@@ -10,8 +10,8 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 @app.route("/")
-def index():
-    return "서버 잘 뜸!"
+def home():
+    return render_template("sermon.html")
 
 
 @app.route("/sermon")
