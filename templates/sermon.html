@@ -24,6 +24,7 @@
     .copy-btn { font-size: .7rem; padding: .2rem .5rem; background: #fff; }
     .status-bar { position: fixed; bottom: 10px; right: 10px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .4rem .7rem; font-size: .8rem; box-shadow: 0 2px 6px rgba(0,0,0,.08); display: none; }
     .guide-tab-active { background: #dfe6ff; border-color: #b5c6ff; }
+    textarea.autosize { overflow: hidden; }
   </style>
 </head>
 <body>
@@ -105,7 +106,7 @@
           <label class="label">본문 분석</label>
           <button class="copy-btn" data-copy="analysis-box">복사</button>
         </div>
-        <textarea id="analysis-box" style="min-height: 140px;" placeholder="본문 분석 결과가 표시됩니다. (해당 카테고리의 '본문 분석 지침'을 1순위로 적용)"></textarea>
+        <textarea id="analysis-box" class="autosize" style="min-height: 140px;" placeholder="본문 분석 결과가 표시됩니다. ..."></textarea>
       </div>
 
       <!-- 설교문 제작 프롬포트 결과 -->
@@ -114,7 +115,7 @@
           <label class="label">설교문 제작 프롬포트</label>
           <button class="copy-btn" data-copy="sermon-prompt-box">복사</button>
         </div>
-        <textarea id="sermon-prompt-box" style="min-height: 140px;" placeholder="GPT에 던질 프롬포트를 여기서 만듭니다. (해당 카테고리의 '설교문 제작 프롬포트' 지침을 1순위로 적용)"></textarea>
+        <textarea id="sermon-prompt-box" class="autosize" style="min-height: 140px;" placeholder="GPT에 던질 프롬포트를 ..."></textarea>
       </div>
     </div>
   </div>
@@ -123,6 +124,21 @@
   <div id="status-bar" class="status-bar">GPT로 작업 중...</div>
 
   <script>
+  // --- 자동 높이 조절 함수 ---
+  function autoResize(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
+  // 페이지 로드 시 textarea 자동 조절 적용
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('textarea.autosize').forEach(t => {
+      t.setAttribute('rows', '1');
+      autoResize(t);
+      t.addEventListener('input', () => autoResize(t));
+    });
+  });
     // 날짜 기본값
     const today = new Date().toISOString().substring(0, 10);
     document.getElementById('sermon-date').value = today;
@@ -295,9 +311,10 @@ function fetchWithTimeout(resource, options = {}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
-      .then(res => res.json())
       .then(data => {
-        document.getElementById('analysis-box').value = data.result || "";
+        const box = document.getElementById('analysis-box');
+        box.value = data.result || "";
+        autoResize(box);
       })
       .catch(err => {
         console.error(err);
@@ -336,8 +353,10 @@ document.getElementById('btn-prompt').addEventListener('click', () => {
       return res.json();
     })
     .then(data => {
-      document.getElementById('sermon-prompt-box').value = data.result || "";
-    })
+  const box = document.getElementById('sermon-prompt-box');
+  box.value = data.result || "";
+  autoResize(box);
+})
     .catch(err => {
       console.error(err);
       document.getElementById('sermon-prompt-box').value =
