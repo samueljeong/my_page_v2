@@ -330,16 +330,14 @@ document.getElementById('btn-analyze').addEventListener('click', () => {
 
     console.log("[ANALYZE] response", data);
 
-    const box = document.getElementById('analysis-box');
-    if (!res.ok) {
-      box.value = "서버 오류(" + res.status + "):\n" + (data.error || raw);
-    } else if (data && data.result) {  // ← 이 부분 수정! (data.ok 대신 data.result)
-      box.value = data.result;
-    } else if (data && data.ok && data.result) {
-      box.value = data.result;
-    } else {
-      box.value = "오류: " + (data && data.error ? data.error : "(원인 불명)");
-    }
+const box = document.getElementById('analysis-box');
+if (!res.ok) {
+  box.value = "서버 오류(" + res.status + "):\n" + (data.error || raw);
+} else if (data && data.result) {
+  box.value = data.result;
+} else {
+  box.value = "오류: " + (data && data.error ? data.error : "(원인 불명)");
+}
 
     box.dispatchEvent(new Event('input'));
   })
