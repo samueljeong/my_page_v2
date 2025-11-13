@@ -372,7 +372,7 @@
   <!-- 진행 상태 -->
   <div id="status-bar" class="status-bar">작업 중...</div>
 
-  <!-- Firebase SDK 추가 -->
+<!-- Firebase SDK 추가 -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   
@@ -391,29 +391,43 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
   
-  // 고유 사용자 코드
   const USER_CODE = 'samuel123';
   const PAGE_NAME = 'message';
 
-  // ===== 기존 변수들 =====
-  const categorySelect = document.getElementById("category-select");
-  const guideTextArea = document.getElementById("guide-text");
-  const statusMsg = document.getElementById("status-msg");
+  // ===== 전역 변수 =====
+  let currentGuideTab = 'morning'; // 현재 활성화된 탭
 
-  function getGuideKey(category) {
-    return `message-guide-${category}`;
+  // ===== 자동 높이 조절 =====
+  function autoResize(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
   }
 
+  // ===== 요일 계산 =====
+  function updateDayOfWeek() {
+    const month = parseInt(document.getElementById('month').value);
+    const day = parseInt(document.getElementById('day').value);
+    const year = new Date().getFullYear();
+    const date = new Date(year, month - 1, day);
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    document.getElementById('day-of-week').textContent = days[date.getDay()];
+  }
+
+  document.getElementById('month').addEventListener('change', updateDayOfWeek);
+  document.getElementById('day').addEventListener('change', updateDayOfWeek);
+
+  // ===== 상태 표시 =====
+  const statusBar = document.getElementById('status-bar');
   function showStatus(msg) {
-    statusMsg.textContent = msg;
-    statusMsg.style.display = "block";
+    statusBar.textContent = msg;
+    statusBar.style.display = 'block';
   }
-
   function hideStatus() {
-    statusMsg.style.display = "none";
+    statusBar.style.display = 'none';
   }
 
-  // ===== Firebase 함수들 =====
+  // ===== Firebase 함수 =====
   
   async function loadFromFirebase() {
     try {
@@ -461,169 +475,305 @@
     }
   }
 
-  // ===== 화면 업데이트 =====
+  // ===== 지침 관리 =====
   
-  function loadCurrentGuide() {
-    const cat = categorySelect.value;
-    const key = getGuideKey(cat);
-    const stored = localStorage.getItem(key);
-    guideTextArea.value = stored || "";
+  function getGuideKey(category) {
+    return `message-guide-${category}`;
   }
 
-  categorySelect.addEventListener("change", loadCurrentGuide);
-
-  // ===== 지침 저장 버튼 =====
-  
-  document.getElementById("save-guide").addEventListener("click", async () => {
-    const cat = categorySelect.value;
-    const key = getGuideKey(cat);
-    const value = guideTextArea.value;
-
-    // 1. localStorage 저장
-    localStorage.setItem(key, value);
-
-    // 2. Firebase 저장
-    showStatus("💾 저장 중...");
-    const success = await saveToFirebase(key, value);
-
-    if (success) {
-      showStatus("✅ 지침이 저장되고 클라우드에 동기화되었습니다!");
-    } else {
-      showStatus("⚠️ 로컬에만 저장됨 (클라우드 동기화 실패)");
-    }
-
-    setTimeout(hideStatus, 2000);
+  // 지침 탭 전환
+  document.querySelectorAll('.guide-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      // 모든 탭 비활성화
+      document.querySelectorAll('.guide-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.guide-content').forEach(c => c.classList.remove('active'));
+      
+      // 클릭한 탭 활성화
+      tab.classList.add('active');
+      const tabName = tab.dataset.tab;
+      currentGuideTab = tabName;
+      
+      const content = document.querySelector(`.guide-content[data-content="${tabName}"]`);
+      if (content) {
+        content.classList.add('active');
+      }
+      
+      // 해당 지침 불러오기
+      loadGuide(tabName);
+    });
   });
 
-  // ===== 테스트 버튼 =====
-  
-  document.getElementById("test-guide").addEventListener("click", async () => {
-    const cat = categorySelect.value;
-    const key = getGuideKey(cat);
-    const storedGuide = localStorage.getItem(key) || "";
+  // 특정 지침 불러오기
+  function loadGuide(category) {
+    const key = getGuideKey(category);
+    const stored = localStorage.getItem(key) || '';
+    const textarea = document.getElementById(`guide-${category}`);
+    if (textarea) {
+      textarea.value = stored;
+      autoResize(textarea);
+    }
+  }
 
-    if (!storedGuide.trim()) {
-      alert("먼저 지침을 작성하고 저장하세요.");
+  // 모든 지침 불러오기
+  function loadAllGuides() {
+    ['morning', 'evening', 'image', 'translate'].forEach(cat => {
+      loadGuide(cat);
+    });
+  }
+
+  // 지침 저장
+  document.getElementById('save-guide').addEventListener('click', async () => {
+    const textarea = document.getElementById(`guide-${currentGuideTab}`);
+    if (!textarea) {
+      alert('오류: 지침 영역을 찾을 수 없습니다.');
       return;
     }
-
-    const sampleText = "오늘 하루도 하나님의 은혜 가운데 살아가세요.";
-    showStatus("🤖 GPT에게 테스트 요청 중...");
-
-    try {
-      const response = await fetch("/api/message/test-guide", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: cat,
-          guide: storedGuide,
-          sample_text: sampleText,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.ok) {
-        alert(`✅ 테스트 성공!\n\n결과:\n${data.result}`);
-        hideStatus();
-      } else {
-        alert(`❌ 오류 발생:\n${data.error}`);
-        hideStatus();
-      }
-    } catch (err) {
-      alert(`❌ 네트워크 오류:\n${err.message}`);
-      hideStatus();
-    }
-  });
-
-  // ===== 내보내기/가져오기 =====
-  
-  document.getElementById("export-guides").addEventListener("click", () => {
-    const guides = {};
-    const categories = ["morning", "evening", "image", "translate"];
-
-    categories.forEach((cat) => {
-      const key = getGuideKey(cat);
-      guides[key] = localStorage.getItem(key) || "";
-    });
-
-    const blob = new Blob([JSON.stringify(guides, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "message-guides-backup.json";
-    a.click();
-
-    alert("✅ 백업 파일 다운로드 완료!");
-  });
-
-  document.getElementById("import-guides").addEventListener("click", () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/json";
-
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        try {
-          const guides = JSON.parse(evt.target.result);
-          
-          for (const [key, value] of Object.entries(guides)) {
-            localStorage.setItem(key, value);
-          }
-
-          showStatus("☁️ Firebase에 업로드 중...");
-          let uploadCount = 0;
-          for (const [key, value] of Object.entries(guides)) {
-            const success = await saveToFirebase(key, value);
-            if (success) uploadCount++;
-          }
-
-          alert(`✅ 가져오기 완료!\n\n로컬: ${Object.keys(guides).length}개\nFirebase: ${uploadCount}개`);
-          loadCurrentGuide();
-          hideStatus();
-        } catch (err) {
-          alert(`❌ JSON 파일 형식이 잘못되었습니다:\n${err.message}`);
-        }
-      };
-      reader.readAsText(file);
-    };
-
-    input.click();
-  });
-
-  // ===== 클라우드 동기화 =====
-  
-  document.getElementById("sync-from-cloud")?.addEventListener("click", async () => {
-    if (!confirm("로컬 지침을 클라우드 지침으로 덮어씌우시겠습니까?")) return;
     
-    showStatus("☁️ 클라우드에서 다운로드 중...");
-    const success = await loadFromFirebase();
+    const value = textarea.value;
+    const key = getGuideKey(currentGuideTab);
+    
+    // localStorage 저장
+    localStorage.setItem(key, value);
+    
+    // Firebase 저장
+    showStatus('💾 저장 중...');
+    const success = await saveToFirebase(key, value);
     
     if (success) {
-      loadCurrentGuide();
-      showStatus("✅ 클라우드 지침으로 업데이트되었습니다!");
+      showStatus('✅ 지침이 저장되고 클라우드에 동기화되었습니다!');
     } else {
-      showStatus("⚠️ 클라우드에 저장된 지침이 없습니다.");
+      showStatus('⚠️ 로컬에만 저장됨 (클라우드 동기화 실패)');
     }
     
     setTimeout(hideStatus, 2000);
+  });
+
+  // ===== 지침 영역 토글 =====
+  
+  let guidesVisible = true;
+  document.getElementById('toggle-guides').addEventListener('click', () => {
+    const inner = document.getElementById('guide-inner');
+    const btn = document.getElementById('toggle-guides');
+    
+    guidesVisible = !guidesVisible;
+    inner.style.display = guidesVisible ? 'block' : 'none';
+    btn.textContent = guidesVisible ? '닫기' : '열기';
+  });
+
+  // ===== 복사 기능 =====
+  
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.copy;
+      const textarea = document.getElementById(targetId);
+      if (!textarea) return;
+      
+      textarea.select();
+      document.execCommand('copy');
+      
+      const originalText = btn.textContent;
+      btn.textContent = '✅ 복사됨!';
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 1500);
+    });
+  });
+
+  // ===== 메시지 생성 =====
+  
+  async function generateMessage(timeOfDay) {
+    const month = document.getElementById('month').value;
+    const day = document.getElementById('day').value;
+    const bibleRef = document.getElementById('bible-ref').value;
+    const bibleText = document.getElementById('bible-text').value;
+    const guideKey = getGuideKey(timeOfDay);
+    const guide = localStorage.getItem(guideKey) || '';
+    
+    if (!bibleRef || !bibleText) {
+      alert('본문과 본문 내용을 입력하세요.');
+      return;
+    }
+    
+    const statusIndicator = document.getElementById('status-indicator');
+    statusIndicator.style.display = 'block';
+    showStatus(`${timeOfDay === 'morning' ? '☀️ 오전' : '🌙 저녁'} 메시지 생성 중...`);
+    
+    try {
+      const response = await fetch('/api/message/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: month,
+          day: day,
+          bible_ref: bibleRef,
+          bible_text: bibleText,
+          time_of_day: timeOfDay,
+          guide: guide
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.ok) {
+        const outputId = `${timeOfDay}-message`;
+        const textarea = document.getElementById(outputId);
+        textarea.value = data.message;
+        autoResize(textarea);
+        showStatus('✅ 메시지 생성 완료!');
+      } else {
+        alert(`오류: ${data.error}`);
+        showStatus('❌ 생성 실패');
+      }
+    } catch (err) {
+      alert(`네트워크 오류: ${err.message}`);
+      showStatus('❌ 오류 발생');
+    } finally {
+      statusIndicator.style.display = 'none';
+      setTimeout(hideStatus, 2000);
+    }
+  }
+
+  document.getElementById('btn-morning').addEventListener('click', () => generateMessage('morning'));
+  document.getElementById('btn-evening').addEventListener('click', () => generateMessage('evening'));
+
+  // ===== 이미지 프롬프트 생성 =====
+  
+  async function generateImagePrompts(timeOfDay) {
+    const month = document.getElementById('month').value;
+    const day = document.getElementById('day').value;
+    const bibleRef = document.getElementById('bible-ref').value;
+    const bibleText = document.getElementById('bible-text').value;
+    const messageTextarea = document.getElementById(`${timeOfDay}-message`);
+    const message = messageTextarea.value;
+    const guideKey = getGuideKey('image');
+    const guide = localStorage.getItem(guideKey) || '';
+    
+    if (!message) {
+      alert(`먼저 ${timeOfDay === 'morning' ? '오전' : '저녁'} 메시지를 생성하세요.`);
+      return;
+    }
+    
+    const statusIndicator = document.getElementById('status-indicator');
+    statusIndicator.style.display = 'block';
+    showStatus(`🖼️ 이미지 프롬프트 생성 중...`);
+    
+    try {
+      const response = await fetch('/api/message/image-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: month,
+          day: day,
+          bible_ref: bibleRef,
+          bible_text: bibleText,
+          message: message,
+          time_of_day: timeOfDay,
+          guide: guide
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.ok) {
+        document.getElementById(`${timeOfDay}-img-1`).value = data.image1;
+        document.getElementById(`${timeOfDay}-img-2`).value = data.image2;
+        document.getElementById(`${timeOfDay}-img-3`).value = data.image3;
+        document.getElementById(`${timeOfDay}-music`).value = data.music;
+        
+        [1, 2, 3].forEach(i => {
+          autoResize(document.getElementById(`${timeOfDay}-img-${i}`));
+        });
+        autoResize(document.getElementById(`${timeOfDay}-music`));
+        
+        showStatus('✅ 이미지 프롬프트 생성 완료!');
+      } else {
+        alert(`오류: ${data.error}`);
+        showStatus('❌ 생성 실패');
+      }
+    } catch (err) {
+      alert(`네트워크 오류: ${err.message}`);
+      showStatus('❌ 오류 발생');
+    } finally {
+      statusIndicator.style.display = 'none';
+      setTimeout(hideStatus, 2000);
+    }
+  }
+
+  document.getElementById('btn-morning-img').addEventListener('click', () => generateImagePrompts('morning'));
+  document.getElementById('btn-evening-img').addEventListener('click', () => generateImagePrompts('evening'));
+
+  // ===== 번역 =====
+  
+  document.querySelectorAll('[data-translate]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const timeOfDay = btn.dataset.translate;
+      const lang = btn.dataset.lang;
+      const messageTextarea = document.getElementById(`${timeOfDay}-message`);
+      const message = messageTextarea.value;
+      const guideKey = getGuideKey('translate');
+      const guide = localStorage.getItem(guideKey) || '';
+      
+      if (!message) {
+        alert('먼저 메시지를 생성하세요.');
+        return;
+      }
+      
+      showStatus(`🌐 번역 중...`);
+      
+      try {
+        const response = await fetch('/api/message/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: message,
+            target_lang: lang,
+            guide: guide
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+          const translationTextarea = document.getElementById('translation');
+          translationTextarea.value = data.translation;
+          autoResize(translationTextarea);
+          showStatus('✅ 번역 완료!');
+        } else {
+          alert(`오류: ${data.error}`);
+          showStatus('❌ 번역 실패');
+        }
+      } catch (err) {
+        alert(`네트워크 오류: ${err.message}`);
+        showStatus('❌ 오류 발생');
+      } finally {
+        setTimeout(hideStatus, 2000);
+      }
+    });
+  });
+
+  // ===== textarea 자동 높이 =====
+  
+  document.querySelectorAll('textarea.autosize').forEach(textarea => {
+    textarea.addEventListener('input', () => autoResize(textarea));
   });
 
   // ===== 페이지 로드 시 초기화 =====
   
-  document.addEventListener("DOMContentLoaded", async () => {
-    showStatus("☁️ 클라우드 동기화 중...");
+  document.addEventListener('DOMContentLoaded', async () => {
+    // 요일 업데이트
+    updateDayOfWeek();
+    
+    // Firebase에서 지침 불러오기
+    showStatus('☁️ 클라우드 동기화 중...');
     await loadFromFirebase();
     hideStatus();
     
-    loadCurrentGuide();
+    // 모든 지침 화면에 표시
+    loadAllGuides();
+    
+    // 모든 textarea 높이 조절
+    document.querySelectorAll('textarea').forEach(autoResize);
   });
   </script>
-  </body>
+</body>
 </html>
