@@ -12,7 +12,7 @@
     .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .75rem; }
     .label-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
     .label { font-weight: 600; }
-    input[type="text"], input[type="date"], select { width: 100%; padding: .35rem .5rem; box-sizing: border-box; }
+    input[type="text"], input[type="date"], input[type="password"], select { width: 100%; padding: .35rem .5rem; box-sizing: border-box; }
     textarea { width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box; font-family: inherit; line-height: 1.4; }
     .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; }
     button { padding: .35rem .6rem; border: 1px solid #ccc; background: #f0f0f0; border-radius: 6px; cursor: pointer; }
@@ -74,6 +74,16 @@
     .modal-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; }
     .modal-buttons { display: flex; gap: .5rem; margin-top: 1rem; }
     .modal-buttons button { flex: 1; }
+    
+    .category-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .4rem .6rem;
+      margin-bottom: .3rem;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -90,17 +100,11 @@
 
       <!-- 카테고리 -->
       <div class="box">
-        <label class="label" for="sermon-category">설교 카테고리</label>
-        <select id="sermon-category">
-          <option value="dawn">새벽설교</option>
-          <option value="wednesday">수요성경공부</option>
-          <option value="friday">금요기도회</option>
-          <option value="youth">청년부</option>
-          <option value="teen">청소년부</option>
-          <option value="women">여선교회</option>
-          <option value="men">남선교회</option>
-          <option value="etc">기타</option>
-        </select>
+        <div class="label-row">
+          <label class="label" for="sermon-category">설교 카테고리</label>
+          <button id="btn-manage-categories" style="font-size: .75rem; padding: .2rem .5rem;">관리</button>
+        </div>
+        <select id="sermon-category"></select>
       </div>
 
       <!-- 시리즈명 -->
@@ -149,21 +153,23 @@
 
     <!-- 오른쪽 -->
     <div class="right-col">
-      <!-- 지침 영역 -->
+      <!-- 지침 영역 (기본 닫힘) -->
       <div class="box" id="guide-box">
         <div class="toggle-header">
-          <span class="label">지침 영역</span>
-          <button id="toggle-guides">닫기</button>
+          <span class="label">지침 영역 🔒</span>
+          <button id="toggle-guides">열기</button>
         </div>
-        <div class="btn-row" id="guide-btn-row" style="margin: .5rem 0;">
-          <button id="save-guide">지침 저장</button>
-          <button id="tab-guide-analysis" class="guide-tab-active">본문 분석 지침</button>
-          <button id="tab-guide-prompt">설교문 제작 프롬포트</button>
+        <div id="guide-content" style="display: none;">
+          <div class="btn-row" id="guide-btn-row" style="margin: .5rem 0;">
+            <button id="save-guide">지침 저장</button>
+            <button id="tab-guide-analysis" class="guide-tab-active">본문 분석 지침</button>
+            <button id="tab-guide-prompt">설교문 제작 프롬포트</button>
+          </div>
+          <div id="prompt-type-indicator" style="display: none; font-size: .85rem; color: #666; margin-bottom: .5rem;">
+            현재 유형: <strong id="current-prompt-type"></strong>
+          </div>
+          <textarea id="guide-text" class="autosize" style="min-height: 90px;" placeholder="선택한 지침 유형의 내용을 작성합니다. 카테고리마다 따로 저장됩니다."></textarea>
         </div>
-        <div id="prompt-type-indicator" style="display: none; font-size: .85rem; color: #666; margin-bottom: .5rem;">
-          현재 유형: <strong id="current-prompt-type"></strong>
-        </div>
-        <textarea id="guide-text" class="autosize" style="min-height: 90px;" placeholder="선택한 지침 유형의 내용을 작성합니다. 카테고리마다 따로 저장됩니다."></textarea>
       </div>
 
       <!-- 본문 분석 결과 -->
@@ -189,6 +195,19 @@
   <!-- 진행 상태 -->
   <div id="status-bar" class="status-bar">GPT로 작업 중...</div>
 
+  <!-- 패스워드 모달 -->
+  <div id="modal-password" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">🔒 지침 영역 잠금</div>
+      <p style="color: #666; font-size: .9rem; margin-bottom: 1rem;">지침 영역에 접근하려면 패스워드를 입력하세요.</p>
+      <input type="password" id="password-input" placeholder="패스워드 입력" style="margin-bottom: .5rem;">
+      <div class="modal-buttons">
+        <button id="btn-cancel-password">취소</button>
+        <button id="btn-submit-password" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 설교 유형 관리 모달 -->
   <div id="modal-manage-types" class="modal">
     <div class="modal-content">
@@ -201,7 +220,25 @@
       </div>
       
       <div class="modal-buttons">
-        <button id="btn-close-modal">닫기</button>
+        <button id="btn-close-modal-types">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 카테고리 관리 모달 -->
+  <div id="modal-manage-categories" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">카테고리 관리</div>
+      <input type="text" id="new-category-value" placeholder="영문 코드 (예: special)" style="margin-bottom: .3rem;">
+      <input type="text" id="new-category-label" placeholder="표시 이름 (예: 특별예배)" style="margin-bottom: .5rem;">
+      <button id="btn-add-category" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
+      
+      <div style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+        <div id="manage-categories-list"></div>
+      </div>
+      
+      <div class="modal-buttons">
+        <button id="btn-close-modal-categories">닫기</button>
       </div>
     </div>
   </div>
@@ -227,6 +264,7 @@
   
   const USER_CODE = 'samuel123';
   const PAGE_NAME = 'sermon';
+  const GUIDE_PASSWORD = '6039';
 
   // ===== 전역 변수 =====
   const categorySelect = document.getElementById("sermon-category");
@@ -236,6 +274,17 @@
   let currentGuideType = "analysis";
   let currentPromptType = "기본";
   let sermonTypes = ["기본", "강해설교", "주제설교"];
+  let categories = [
+    {value: "dawn", label: "새벽설교"},
+    {value: "wednesday", label: "수요성경공부"},
+    {value: "friday", label: "금요기도회"},
+    {value: "youth", label: "청년부"},
+    {value: "teen", label: "청소년부"},
+    {value: "women", label: "여선교회"},
+    {value: "men", label: "남선교회"},
+    {value: "etc", label: "기타"}
+  ];
+  let guideUnlocked = false;
 
   // ===== 상태 표시 =====
   function showStatus(msg) {
@@ -253,6 +302,137 @@
     el.style.height = 'auto';
     el.style.height = el.scrollHeight + 'px';
   }
+
+  // ===== 패스워드 관리 =====
+  
+  document.getElementById("toggle-guides").addEventListener("click", () => {
+    const guideContent = document.getElementById("guide-content");
+    const btn = document.getElementById("toggle-guides");
+    
+    if (guideContent.style.display === 'none') {
+      // 열기 시도
+      if (!guideUnlocked) {
+        document.getElementById('modal-password').classList.add('show');
+        document.getElementById('password-input').value = '';
+        document.getElementById('password-input').focus();
+      } else {
+        guideContent.style.display = 'block';
+        btn.textContent = '닫기';
+      }
+    } else {
+      // 닫기
+      guideContent.style.display = 'none';
+      btn.textContent = '열기';
+    }
+  });
+
+  document.getElementById('btn-submit-password').addEventListener('click', () => {
+    const input = document.getElementById('password-input').value;
+    if (input === GUIDE_PASSWORD) {
+      guideUnlocked = true;
+      document.getElementById('modal-password').classList.remove('show');
+      document.getElementById('guide-content').style.display = 'block';
+      document.getElementById('toggle-guides').textContent = '닫기';
+      showStatus('✅ 지침 영역이 열렸습니다!');
+      setTimeout(hideStatus, 2000);
+    } else {
+      alert('❌ 패스워드가 틀렸습니다.');
+      document.getElementById('password-input').value = '';
+      document.getElementById('password-input').focus();
+    }
+  });
+
+  document.getElementById('btn-cancel-password').addEventListener('click', () => {
+    document.getElementById('modal-password').classList.remove('show');
+  });
+
+  document.getElementById('password-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('btn-submit-password').click();
+    }
+  });
+
+  // ===== 카테고리 관리 =====
+  
+  function loadCategories() {
+    const saved = localStorage.getItem('sermon-categories');
+    if (saved) {
+      categories = JSON.parse(saved);
+    }
+    renderCategories();
+  }
+
+  function saveCategories() {
+    localStorage.setItem('sermon-categories', JSON.stringify(categories));
+  }
+
+  function renderCategories() {
+    const currentValue = categorySelect.value;
+    categorySelect.innerHTML = categories.map(cat => 
+      `<option value="${cat.value}">${cat.label}</option>`
+    ).join('');
+    
+    if (currentValue && categories.find(c => c.value === currentValue)) {
+      categorySelect.value = currentValue;
+    }
+    
+    toggleSeriesBox();
+  }
+
+  function renderManageCategories() {
+    const list = document.getElementById('manage-categories-list');
+    list.innerHTML = categories.map((cat, idx) => `
+      <div class="category-item">
+        <div>
+          <div style="font-weight: 600;">${cat.label}</div>
+          <div style="font-size: .75rem; color: #666;">${cat.value}</div>
+        </div>
+        ${categories.length > 1 ? `<button class="sermon-type-delete" onclick="deleteCategory(${idx})">삭제</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  window.deleteCategory = function(idx) {
+    if (!confirm(`"${categories[idx].label}" 카테고리를 삭제하시겠습니까?`)) return;
+    
+    categories.splice(idx, 1);
+    saveCategories();
+    renderCategories();
+    renderManageCategories();
+  };
+
+  document.getElementById('btn-manage-categories').addEventListener('click', () => {
+    renderManageCategories();
+    document.getElementById('modal-manage-categories').classList.add('show');
+  });
+
+  document.getElementById('btn-close-modal-categories').addEventListener('click', () => {
+    document.getElementById('modal-manage-categories').classList.remove('show');
+  });
+
+  document.getElementById('btn-add-category').addEventListener('click', () => {
+    const value = document.getElementById('new-category-value').value.trim();
+    const label = document.getElementById('new-category-label').value.trim();
+    
+    if (!value || !label) {
+      alert('영문 코드와 표시 이름을 모두 입력하세요.');
+      return;
+    }
+    
+    if (categories.find(c => c.value === value)) {
+      alert('이미 존재하는 코드입니다.');
+      return;
+    }
+    
+    categories.push({value, label});
+    saveCategories();
+    renderCategories();
+    renderManageCategories();
+    
+    document.getElementById('new-category-value').value = '';
+    document.getElementById('new-category-label').value = '';
+    alert(`"${label}" 카테고리가 추가되었습니다!`);
+  });
 
   // ===== 설교 유형 관리 =====
   
@@ -318,7 +498,7 @@
     document.getElementById('modal-manage-types').classList.add('show');
   });
 
-  document.getElementById('btn-close-modal').addEventListener('click', () => {
+  document.getElementById('btn-close-modal-types').addEventListener('click', () => {
     document.getElementById('modal-manage-types').classList.remove('show');
   });
 
@@ -473,29 +653,6 @@
     setTimeout(hideStatus, 2000);
   });
 
-  // ===== 지침 영역 토글 =====
-  
-  let guidesVisible = true;
-  document.getElementById("toggle-guides").addEventListener("click", () => {
-    const btnRow = document.getElementById("guide-btn-row");
-    const btn = document.getElementById("toggle-guides");
-    const indicator = document.getElementById("prompt-type-indicator");
-    
-    guidesVisible = !guidesVisible;
-    
-    if (guidesVisible) {
-      btnRow.style.display = 'flex';
-      indicator.style.display = currentGuideType === 'prompt' ? 'block' : 'none';
-      guideTextArea.style.display = 'block';
-      btn.textContent = '닫기';
-    } else {
-      btnRow.style.display = 'none';
-      indicator.style.display = 'none';
-      guideTextArea.style.display = 'none';
-      btn.textContent = '열기';
-    }
-  });
-
   // ===== 복사 기능 =====
   
   document.querySelectorAll('[data-copy]').forEach(btn => {
@@ -628,19 +785,9 @@
       return;
     }
 
-    const categoryNames = {
-      dawn: "새벽설교",
-      wednesday: "수요성경공부",
-      friday: "금요기도회",
-      youth: "청년부",
-      teen: "청소년부",
-      women: "여선교회",
-      men: "남선교회",
-      etc: "기타"
-    };
-
     savedList.innerHTML = saved.map((item, idx) => {
-      const categoryName = categoryNames[item.category] || item.category;
+      const category = categories.find(c => c.value === item.category);
+      const categoryName = category ? category.label : item.category;
       const displayText = item.seriesName 
         ? `${item.date || '날짜 없음'} - ${categoryName} - ${item.seriesName}`
         : `${item.date || '날짜 없음'} - ${categoryName}`;
@@ -689,7 +836,13 @@
     const item = saved[idx];
 
     document.getElementById("sermon-date").value = item.date || "";
-    categorySelect.value = item.category || "dawn";
+    
+    if (categories.find(c => c.value === item.category)) {
+      categorySelect.value = item.category;
+    } else {
+      categorySelect.value = categories[0].value;
+    }
+    
     document.getElementById("series-name").value = item.seriesName || "";
     document.getElementById("sermon-ref").value = item.ref || "";
     document.getElementById("sermon-text").value = item.text || "";
@@ -730,6 +883,7 @@
     await loadFromFirebase();
     hideStatus();
 
+    loadCategories();
     loadSermonTypes();
     loadCurrentGuide();
     loadSavedList();
