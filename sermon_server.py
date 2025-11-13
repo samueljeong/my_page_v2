@@ -226,4 +226,4 @@ def process_custom_step(step_id, reference, text, guide, category, previous_resu
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5057))
-    app.run(host="127.0.0.1", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

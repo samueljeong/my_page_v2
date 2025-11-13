@@ -4,11 +4,15 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return "서버 잘 뜸!"
+    return render_template("index.html")
 
-@app.route("/sermon")
-def sermon():
-    return "설교 페이지 자리!"
+@app.route("/bible")
+def bible():
+    return render_template("bible.html")
+
+@app.route("/message")
+def message():
+    return render_template("message.html")
 
 if __name__ == "__main__":
     app.run(debug=True)

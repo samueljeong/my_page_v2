@@ -142,6 +142,17 @@
 
     <!-- 오른쪽 -->
     <div class="right-col">
+      <!-- 전체 복사 버튼 -->
+      <div class="box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="color: white; font-weight: 600; font-size: 1.1rem; margin-bottom: .3rem;">📋 완성된 설교 자료</div>
+            <div style="color: rgba(255,255,255,0.9); font-size: .85rem;">모든 단계를 순서대로 복사합니다</div>
+          </div>
+          <button id="btn-copy-all" style="background: white; color: #667eea; font-weight: 600; padding: .6rem 1.2rem; border: none; font-size: .95rem;">전체 복사</button>
+        </div>
+      </div>
+
       <!-- 지침 영역 -->
       <div class="box" id="guide-box">
         <div class="toggle-header">
@@ -415,6 +426,65 @@
     return settings ? settings.promptTypes : ['기본'];
   }
 
+  // ===== 전체 복사 기능 =====
+  document.getElementById('btn-copy-all').addEventListener('click', () => {
+    const steps = getCurrentSteps();
+    const ref = document.getElementById('sermon-ref').value;
+    const seriesName = document.getElementById('series-name').value;
+    
+    if (steps.length === 0) {
+      alert('처리된 단계가 없습니다.');
+      return;
+    }
+    
+    // 결과가 있는 단계만 필터링
+    const completedSteps = steps.filter(step => stepResults[step.id]);
+    
+    if (completedSteps.length === 0) {
+      alert('완성된 단계가 없습니다. 먼저 각 단계를 실행해주세요.');
+      return;
+    }
+    
+    // 전체 텍스트 구성
+    let fullText = `====================================\n`;
+    fullText += `📖 설교 자료\n`;
+    fullText += `====================================\n\n`;
+    fullText += `📌 기본 정보\n`;
+    fullText += `- 카테고리: ${getCategoryLabel(currentCategory)}\n`;
+    fullText += `- 설교 유형: ${currentPromptType}\n`;
+    fullText += `- 성경구절: ${ref}\n`;
+    if (seriesName) {
+      fullText += `- 시리즈명: ${seriesName}\n`;
+    }
+    fullText += `- 작성일: ${new Date().toLocaleDateString('ko-KR')}\n`;
+    fullText += `\n${'='.repeat(50)}\n\n`;
+    
+    // 각 단계 결과 추가
+    completedSteps.forEach((step, index) => {
+      fullText += `【 ${index + 1}. ${step.name} 】\n\n`;
+      fullText += stepResults[step.id];
+      fullText += `\n\n${'='.repeat(50)}\n\n`;
+    });
+    
+    // 클립보드에 복사
+    const tempTextarea = document.createElement('textarea');
+    tempTextarea.value = fullText;
+    tempTextarea.style.position = 'fixed';
+    tempTextarea.style.opacity = '0';
+    document.body.appendChild(tempTextarea);
+    tempTextarea.select();
+    
+    try {
+      document.execCommand('copy');
+      showStatus('✅ 전체 내용이 클립보드에 복사되었습니다!');
+      setTimeout(hideStatus, 2000);
+    } catch (err) {
+      alert('복사 실패: ' + err.message);
+    } finally {
+      document.body.removeChild(tempTextarea);
+    }
+  });
+
   // ===== 렌더링 함수 =====
   function renderCategories() {
     const select = document.getElementById('sermon-category');
@@ -483,7 +553,7 @@
     container.querySelectorAll('[data-copy]').forEach(btn => {
       btn.addEventListener('click', () => {
         const textarea = document.getElementById(btn.dataset.copy);
-        if (textarea) {
+        if (textarea && textarea.value) {
           textarea.select();
           document.execCommand('copy');
           const orig = btn.textContent;
