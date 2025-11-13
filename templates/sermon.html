@@ -332,17 +332,17 @@
   // ===== 본문 분석 =====
   
   document.getElementById("btn-analyze").addEventListener("click", async () => {
-    const date = document.getElementById("sermon-date").value;
-    const category = categorySelect.value;
-    const ref = document.getElementById("sermon-ref").value;
-    const text = document.getElementById("sermon-text").value;
-    const guideKey = getGuideKey(category, "analysis");
-    const guide = localStorage.getItem(guideKey) || "";
+  const date = document.getElementById("sermon-date").value;
+  const category = categorySelect.value;
+  const ref = document.getElementById("sermon-ref").value;
+  const text = document.getElementById("sermon-text").value;
+  const guideKey = getGuideKey(category, "analysis");
+  const guide = localStorage.getItem(guideKey) || "";
 
-    if (!ref || !text) {
-      alert("성경구절과 본문을 입력하세요.");
-      return;
-    }
+  if (!ref) {  // ← 본문 내용(text) 검증 제거
+    alert("성경구절을 입력하세요.");
+    return;
+  }
 
     showStatus("🤖 본문 분석 중...");
 
