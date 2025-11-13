@@ -29,60 +29,7 @@
 </head>
 <body>
   <div class="page-wrap">
-    <!-- 왼쪽 -->
     <div class="left-col">
-      <!-- 날짜 -->
-      <div class="box">
-        <div class="label-row">
-          <label class="label" for="sermon-date">날짜</label>
-          <input type="date" id="sermon-date" style="max-width: 160px;">
-        </div>
-      </div>
-
-      <!-- 카테고리 -->
-      <div class="box">
-        <label class="label" for="sermon-category">설교 카테고리</label>
-        <select id="sermon-category">
-          <option value="dawn">새벽설교</option>
-          <option value="wednesday">수요성경공부</option>
-          <option value="friday">금요기도회</option>
-          <option value="youth">청년부</option>
-          <option value="teen">청소년부</option>
-          <option value="women">여선교회</option>
-          <option value="men">남선교회</option>
-          <option value="etc">기타</option>
-        </select>
-      </div>
-
-      <!-- 성경구절 -->
-      <div class="box">
-        <label class="label">성경구절</label>
-        <input type="text" id="sermon-ref" placeholder="예) 시 78:1-8">
-      </div>
-
-      <!-- 성경 본문 -->
-      <div class="box">
-        <label class="label">성경 본문</label>
-        <textarea id="sermon-text" placeholder="본문을 여기에 붙여넣으세요."></textarea>
-      </div>
-
-      <!-- 실행 버튼 -->
-      <div class="box">
-        <div class="btn-row">
-          <button id="btn-analyze">본문 분석</button>
-          <button id="btn-prompt">설교 제작 프롬포트</button>
-        </div>
-      </div>
-
-      <!-- 저장 공간 -->
-      <div class="box">
-        <label class="label">저장된 설교 자료</label>
-        <div class="btn-row" style="margin-bottom: .5rem;">
-          <button id="btn-save">현재 내용 저장</button>
-        </div>
-        <div id="saved-list"></div>
-      </div>
-    </div>
 
     <!-- 오른쪽 -->
     <div class="right-col">
@@ -235,9 +182,23 @@
     autoResize(guideTextArea);
   }
 
-  // 카테고리 변경
-  categorySelect.addEventListener("change", loadCurrentGuide);
+// 카테고리 변경
+categorySelect.addEventListener("change", () => {
+  loadCurrentGuide();
+  toggleSeriesBox();
+});
 
+// 시리즈 박스 표시/숨김
+function toggleSeriesBox() {
+  const seriesBox = document.getElementById("series-box");
+  const category = categorySelect.value;
+  
+  if (category === "wednesday") {
+    seriesBox.style.display = "block";
+  } else {
+    seriesBox.style.display = "none";
+  }
+}
   // 지침 타입 탭 전환
   document.getElementById("tab-guide-analysis").addEventListener("click", () => {
     document.getElementById("tab-guide-analysis").classList.add("guide-tab-active");
@@ -416,63 +377,86 @@
 
   // ===== 저장 공간 관리 =====
   
-  function loadSavedList() {
-    const savedList = document.getElementById("saved-list");
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+function loadSavedList() {
+  const savedList = document.getElementById("saved-list");
+  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
 
-    if (saved.length === 0) {
-      savedList.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
-      return;
-    }
+  if (saved.length === 0) {
+    savedList.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
+    return;
+  }
 
-    savedList.innerHTML = saved.map((item, idx) => `
+  // 카테고리 이름 매핑
+  const categoryNames = {
+    dawn: "새벽설교",
+    wednesday: "수요성경공부",
+    friday: "금요기도회",
+    youth: "청년부",
+    teen: "청소년부",
+    women: "여선교회",
+    men: "남선교회",
+    etc: "기타"
+  };
+
+  savedList.innerHTML = saved.map((item, idx) => {
+    const categoryName = categoryNames[item.category] || item.category;
+    const displayText = item.seriesName 
+      ? `${item.date || '날짜 없음'} - ${categoryName} - ${item.seriesName}`
+      : `${item.date || '날짜 없음'} - ${categoryName}`;
+    
+    return `
       <div class="storage-item">
-        <span style="font-size: .85rem;">${item.date || '날짜 없음'} - ${item.category || '카테고리 없음'}</span>
+        <span style="font-size: .85rem;">${displayText}</span>
         <div class="storage-actions">
           <button onclick="loadSaved(${idx})">불러오기</button>
           <button onclick="deleteSaved(${idx})">삭제</button>
         </div>
       </div>
-    `).join('');
-  }
+    `;
+  }).join('');
+}
 
-  document.getElementById("btn-save").addEventListener("click", () => {
-    const date = document.getElementById("sermon-date").value;
-    const category = categorySelect.value;
-    const ref = document.getElementById("sermon-ref").value;
-    const text = document.getElementById("sermon-text").value;
-    const analysis = document.getElementById("analysis-box").value;
-    const prompt = document.getElementById("sermon-prompt-box").value;
+document.getElementById("btn-save").addEventListener("click", () => {
+  const date = document.getElementById("sermon-date").value;
+  const category = categorySelect.value;
+  const seriesName = document.getElementById("series-name").value;
+  const ref = document.getElementById("sermon-ref").value;
+  const text = document.getElementById("sermon-text").value;
+  const analysis = document.getElementById("analysis-box").value;
+  const prompt = document.getElementById("sermon-prompt-box").value;
 
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
-    saved.push({
-      date: date,
-      category: category,
-      ref: ref,
-      text: text,
-      analysis: analysis,
-      prompt: prompt,
-      savedAt: new Date().toISOString()
-    });
-
-    localStorage.setItem("sermon-saved", JSON.stringify(saved));
-    loadSavedList();
-    alert("✅ 저장되었습니다!");
+  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+  saved.push({
+    date: date,
+    category: category,
+    seriesName: seriesName,  // ← 추가
+    ref: ref,
+    text: text,
+    analysis: analysis,
+    prompt: prompt,
+    savedAt: new Date().toISOString()
   });
 
-  window.loadSaved = function(idx) {
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
-    const item = saved[idx];
+  localStorage.setItem("sermon-saved", JSON.stringify(saved));
+  loadSavedList();
+  alert("✅ 저장되었습니다!");
+});
 
-    document.getElementById("sermon-date").value = item.date || "";
-    categorySelect.value = item.category || "dawn";
-    document.getElementById("sermon-ref").value = item.ref || "";
-    document.getElementById("sermon-text").value = item.text || "";
-    document.getElementById("analysis-box").value = item.analysis || "";
-    document.getElementById("sermon-prompt-box").value = item.prompt || "";
+window.loadSaved = function(idx) {
+  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+  const item = saved[idx];
 
-    document.querySelectorAll('textarea').forEach(autoResize);
-  };
+  document.getElementById("sermon-date").value = item.date || "";
+  categorySelect.value = item.category || "dawn";
+  document.getElementById("series-name").value = item.seriesName || "";  // ← 추가
+  document.getElementById("sermon-ref").value = item.ref || "";
+  document.getElementById("sermon-text").value = item.text || "";
+  document.getElementById("analysis-box").value = item.analysis || "";
+  document.getElementById("sermon-prompt-box").value = item.prompt || "";
+
+  toggleSeriesBox();  // ← 추가 (시리즈 박스 표시/숨김)
+  document.querySelectorAll('textarea').forEach(autoResize);
+};
 
   window.deleteSaved = function(idx) {
     if (!confirm("삭제하시겠습니까?")) return;
