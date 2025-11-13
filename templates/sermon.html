@@ -5,15 +5,16 @@
   <title>설교 도움 페이지</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
+    * { box-sizing: border-box; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; }
-    .page-wrap { display: flex; gap: 1rem; padding: 1rem; height: 100vh; box-sizing: border-box; }
+    .page-wrap { display: flex; gap: 1rem; padding: 1rem; height: 100vh; }
     .left-col { width: 360px; display: flex; flex-direction: column; gap: .75rem; overflow-y: auto; }
     .right-col { flex: 1; display: flex; flex-direction: column; gap: .75rem; min-width: 0; overflow-y: auto; }
     .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .75rem; }
     .label-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
     .label { font-weight: 600; }
-    input[type="text"], input[type="date"], input[type="password"], select { width: 100%; padding: .35rem .5rem; box-sizing: border-box; }
-    textarea { width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box; font-family: inherit; line-height: 1.4; }
+    input[type="text"], input[type="date"], input[type="password"], select { width: 100%; padding: .35rem .5rem; }
+    textarea { width: 100%; min-height: 80px; resize: vertical; font-family: inherit; line-height: 1.4; }
     .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; }
     button { padding: .35rem .6rem; border: 1px solid #ccc; background: #f0f0f0; border-radius: 6px; cursor: pointer; }
     button:hover { background: #e0e0e0; }
@@ -21,16 +22,10 @@
     button.primary:hover { background: #357abd; }
     button.danger { background: #e74c3c; color: white; border-color: #e74c3c; }
     button.danger:hover { background: #c0392b; }
-    .storage-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: .25rem 0; gap: .5rem; }
-    .storage-item:last-child { border-bottom: none; }
-    .storage-actions button { font-size: .7rem; padding: .25rem .45rem; }
-    .toggle-header { display: flex; justify-content: space-between; align-items: center; }
-    .copy-btn { font-size: .7rem; padding: .2rem .5rem; background: #fff; }
-    .status-bar { position: fixed; bottom: 10px; right: 10px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .4rem .7rem; font-size: .8rem; box-shadow: 0 2px 6px rgba(0,0,0,.08); display: none; z-index: 1000; }
-    .guide-tab-active { background: #dfe6ff; border-color: #b5c6ff; }
-    textarea.autosize { overflow: hidden; }
+    button.step-btn { width: 100%; margin-bottom: .5rem; position: relative; }
+    button.step-btn::before { content: attr(data-order) ". "; font-weight: 600; }
     
-    .sermon-type-item { 
+    .storage-item, .type-item, .step-item { 
       display: flex; 
       justify-content: space-between; 
       align-items: center; 
@@ -38,20 +33,19 @@
       margin-bottom: .3rem;
       background: #f8f9fa;
       border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
     }
-    .sermon-type-item:hover { background: #e9ecef; }
-    .sermon-type-item.active { background: #dfe6ff; border: 1px solid #4a90e2; }
-    .sermon-type-name { font-size: .9rem; font-weight: 500; }
-    .sermon-type-delete { 
-      font-size: .7rem; 
-      padding: .2rem .4rem; 
-      background: transparent;
-      color: #e74c3c;
-      border: none;
-    }
-    .sermon-type-delete:hover { background: #fee; }
+    .type-item { cursor: pointer; transition: all 0.2s; }
+    .type-item:hover { background: #e9ecef; }
+    .type-item.active { background: #dfe6ff; border: 1px solid #4a90e2; }
+    .storage-item:last-child { border-bottom: none; }
+    .storage-actions button, .item-actions button { font-size: .7rem; padding: .25rem .45rem; }
+    
+    .toggle-header { display: flex; justify-content: space-between; align-items: center; }
+    .copy-btn { font-size: .7rem; padding: .2rem .5rem; background: #fff; }
+    .status-bar { position: fixed; bottom: 10px; right: 10px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .4rem .7rem; font-size: .8rem; box-shadow: 0 2px 6px rgba(0,0,0,.08); display: none; z-index: 1000; }
+    .guide-tab { padding: .35rem .7rem; margin-right: .3rem; margin-bottom: .3rem; display: inline-block; }
+    .guide-tab-active { background: #dfe6ff; border-color: #b5c6ff; }
+    textarea.autosize { overflow: hidden; }
     
     .modal {
       display: none;
@@ -68,22 +62,17 @@
       background: white;
       border-radius: 12px;
       padding: 1.5rem;
-      max-width: 400px;
+      max-width: 500px;
       width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
     }
     .modal-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; }
     .modal-buttons { display: flex; gap: .5rem; margin-top: 1rem; }
     .modal-buttons button { flex: 1; }
     
-    .category-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: .4rem .6rem;
-      margin-bottom: .3rem;
-      background: #f8f9fa;
-      border-radius: 6px;
-    }
+    .step-order-controls { display: flex; gap: .3rem; }
+    .step-order-controls button { padding: .2rem .4rem; font-size: .7rem; }
   </style>
 </head>
 <body>
@@ -122,78 +111,60 @@
       <!-- 성경 본문 -->
       <div class="box">
         <label class="label">성경 본문 (선택사항)</label>
-        <textarea id="sermon-text" placeholder="본문을 여기에 붙여넣으세요. (선택사항)"></textarea>
+        <textarea id="sermon-text" class="autosize" placeholder="본문을 여기에 붙여넣으세요."></textarea>
       </div>
 
-      <!-- 실행 버튼 -->
+      <!-- 처리 단계 -->
       <div class="box">
-        <button id="btn-analyze" class="primary" style="width: 100%; margin-bottom: .5rem;">본문 분석</button>
-        
-        <!-- 설교 유형 선택 -->
-        <div style="margin: .75rem 0;">
-          <div class="label-row">
-            <label class="label">설교 유형</label>
-            <button id="btn-manage-types" style="font-size: .75rem; padding: .2rem .5rem;">관리</button>
-          </div>
-          <div id="sermon-types-list"></div>
+        <div class="label-row">
+          <label class="label">처리 단계</label>
+          <button id="btn-manage-steps" style="font-size: .75rem; padding: .2rem .5rem;">관리</button>
         </div>
-        
-        <button id="btn-prompt" class="primary" style="width: 100%;">설교 제작 프롬포트</button>
+        <div id="processing-steps"></div>
+      </div>
+
+      <!-- 설교 유형 -->
+      <div class="box">
+        <div class="label-row">
+          <label class="label">설교 유형</label>
+          <button id="btn-manage-prompt-types" style="font-size: .75rem; padding: .2rem .5rem;">관리</button>
+        </div>
+        <div id="prompt-types-list"></div>
       </div>
 
       <!-- 저장 공간 -->
       <div class="box">
         <label class="label">저장된 설교 자료</label>
-        <div class="btn-row" style="margin-bottom: .5rem;">
-          <button id="btn-save">현재 내용 저장</button>
-        </div>
+        <button id="btn-save" style="width: 100%; margin-bottom: .5rem;">현재 내용 저장</button>
         <div id="saved-list"></div>
       </div>
     </div>
 
     <!-- 오른쪽 -->
     <div class="right-col">
-      <!-- 지침 영역 (기본 닫힘) -->
+      <!-- 지침 영역 -->
       <div class="box" id="guide-box">
         <div class="toggle-header">
           <span class="label">지침 영역 🔒</span>
           <button id="toggle-guides">열기</button>
         </div>
         <div id="guide-content" style="display: none;">
-          <div class="btn-row" id="guide-btn-row" style="margin: .5rem 0;">
-            <button id="save-guide">지침 저장</button>
-            <button id="tab-guide-analysis" class="guide-tab-active">본문 분석 지침</button>
-            <button id="tab-guide-prompt">설교문 제작 프롬포트</button>
+          <div class="btn-row" style="margin-bottom: .5rem;">
+            <button id="save-guide" class="primary">지침 저장</button>
           </div>
-          <div id="prompt-type-indicator" style="display: none; font-size: .85rem; color: #666; margin-bottom: .5rem;">
-            현재 유형: <strong id="current-prompt-type"></strong>
-          </div>
-          <textarea id="guide-text" class="autosize" style="min-height: 90px;" placeholder="선택한 지침 유형의 내용을 작성합니다. 카테고리마다 따로 저장됩니다."></textarea>
+          <div id="guide-tabs" class="btn-row" style="margin-bottom: .5rem;"></div>
+          <div id="current-guide-info" style="font-size: .85rem; color: #666; margin-bottom: .5rem;"></div>
+          <textarea id="guide-text" class="autosize" style="min-height: 90px;" placeholder="지침을 작성하세요."></textarea>
         </div>
       </div>
 
-      <!-- 본문 분석 결과 -->
-      <div class="box">
-        <div class="toggle-header">
-          <label class="label">본문 분석</label>
-          <button class="copy-btn" data-copy="analysis-box">복사</button>
-        </div>
-        <textarea id="analysis-box" class="autosize" style="min-height: 140px;" placeholder="본문 분석 결과가 표시됩니다."></textarea>
-      </div>
-
-      <!-- 설교문 제작 프롬포트 결과 -->
-      <div class="box">
-        <div class="toggle-header">
-          <label class="label">설교문 제작 프롬포트 (<span id="prompt-result-type">기본</span>)</label>
-          <button class="copy-btn" data-copy="sermon-prompt-box">복사</button>
-        </div>
-        <textarea id="sermon-prompt-box" class="autosize" style="min-height: 140px;" placeholder="GPT에 던질 프롬포트가 표시됩니다."></textarea>
-      </div>
+      <!-- 동적 결과 박스들 -->
+      <div id="result-boxes"></div>
     </div>
   </div>
 
-  <!-- 진행 상태 -->
-  <div id="status-bar" class="status-bar">GPT로 작업 중...</div>
+  <!-- 상태 표시 -->
+  <div id="status-bar" class="status-bar">작업 중...</div>
 
   <!-- 패스워드 모달 -->
   <div id="modal-password" class="modal">
@@ -208,37 +179,45 @@
     </div>
   </div>
 
-  <!-- 설교 유형 관리 모달 -->
-  <div id="modal-manage-types" class="modal">
+  <!-- 카테고리 관리 모달 -->
+  <div id="modal-categories" class="modal">
     <div class="modal-content">
-      <div class="modal-title">설교 유형 관리</div>
-      <input type="text" id="new-type-name" placeholder="새 설교 유형 이름 (예: 강해설교v2)" style="margin-bottom: .5rem;">
-      <button id="btn-add-type" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
-      
-      <div style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
-        <div id="manage-types-list"></div>
-      </div>
-      
+      <div class="modal-title">카테고리 관리</div>
+      <input type="text" id="new-cat-value" placeholder="영문 코드 (예: special)" style="margin-bottom: .3rem;">
+      <input type="text" id="new-cat-label" placeholder="표시 이름 (예: 특별예배)" style="margin-bottom: .5rem;">
+      <button id="btn-add-category" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
+      <div id="categories-list" style="max-height: 300px; overflow-y: auto;"></div>
       <div class="modal-buttons">
-        <button id="btn-close-modal-types">닫기</button>
+        <button id="btn-close-categories">닫기</button>
       </div>
     </div>
   </div>
 
-  <!-- 카테고리 관리 모달 -->
-  <div id="modal-manage-categories" class="modal">
+  <!-- 처리 단계 관리 모달 -->
+  <div id="modal-steps" class="modal">
     <div class="modal-content">
-      <div class="modal-title">카테고리 관리</div>
-      <input type="text" id="new-category-value" placeholder="영문 코드 (예: special)" style="margin-bottom: .3rem;">
-      <input type="text" id="new-category-label" placeholder="표시 이름 (예: 특별예배)" style="margin-bottom: .5rem;">
-      <button id="btn-add-category" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
-      
-      <div style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
-        <div id="manage-categories-list"></div>
-      </div>
-      
+      <div class="modal-title">처리 단계 관리</div>
+      <p style="font-size: .85rem; color: #666; margin-bottom: .5rem;">카테고리: <strong id="modal-steps-category"></strong></p>
+      <input type="text" id="new-step-id" placeholder="영문 ID (예: questions)" style="margin-bottom: .3rem;">
+      <input type="text" id="new-step-name" placeholder="표시 이름 (예: 질문 생성)" style="margin-bottom: .5rem;">
+      <button id="btn-add-step" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
+      <div id="steps-list" style="max-height: 300px; overflow-y: auto;"></div>
       <div class="modal-buttons">
-        <button id="btn-close-modal-categories">닫기</button>
+        <button id="btn-close-steps">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설교 유형 관리 모달 -->
+  <div id="modal-prompt-types" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">설교 유형 관리</div>
+      <p style="font-size: .85rem; color: #666; margin-bottom: .5rem;">카테고리: <strong id="modal-types-category"></strong></p>
+      <input type="text" id="new-prompt-type" placeholder="유형 이름 (예: 강해설교v2)" style="margin-bottom: .5rem;">
+      <button id="btn-add-prompt-type" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
+      <div id="prompt-types-manage-list" style="max-height: 300px; overflow-y: auto;"></div>
+      <div class="modal-buttons">
+        <button id="btn-close-prompt-types">닫기</button>
       </div>
     </div>
   </div>
@@ -264,317 +243,90 @@
   
   const USER_CODE = 'samuel123';
   const PAGE_NAME = 'sermon';
-const GUIDE_PASSWORD = '6039';
-
-// Firebase 특수 키 정의
-const SERMON_TYPES_KEY = '_sermon-types';
-const CATEGORIES_KEY = '_sermon-categories';
+  const GUIDE_PASSWORD = '5555';
+  const CONFIG_KEY = '_sermon-config';
 
   // ===== 전역 변수 =====
-  const categorySelect = document.getElementById("sermon-category");
-  const guideTextArea = document.getElementById("guide-text");
-  const statusBar = document.getElementById("status-bar");
-  
-  let currentGuideType = "analysis";
-  let currentPromptType = "기본";
-  let sermonTypes = ["기본", "강해설교", "주제설교"];
-  let categories = [
-    {value: "dawn", label: "새벽설교"},
-    {value: "wednesday", label: "수요성경공부"},
-    {value: "friday", label: "금요기도회"},
-    {value: "youth", label: "청년부"},
-    {value: "teen", label: "청소년부"},
-    {value: "women", label: "여선교회"},
-    {value: "men", label: "남선교회"},
-    {value: "etc", label: "기타"}
-  ];
   let guideUnlocked = false;
+  let currentCategory = 'dawn';
+  let currentPromptType = '기본';
+  let currentGuideStep = '';
+  let stepResults = {}; // {stepId: result}
 
-  // ===== 상태 표시 =====
+  // 기본 설정
+  let config = {
+    categories: [
+      {value: "dawn", label: "새벽설교"},
+      {value: "wednesday", label: "수요성경공부"},
+      {value: "friday", label: "금요기도회"},
+      {value: "youth", label: "청년부"}
+    ],
+    categorySettings: {
+      dawn: {
+        promptTypes: ["기본", "강해설교", "주제설교"],
+        steps: [
+          {id: "analysis", name: "본문 분석", order: 1},
+          {id: "prompt", name: "설교문 프롬프트", order: 2}
+        ]
+      },
+      wednesday: {
+        promptTypes: ["시리즈형", "강해형"],
+        steps: [
+          {id: "analysis", name: "본문 분석", order: 1},
+          {id: "prompt", name: "설교문 프롬프트", order: 2}
+        ]
+      },
+      friday: {
+        promptTypes: ["기본", "기도 중심"],
+        steps: [
+          {id: "analysis", name: "본문 분석", order: 1},
+          {id: "prompt", name: "설교문 프롬프트", order: 2}
+        ]
+      },
+      youth: {
+        promptTypes: ["실천형", "토론형"],
+        steps: [
+          {id: "analysis", name: "본문 분석", order: 1},
+          {id: "prompt", name: "설교문 프롬프트", order: 2}
+        ]
+      }
+    }
+  };
+
+  // ===== 유틸리티 =====
   function showStatus(msg) {
-    statusBar.textContent = msg;
-    statusBar.style.display = "block";
+    document.getElementById('status-bar').textContent = msg;
+    document.getElementById('status-bar').style.display = 'block';
   }
   
   function hideStatus() {
-    statusBar.style.display = "none";
+    document.getElementById('status-bar').style.display = 'none';
   }
 
-  // ===== 자동 높이 조절 =====
   function autoResize(el) {
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = el.scrollHeight + 'px';
   }
 
-  // ===== 패스워드 관리 =====
-  
-  document.getElementById("toggle-guides").addEventListener("click", () => {
-    const guideContent = document.getElementById("guide-content");
-    const btn = document.getElementById("toggle-guides");
-    
-    if (guideContent.style.display === 'none') {
-      // 열기 시도
-      if (!guideUnlocked) {
-        document.getElementById('modal-password').classList.add('show');
-        document.getElementById('password-input').value = '';
-        document.getElementById('password-input').focus();
-      } else {
-        guideContent.style.display = 'block';
-        btn.textContent = '닫기';
-      }
-    } else {
-      // 닫기
-      guideContent.style.display = 'none';
-      btn.textContent = '열기';
-    }
-  });
-
-  document.getElementById('btn-submit-password').addEventListener('click', () => {
-    const input = document.getElementById('password-input').value;
-    if (input === GUIDE_PASSWORD) {
-      guideUnlocked = true;
-      document.getElementById('modal-password').classList.remove('show');
-      document.getElementById('guide-content').style.display = 'block';
-      document.getElementById('toggle-guides').textContent = '닫기';
-      showStatus('✅ 지침 영역이 열렸습니다!');
-      setTimeout(hideStatus, 2000);
-    } else {
-      alert('❌ 패스워드가 틀렸습니다.');
-      document.getElementById('password-input').value = '';
-      document.getElementById('password-input').focus();
-    }
-  });
-
-  document.getElementById('btn-cancel-password').addEventListener('click', () => {
-    document.getElementById('modal-password').classList.remove('show');
-  });
-
-  document.getElementById('password-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('btn-submit-password').click();
-    }
-  });
-
-  // ===== 카테고리 관리 =====
-  
-  function loadCategories() {
-    const saved = localStorage.getItem('sermon-categories');
-    if (saved) {
-      categories = JSON.parse(saved);
-    }
-    renderCategories();
-  }
-
-// 수정
-async function saveCategories() {
-  localStorage.setItem('sermon-categories', JSON.stringify(categories));
-  
-  // Firebase에도 저장
-  try {
-    await saveToFirebase(CATEGORIES_KEY, JSON.stringify(categories));
-    console.log('✅ 카테고리 Firebase 동기화 완료');
-  } catch (err) {
-    console.error('카테고리 Firebase 동기화 실패:', err);
-  }
-}
-  function renderCategories() {
-    const currentValue = categorySelect.value;
-    categorySelect.innerHTML = categories.map(cat => 
-      `<option value="${cat.value}">${cat.label}</option>`
-    ).join('');
-    
-    if (currentValue && categories.find(c => c.value === currentValue)) {
-      categorySelect.value = currentValue;
-    }
-    
-    toggleSeriesBox();
-  }
-
-  function renderManageCategories() {
-    const list = document.getElementById('manage-categories-list');
-    list.innerHTML = categories.map((cat, idx) => `
-      <div class="category-item">
-        <div>
-          <div style="font-weight: 600;">${cat.label}</div>
-          <div style="font-size: .75rem; color: #666;">${cat.value}</div>
-        </div>
-        ${categories.length > 1 ? `<button class="sermon-type-delete" onclick="deleteCategory(${idx})">삭제</button>` : ''}
-      </div>
-    `).join('');
-  }
-
-  window.deleteCategory = function(idx) {
-    if (!confirm(`"${categories[idx].label}" 카테고리를 삭제하시겠습니까?`)) return;
-    
-    categories.splice(idx, 1);
-    saveCategories();
-    renderCategories();
-    renderManageCategories();
-  };
-
-  document.getElementById('btn-manage-categories').addEventListener('click', () => {
-    renderManageCategories();
-    document.getElementById('modal-manage-categories').classList.add('show');
-  });
-
-  document.getElementById('btn-close-modal-categories').addEventListener('click', () => {
-    document.getElementById('modal-manage-categories').classList.remove('show');
-  });
-
-  document.getElementById('btn-add-category').addEventListener('click', async () => {  // async 추가
-  const value = document.getElementById('new-category-value').value.trim();
-  const label = document.getElementById('new-category-label').value.trim();
-  
-  if (!value || !label) {
-    alert('영문 코드와 표시 이름을 모두 입력하세요.');
-    return;
-  }
-  
-  if (categories.find(c => c.value === value)) {
-    alert('이미 존재하는 코드입니다.');
-    return;
-  }
-  
-  categories.push({value, label});
-  await saveCategories();  // await 추가
-  renderCategories();
-  renderManageCategories();
-  
-  document.getElementById('new-category-value').value = '';
-  document.getElementById('new-category-label').value = '';
-  alert(`"${label}" 카테고리가 추가되었습니다!`);
-});
-
-window.deleteCategory = async function(idx) {  // async 추가
-  if (!confirm(`"${categories[idx].label}" 카테고리를 삭제하시겠습니까?`)) return;
-  
-  categories.splice(idx, 1);
-  await saveCategories();  // await 추가
-  renderCategories();
-  renderManageCategories();
-};
-
-  // ===== 설교 유형 관리 =====
-  
-  function loadSermonTypes() {
-    const saved = localStorage.getItem('sermon-prompt-types');
-    if (saved) {
-      sermonTypes = JSON.parse(saved);
-    }
-    renderSermonTypes();
-  }
-
-// 수정
-async function saveSermonTypes() {
-  localStorage.setItem('sermon-prompt-types', JSON.stringify(sermonTypes));
-  
-  // Firebase에도 저장
-  try {
-    await saveToFirebase(SERMON_TYPES_KEY, JSON.stringify(sermonTypes));
-    console.log('✅ 설교 유형 Firebase 동기화 완료');
-  } catch (err) {
-    console.error('설교 유형 Firebase 동기화 실패:', err);
-  }
-}
-  function renderSermonTypes() {
-    const list = document.getElementById('sermon-types-list');
-    list.innerHTML = sermonTypes.map((type, idx) => `
-      <div class="sermon-type-item ${type === currentPromptType ? 'active' : ''}" data-type="${type}">
-        <span class="sermon-type-name">${type}</span>
-      </div>
-    `).join('');
-    
-    document.querySelectorAll('.sermon-type-item').forEach(item => {
-      item.addEventListener('click', () => {
-        currentPromptType = item.dataset.type;
-        renderSermonTypes();
-        if (currentGuideType === 'prompt') {
-          loadCurrentGuide();
-        }
-        document.getElementById('current-prompt-type').textContent = currentPromptType;
-      });
-    });
-  }
-
-  function renderManageTypes() {
-    const list = document.getElementById('manage-types-list');
-    list.innerHTML = sermonTypes.map((type, idx) => `
-      <div class="sermon-type-item">
-        <span class="sermon-type-name">${type}</span>
-        ${sermonTypes.length > 1 ? `<button class="sermon-type-delete" onclick="deleteSermonType(${idx})">삭제</button>` : ''}
-      </div>
-    `).join('');
-  }
-
-window.deleteSermonType = async function(idx) {  // async 추가
-  if (!confirm(`"${sermonTypes[idx]}" 유형을 삭제하시겠습니까?\n관련 지침도 함께 삭제됩니다.`)) return;
-  
-  const deletedType = sermonTypes[idx];
-  sermonTypes.splice(idx, 1);
-  
-  if (currentPromptType === deletedType) {
-    currentPromptType = sermonTypes[0];
-  }
-  
-  await saveSermonTypes();  // await 추가
-  renderSermonTypes();
-  renderManageTypes();
-};
-
-  document.getElementById('btn-manage-types').addEventListener('click', () => {
-    renderManageTypes();
-    document.getElementById('modal-manage-types').classList.add('show');
-  });
-
-  document.getElementById('btn-close-modal-types').addEventListener('click', () => {
-    document.getElementById('modal-manage-types').classList.remove('show');
-  });
-
-  document.getElementById('btn-add-type').addEventListener('click', async () => {  // async 추가
-  const newName = document.getElementById('new-type-name').value.trim();
-  if (!newName) {
-    alert('유형 이름을 입력하세요.');
-    return;
-  }
-  
-  if (sermonTypes.includes(newName)) {
-    alert('이미 존재하는 유형 이름입니다.');
-    return;
-  }
-  
-  sermonTypes.push(newName);
-  await saveSermonTypes();  // await 추가
-  renderSermonTypes();
-  renderManageTypes();
-  document.getElementById('new-type-name').value = '';
-  alert(`"${newName}" 유형이 추가되었습니다!`);
-});
-
   // ===== Firebase 함수 =====
-  
   async function loadFromFirebase() {
     try {
-      const snapshot = await db
-        .collection('users')
-        .doc(USER_CODE)
-        .collection(PAGE_NAME)
-        .get();
+      const snapshot = await db.collection('users').doc(USER_CODE).collection(PAGE_NAME).get();
       
-      let loadedCount = 0;
       if (!snapshot.empty) {
         snapshot.forEach(doc => {
-          const key = doc.id;
-          const value = doc.data().value;
-          localStorage.setItem(key, value);
-          loadedCount++;
+          localStorage.setItem(doc.id, doc.data().value);
         });
-        console.log(`✅ Firebase에서 ${loadedCount}개 지침을 불러왔습니다!`);
+        
+        const configData = localStorage.getItem(CONFIG_KEY);
+        if (configData) {
+          config = JSON.parse(configData);
+        }
+        console.log('✅ Firebase 동기화 완료');
         return true;
-      } else {
-        console.log('Firebase에 저장된 지침이 없습니다.');
-        return false;
       }
+      return false;
     } catch (err) {
       console.error('Firebase 로드 실패:', err);
       return false;
@@ -583,15 +335,10 @@ window.deleteSermonType = async function(idx) {  // async 추가
 
   async function saveToFirebase(key, value) {
     try {
-      await db
-        .collection('users')
-        .doc(USER_CODE)
-        .collection(PAGE_NAME)
-        .doc(key)
-        .set({
-          value: value,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+      await db.collection('users').doc(USER_CODE).collection(PAGE_NAME).doc(key).set({
+        value: value,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
       return true;
     } catch (err) {
       console.error('Firebase 저장 실패:', err);
@@ -599,231 +346,577 @@ window.deleteSermonType = async function(idx) {  // async 추가
     }
   }
 
+  async function saveConfig() {
+    const configStr = JSON.stringify(config);
+    localStorage.setItem(CONFIG_KEY, configStr);
+    await saveToFirebase(CONFIG_KEY, configStr);
+  }
+
   // ===== 지침 관리 =====
-  
-  function getGuideKey(category, type, promptType = null) {
-    if (type === 'prompt' && promptType) {
-      return `sermon-guide-${category}-prompt-${promptType}`;
+  function getGuideKey(category, stepId, promptType = null) {
+    if (stepId === 'prompt' && promptType) {
+      return `guide-${category}-${stepId}-${promptType}`;
     }
-    return `sermon-guide-${category}-${type}`;
+    return `guide-${category}-${stepId}`;
   }
 
-  function loadCurrentGuide() {
-    const cat = categorySelect.value;
-    let key;
+  function loadGuide(category, stepId, promptType = null) {
+    const key = getGuideKey(category, stepId, promptType);
+    const stored = localStorage.getItem(key) || '';
+    document.getElementById('guide-text').value = stored;
+    autoResize(document.getElementById('guide-text'));
     
-    if (currentGuideType === 'prompt') {
-      key = getGuideKey(cat, 'prompt', currentPromptType);
-      document.getElementById('prompt-type-indicator').style.display = 'block';
-      document.getElementById('current-prompt-type').textContent = currentPromptType;
-    } else {
-      key = getGuideKey(cat, currentGuideType);
-      document.getElementById('prompt-type-indicator').style.display = 'none';
+    let info = `카테고리: ${getCategoryLabel(category)} | 단계: ${getStepName(category, stepId)}`;
+    if (stepId === 'prompt' && promptType) {
+      info += ` | 유형: ${promptType}`;
     }
-    
-    const stored = localStorage.getItem(key) || "";
-    guideTextArea.value = stored;
-    autoResize(guideTextArea);
+    document.getElementById('current-guide-info').textContent = info;
   }
 
-  function toggleSeriesBox() {
-    const seriesBox = document.getElementById("series-box");
-    const category = categorySelect.value;
+  async function saveGuide() {
+    const key = getGuideKey(currentCategory, currentGuideStep, 
+      currentGuideStep === 'prompt' ? currentPromptType : null);
+    const value = document.getElementById('guide-text').value;
     
-    if (category === "wednesday") {
-      seriesBox.style.display = "block";
-    } else {
-      seriesBox.style.display = "none";
-    }
-  }
-
-  categorySelect.addEventListener("change", () => {
-    loadCurrentGuide();
-    toggleSeriesBox();
-  });
-
-  document.getElementById("tab-guide-analysis").addEventListener("click", () => {
-    document.getElementById("tab-guide-analysis").classList.add("guide-tab-active");
-    document.getElementById("tab-guide-prompt").classList.remove("guide-tab-active");
-    currentGuideType = "analysis";
-    loadCurrentGuide();
-  });
-
-  document.getElementById("tab-guide-prompt").addEventListener("click", () => {
-    document.getElementById("tab-guide-prompt").classList.add("guide-tab-active");
-    document.getElementById("tab-guide-analysis").classList.remove("guide-tab-active");
-    currentGuideType = "prompt";
-    loadCurrentGuide();
-  });
-
-  document.getElementById("save-guide").addEventListener("click", async () => {
-    const cat = categorySelect.value;
-    let key;
-    
-    if (currentGuideType === 'prompt') {
-      key = getGuideKey(cat, 'prompt', currentPromptType);
-    } else {
-      key = getGuideKey(cat, currentGuideType);
-    }
-    
-    const value = guideTextArea.value;
-
     localStorage.setItem(key, value);
-
-    showStatus("💾 저장 중...");
+    
+    showStatus('💾 저장 중...');
     const success = await saveToFirebase(key, value);
-
+    
     if (success) {
-      showStatus("✅ 지침이 저장되고 클라우드에 동기화되었습니다!");
+      showStatus('✅ 지침 저장 완료!');
     } else {
-      showStatus("⚠️ 로컬에만 저장됨 (클라우드 동기화 실패)");
+      showStatus('⚠️ 로컬에만 저장됨');
     }
-
+    
     setTimeout(hideStatus, 2000);
-  });
+  }
 
-  // ===== 복사 기능 =====
-  
-  document.querySelectorAll('[data-copy]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.dataset.copy;
-      const textarea = document.getElementById(targetId);
-      if (!textarea) return;
-      
-      textarea.select();
-      document.execCommand('copy');
-      
-      const originalText = btn.textContent;
-      btn.textContent = '✅ 복사됨!';
-      setTimeout(() => {
-        btn.textContent = originalText;
-      }, 1500);
+  // ===== 헬퍼 함수 =====
+  function getCategoryLabel(value) {
+    const cat = config.categories.find(c => c.value === value);
+    return cat ? cat.label : value;
+  }
+
+  function getStepName(category, stepId) {
+    const settings = config.categorySettings[category];
+    if (!settings) return stepId;
+    const step = settings.steps.find(s => s.id === stepId);
+    return step ? step.name : stepId;
+  }
+
+  function getCurrentSteps() {
+    const settings = config.categorySettings[currentCategory];
+    return settings ? settings.steps.sort((a, b) => a.order - b.order) : [];
+  }
+
+  function getCurrentPromptTypes() {
+    const settings = config.categorySettings[currentCategory];
+    return settings ? settings.promptTypes : ['기본'];
+  }
+
+  // ===== 렌더링 함수 =====
+  function renderCategories() {
+    const select = document.getElementById('sermon-category');
+    const current = select.value;
+    select.innerHTML = config.categories.map(c => 
+      `<option value="${c.value}">${c.label}</option>`
+    ).join('');
+    
+    if (current && config.categories.find(c => c.value === current)) {
+      select.value = current;
+    } else {
+      select.value = config.categories[0].value;
+    }
+    currentCategory = select.value;
+  }
+
+  function renderProcessingSteps() {
+    const steps = getCurrentSteps();
+    const container = document.getElementById('processing-steps');
+    
+    container.innerHTML = steps.map(step => 
+      `<button class="step-btn primary" data-step="${step.id}" data-order="${step.order}">${step.name}</button>`
+    ).join('');
+    
+    container.querySelectorAll('.step-btn').forEach(btn => {
+      btn.addEventListener('click', () => executeStep(btn.dataset.step));
     });
-  });
+  }
 
-  // ===== 본문 분석 =====
-  
-  document.getElementById("btn-analyze").addEventListener("click", async () => {
-    const date = document.getElementById("sermon-date").value;
-    const category = categorySelect.value;
-    const ref = document.getElementById("sermon-ref").value;
-    const text = document.getElementById("sermon-text").value;
-    const guideKey = getGuideKey(category, "analysis");
-    const guide = localStorage.getItem(guideKey) || "";
-
-    if (!ref) {
-      alert("성경구절을 입력하세요.");
-      return;
-    }
-
-    showStatus("🤖 본문 분석 중...");
-
-    try {
-      const response = await fetch("/api/sermon/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: date,
-          category: category,
-          reference: ref,
-          text: text,
-          guide: guide
-        })
+  function renderPromptTypes() {
+    const types = getCurrentPromptTypes();
+    const container = document.getElementById('prompt-types-list');
+    
+    container.innerHTML = types.map(type => 
+      `<div class="type-item ${type === currentPromptType ? 'active' : ''}" data-type="${type}">
+        <span>${type}</span>
+      </div>`
+    ).join('');
+    
+    container.querySelectorAll('.type-item').forEach(item => {
+      item.addEventListener('click', () => {
+        currentPromptType = item.dataset.type;
+        renderPromptTypes();
+        if (currentGuideStep === 'prompt') {
+          loadGuide(currentCategory, 'prompt', currentPromptType);
+        }
       });
+    });
+  }
 
-      const data = await response.json();
-
-      if (data.ok) {
-        const analysisBox = document.getElementById("analysis-box");
-        analysisBox.value = data.result;
-        autoResize(analysisBox);
-        showStatus("✅ 본문 분석 완료!");
-      } else {
-        alert(`오류: ${data.error}`);
-        showStatus("❌ 분석 실패");
+  function renderResultBoxes() {
+    const steps = getCurrentSteps();
+    const container = document.getElementById('result-boxes');
+    
+    container.innerHTML = steps.map(step => `
+      <div class="box">
+        <div class="toggle-header">
+          <label class="label">${step.name}${step.id === 'prompt' ? ` (${currentPromptType})` : ''}</label>
+          <button class="copy-btn" data-copy="result-${step.id}">📋 복사</button>
+        </div>
+        <textarea id="result-${step.id}" class="autosize" style="min-height: 140px;" placeholder="${step.name} 결과가 표시됩니다." readonly></textarea>
+      </div>
+    `).join('');
+    
+    // 복사 버튼
+    container.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const textarea = document.getElementById(btn.dataset.copy);
+        if (textarea) {
+          textarea.select();
+          document.execCommand('copy');
+          const orig = btn.textContent;
+          btn.textContent = '✅ 복사됨!';
+          setTimeout(() => btn.textContent = orig, 1500);
+        }
+      });
+    });
+    
+    // 기존 결과 복원
+    steps.forEach(step => {
+      if (stepResults[step.id]) {
+        const textarea = document.getElementById(`result-${step.id}`);
+        if (textarea) {
+          textarea.value = stepResults[step.id];
+          autoResize(textarea);
+        }
       }
-    } catch (err) {
-      alert(`네트워크 오류: ${err.message}`);
-      showStatus("❌ 오류 발생");
-    } finally {
-      setTimeout(hideStatus, 2000);
-    }
-  });
+    });
+  }
 
-  // ===== 설교문 프롬프트 생성 =====
-  
-  document.getElementById("btn-prompt").addEventListener("click", async () => {
-    const date = document.getElementById("sermon-date").value;
-    const category = categorySelect.value;
-    const ref = document.getElementById("sermon-ref").value;
-    const text = document.getElementById("sermon-text").value;
-    const analysis = document.getElementById("analysis-box").value;
-    const guideKey = getGuideKey(category, "prompt", currentPromptType);
-    const guide = localStorage.getItem(guideKey) || "";
+  function renderGuideTabs() {
+    const steps = getCurrentSteps();
+    const container = document.getElementById('guide-tabs');
+    
+    const tabs = [];
+    steps.forEach(step => {
+      if (step.id === 'prompt') {
+        const types = getCurrentPromptTypes();
+        types.forEach(type => {
+          tabs.push({
+            id: `${step.id}-${type}`,
+            label: `${step.name} (${type})`,
+            stepId: step.id,
+            promptType: type
+          });
+        });
+      } else {
+        tabs.push({
+          id: step.id,
+          label: step.name,
+          stepId: step.id,
+          promptType: null
+        });
+      }
+    });
+    
+    container.innerHTML = tabs.map(tab => 
+      `<button class="guide-tab ${tab.stepId === currentGuideStep && (tab.stepId !== 'prompt' || tab.promptType === currentPromptType) ? 'guide-tab-active' : ''}" 
+        data-step="${tab.stepId}" data-type="${tab.promptType || ''}">${tab.label}</button>`
+    ).join('');
+    
+    container.querySelectorAll('.guide-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentGuideStep = btn.dataset.step;
+        if (btn.dataset.type) {
+          currentPromptType = btn.dataset.type;
+        }
+        renderGuideTabs();
+        loadGuide(currentCategory, currentGuideStep, 
+          currentGuideStep === 'prompt' ? currentPromptType : null);
+      });
+    });
+  }
 
+  // ===== 처리 단계 실행 =====
+  async function executeStep(stepId) {
+    const ref = document.getElementById('sermon-ref').value;
     if (!ref) {
-      alert("성경구절을 입력하세요.");
+      alert('성경구절을 입력하세요.');
       return;
     }
 
-    showStatus(`🤖 프롬프트 생성 중 (${currentPromptType})...`);
-
+    const text = document.getElementById('sermon-text').value;
+    const guideKey = getGuideKey(currentCategory, stepId, 
+      stepId === 'prompt' ? currentPromptType : null);
+    const guide = localStorage.getItem(guideKey) || '';
+    
+    // 이전 단계 결과들 수집
+    const steps = getCurrentSteps();
+    const currentStepIndex = steps.findIndex(s => s.id === stepId);
+    const previousResults = {};
+    for (let i = 0; i < currentStepIndex; i++) {
+      const prevStep = steps[i];
+      if (stepResults[prevStep.id]) {
+        previousResults[prevStep.id] = {
+          name: prevStep.name,
+          result: stepResults[prevStep.id]
+        };
+      }
+    }
+    
+    showStatus(`🤖 ${getStepName(currentCategory, stepId)} 처리 중...`);
+    
     try {
-      const response = await fetch("/api/sermon/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/sermon/process', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          date: date,
-          category: category,
+          category: currentCategory,
+          stepId: stepId,
           reference: ref,
           text: text,
-          analysis: analysis,
           guide: guide,
-          promptType: currentPromptType
+          promptType: stepId === 'prompt' ? currentPromptType : null,
+          previousResults: previousResults
         })
       });
-
+      
       const data = await response.json();
-
+      
       if (data.ok) {
-        const promptBox = document.getElementById("sermon-prompt-box");
-        promptBox.value = data.result;
-        autoResize(promptBox);
-        document.getElementById('prompt-result-type').textContent = currentPromptType;
-        showStatus("✅ 프롬프트 생성 완료!");
+        stepResults[stepId] = data.result;
+        const textarea = document.getElementById(`result-${stepId}`);
+        if (textarea) {
+          textarea.value = data.result;
+          autoResize(textarea);
+        }
+        showStatus('✅ 완료!');
       } else {
         alert(`오류: ${data.error}`);
-        showStatus("❌ 생성 실패");
+        showStatus('❌ 실패');
       }
     } catch (err) {
       alert(`네트워크 오류: ${err.message}`);
-      showStatus("❌ 오류 발생");
+      showStatus('❌ 오류');
     } finally {
       setTimeout(hideStatus, 2000);
     }
+  }
+
+  // ===== 카테고리 변경 =====
+  document.getElementById('sermon-category').addEventListener('change', (e) => {
+    currentCategory = e.target.value;
+    currentPromptType = getCurrentPromptTypes()[0];
+    stepResults = {};
+    
+    renderProcessingSteps();
+    renderPromptTypes();
+    renderResultBoxes();
+    renderGuideTabs();
+    
+    if (currentCategory === 'wednesday') {
+      document.getElementById('series-box').style.display = 'block';
+    } else {
+      document.getElementById('series-box').style.display = 'none';
+    }
   });
 
-  // ===== 저장 공간 관리 =====
-  
-  function loadSavedList() {
-    const savedList = document.getElementById("saved-list");
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+  // ===== 패스워드 =====
+  document.getElementById('toggle-guides').addEventListener('click', () => {
+    const content = document.getElementById('guide-content');
+    const btn = document.getElementById('toggle-guides');
+    
+    if (content.style.display === 'none') {
+      if (!guideUnlocked) {
+        document.getElementById('modal-password').classList.add('show');
+        document.getElementById('password-input').value = '';
+        document.getElementById('password-input').focus();
+      } else {
+        content.style.display = 'block';
+        btn.textContent = '닫기';
+      }
+    } else {
+      content.style.display = 'none';
+      btn.textContent = '열기';
+    }
+  });
 
-    if (saved.length === 0) {
-      savedList.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
+  document.getElementById('btn-submit-password').addEventListener('click', () => {
+    if (document.getElementById('password-input').value === GUIDE_PASSWORD) {
+      guideUnlocked = true;
+      document.getElementById('modal-password').classList.remove('show');
+      document.getElementById('guide-content').style.display = 'block';
+      document.getElementById('toggle-guides').textContent = '닫기';
+      
+      // 첫 지침 탭 선택
+      const steps = getCurrentSteps();
+      if (steps.length > 0) {
+        currentGuideStep = steps[0].id;
+        renderGuideTabs();
+        loadGuide(currentCategory, currentGuideStep);
+      }
+    } else {
+      alert('❌ 패스워드가 틀렸습니다.');
+      document.getElementById('password-input').value = '';
+    }
+  });
+
+  document.getElementById('btn-cancel-password').addEventListener('click', () => {
+    document.getElementById('modal-password').classList.remove('show');
+  });
+
+  document.getElementById('password-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('btn-submit-password').click();
+  });
+
+  // ===== 지침 저장 =====
+  document.getElementById('save-guide').addEventListener('click', saveGuide);
+
+  // ===== 카테고리 관리 =====
+  document.getElementById('btn-manage-categories').addEventListener('click', () => {
+    const list = document.getElementById('categories-list');
+    list.innerHTML = config.categories.map((cat, idx) => `
+      <div class="storage-item">
+        <div>
+          <div style="font-weight: 600;">${cat.label}</div>
+          <div style="font-size: .75rem; color: #666;">${cat.value}</div>
+        </div>
+        ${config.categories.length > 1 ? `<button class="danger" onclick="deleteCategory(${idx})">삭제</button>` : ''}
+      </div>
+    `).join('');
+    document.getElementById('modal-categories').classList.add('show');
+  });
+
+  document.getElementById('btn-close-categories').addEventListener('click', () => {
+    document.getElementById('modal-categories').classList.remove('show');
+  });
+
+  document.getElementById('btn-add-category').addEventListener('click', async () => {
+    const value = document.getElementById('new-cat-value').value.trim();
+    const label = document.getElementById('new-cat-label').value.trim();
+    
+    if (!value || !label) {
+      alert('모두 입력하세요.');
       return;
     }
+    
+    if (config.categories.find(c => c.value === value)) {
+      alert('이미 존재하는 코드입니다.');
+      return;
+    }
+    
+    config.categories.push({value, label});
+    config.categorySettings[value] = {
+      promptTypes: ['기본'],
+      steps: [
+        {id: 'analysis', name: '본문 분석', order: 1},
+        {id: 'prompt', name: '설교문 프롬프트', order: 2}
+      ]
+    };
+    
+    await saveConfig();
+    renderCategories();
+    document.getElementById('btn-manage-categories').click();
+    document.getElementById('new-cat-value').value = '';
+    document.getElementById('new-cat-label').value = '';
+  });
 
-    savedList.innerHTML = saved.map((item, idx) => {
-      const category = categories.find(c => c.value === item.category);
-      const categoryName = category ? category.label : item.category;
-      const displayText = item.seriesName 
-        ? `${item.date || '날짜 없음'} - ${categoryName} - ${item.seriesName}`
-        : `${item.date || '날짜 없음'} - ${categoryName}`;
+  window.deleteCategory = async function(idx) {
+    if (!confirm(`"${config.categories[idx].label}" 삭제?`)) return;
+    const value = config.categories[idx].value;
+    config.categories.splice(idx, 1);
+    delete config.categorySettings[value];
+    await saveConfig();
+    renderCategories();
+    document.getElementById('btn-manage-categories').click();
+  };
+
+  // ===== 처리 단계 관리 =====
+  document.getElementById('btn-manage-steps').addEventListener('click', () => {
+    document.getElementById('modal-steps-category').textContent = getCategoryLabel(currentCategory);
+    const steps = getCurrentSteps();
+    const list = document.getElementById('steps-list');
+    
+    list.innerHTML = steps.map((step, idx) => `
+      <div class="step-item">
+        <span>${step.order}. ${step.name}</span>
+        <div class="step-order-controls">
+          ${idx > 0 ? `<button onclick="moveStep(${idx}, -1)">↑</button>` : ''}
+          ${idx < steps.length - 1 ? `<button onclick="moveStep(${idx}, 1)">↓</button>` : ''}
+          ${steps.length > 1 ? `<button class="danger" onclick="deleteStep(${idx})">삭제</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    
+    document.getElementById('modal-steps').classList.add('show');
+  });
+
+  document.getElementById('btn-close-steps').addEventListener('click', () => {
+    document.getElementById('modal-steps').classList.remove('show');
+  });
+
+  document.getElementById('btn-add-step').addEventListener('click', async () => {
+    const id = document.getElementById('new-step-id').value.trim();
+    const name = document.getElementById('new-step-name').value.trim();
+    
+    if (!id || !name) {
+      alert('모두 입력하세요.');
+      return;
+    }
+    
+    const steps = getCurrentSteps();
+    if (steps.find(s => s.id === id)) {
+      alert('이미 존재하는 ID입니다.');
+      return;
+    }
+    
+    const maxOrder = Math.max(...steps.map(s => s.order), 0);
+    config.categorySettings[currentCategory].steps.push({
+      id: id,
+      name: name,
+      order: maxOrder + 1
+    });
+    
+    await saveConfig();
+    renderProcessingSteps();
+    renderResultBoxes();
+    renderGuideTabs();
+    document.getElementById('btn-manage-steps').click();
+    document.getElementById('new-step-id').value = '';
+    document.getElementById('new-step-name').value = '';
+  });
+
+  window.moveStep = async function(idx, direction) {
+    const steps = getCurrentSteps();
+    const targetIdx = idx + direction;
+    
+    if (targetIdx < 0 || targetIdx >= steps.length) return;
+    
+    [steps[idx].order, steps[targetIdx].order] = [steps[targetIdx].order, steps[idx].order];
+    
+    await saveConfig();
+    renderProcessingSteps();
+    renderResultBoxes();
+    document.getElementById('btn-manage-steps').click();
+  };
+
+  window.deleteStep = async function(idx) {
+    const steps = getCurrentSteps();
+    if (!confirm(`"${steps[idx].name}" 삭제?`)) return;
+    
+    config.categorySettings[currentCategory].steps.splice(idx, 1);
+    await saveConfig();
+    renderProcessingSteps();
+    renderResultBoxes();
+    renderGuideTabs();
+    document.getElementById('btn-manage-steps').click();
+  };
+
+  // ===== 설교 유형 관리 =====
+  document.getElementById('btn-manage-prompt-types').addEventListener('click', () => {
+    document.getElementById('modal-types-category').textContent = getCategoryLabel(currentCategory);
+    const types = getCurrentPromptTypes();
+    const list = document.getElementById('prompt-types-manage-list');
+    
+    list.innerHTML = types.map((type, idx) => `
+      <div class="storage-item">
+        <span>${type}</span>
+        ${types.length > 1 ? `<button class="danger" onclick="deletePromptType(${idx})">삭제</button>` : ''}
+      </div>
+    `).join('');
+    
+    document.getElementById('modal-prompt-types').classList.add('show');
+  });
+
+  document.getElementById('btn-close-prompt-types').addEventListener('click', () => {
+    document.getElementById('modal-prompt-types').classList.remove('show');
+  });
+
+  document.getElementById('btn-add-prompt-type').addEventListener('click', async () => {
+    const name = document.getElementById('new-prompt-type').value.trim();
+    
+    if (!name) {
+      alert('유형 이름을 입력하세요.');
+      return;
+    }
+    
+    const types = getCurrentPromptTypes();
+    if (types.includes(name)) {
+      alert('이미 존재합니다.');
+      return;
+    }
+    
+    config.categorySettings[currentCategory].promptTypes.push(name);
+    await saveConfig();
+    renderPromptTypes();
+    renderGuideTabs();
+    document.getElementById('btn-manage-prompt-types').click();
+    document.getElementById('new-prompt-type').value = '';
+  });
+
+  window.deletePromptType = async function(idx) {
+    const types = getCurrentPromptTypes();
+    if (!confirm(`"${types[idx]}" 삭제?`)) return;
+    
+    config.categorySettings[currentCategory].promptTypes.splice(idx, 1);
+    if (currentPromptType === types[idx]) {
+      currentPromptType = getCurrentPromptTypes()[0];
+    }
+    await saveConfig();
+    renderPromptTypes();
+    renderGuideTabs();
+    document.getElementById('btn-manage-prompt-types').click();
+  };
+
+  // ===== 저장/불러오기 =====
+  document.getElementById('btn-save').addEventListener('click', () => {
+    const saved = JSON.parse(localStorage.getItem('sermon-saved') || '[]');
+    saved.push({
+      date: document.getElementById('sermon-date').value,
+      category: currentCategory,
+      seriesName: document.getElementById('series-name').value,
+      ref: document.getElementById('sermon-ref').value,
+      text: document.getElementById('sermon-text').value,
+      promptType: currentPromptType,
+      results: stepResults,
+      savedAt: new Date().toISOString()
+    });
+    
+    localStorage.setItem('sermon-saved', JSON.stringify(saved));
+    renderSavedList();
+    alert('✅ 저장되었습니다!');
+  });
+
+  function renderSavedList() {
+    const saved = JSON.parse(localStorage.getItem('sermon-saved') || '[]');
+    const list = document.getElementById('saved-list');
+    
+    if (saved.length === 0) {
+      list.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
+      return;
+    }
+    
+    list.innerHTML = saved.map((item, idx) => {
+      const catLabel = getCategoryLabel(item.category);
+      const display = item.seriesName 
+        ? `${item.date} - ${catLabel} - ${item.seriesName}`
+        : `${item.date} - ${catLabel}`;
       
       return `
         <div class="storage-item">
-          <span style="font-size: .85rem;">${displayText}</span>
+          <span style="font-size: .85rem;">${display}</span>
           <div class="storage-actions">
             <button onclick="loadSaved(${idx})">불러오기</button>
             <button onclick="deleteSaved(${idx})">삭제</button>
@@ -833,116 +926,58 @@ window.deleteSermonType = async function(idx) {  // async 추가
     }).join('');
   }
 
-  document.getElementById("btn-save").addEventListener("click", () => {
-    const date = document.getElementById("sermon-date").value;
-    const category = categorySelect.value;
-    const seriesName = document.getElementById("series-name").value;
-    const ref = document.getElementById("sermon-ref").value;
-    const text = document.getElementById("sermon-text").value;
-    const analysis = document.getElementById("analysis-box").value;
-    const prompt = document.getElementById("sermon-prompt-box").value;
-
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
-    saved.push({
-      date: date,
-      category: category,
-      seriesName: seriesName,
-      ref: ref,
-      text: text,
-      analysis: analysis,
-      prompt: prompt,
-      promptType: currentPromptType,
-      savedAt: new Date().toISOString()
-    });
-
-    localStorage.setItem("sermon-saved", JSON.stringify(saved));
-    loadSavedList();
-    alert("✅ 저장되었습니다!");
-  });
-
   window.loadSaved = function(idx) {
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+    const saved = JSON.parse(localStorage.getItem('sermon-saved') || '[]');
     const item = saved[idx];
-
-    document.getElementById("sermon-date").value = item.date || "";
     
-    if (categories.find(c => c.value === item.category)) {
-      categorySelect.value = item.category;
-    } else {
-      categorySelect.value = categories[0].value;
-    }
+    document.getElementById('sermon-date').value = item.date || '';
+    document.getElementById('sermon-category').value = item.category || 'dawn';
+    document.getElementById('sermon-ref').value = item.ref || '';
+    document.getElementById('sermon-text').value = item.text || '';
+    document.getElementById('series-name').value = item.seriesName || '';
     
-    document.getElementById("series-name").value = item.seriesName || "";
-    document.getElementById("sermon-ref").value = item.ref || "";
-    document.getElementById("sermon-text").value = item.text || "";
-    document.getElementById("analysis-box").value = item.analysis || "";
-    document.getElementById("sermon-prompt-box").value = item.prompt || "";
+    currentCategory = item.category || 'dawn';
+    currentPromptType = item.promptType || '기본';
+    stepResults = item.results || {};
     
-    if (item.promptType && sermonTypes.includes(item.promptType)) {
-      currentPromptType = item.promptType;
-      renderSermonTypes();
-    }
-
-    toggleSeriesBox();
+    renderProcessingSteps();
+    renderPromptTypes();
+    renderResultBoxes();
+    renderGuideTabs();
+    
     document.querySelectorAll('textarea').forEach(autoResize);
   };
 
   window.deleteSaved = function(idx) {
-    if (!confirm("삭제하시겠습니까?")) return;
-
-    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+    if (!confirm('삭제하시겠습니까?')) return;
+    const saved = JSON.parse(localStorage.getItem('sermon-saved') || '[]');
     saved.splice(idx, 1);
-    localStorage.setItem("sermon-saved", JSON.stringify(saved));
-    loadSavedList();
+    localStorage.setItem('sermon-saved', JSON.stringify(saved));
+    renderSavedList();
   };
 
   // ===== textarea 자동 높이 =====
-  
   document.querySelectorAll('textarea.autosize').forEach(textarea => {
     textarea.addEventListener('input', () => autoResize(textarea));
   });
 
-  // ===== 페이지 로드 시 초기화 =====
-  
-document.addEventListener("DOMContentLoaded", async () => {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById("sermon-date").value = today;
-
-  showStatus("☁️ 클라우드 동기화 중...");
-  await loadFromFirebase();
-  
-  // Firebase에서 설교 유형 불러오기
-  const savedTypes = localStorage.getItem(SERMON_TYPES_KEY);
-  if (savedTypes) {
-    try {
-      sermonTypes = JSON.parse(savedTypes);
-      console.log('✅ 설교 유형 Firebase에서 불러옴:', sermonTypes);
-    } catch (e) {
-      console.error('설교 유형 파싱 실패:', e);
-    }
-  }
-  
-  // Firebase에서 카테고리 불러오기
-  const savedCategories = localStorage.getItem(CATEGORIES_KEY);
-  if (savedCategories) {
-    try {
-      categories = JSON.parse(savedCategories);
-      console.log('✅ 카테고리 Firebase에서 불러옴:', categories);
-    } catch (e) {
-      console.error('카테고리 파싱 실패:', e);
-    }
-  }
-  
-  hideStatus();
-
-  loadCategories();
-  loadSermonTypes();
-  loadCurrentGuide();
-  loadSavedList();
-  toggleSeriesBox();
-
-  document.querySelectorAll('textarea').forEach(autoResize);
-});
+  // ===== 초기화 =====
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('sermon-date').value = new Date().toISOString().split('T')[0];
+    
+    showStatus('☁️ 클라우드 동기화 중...');
+    await loadFromFirebase();
+    hideStatus();
+    
+    renderCategories();
+    renderProcessingSteps();
+    renderPromptTypes();
+    renderResultBoxes();
+    renderGuideTabs();
+    renderSavedList();
+    
+    document.querySelectorAll('textarea').forEach(autoResize);
+  });
   </script>
 </body>
 </html>
