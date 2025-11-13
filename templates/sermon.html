@@ -7,8 +7,8 @@
   <style>
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; }
     .page-wrap { display: flex; gap: 1rem; padding: 1rem; height: 100vh; box-sizing: border-box; }
-    .left-col { width: 360px; display: flex; flex-direction: column; gap: .75rem; }
-    .right-col { flex: 1; display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
+    .left-col { width: 360px; display: flex; flex-direction: column; gap: .75rem; overflow-y: auto; }
+    .right-col { flex: 1; display: flex; flex-direction: column; gap: .75rem; min-width: 0; overflow-y: auto; }
     .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .75rem; }
     .label-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
     .label { font-weight: 600; }
@@ -29,7 +29,66 @@
 </head>
 <body>
   <div class="page-wrap">
+    <!-- 왼쪽 -->
     <div class="left-col">
+      <!-- 날짜 -->
+      <div class="box">
+        <div class="label-row">
+          <label class="label" for="sermon-date">날짜</label>
+          <input type="date" id="sermon-date" style="max-width: 160px;">
+        </div>
+      </div>
+
+      <!-- 카테고리 -->
+      <div class="box">
+        <label class="label" for="sermon-category">설교 카테고리</label>
+        <select id="sermon-category">
+          <option value="dawn">새벽설교</option>
+          <option value="wednesday">수요성경공부</option>
+          <option value="friday">금요기도회</option>
+          <option value="youth">청년부</option>
+          <option value="teen">청소년부</option>
+          <option value="women">여선교회</option>
+          <option value="men">남선교회</option>
+          <option value="etc">기타</option>
+        </select>
+      </div>
+
+      <!-- 시리즈명 (수요성경공부 전용) -->
+      <div class="box" id="series-box" style="display: none;">
+        <label class="label">시리즈명</label>
+        <input type="text" id="series-name" placeholder="예: 요한복음 시리즈">
+      </div>
+
+      <!-- 성경구절 -->
+      <div class="box">
+        <label class="label">성경구절</label>
+        <input type="text" id="sermon-ref" placeholder="예) 시 78:1-8">
+      </div>
+
+      <!-- 성경 본문 -->
+      <div class="box">
+        <label class="label">성경 본문</label>
+        <textarea id="sermon-text" placeholder="본문을 여기에 붙여넣으세요."></textarea>
+      </div>
+
+      <!-- 실행 버튼 -->
+      <div class="box">
+        <div class="btn-row">
+          <button id="btn-analyze">본문 분석</button>
+          <button id="btn-prompt">설교 제작 프롬포트</button>
+        </div>
+      </div>
+
+      <!-- 저장 공간 -->
+      <div class="box">
+        <label class="label">저장된 설교 자료</label>
+        <div class="btn-row" style="margin-bottom: .5rem;">
+          <button id="btn-save">현재 내용 저장</button>
+        </div>
+        <div id="saved-list"></div>
+      </div>
+    </div>
 
     <!-- 오른쪽 -->
     <div class="right-col">
@@ -39,7 +98,7 @@
           <span class="label">지침 영역</span>
           <button id="toggle-guides">닫기</button>
         </div>
-        <div class="btn-row" style="margin: .5rem 0;">
+        <div class="btn-row" id="guide-btn-row" style="margin: .5rem 0;">
           <button id="save-guide">지침 저장</button>
           <button id="tab-guide-analysis" class="guide-tab-active">본문 분석 지침</button>
           <button id="tab-guide-prompt">설교문 제작 프롬포트</button>
@@ -53,7 +112,7 @@
           <label class="label">본문 분석</label>
           <button class="copy-btn" data-copy="analysis-box">복사</button>
         </div>
-        <textarea id="analysis-box" class="autosize" style="min-height: 140px;" placeholder="본문 분석 결과가 표시됩니다. ..."></textarea>
+        <textarea id="analysis-box" class="autosize" style="min-height: 140px;" placeholder="본문 분석 결과가 표시됩니다."></textarea>
       </div>
 
       <!-- 설교문 제작 프롬포트 결과 -->
@@ -62,7 +121,7 @@
           <label class="label">설교문 제작 프롬포트</label>
           <button class="copy-btn" data-copy="sermon-prompt-box">복사</button>
         </div>
-        <textarea id="sermon-prompt-box" class="autosize" style="min-height: 140px;" placeholder="GPT에 던질 프롬포트를 ..."></textarea>
+        <textarea id="sermon-prompt-box" class="autosize" style="min-height: 140px;" placeholder="GPT에 던질 프롬포트가 표시됩니다."></textarea>
       </div>
     </div>
   </div>
@@ -70,11 +129,7 @@
   <!-- 진행 상태 -->
   <div id="status-bar" class="status-bar">GPT로 작업 중...</div>
 
-<!-- Firebase SDK 추가 -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-  
-<!-- Firebase SDK 추가 -->
+  <!-- Firebase SDK 추가 -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   
@@ -101,7 +156,7 @@
   const guideTextArea = document.getElementById("guide-text");
   const statusBar = document.getElementById("status-bar");
   
-  let currentGuideType = "analysis"; // analysis 또는 prompt
+  let currentGuideType = "analysis";
 
   // ===== 상태 표시 =====
   function showStatus(msg) {
@@ -182,23 +237,24 @@
     autoResize(guideTextArea);
   }
 
-// 카테고리 변경
-categorySelect.addEventListener("change", () => {
-  loadCurrentGuide();
-  toggleSeriesBox();
-});
-
-// 시리즈 박스 표시/숨김
-function toggleSeriesBox() {
-  const seriesBox = document.getElementById("series-box");
-  const category = categorySelect.value;
-  
-  if (category === "wednesday") {
-    seriesBox.style.display = "block";
-  } else {
-    seriesBox.style.display = "none";
+  // 시리즈 박스 표시/숨김
+  function toggleSeriesBox() {
+    const seriesBox = document.getElementById("series-box");
+    const category = categorySelect.value;
+    
+    if (category === "wednesday") {
+      seriesBox.style.display = "block";
+    } else {
+      seriesBox.style.display = "none";
+    }
   }
-}
+
+  // 카테고리 변경
+  categorySelect.addEventListener("change", () => {
+    loadCurrentGuide();
+    toggleSeriesBox();
+  });
+
   // 지침 타입 탭 전환
   document.getElementById("tab-guide-analysis").addEventListener("click", () => {
     document.getElementById("tab-guide-analysis").classList.add("guide-tab-active");
@@ -220,10 +276,8 @@ function toggleSeriesBox() {
     const key = getGuideKey(cat, currentGuideType);
     const value = guideTextArea.value;
 
-    // localStorage 저장
     localStorage.setItem(key, value);
 
-    // Firebase 저장
     showStatus("💾 저장 중...");
     const success = await saveToFirebase(key, value);
 
@@ -240,17 +294,17 @@ function toggleSeriesBox() {
   
   let guidesVisible = true;
   document.getElementById("toggle-guides").addEventListener("click", () => {
-    const guideBox = document.getElementById("guide-box");
+    const btnRow = document.getElementById("guide-btn-row");
     const btn = document.getElementById("toggle-guides");
     
     guidesVisible = !guidesVisible;
     
     if (guidesVisible) {
-      guideBox.querySelector('.btn-row').style.display = 'flex';
+      btnRow.style.display = 'flex';
       guideTextArea.style.display = 'block';
       btn.textContent = '닫기';
     } else {
-      guideBox.querySelector('.btn-row').style.display = 'none';
+      btnRow.style.display = 'none';
       guideTextArea.style.display = 'none';
       btn.textContent = '열기';
     }
@@ -309,7 +363,7 @@ function toggleSeriesBox() {
 
       if (data.ok) {
         const analysisBox = document.getElementById("analysis-box");
-        analysisBox.value = data.analysis;
+        analysisBox.value = data.result;
         autoResize(analysisBox);
         showStatus("✅ 본문 분석 완료!");
       } else {
@@ -358,9 +412,9 @@ function toggleSeriesBox() {
 
       const data = await response.json();
 
-      if (data.ok) {
+      if (data.result) {
         const promptBox = document.getElementById("sermon-prompt-box");
-        promptBox.value = data.prompt;
+        promptBox.value = data.result;
         autoResize(promptBox);
         showStatus("✅ 프롬프트 생성 완료!");
       } else {
@@ -377,86 +431,85 @@ function toggleSeriesBox() {
 
   // ===== 저장 공간 관리 =====
   
-function loadSavedList() {
-  const savedList = document.getElementById("saved-list");
-  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+  function loadSavedList() {
+    const savedList = document.getElementById("saved-list");
+    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
 
-  if (saved.length === 0) {
-    savedList.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
-    return;
+    if (saved.length === 0) {
+      savedList.innerHTML = '<p style="color: #999; font-size: .8rem; text-align: center; padding: .5rem;">저장된 자료가 없습니다.</p>';
+      return;
+    }
+
+    const categoryNames = {
+      dawn: "새벽설교",
+      wednesday: "수요성경공부",
+      friday: "금요기도회",
+      youth: "청년부",
+      teen: "청소년부",
+      women: "여선교회",
+      men: "남선교회",
+      etc: "기타"
+    };
+
+    savedList.innerHTML = saved.map((item, idx) => {
+      const categoryName = categoryNames[item.category] || item.category;
+      const displayText = item.seriesName 
+        ? `${item.date || '날짜 없음'} - ${categoryName} - ${item.seriesName}`
+        : `${item.date || '날짜 없음'} - ${categoryName}`;
+      
+      return `
+        <div class="storage-item">
+          <span style="font-size: .85rem;">${displayText}</span>
+          <div class="storage-actions">
+            <button onclick="loadSaved(${idx})">불러오기</button>
+            <button onclick="deleteSaved(${idx})">삭제</button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
-  // 카테고리 이름 매핑
-  const categoryNames = {
-    dawn: "새벽설교",
-    wednesday: "수요성경공부",
-    friday: "금요기도회",
-    youth: "청년부",
-    teen: "청소년부",
-    women: "여선교회",
-    men: "남선교회",
-    etc: "기타"
-  };
+  document.getElementById("btn-save").addEventListener("click", () => {
+    const date = document.getElementById("sermon-date").value;
+    const category = categorySelect.value;
+    const seriesName = document.getElementById("series-name").value;
+    const ref = document.getElementById("sermon-ref").value;
+    const text = document.getElementById("sermon-text").value;
+    const analysis = document.getElementById("analysis-box").value;
+    const prompt = document.getElementById("sermon-prompt-box").value;
 
-  savedList.innerHTML = saved.map((item, idx) => {
-    const categoryName = categoryNames[item.category] || item.category;
-    const displayText = item.seriesName 
-      ? `${item.date || '날짜 없음'} - ${categoryName} - ${item.seriesName}`
-      : `${item.date || '날짜 없음'} - ${categoryName}`;
-    
-    return `
-      <div class="storage-item">
-        <span style="font-size: .85rem;">${displayText}</span>
-        <div class="storage-actions">
-          <button onclick="loadSaved(${idx})">불러오기</button>
-          <button onclick="deleteSaved(${idx})">삭제</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
+    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+    saved.push({
+      date: date,
+      category: category,
+      seriesName: seriesName,
+      ref: ref,
+      text: text,
+      analysis: analysis,
+      prompt: prompt,
+      savedAt: new Date().toISOString()
+    });
 
-document.getElementById("btn-save").addEventListener("click", () => {
-  const date = document.getElementById("sermon-date").value;
-  const category = categorySelect.value;
-  const seriesName = document.getElementById("series-name").value;
-  const ref = document.getElementById("sermon-ref").value;
-  const text = document.getElementById("sermon-text").value;
-  const analysis = document.getElementById("analysis-box").value;
-  const prompt = document.getElementById("sermon-prompt-box").value;
-
-  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
-  saved.push({
-    date: date,
-    category: category,
-    seriesName: seriesName,  // ← 추가
-    ref: ref,
-    text: text,
-    analysis: analysis,
-    prompt: prompt,
-    savedAt: new Date().toISOString()
+    localStorage.setItem("sermon-saved", JSON.stringify(saved));
+    loadSavedList();
+    alert("✅ 저장되었습니다!");
   });
 
-  localStorage.setItem("sermon-saved", JSON.stringify(saved));
-  loadSavedList();
-  alert("✅ 저장되었습니다!");
-});
+  window.loadSaved = function(idx) {
+    const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
+    const item = saved[idx];
 
-window.loadSaved = function(idx) {
-  const saved = JSON.parse(localStorage.getItem("sermon-saved") || "[]");
-  const item = saved[idx];
+    document.getElementById("sermon-date").value = item.date || "";
+    categorySelect.value = item.category || "dawn";
+    document.getElementById("series-name").value = item.seriesName || "";
+    document.getElementById("sermon-ref").value = item.ref || "";
+    document.getElementById("sermon-text").value = item.text || "";
+    document.getElementById("analysis-box").value = item.analysis || "";
+    document.getElementById("sermon-prompt-box").value = item.prompt || "";
 
-  document.getElementById("sermon-date").value = item.date || "";
-  categorySelect.value = item.category || "dawn";
-  document.getElementById("series-name").value = item.seriesName || "";  // ← 추가
-  document.getElementById("sermon-ref").value = item.ref || "";
-  document.getElementById("sermon-text").value = item.text || "";
-  document.getElementById("analysis-box").value = item.analysis || "";
-  document.getElementById("sermon-prompt-box").value = item.prompt || "";
-
-  toggleSeriesBox();  // ← 추가 (시리즈 박스 표시/숨김)
-  document.querySelectorAll('textarea').forEach(autoResize);
-};
+    toggleSeriesBox();
+    document.querySelectorAll('textarea').forEach(autoResize);
+  };
 
   window.deleteSaved = function(idx) {
     if (!confirm("삭제하시겠습니까?")) return;
@@ -476,22 +529,17 @@ window.loadSaved = function(idx) {
   // ===== 페이지 로드 시 초기화 =====
   
   document.addEventListener("DOMContentLoaded", async () => {
-    // 오늘 날짜 설정
     const today = new Date().toISOString().split('T')[0];
     document.getElementById("sermon-date").value = today;
 
-    // Firebase에서 지침 불러오기
     showStatus("☁️ 클라우드 동기화 중...");
     await loadFromFirebase();
     hideStatus();
 
-    // 현재 지침 표시
     loadCurrentGuide();
-
-    // 저장된 목록 불러오기
     loadSavedList();
+    toggleSeriesBox();
 
-    // 모든 textarea 높이 조절
     document.querySelectorAll('textarea').forEach(autoResize);
   });
   </script>
