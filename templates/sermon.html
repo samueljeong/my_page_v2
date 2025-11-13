@@ -123,280 +123,283 @@
   <!-- 진행 상태 -->
   <div id="status-bar" class="status-bar">GPT로 작업 중...</div>
 
+<!-- Firebase SDK 추가 -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  
   <script>
-  // --- 자동 높이 조절 함수 ---
-  function autoResize(el) {
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
+  // ===== Firebase 초기화 =====
+  const firebaseConfig = {
+    apiKey: "AIzaSyBacmJDk-PG5FaoqnXV8Rg3P__AKOS2vu4",
+    authDomain: "my-sermon-guides.firebaseapp.com",
+    projectId: "my-sermon-guides",
+    storageBucket: "my-sermon-guides.firebasestorage.app",
+    messagingSenderId: "539520456089",
+    appId: "1:539520456089:web:d6aceb7838baa89e70af08",
+    measurementId: "G-KWN8TH7Z26"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  
+  // 고유 사용자 코드 (원하는 대로 변경 가능)
+  const USER_CODE = 'samuel123';
+  const PAGE_NAME = 'sermon';
+
+  // ===== 기존 변수들 =====
+  const categorySelect = document.getElementById("category-select");
+  const guideTypeButtons = document.querySelectorAll(".guide-type-btn");
+  const guideTextArea = document.getElementById("guide-text");
+  const statusMsg = document.getElementById("status-msg");
+
+  let currentGuideType = "analysis";
+
+  function getGuideKey(category, type) {
+    return `sermon-guide-${category}-${type}`;
   }
 
-  // 페이지 로드 시 textarea 자동 조절 적용
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('textarea.autosize').forEach(t => {
-      t.setAttribute('rows', '1');
-      autoResize(t);
-      t.addEventListener('input', () => autoResize(t));
-    });
-  });
-    // 날짜 기본값
-    const today = new Date().toISOString().substring(0, 10);
-    document.getElementById('sermon-date').value = today;
+  function showStatus(msg) {
+    statusMsg.textContent = msg;
+    statusMsg.style.display = "block";
+  }
 
-    const categorySelect = document.getElementById('sermon-category');
-    const guideTextArea = document.getElementById('guide-text');
-    const tabGuideAnalysis = document.getElementById('tab-guide-analysis');
-    const tabGuidePrompt = document.getElementById('tab-guide-prompt');
-    const statusBar = document.getElementById('status-bar');
+  function hideStatus() {
+    statusMsg.style.display = "none";
+  }
 
-    let currentGuideType = 'analysis'; // 현재 보고 있는 지침 종류
-
-    function showStatus(msg) {
-      statusBar.textContent = msg;
-      statusBar.style.display = 'block';
-    }
-    function hideStatus() {
-      statusBar.style.display = 'none';
-    }
-
-    // 카테고리 + 지침타입 기반 key
-    function getGuideKey(cat, type) {
-      return `sermon-guide-${cat}-${type}`;
-    }
-
-    // 현재 선택된 카테고리의, 현재 탭의 지침을 textarea에 반영
-function loadCurrentGuide() {
-  const cat = categorySelect.value;
-  const key = getGuideKey(cat, currentGuideType);
-  const saved = localStorage.getItem(key) || "";
-  guideTextArea.value = saved;
-  autoResize(guideTextArea); // ← 이 줄 추가!
-}
-
-    // 탭 활성화
-    function activateTab(type) {
-      currentGuideType = type;
-      if (type === 'analysis') {
-        tabGuideAnalysis.classList.add('guide-tab-active');
-        tabGuidePrompt.classList.remove('guide-tab-active');
-      } else {
-        tabGuidePrompt.classList.add('guide-tab-active');
-        tabGuideAnalysis.classList.remove('guide-tab-active');
-      }
-      loadCurrentGuide();
-    }
-
-    tabGuideAnalysis.addEventListener('click', () => activateTab('analysis'));
-    tabGuidePrompt.addEventListener('click', () => activateTab('prompt'));
-
-    // 지침 저장
-document.getElementById('save-guide').addEventListener('click', () => {
-  const cat = categorySelect.value;
-  const key = getGuideKey(cat, currentGuideType);
-  localStorage.setItem(key, guideTextArea.value);
-  autoResize(guideTextArea); // ← 이 줄 추가!
-  showStatus("이 카테고리의 지침이 저장되었습니다.");
-  setTimeout(hideStatus, 1500);
-});
-
-    // 카테고리 바뀌면 해당 카테고리의 지침/저장목록 보여주기
-    categorySelect.addEventListener('change', () => {
-      renderSaved();
-      loadCurrentGuide();
-    });
-
-    // 지침 영역 열고닫기
-    document.getElementById('toggle-guides').addEventListener('click', () => {
-      const isHidden = guideTextArea.style.display === 'none';
-      guideTextArea.style.display = isHidden ? 'block' : 'none';
-      document.getElementById('toggle-guides').textContent = isHidden ? '닫기' : '열기';
-    });
-
-    // 저장된 설교 자료 렌더링 (카테고리별)
-    const savedList = document.getElementById('saved-list');
-    const saveBtn = document.getElementById('btn-save');
-
-    function renderSaved() {
-      const cat = categorySelect.value;
-      const data = JSON.parse(localStorage.getItem('sermon-data-' + cat) || '[]');
-      savedList.innerHTML = '';
-      data.forEach((item, idx) => {
-        const div = document.createElement('div');
-        div.className = 'storage-item';
-        div.innerHTML = `
-          <span>${item.label}</span>
-          <div class="storage-actions">
-            <button data-idx="${idx}" data-act="load">불러오기</button>
-            <button data-idx="${idx}" data-act="del">삭제</button>
-          </div>
-        `;
-        savedList.appendChild(div);
-      });
-    }
-
-    saveBtn.addEventListener('click', () => {
-      const cat = categorySelect.value;
-      const key = 'sermon-data-' + cat;
-      const existing = JSON.parse(localStorage.getItem(key) || '[]');
-
-      const date = document.getElementById('sermon-date').value;
-      const ref = document.getElementById('sermon-ref').value;
-      const text = document.getElementById('sermon-text').value;
-      const analysis = document.getElementById('analysis-box').value;
-      const prompt = document.getElementById('sermon-prompt-box').value;
-
-      const label = `${date} ${ref}`;
-      existing.unshift({ label, date, ref, text, analysis, prompt });
-      localStorage.setItem(key, JSON.stringify(existing));
-      renderSaved();
-    });
-
-    savedList.addEventListener('click', (e) => {
-      if (e.target.tagName !== 'BUTTON') return;
-      const act = e.target.dataset.act;
-      const idx = Number(e.target.dataset.idx);
-      const cat = categorySelect.value;
-      const key = 'sermon-data-' + cat;
-      const data = JSON.parse(localStorage.getItem(key) || '[]');
-
-      if (act === 'load') {
-        const item = data[idx];
-        document.getElementById('sermon-date').value = item.date;
-        document.getElementById('sermon-ref').value = item.ref;
-        document.getElementById('sermon-text').value = item.text;
-        document.getElementById('analysis-box').value = item.analysis;
-        document.getElementById('sermon-prompt-box').value = item.prompt;
-      } else if (act === 'del') {
-        data.splice(idx, 1);
-        localStorage.setItem(key, JSON.stringify(data));
-        renderSaved();
-      }
-    });
-
-// ✅ 여기에 추가
-// 공통: fetch 타임아웃 헬퍼 함수 (응답 없을 때 자동 중단)
-function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 10000 } = options; // 기본 10초
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  return fetch(resource, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(id));
-}
-
-    // 복사 버튼
-    document.querySelectorAll('.copy-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.copy;
-        const el = document.getElementById(targetId);
-        navigator.clipboard.writeText(el.value || "").then(() => {
-          showStatus("복사되었습니다.");
-          setTimeout(hideStatus, 1500);
+  // ===== Firebase 함수들 =====
+  
+  // Firebase에서 모든 지침 불러오기
+  async function loadFromFirebase() {
+    try {
+      const snapshot = await db
+        .collection('users')
+        .doc(USER_CODE)
+        .collection(PAGE_NAME)
+        .get();
+      
+      let loadedCount = 0;
+      if (!snapshot.empty) {
+        snapshot.forEach(doc => {
+          const key = doc.id;
+          const value = doc.data().value;
+          localStorage.setItem(key, value);
+          loadedCount++;
         });
+        console.log(`✅ Firebase에서 ${loadedCount}개 지침을 불러왔습니다!`);
+        return true;
+      } else {
+        console.log('Firebase에 저장된 지침이 없습니다.');
+        return false;
+      }
+    } catch (err) {
+      console.error('Firebase 로드 실패:', err);
+      return false;
+    }
+  }
+
+  // Firebase에 지침 저장
+  async function saveToFirebase(key, value) {
+    try {
+      await db
+        .collection('users')
+        .doc(USER_CODE)
+        .collection(PAGE_NAME)
+        .doc(key)
+        .set({
+          value: value,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      return true;
+    } catch (err) {
+      console.error('Firebase 저장 실패:', err);
+      return false;
+    }
+  }
+
+  // ===== 화면 업데이트 =====
+  
+  function loadCurrentGuide() {
+    const cat = categorySelect.value;
+    const key = getGuideKey(cat, currentGuideType);
+    const stored = localStorage.getItem(key);
+    guideTextArea.value = stored || "";
+  }
+
+  categorySelect.addEventListener("change", loadCurrentGuide);
+
+  guideTypeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      guideTypeButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentGuideType = btn.dataset.type;
+      loadCurrentGuide();
+    });
+  });
+
+  // ===== 지침 저장 버튼 =====
+  
+  document.getElementById("save-guide").addEventListener("click", async () => {
+    const cat = categorySelect.value;
+    const key = getGuideKey(cat, currentGuideType);
+    const value = guideTextArea.value;
+
+    // 1. localStorage 저장 (빠른 로컬 접근)
+    localStorage.setItem(key, value);
+
+    // 2. Firebase 저장 (클라우드 동기화)
+    showStatus("💾 저장 중...");
+    const success = await saveToFirebase(key, value);
+
+    if (success) {
+      showStatus("✅ 지침이 저장되고 클라우드에 동기화되었습니다!");
+    } else {
+      showStatus("⚠️ 로컬에만 저장됨 (클라우드 동기화 실패)");
+    }
+
+    setTimeout(hideStatus, 2000);
+  });
+
+  // ===== 테스트 버튼 =====
+  
+  document.getElementById("test-guide").addEventListener("click", async () => {
+    const cat = categorySelect.value;
+    const key = getGuideKey(cat, currentGuideType);
+    const storedGuide = localStorage.getItem(key) || "";
+
+    if (!storedGuide.trim()) {
+      alert("먼저 지침을 작성하고 저장하세요.");
+      return;
+    }
+
+    const sampleText = "여호와는 나의 목자시니 내게 부족함이 없으리로다.";
+    showStatus("🤖 GPT에게 테스트 요청 중...");
+
+    try {
+      const response = await fetch("/api/sermon/test-guide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: cat,
+          guide_type: currentGuideType,
+          guide: storedGuide,
+          sample_text: sampleText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        alert(`✅ 테스트 성공!\n\n결과:\n${data.result}`);
+        hideStatus();
+      } else {
+        alert(`❌ 오류 발생:\n${data.error}`);
+        hideStatus();
+      }
+    } catch (err) {
+      alert(`❌ 네트워크 오류:\n${err.message}`);
+      hideStatus();
+    }
+  });
+
+  // ===== 내보내기/가져오기 =====
+  
+  // 내보내기
+  document.getElementById("export-guides").addEventListener("click", () => {
+    const guides = {};
+    const categories = ["dawn", "wednesday", "friday", "youth"];
+    const types = ["analysis", "prompt"];
+
+    categories.forEach((cat) => {
+      types.forEach((type) => {
+        const key = getGuideKey(cat, type);
+        guides[key] = localStorage.getItem(key) || "";
       });
     });
 
-// 본문 분석 → Flask GPT API 호출 (개선)
-// 본문 분석 버튼 클릭 부분 찾기 (약 190줄 근처)
-document.getElementById('btn-analyze').addEventListener('click', () => {
-  showStatus("GPT로 본문 분석 중입니다...");
-
-  const cat = categorySelect.value;
-  const guide = localStorage.getItem(getGuideKey(cat, 'analysis')) || "";
-  const payload = {
-    guide: guide,
-    text: document.getElementById('sermon-text').value,
-    ref: document.getElementById('sermon-ref').value,
-    category: cat
-  };
-
-  console.log("[ANALYZE] sending payload", {
-    len_guide: guide.length,
-    len_text: payload.text.length,
-    ref: payload.ref,
-    category: payload.category,
-  });
-
-  fetchWithTimeout("/api/sermon/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    timeout: 30000
-  })
-  .then(async (res) => {
-    const raw = await res.text();
-    let data;
-    try { data = JSON.parse(raw); }
-    catch { data = { ok: false, error: "응답이 JSON이 아닙니다:\n" + raw }; }
-
-    console.log("[ANALYZE] response", data);
-
-const box = document.getElementById('analysis-box');
-if (!res.ok) {
-  box.value = "서버 오류(" + res.status + "):\n" + (data.error || raw);
-} else if (data && data.result) {
-  box.value = data.result;
-} else {
-  box.value = "오류: " + (data && data.error ? data.error : "(원인 불명)");
-}
-
-    box.dispatchEvent(new Event('input'));
-  })
-  .catch((err) => {
-    console.error("[ANALYZE][FETCH ERROR]", err);
-    const box = document.getElementById('analysis-box');
-    box.value = "본문 분석 중 오류가 발생했습니다.\n" + (err && err.message ? err.message : String(err));
-    box.dispatchEvent(new Event('input'));
-  })
-  .finally(() => {
-    hideStatus();
-  });
-});
-
-
-// 설교 프롬포트 → Flask GPT API 호출
-document.getElementById('btn-prompt').addEventListener('click', () => {
-  showStatus("GPT로 설교문 프롬포트 생성 중입니다...");
-
-  const cat = categorySelect.value;
-  const guide = localStorage.getItem(getGuideKey(cat, 'prompt')) || "";
-  const payload = {
-    guide: guide,
-    text: document.getElementById('sermon-text').value,
-    ref: document.getElementById('sermon-ref').value,
-    category: cat
-  };
-
-  fetchWithTimeout("/api/sermon/prompt", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    timeout: 15000
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error("서버 오류: " + text);
-      }
-      return res.json();
-    })
-    .then(data => {
-  const box = document.getElementById('sermon-prompt-box');
-  box.value = data.result || "";
-  autoResize(box);
-})
-    .catch(err => {
-      console.error(err);
-      document.getElementById('sermon-prompt-box').value =
-        "프롬포트 생성 중 오류가 발생했습니다.\n" + err.message;
-    })
-    .finally(() => {
-      hideStatus();
+    const blob = new Blob([JSON.stringify(guides, null, 2)], {
+      type: "application/json",
     });
-});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sermon-guides-backup.json";
+    a.click();
 
-    // 처음 진입 시
-    renderSaved();
+    alert("✅ 백업 파일 다운로드 완료!\n\n참고: Firebase에 자동 저장되므로 백업은 선택사항입니다.");
+  });
+
+  // 가져오기
+  document.getElementById("import-guides").addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const guides = JSON.parse(evt.target.result);
+          
+          // localStorage에 저장
+          for (const [key, value] of Object.entries(guides)) {
+            localStorage.setItem(key, value);
+          }
+
+          // Firebase에도 업로드
+          showStatus("☁️ Firebase에 업로드 중...");
+          let uploadCount = 0;
+          for (const [key, value] of Object.entries(guides)) {
+            const success = await saveToFirebase(key, value);
+            if (success) uploadCount++;
+          }
+
+          alert(`✅ 가져오기 완료!\n\n로컬: ${Object.keys(guides).length}개\nFirebase: ${uploadCount}개`);
+          loadCurrentGuide();
+          hideStatus();
+        } catch (err) {
+          alert(`❌ JSON 파일 형식이 잘못되었습니다:\n${err.message}`);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    input.click();
+  });
+
+  // ===== Firebase 동기화 버튼 =====
+  
+  // "클라우드에서 불러오기" 버튼 추가
+  document.getElementById("sync-from-cloud")?.addEventListener("click", async () => {
+    if (!confirm("로컬 지침을 클라우드 지침으로 덮어씌우시겠습니까?")) return;
+    
+    showStatus("☁️ 클라우드에서 다운로드 중...");
+    const success = await loadFromFirebase();
+    
+    if (success) {
+      loadCurrentGuide();
+      showStatus("✅ 클라우드 지침으로 업데이트되었습니다!");
+    } else {
+      showStatus("⚠️ 클라우드에 저장된 지침이 없습니다.");
+    }
+    
+    setTimeout(hideStatus, 2000);
+  });
+
+  // ===== 페이지 로드 시 초기화 =====
+  
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Firebase에서 최신 지침 불러오기 시도
+    showStatus("☁️ 클라우드 동기화 중...");
+    await loadFromFirebase();
+    hideStatus();
+    
+    // 화면에 현재 지침 표시
     loadCurrentGuide();
+  });
   </script>
 </body>
 </html>
