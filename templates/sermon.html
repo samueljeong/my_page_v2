@@ -421,6 +421,19 @@
     </div>
   </div>
 
+  <!-- GPT PRO 패스워드 모달 -->
+  <div id="modal-gpt-pro-password" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">🔒 GPT PRO 실행 (테스트 중)</div>
+      <p style="color: #666; font-size: .9rem; margin-bottom: 1rem;">이 기능은 현재 테스트 중입니다. 패스워드를 입력하세요.</p>
+      <input type="password" id="gpt-pro-password-input" placeholder="패스워드 입력" style="margin-bottom: .5rem;">
+      <div class="modal-buttons">
+        <button id="btn-cancel-gpt-pro-password">취소</button>
+        <button id="btn-submit-gpt-pro-password" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 카테고리 관리 모달 -->
   <div id="modal-categories" class="modal">
     <div class="modal-content">
@@ -489,10 +502,12 @@
   const USER_CODE = 'samuel123';
   const PAGE_NAME = 'sermon';
   const GUIDE_PASSWORD = '5555';
+  const GPT_PRO_PASSWORD = '6039';
   const CONFIG_KEY = '_sermon-config';
 
   // ===== 전역 변수 =====
   let guideUnlocked = false;
+  let gptProUnlocked = false;
   let currentCategory = 'general';
   let currentStyleId = '';
   let currentGuideStep = '';
@@ -504,7 +519,9 @@
   let config = {
     categories: [
       {value: "general", label: "일반 설교"},
-      {value: "series", label: "시리즈 설교"}
+      {value: "series", label: "시리즈 설교"},
+      {value: "education", label: "교육"},
+      {value: "lecture", label: "강의"}
     ],
     categorySettings: {
       general: {
@@ -546,6 +563,14 @@
             ]
           }
         ]
+      },
+      education: {
+        masterGuide: "",
+        styles: []
+      },
+      lecture: {
+        masterGuide: "",
+        styles: []
       }
     }
   };
@@ -883,71 +908,140 @@
   }
 
   // ===== GPT PRO 처리 기능 =====
-  const btnGptPro = document.getElementById('btn-gpt-pro');
-  if (btnGptPro) {
-    btnGptPro.addEventListener('click', async () => {
-      const steps = getCurrentSteps();
-      const ref = document.getElementById('sermon-ref').value;
-      const finalTitle = getSelectedTitle();
+  async function executeGptPro() {
+    const steps = getCurrentSteps();
+    const ref = document.getElementById('sermon-ref').value;
+    const seriesName = document.getElementById('series-name').value;
+    const style = getCurrentStyle();
+    const finalTitle = getSelectedTitle();
 
-      if (!ref) {
-        alert('성경구절을 입력하세요.');
-        return;
-      }
+    if (!ref) {
+      alert('성경구절을 입력하세요.');
+      return;
+    }
 
-      const completedSteps = steps.filter(step => stepResults[step.id]);
+    const completedSteps = steps.filter(step => stepResults[step.id]);
 
-      if (completedSteps.length === 0) {
-        alert('처리된 단계가 없습니다. 먼저 각 단계를 실행해주세요.');
-        return;
-      }
+    if (completedSteps.length === 0) {
+      alert('처리된 단계가 없습니다. 먼저 각 단계를 실행해주세요.');
+      return;
+    }
 
-      // 초안 내용 구성
-      let draftContent = '';
-      completedSteps.forEach((step, index) => {
-        draftContent += `【 ${step.name} 】\n\n`;
-        draftContent += stepResults[step.id];
-        draftContent += `\n\n${'='.repeat(50)}\n\n`;
+    // ===== 1단계: 전체 복사 =====
+    let fullText = `====================================\n`;
+    fullText += `📖 설교 초안 자료 (GPT-5.1 작성용)\n`;
+    fullText += `====================================\n\n`;
+    fullText += `⚠️ 중요: 이 자료는 gpt-4o-mini가 만든 '초안'입니다.\n`;
+    fullText += `GPT-5.1은 이 자료를 참고하되, 처음부터 새로 작성해주세요.\n`;
+    fullText += `mini가 만든 문장을 그대로 복사하지 말고, 자연스러운 설교문으로 재작성하세요.\n\n`;
+    fullText += `${'='.repeat(50)}\n\n`;
+    fullText += `📌 기본 정보\n`;
+    fullText += `- 카테고리: ${getCategoryLabel(currentCategory)}\n`;
+    fullText += `- 스타일: ${style ? style.name : ''}\n`;
+    fullText += `- 성경구절: ${ref}\n`;
+    if (finalTitle) {
+      fullText += `- 설교 제목: ${finalTitle}\n`;
+    }
+    if (seriesName) {
+      fullText += `- 시리즈명: ${seriesName}\n`;
+    }
+    fullText += `- 작성일: ${new Date().toLocaleDateString('ko-KR')}\n`;
+    fullText += `\n${'='.repeat(50)}\n\n`;
+
+    completedSteps.forEach((step, index) => {
+      // 제목 추천 단계는 제외 (이미 선택된 제목이 위에 표시됨)
+      if (step.name === '제목 추천') return;
+
+      fullText += `【 ${index}. ${step.name} 】\n\n`;
+      fullText += stepResults[step.id];
+      fullText += `\n\n${'='.repeat(50)}\n\n`;
+    });
+
+    fullText += `\n📝 작성 지침:\n`;
+    fullText += `위의 초안 자료를 참고하여, 완성도 높은 설교문을 처음부터 새로 작성해주세요.\n`;
+
+    // 클립보드에 복사
+    const tempTextarea = document.createElement('textarea');
+    tempTextarea.value = fullText;
+    tempTextarea.style.position = 'fixed';
+    tempTextarea.style.opacity = '0';
+    document.body.appendChild(tempTextarea);
+    tempTextarea.select();
+
+    try {
+      document.execCommand('copy');
+      showStatus('📋 전체 복사 완료! GPT PRO 처리 중...');
+    } catch (err) {
+      console.error('복사 실패:', err);
+    } finally {
+      document.body.removeChild(tempTextarea);
+    }
+
+    // ===== 2단계: GPT-5.1로 설교문 작성 =====
+    // 초안 내용 구성
+    let draftContent = '';
+    completedSteps.forEach((step, index) => {
+      draftContent += `【 ${step.name} 】\n\n`;
+      draftContent += stepResults[step.id];
+      draftContent += `\n\n${'='.repeat(50)}\n\n`;
+    });
+
+    showStatus('🚀 GPT PRO 처리 중... (약 30초 소요)');
+
+    try {
+      const response = await fetch('/api/sermon/gpt-pro', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          reference: ref,
+          title: finalTitle,
+          draftContent: draftContent
+        })
       });
 
-      showStatus('🚀 GPT PRO 처리 중... (약 30초 소요)');
+      const data = await response.json();
 
-      try {
-        const response = await fetch('/api/sermon/gpt-pro', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            reference: ref,
-            title: finalTitle,
-            draftContent: draftContent
-          })
-        });
+      if (data.ok) {
+        const resultTextarea = document.getElementById('gpt-pro-result');
+        const resultContainer = document.getElementById('gpt-pro-result-container');
 
-        const data = await response.json();
+        if (resultTextarea && resultContainer) {
+          resultTextarea.value = data.result;
+          autoResize(resultTextarea);
+          resultContainer.style.display = 'block';
 
-        if (data.ok) {
-          const resultTextarea = document.getElementById('gpt-pro-result');
-          const resultContainer = document.getElementById('gpt-pro-result-container');
-
-          if (resultTextarea && resultContainer) {
-            resultTextarea.value = data.result;
-            autoResize(resultTextarea);
-            resultContainer.style.display = 'block';
-
-            // 결과 박스로 스크롤
-            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-
-          showStatus('✅ GPT PRO 완성!');
-        } else {
-          alert(`오류: ${data.error}`);
-          showStatus('❌ 실패');
+          // 결과 박스로 스크롤
+          resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-      } catch (err) {
-        alert(`네트워크 오류: ${err.message}`);
-        showStatus('❌ 오류');
-      } finally {
-        setTimeout(hideStatus, 3000);
+
+        showStatus('✅ 전체 복사 + GPT PRO 완성!');
+      } else {
+        alert(`오류: ${data.error}`);
+        showStatus('❌ 실패');
+      }
+    } catch (err) {
+      alert(`네트워크 오류: ${err.message}`);
+      showStatus('❌ 오류');
+    } finally {
+      setTimeout(hideStatus, 3000);
+    }
+  }
+
+  const btnGptPro = document.getElementById('btn-gpt-pro');
+  if (btnGptPro) {
+    btnGptPro.addEventListener('click', () => {
+      if (!gptProUnlocked) {
+        // 패스워드 모달 표시
+        const modal = document.getElementById('modal-gpt-pro-password');
+        if (modal) modal.classList.add('show');
+        const input = document.getElementById('gpt-pro-password-input');
+        if (input) {
+          input.value = '';
+          input.focus();
+        }
+      } else {
+        // 이미 잠금 해제된 경우 바로 실행
+        executeGptPro();
       }
     });
   }
@@ -1291,6 +1385,43 @@
   const saveGuideBtn = document.getElementById('save-guide');
   if (saveGuideBtn) {
     saveGuideBtn.addEventListener('click', saveGuide);
+  }
+
+  // ===== GPT PRO 패스워드 =====
+  const btnSubmitGptProPassword = document.getElementById('btn-submit-gpt-pro-password');
+  if (btnSubmitGptProPassword) {
+    btnSubmitGptProPassword.addEventListener('click', () => {
+      const input = document.getElementById('gpt-pro-password-input');
+      if (input && input.value === GPT_PRO_PASSWORD) {
+        gptProUnlocked = true;
+        const modal = document.getElementById('modal-gpt-pro-password');
+        if (modal) modal.classList.remove('show');
+
+        // 패스워드 확인 후 GPT PRO 실행
+        executeGptPro();
+      } else {
+        alert('❌ 패스워드가 틀렸습니다.');
+        if (input) input.value = '';
+      }
+    });
+  }
+
+  const btnCancelGptProPassword = document.getElementById('btn-cancel-gpt-pro-password');
+  if (btnCancelGptProPassword) {
+    btnCancelGptProPassword.addEventListener('click', () => {
+      const modal = document.getElementById('modal-gpt-pro-password');
+      if (modal) modal.classList.remove('show');
+    });
+  }
+
+  const gptProPasswordInput = document.getElementById('gpt-pro-password-input');
+  if (gptProPasswordInput) {
+    gptProPasswordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const btn = document.getElementById('btn-submit-gpt-pro-password');
+        if (btn) btn.click();
+      }
+    });
   }
 
   // ===== 카테고리 관리 =====
