@@ -1,5 +1,5 @@
-# sermon_server.py
 import os
+import re
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
@@ -13,6 +13,123 @@ def get_client():
 
 client = get_client()
 
+def remove_markdown(text):
+    """마크다운 기호 제거 (#, *, -, **, ###, 등)"""
+    # 헤더 제거 (##, ###, #### 등)
+    text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
+    
+    # 볼드 제거 (**, __)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    
+    # 이탤릭 제거 (*, _)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = re.sub(r'_(.+?)_', r'\1', text)
+    
+    # 리스트 마커 제거 (-, *, +)
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+    
+    # 코드 블록 제거 (```)
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    
+    # 인라인 코드 제거 (`)
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    
+    return text.strip()
+
+def get_system_prompt_for_step(step_name):
+    """
+    단계별로 최적화된 system prompt 반환
+    mini는 개요와 자료만 생성, 설교문 작성 금지
+    """
+    step_lower = step_name.lower()
+    
+    # 제목 추천 단계
+    if '제목' in step_name:
+        return """당신은 gpt-4o-mini로서 설교 '제목 후보'만 제안하는 역할입니다.
+
+CRITICAL RULES:
+1. 정확히 3개의 제목만 제시하세요
+2. 각 제목은 한 줄로 작성하세요
+3. 번호, 기호, 마크다운 사용 금지
+4. 제목만 작성하고 설명 추가 금지
+
+출력 형식 예시:
+하나님의 약속을 믿는 믿음
+약속의 땅을 향한 여정
+아브라함의 신앙 결단"""
+    
+    # 본문 분석 / 연구 단계
+    elif '분석' in step_name or '연구' in step_name or '배경' in step_name:
+        return f"""당신은 gpt-4o-mini로서 설교 '초안 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 객관적인 성경 연구 자료만 제공하세요
+2. 다음 항목들을 포함하세요:
+   - 시대적/지리적/문화적 배경
+   - 핵심 단어 분석
+   - 본문 구조 분석
+   - 관련 성경구절 (Cross-reference)
+   - 신학적 주제
+3. 설교문 형식으로 작성하지 마세요
+4. 감동적인 표현이나 적용 내용 금지
+5. 마크다운 기호 사용 금지
+6. 순수한 연구 자료만 제공"""
+    
+    # 개요 / 구조 단계
+    elif '개요' in step_name or '구조' in step_name or 'outline' in step_lower:
+        return f"""당신은 gpt-4o-mini로서 설교 '개요'만 작성하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 설교의 뼈대만 제시하세요:
+   - Big Idea (한 문장으로 핵심 메시지)
+   - 서론 포인트 (키워드만)
+   - 1대지 주제 문장
+   - 1대지 소대지 (키워드만)
+   - 2대지 주제 문장
+   - 2대지 소대지 (키워드만)
+   - 3대지 주제 문장
+   - 3대지 소대지 (키워드만)
+   - 결론 방향 (키워드만)
+2. 문단 형태의 설교문은 절대 작성하지 마세요
+3. 구조와 주제 문장만 제시하세요
+4. 마크다운 기호 사용 금지"""
+    
+    # 설교문 작성이 의심되는 단계 (경고)
+    elif any(word in step_name for word in ['서론', '본론', '결론', '적용', '설교문']):
+        return f"""당신은 gpt-4o-mini로서 설교 '자료'만 준비하는 역할입니다.
+
+⚠️ 중요: 완성된 설교 문단은 작성하지 마세요!
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 이 단계는 GPT-5.1에서 최종 작성될 부분입니다
+2. 당신은 자료와 포인트만 제공하세요:
+   - 핵심 메시지 (한 문장)
+   - 주요 포인트 (키워드 나열)
+   - 사용할 성경 구절 리스트
+   - 강조할 내용 (키워드만)
+3. 자연스러운 설교 문장 작성 금지
+4. 감동적인 표현 금지
+5. 마크다운 기호 사용 금지"""
+    
+    # 기타 단계
+    else:
+        return f"""당신은 gpt-4o-mini로서 설교 '초안 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 자료와 정보만 제공하세요
+2. 완성된 설교문은 작성하지 마세요
+3. 객관적 내용만 제시하세요
+4. 마크다운 기호 사용 금지"""
+
 @app.route("/")
 def home():
     return render_template("sermon.html")
@@ -25,205 +142,98 @@ def sermon():
 def health():
     return jsonify({"ok": True})
 
-# ===== 통합 처리 엔드포인트 =====
+# ===== 처리 단계 실행 API =====
 @app.route("/api/sermon/process", methods=["POST"])
-def api_sermon_process():
-    """
-    모든 처리 단계를 처리하는 통합 엔드포인트
-    """
+def api_process_step():
+    """단일 처리 단계 실행"""
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"ok": False, "error": "No JSON data received"}), 400
+            return jsonify({"ok": False, "error": "No data received"}), 400
         
         category = data.get("category", "")
         step_id = data.get("stepId", "")
+        step_name = data.get("stepName", "")
         reference = data.get("reference", "")
+        title = data.get("title", "")
         text = data.get("text", "")
         guide = data.get("guide", "")
-        prompt_type = data.get("promptType", None)
+        master_guide = data.get("masterGuide", "")
         previous_results = data.get("previousResults", {})
         
-        print(f"[PROCESS] category={category}, stepId={step_id}, promptType={prompt_type}")
+        print(f"[PROCESS] {category} - {step_name}")
         
-        if not reference:
-            return jsonify({"ok": False, "error": "성경 구절이 필요합니다."}), 400
+        # 시스템 메시지 구성 (단계별 최적화)
+        system_content = get_system_prompt_for_step(step_name)
         
-        # 단계별 처리
-        if step_id == "analysis":
-            result = process_analysis(reference, text, guide, category, previous_results)
-        elif step_id == "prompt":
-            result = process_prompt(reference, text, guide, category, prompt_type, previous_results)
+        # 총괄 지침이 있으면 추가
+        if master_guide:
+            system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
+            system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
+            system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
+        
+        # 사용자 메시지 구성
+        user_content = f"[성경구절]\n{reference}\n\n"
+        
+        # 제목이 있으면 추가 (제목 추천 단계가 아닐 때만)
+        if title and '제목' not in step_name:
+            user_content += f"[설교 제목]\n{title}\n\n"
+            user_content += "위 제목을 염두에 두고 모든 내용을 작성해주세요.\n\n"
+        
+        if text:
+            user_content += f"[성경 본문]\n{text}\n\n"
+        
+        # 이전 단계 결과 추가
+        if previous_results:
+            user_content += "[이전 단계 결과 (참고용)]\n"
+            for prev_id, prev_data in previous_results.items():
+                user_content += f"\n### {prev_data['name']}\n{prev_data['result']}\n"
+            user_content += "\n"
+        
+        # 현재 단계 지침 추가
+        if guide:
+            user_content += f"[{step_name} 단계 세부 지침]\n{guide}\n\n"
+        
+        # 제목 추천 단계 특별 처리
+        if '제목' in step_name:
+            user_content += f"위 성경 본문({reference})에 적합한 설교 제목을 정확히 3개만 제안해주세요.\n"
+            user_content += "각 제목은 한 줄로, 번호나 기호 없이 작성하세요."
         else:
-            # 커스텀 단계 (일반 처리)
-            result = process_custom_step(step_id, reference, text, guide, category, previous_results)
+            user_content += f"위 내용을 바탕으로 '{step_name}' 단계를 작성해주세요.\n"
+            user_content += "⚠️ 중요: 완성된 설교 문단이 아닌, 자료와 구조만 제공하세요."
+        
+        if title and '제목' not in step_name:
+            user_content += f"\n제목 '{title}'을 고려하여 작성하세요."
+        
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ],
+            temperature=0.7,
+        )
+        
+        result = completion.choices[0].message.content.strip()
+        
+        # 마크다운 기호 제거
+        result = remove_markdown(result)
         
         return jsonify({"ok": True, "result": result})
         
     except Exception as e:
-        err_text = str(e)
-        print(f"[PROCESS][ERROR] {err_text}")
-        return jsonify({"ok": False, "error": err_text}), 200
+        print(f"[PROCESS][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
 
 
-def process_analysis(reference, text, guide, category, previous_results):
-    """본문 분석 처리"""
-    content = f"[성경 구절]\n{reference}\n\n[카테고리]\n{category}"
-    
-    if text:
-        content += f"\n\n[본문 내용]\n{text}"
-    
-    if guide:
-        content = f"[사용자 지침]\n{guide}\n\n{content}"
-    
-    content += "\n\n위 본문을 분석해주세요."
-    
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You help Korean pastors analyze Bible passages."
-            },
-            {
-                "role": "user",
-                "content": content
-            }
-        ],
-        temperature=0.7,
-    )
-    
-    return completion.choices[0].message.content.strip()
-
-
-def process_prompt(reference, text, guide, category, prompt_type, previous_results):
-    """설교문 프롬프트 생성 처리"""
-    
-    # 메타-프롬프트 구성
-    content = f"""당신은 설교문 작성 프롬프트 전문가입니다.
-
-아래 정보를 바탕으로, **다른 GPT 모델(예: ChatGPT Plus, Claude)에게 직접 입력할 수 있는 완성된 설교문 작성 프롬프트**를 만들어주세요.
-
----
-
-📌 **설교 정보**
-- 성경 구절: {reference}
-- 카테고리: {category}
-- 설교 유형: {prompt_type or '기본'}
-"""
-
-    if text:
-        content += f"\n- 본문 내용:\n{text}\n"
-    
-    # 이전 단계 결과들 포함
-    if previous_results:
-        content += "\n📊 **이전 단계 결과**\n"
-        for step_id, step_data in previous_results.items():
-            content += f"\n[{step_data['name']}]\n{step_data['result']}\n"
-        content += "\n⚠️ **중요**: 위의 이전 단계 결과들을 프롬프트에 반드시 포함시켜, GPT가 이를 바탕으로 설교문을 작성하도록 해주세요.\n"
-    
-    if guide:
-        content += f"""
-📘 **설교 제작 매뉴얼 (필수 준수)**
-{guide}
-
-⚠️ **중요**: 위 매뉴얼의 모든 지침을 프롬프트에 명확히 포함시켜주세요.
-"""
-    
-    content += """
-
----
-
-✅ **출력 형식**
-
-아래와 같은 형식으로 **완성된 프롬프트**를 작성해주세요:
-```
-[GPT에게 입력할 프롬프트 시작]
-
-당신은 한국 교회의 설교문 작성 전문가입니다.
-
-[설교 정보와 매뉴얼을 통합하여 명확한 지시사항 작성]
-[이전 단계 결과들을 포함]
-[기대하는 설교문의 구조와 톤 명시]
-[구체적인 작성 지침]
-
-[GPT에게 입력할 프롬프트 끝]
-```
-
-**주의사항**:
-1. 프롬프트는 복사-붙여넣기만 하면 바로 사용 가능해야 합니다
-2. 설교문을 직접 작성하지 말고, "설교문을 작성하라"는 지시문을 만드세요
-3. 매뉴얼의 모든 세부사항이 프롬프트에 포함되어야 합니다
-4. 이전 단계의 모든 결과를 프롬프트에 통합하세요
-"""
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are an expert at creating sermon writing prompts for other AI models. You create clear, detailed prompts that other GPTs can use to write excellent sermons. You NEVER write the sermon itself - you only create the prompt."
-            },
-            {
-                "role": "user",
-                "content": content
-            }
-        ],
-        temperature=0.7,
-    )
-    
-    return completion.choices[0].message.content.strip()
-
-
-def process_custom_step(step_id, reference, text, guide, category, previous_results):
-    """커스텀 단계 처리 (질문 생성, 토론 주제 등)"""
-    
-    # 단계 이름을 추론 (실제로는 프론트에서 보내주는 게 좋지만, 여기서는 간단히)
-    step_names = {
-        "questions": "성경공부 질문",
-        "discussion": "토론 주제",
-        "application": "실천 과제",
-        "prayer": "기도 제목",
-        "illustration": "예화",
-        "outline": "설교 개요"
-    }
-    
-    step_name = step_names.get(step_id, step_id)
-    
-    content = f"""[성경 구절]\n{reference}\n\n[카테고리]\n{category}"""
-    
-    if text:
-        content += f"\n\n[본문 내용]\n{text}"
-    
-    # 이전 단계 결과들 포함
-    if previous_results:
-        content += "\n\n[이전 단계 결과]\n"
-        for prev_step_id, step_data in previous_results.items():
-            content += f"\n## {step_data['name']}\n{step_data['result']}\n"
-    
-    if guide:
-        content = f"[사용자 지침]\n{guide}\n\n{content}"
-    
-    content += f"\n\n위 정보를 바탕으로 {step_name}을(를) 작성해주세요."
-    
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": f"You are a Korean church ministry expert helping to create {step_name}."
-            },
-            {
-                "role": "user",
-                "content": content
-            }
-        ],
-        temperature=0.7,
-    )
-    
-    return completion.choices[0].message.content.strip()
-
-
+# ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5057))
+    port = int(os.environ.get("PORT", 5058))
     app.run(host="0.0.0.0", port=port, debug=False)
