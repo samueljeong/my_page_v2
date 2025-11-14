@@ -241,44 +241,23 @@ def api_gpt_pro():
         data = request.get_json()
         if not data:
             return jsonify({"ok": False, "error": "No data received"}), 400
-        
+
         reference = data.get("reference", "")
         title = data.get("title", "")
         draft_content = data.get("draftContent", "")
-        
+
         print(f"[GPT-PRO] 처리 시작")
-        
-        # GPT-5.1 시스템 프롬프트
-        system_content = """당신은 gpt-4o로서 설교문 작성 전문가입니다.
 
-당신의 역할:
-1. gpt-4o-mini가 작성한 '초안 자료'를 참고하여 완성도 높은 설교문을 작성합니다
-2. mini의 문장을 그대로 복사하지 말고, 자연스럽고 감동적인 설교문으로 재작성합니다
-3. 청중과 소통하는 듯한 따뜻하고 진실된 어조로 작성합니다
+        # GPT-5.1 시스템 프롬프트 (심플 버전)
+        system_content = """당신은 설교문 작성 전문가입니다.
+제공된 초안 자료를 바탕으로 완성도 높은 설교문을 작성하세요."""
 
-작성 원칙:
-- 초안의 구조와 핵심 메시지는 유지하되, 표현은 완전히 새롭게
-- 적절한 예화와 실생활 적용을 추가
-- 청중의 마음을 움직이는 감동적인 메시지
-- 명확한 서론-본론-결론 구조
-- 한국 교회 문화에 맞는 자연스러운 표현
-
-중요: mini의 개요와 자료를 참고하되, 당신만의 언어로 처음부터 새로 작성하세요."""
-
-        # 사용자 메시지 구성
-        user_content = f"""다음은 gpt-4o-mini가 작성한 설교 초안 자료입니다.
-이 자료를 참고하여 완성도 높은 설교문을 작성해주세요.
+        # 사용자 메시지 구성 (심플 버전)
+        user_content = f"""다음 초안 자료를 바탕으로 완성된 설교문을 작성해주세요.
 
 {draft_content}
 
-====================================
-
-위 초안 자료를 바탕으로, 청중의 마음을 움직이는 완성도 높은 설교문을 작성해주세요.
-- 서론에서 청중의 관심을 끌고
-- 본론에서 명확한 메시지를 전달하며
-- 결론에서 실천 가능한 적용점을 제시해주세요.
-
-초안의 구조는 따르되, 표현은 당신만의 언어로 완전히 새롭게 작성하세요."""
+위 자료를 참고하여 완성도 높은 설교문을 작성하세요."""
 
         # GPT 호출 (gpt-4o = GPT-5.1)
         completion = client.chat.completions.create(
@@ -294,15 +273,15 @@ def api_gpt_pro():
                 }
             ],
             temperature=0.8,
-            max_tokens=4000
+            max_tokens=8000  # 더 긴 설교문을 위해 토큰 증가
         )
-        
+
         result = completion.choices[0].message.content.strip()
-        
+
         print(f"[GPT-PRO] 완료")
-        
+
         return jsonify({"ok": True, "result": result})
-        
+
     except Exception as e:
         print(f"[GPT-PRO][ERROR] {str(e)}")
         return jsonify({"ok": False, "error": str(e)}), 200
