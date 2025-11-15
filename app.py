@@ -373,6 +373,12 @@ def sermon():
     """Sermon page"""
     return render_template('sermon.html')
 
+# ===== Drama Routes =====
+@app.route('/drama')
+def drama():
+    """Drama page"""
+    return render_template('drama.html')
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
@@ -666,6 +672,255 @@ def api_gpt_pro():
     except Exception as e:
         print(f"[GPT-PRO][ERROR] {str(e)}")
         return jsonify({"ok": False, "error": str(e)}), 200
+
+# ===== Drama API Routes =====
+@app.route('/api/drama/synopsis', methods=['POST'])
+def api_drama_synopsis():
+    """Generate drama synopsis"""
+    try:
+        if not openai_client:
+            return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        title = data.get("title", "무제")
+        genre = data.get("genre", "드라마")
+        drama_type = data.get("type", "short")
+        running_time = data.get("runningTime", 10)
+        characters = data.get("characters", [])
+        theme = data.get("theme", "")
+        setting = data.get("setting", "")
+        conflict = data.get("conflict", "")
+
+        # Build character description
+        char_desc = ""
+        for char in characters:
+            char_desc += f"- {char.get('name', '?')}: {char.get('description', '')}\n"
+
+        # Create system prompt
+        type_desc = {
+            'short': '5-10분 분량의 단막극',
+            'episode': '20-30분 분량의 에피소드',
+            'series': '시리즈물 연속극',
+            'musical': '음악이 포함된 뮤지컬'
+        }
+
+        system_prompt = f"""당신은 전문 드라마 작가입니다.
+주어진 정보를 바탕으로 매력적이고 구조가 탄탄한 드라마 시놉시스를 작성해주세요.
+
+형식: {type_desc.get(drama_type, '드라마')}
+장르: {genre}
+러닝타임: {running_time}분
+
+시놉시스는 다음을 포함해야 합니다:
+1. 흥미로운 도입부 (Hook)
+2. 주요 인물 소개
+3. 핵심 갈등/사건
+4. 스토리 전개 방향
+5. 예상되는 클라이맥스와 결말 암시
+
+간결하면서도 임팩트 있게 작성하세요."""
+
+        user_prompt = f"""다음 정보를 바탕으로 드라마 시놉시스를 작성해주세요:
+
+제목: {title}
+장르: {genre}
+
+등장인물:
+{char_desc}
+
+주제/테마: {theme}
+
+배경/시대: {setting}
+
+주요 갈등/사건:
+{conflict}
+
+위 정보를 바탕으로 매력적인 시놉시스를 작성해주세요."""
+
+        # Call GPT
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.8,
+        )
+
+        synopsis = completion.choices[0].message.content.strip()
+        return jsonify({"ok": True, "synopsis": synopsis})
+
+    except Exception as e:
+        print(f"[DRAMA-SYNOPSIS][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route('/api/drama/scenes', methods=['POST'])
+def api_drama_scenes():
+    """Generate scene structure"""
+    try:
+        if not openai_client:
+            return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        drama_type = data.get("type", "short")
+        running_time = data.get("runningTime", 10)
+        synopsis = data.get("synopsis", "")
+        genre = data.get("genre", "드라마")
+        characters = data.get("characters", [])
+
+        # Build character list
+        char_list = ", ".join([c.get('name', '?') for c in characters])
+
+        system_prompt = f"""당신은 전문 드라마 작가입니다.
+주어진 시놉시스를 바탕으로 구체적인 장면 구성을 작성해주세요.
+
+러닝타임: {running_time}분
+장르: {genre}
+
+장면 구성 작성 시 포함할 내용:
+1. 장면 번호와 제목
+2. 장소 및 시간
+3. 등장인물
+4. 주요 사건/대화 내용
+5. 장면의 목적 (스토리 전개, 캐릭터 성장 등)
+6. 예상 분량 (초/분)
+
+{running_time}분 분량에 적합하게 5-10개 정도의 장면으로 구성하세요."""
+
+        user_prompt = f"""다음 시놉시스를 바탕으로 장면 구성을 작성해주세요:
+
+【 시놉시스 】
+{synopsis}
+
+등장인물: {char_list}
+
+각 장면을 구체적으로 구성해주세요."""
+
+        # Call GPT
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+        )
+
+        scenes = completion.choices[0].message.content.strip()
+        return jsonify({"ok": True, "scenes": scenes})
+
+    except Exception as e:
+        print(f"[DRAMA-SCENES][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route('/api/drama/script', methods=['POST'])
+def api_drama_script():
+    """Generate detailed drama script"""
+    try:
+        if not openai_client:
+            return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        title = data.get("title", "무제")
+        synopsis = data.get("synopsis", "")
+        scenes = data.get("scenes", "")
+        characters = data.get("characters", [])
+        setting = data.get("setting", "")
+        genre = data.get("genre", "드라마")
+
+        # Build character description
+        char_desc = ""
+        for char in characters:
+            char_desc += f"- {char.get('name', '?')}: {char.get('description', '')}\n"
+
+        system_prompt = f"""당신은 전문 드라마 대본 작가입니다.
+주어진 시놉시스와 장면 구성을 바탕으로 구체적인 대본 스크립트를 작성해주세요.
+
+장르: {genre}
+
+대본 작성 형식:
+1. 장면 번호, 제목, 장소, 시간 명시
+2. 지문 (인물의 행동, 표정, 분위기 등)
+3. 대사 (인물명: 대사 형식)
+4. 필요시 (  ) 안에 감정이나 상황 묘사
+5. 자연스럽고 현실적인 대화
+
+실제 촬영이 가능한 수준의 구체적인 대본을 작성하세요."""
+
+        user_prompt = f"""다음 정보를 바탕으로 상세한 드라마 대본을 작성해주세요:
+
+【 제목 】
+{title}
+
+【 등장인물 】
+{char_desc}
+
+【 시놉시스 】
+{synopsis}
+
+【 장면 구성 】
+{scenes}
+
+배경: {setting}
+
+위 정보를 바탕으로 실제 촬영이 가능한 구체적인 대본 스크립트를 작성해주세요.
+대사, 지문, 행동 등을 모두 포함하여 완성도 높은 대본을 만들어주세요."""
+
+        # Call GPT with higher quality model
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.8,
+        )
+
+        script = completion.choices[0].message.content.strip()
+
+        # Generate production notes
+        notes_prompt = f"""다음 드라마 대본에 대한 연출 노트를 작성해주세요:
+
+제목: {title}
+장르: {genre}
+
+【 대본 】
+{script[:1000]}... (일부)
+
+연출 노트에 포함할 내용:
+1. 전체적인 톤 앤 매너
+2. 촬영 시 주의사항
+3. 조명 및 음향 가이드
+4. 주요 장면 연출 포인트
+5. 캐릭터 연기 지도 방향
+
+간단명료하게 작성해주세요."""
+
+        notes_completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 전문 드라마 연출가입니다."},
+                {"role": "user", "content": notes_prompt}
+            ],
+            temperature=0.7,
+        )
+
+        notes = notes_completion.choices[0].message.content.strip()
+
+        return jsonify({"ok": True, "script": script, "notes": notes})
+
+    except Exception as e:
+        print(f"[DRAMA-SCRIPT][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

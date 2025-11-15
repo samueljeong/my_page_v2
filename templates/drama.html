@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>드라마 스크립트 생성</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .header {
+      background: white;
+      padding: 15px 30px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #333;
+    }
+    .header a {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: transform 0.2s;
+    }
+    .header a:hover {
+      transform: translateY(-2px);
+    }
+    .page-wrap {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .left-col {
+      width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+      overflow-y: auto;
+      max-height: calc(100vh - 120px);
+    }
+    .right-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+      min-width: 0;
+      overflow-y: auto;
+      max-height: calc(100vh - 120px);
+    }
+    .box {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .box-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+    }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .5rem;
+    }
+    .label {
+      font-weight: 600;
+      color: #555;
+      font-size: 14px;
+    }
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: .5rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 0.75rem;
+    }
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.5;
+      padding: .5rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .btn-row {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+    button {
+      padding: .5rem .8rem;
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #e0e0e0;
+      transform: translateY(-1px);
+    }
+    button.primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      font-weight: 600;
+    }
+    button.primary:hover {
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    button.secondary {
+      background: #4a90e2;
+      color: white;
+      border: none;
+    }
+    button.secondary:hover {
+      background: #357abd;
+    }
+    button.danger {
+      background: #e74c3c;
+      color: white;
+      border: none;
+    }
+    button.danger:hover {
+      background: #c0392b;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .type-option {
+      padding: 0.75rem;
+      background: #f8f9fa;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .type-option:hover {
+      background: #e9ecef;
+    }
+    .type-option.active {
+      background: #dfe6ff;
+      border: 2px solid #667eea;
+      color: #667eea;
+      font-weight: 600;
+    }
+    .result-area {
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 200px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      font-size: 14px;
+      margin-top: 0.5rem;
+    }
+    .result-area.loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+    }
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .info-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
+    .scene-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .scene-item {
+      background: #f8f9fa;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      border-left: 4px solid #667eea;
+    }
+    .scene-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+    .scene-desc {
+      font-size: 13px;
+      color: #666;
+    }
+    .char-input-group {
+      margin-bottom: 0.5rem;
+    }
+    .char-item {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .char-item input {
+      margin-bottom: 0;
+    }
+    .char-item button {
+      padding: 0.5rem 0.75rem;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎭 드라마 스크립트 생성</h1>
+    <a href="/">← 메인으로</a>
+  </div>
+
+  <div class="page-wrap">
+    <!-- Left Column: Inputs -->
+    <div class="left-col">
+      <!-- Drama Type Selection -->
+      <div class="box">
+        <div class="box-title">드라마 유형</div>
+        <div class="type-grid">
+          <div class="type-option active" data-type="short">
+            📱 단막극<br><small>(5-10분)</small>
+          </div>
+          <div class="type-option" data-type="episode">
+            📺 에피소드<br><small>(20-30분)</small>
+          </div>
+          <div class="type-option" data-type="series">
+            🎬 연속극<br><small>(시리즈)</small>
+          </div>
+          <div class="type-option" data-type="musical">
+            🎵 뮤지컬<br><small>(음악극)</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Basic Settings -->
+      <div class="box">
+        <div class="box-title">기본 설정</div>
+
+        <div class="label">제목</div>
+        <input type="text" id="dramaTitle" placeholder="드라마 제목을 입력하세요">
+
+        <div class="label">장르</div>
+        <select id="dramaGenre">
+          <option value="drama">드라마</option>
+          <option value="comedy">코미디</option>
+          <option value="romance">로맨스</option>
+          <option value="thriller">스릴러</option>
+          <option value="fantasy">판타지</option>
+          <option value="historical">사극</option>
+          <option value="family">가족</option>
+          <option value="youth">청춘</option>
+          <option value="crime">범죄</option>
+          <option value="melodrama">멜로</option>
+        </select>
+
+        <div class="label">러닝타임 (분)</div>
+        <input type="number" id="runningTime" value="10" min="5" max="120">
+
+        <div class="label">대상 연령</div>
+        <select id="targetAge">
+          <option value="all">전체 관람가</option>
+          <option value="12">12세 이상</option>
+          <option value="15">15세 이상</option>
+          <option value="19">19세 이상</option>
+        </select>
+      </div>
+
+      <!-- Characters -->
+      <div class="box">
+        <div class="box-title">등장인물</div>
+        <div id="characterList" class="char-input-group">
+          <div class="char-item">
+            <input type="text" placeholder="이름" class="char-name" value="주인공">
+            <input type="text" placeholder="역할/특징" class="char-desc" value="용감한 청년">
+            <button onclick="removeCharacter(this)" class="danger">삭제</button>
+          </div>
+        </div>
+        <button onclick="addCharacter()" class="secondary" style="width: 100%;">+ 인물 추가</button>
+      </div>
+
+      <!-- Story Settings -->
+      <div class="box">
+        <div class="box-title">스토리 설정</div>
+
+        <div class="label">주제/테마</div>
+        <textarea id="theme" placeholder="드라마의 주제나 전달하고자 하는 메시지를 입력하세요&#10;예: 가족의 소중함, 우정, 사랑과 희생 등">사랑과 용서</textarea>
+
+        <div class="label">배경/시대</div>
+        <input type="text" id="setting" placeholder="예: 현대 서울, 조선시대, 2050년 미래 등" value="현대 서울">
+
+        <div class="label">주요 갈등/사건</div>
+        <textarea id="conflict" placeholder="드라마의 중심 갈등이나 사건을 설명하세요">주인공이 오랜 친구의 배신을 알게 되면서 벌어지는 이야기</textarea>
+      </div>
+
+      <!-- Generate Button -->
+      <div class="box">
+        <button id="generateBtn" class="primary" style="width: 100%; padding: 1rem; font-size: 16px;" onclick="generateDrama()">
+          ✨ 드라마 생성하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="right-col">
+      <!-- Synopsis -->
+      <div class="box">
+        <div class="box-title">시놉시스</div>
+        <div id="synopsisResult" class="result-area">생성 버튼을 눌러 드라마 시놉시스를 만들어보세요.</div>
+        <div class="btn-row">
+          <button onclick="copyToClipboard('synopsisResult')" class="secondary">📋 복사</button>
+          <button onclick="regenerateSynopsis()" class="secondary">🔄 재생성</button>
+        </div>
+      </div>
+
+      <!-- Scene Structure -->
+      <div class="box">
+        <div class="box-title">장면 구성</div>
+        <div id="sceneResult" class="result-area">생성 버튼을 눌러 장면 구성을 확인하세요.</div>
+        <div class="btn-row">
+          <button onclick="copyToClipboard('sceneResult')" class="secondary">📋 복사</button>
+          <button onclick="generateDetailedScenes()" class="primary">📝 상세 스크립트 생성</button>
+        </div>
+      </div>
+
+      <!-- Script -->
+      <div class="box">
+        <div class="box-title">대본 스크립트</div>
+        <div id="scriptResult" class="result-area">장면 구성 후 상세 스크립트를 생성할 수 있습니다.</div>
+        <div class="btn-row">
+          <button onclick="copyToClipboard('scriptResult')" class="secondary">📋 복사</button>
+          <button onclick="downloadScript()" class="secondary">💾 다운로드</button>
+        </div>
+      </div>
+
+      <!-- Production Notes -->
+      <div class="box">
+        <div class="box-title">연출 노트</div>
+        <div id="notesResult" class="result-area">스크립트 생성 후 연출 노트를 확인할 수 있습니다.</div>
+        <div class="btn-row">
+          <button onclick="copyToClipboard('notesResult')" class="secondary">📋 복사</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentType = 'short';
+
+    // Type selection
+    document.querySelectorAll('.type-option').forEach(el => {
+      el.addEventListener('click', function() {
+        document.querySelectorAll('.type-option').forEach(e => e.classList.remove('active'));
+        this.classList.add('active');
+        currentType = this.dataset.type;
+      });
+    });
+
+    // Character management
+    function addCharacter() {
+      const charList = document.getElementById('characterList');
+      const newChar = document.createElement('div');
+      newChar.className = 'char-item';
+      newChar.innerHTML = `
+        <input type="text" placeholder="이름" class="char-name">
+        <input type="text" placeholder="역할/특징" class="char-desc">
+        <button onclick="removeCharacter(this)" class="danger">삭제</button>
+      `;
+      charList.appendChild(newChar);
+    }
+
+    function removeCharacter(btn) {
+      const charList = document.getElementById('characterList');
+      if (charList.children.length > 1) {
+        btn.parentElement.remove();
+      } else {
+        alert('최소 1명의 등장인물이 필요합니다.');
+      }
+    }
+
+    // Get characters
+    function getCharacters() {
+      const chars = [];
+      document.querySelectorAll('.char-item').forEach(item => {
+        const name = item.querySelector('.char-name').value.trim();
+        const desc = item.querySelector('.char-desc').value.trim();
+        if (name) {
+          chars.push({ name, description: desc });
+        }
+      });
+      return chars;
+    }
+
+    // Generate drama
+    async function generateDrama() {
+      const btn = document.getElementById('generateBtn');
+      btn.disabled = true;
+      btn.textContent = '생성 중...';
+
+      const data = {
+        type: currentType,
+        title: document.getElementById('dramaTitle').value.trim() || '무제',
+        genre: document.getElementById('dramaGenre').value,
+        runningTime: parseInt(document.getElementById('runningTime').value),
+        targetAge: document.getElementById('targetAge').value,
+        characters: getCharacters(),
+        theme: document.getElementById('theme').value.trim(),
+        setting: document.getElementById('setting').value.trim(),
+        conflict: document.getElementById('conflict').value.trim()
+      };
+
+      try {
+        // Show loading
+        showLoading('synopsisResult');
+        showLoading('sceneResult');
+
+        // Generate synopsis
+        const synopsisRes = await fetch('/api/drama/synopsis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const synopsisData = await synopsisRes.json();
+        document.getElementById('synopsisResult').textContent = synopsisData.synopsis || '생성 실패';
+
+        // Generate scene structure
+        const sceneRes = await fetch('/api/drama/scenes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, synopsis: synopsisData.synopsis })
+        });
+        const sceneData = await sceneRes.json();
+        document.getElementById('sceneResult').textContent = sceneData.scenes || '생성 실패';
+
+      } catch (error) {
+        console.error('Error:', error);
+        alert('드라마 생성 중 오류가 발생했습니다.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ 드라마 생성하기';
+      }
+    }
+
+    // Regenerate synopsis
+    async function regenerateSynopsis() {
+      const data = {
+        type: currentType,
+        title: document.getElementById('dramaTitle').value.trim() || '무제',
+        genre: document.getElementById('dramaGenre').value,
+        characters: getCharacters(),
+        theme: document.getElementById('theme').value.trim(),
+        setting: document.getElementById('setting').value.trim(),
+        conflict: document.getElementById('conflict').value.trim()
+      };
+
+      showLoading('synopsisResult');
+
+      try {
+        const res = await fetch('/api/drama/synopsis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        document.getElementById('synopsisResult').textContent = result.synopsis || '생성 실패';
+      } catch (error) {
+        alert('시놉시스 재생성 중 오류가 발생했습니다.');
+      }
+    }
+
+    // Generate detailed script
+    async function generateDetailedScenes() {
+      const synopsis = document.getElementById('synopsisResult').textContent;
+      const scenes = document.getElementById('sceneResult').textContent;
+
+      if (!synopsis || synopsis === '생성 버튼을 눌러 드라마 시놉시스를 만들어보세요.') {
+        alert('먼저 드라마를 생성해주세요.');
+        return;
+      }
+
+      showLoading('scriptResult');
+      showLoading('notesResult');
+
+      const data = {
+        type: currentType,
+        title: document.getElementById('dramaTitle').value.trim() || '무제',
+        genre: document.getElementById('dramaGenre').value,
+        characters: getCharacters(),
+        synopsis: synopsis,
+        scenes: scenes,
+        setting: document.getElementById('setting').value.trim()
+      };
+
+      try {
+        const res = await fetch('/api/drama/script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        document.getElementById('scriptResult').textContent = result.script || '생성 실패';
+        document.getElementById('notesResult').textContent = result.notes || '연출 노트가 생성되지 않았습니다.';
+      } catch (error) {
+        alert('스크립트 생성 중 오류가 발생했습니다.');
+      }
+    }
+
+    // Show loading
+    function showLoading(elementId) {
+      const el = document.getElementById(elementId);
+      el.innerHTML = '<div class="spinner"></div><div style="text-align: center; color: #666;">생성 중...</div>';
+    }
+
+    // Copy to clipboard
+    async function copyToClipboard(elementId) {
+      const text = document.getElementById(elementId).textContent;
+      if (text.includes('생성 중') || text.includes('생성 버튼')) {
+        alert('복사할 내용이 없습니다.');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('클립보드에 복사되었습니다!');
+      } catch (err) {
+        alert('복사 실패: ' + err);
+      }
+    }
+
+    // Download script
+    function downloadScript() {
+      const script = document.getElementById('scriptResult').textContent;
+      if (script.includes('생성할 수 있습니다') || script.includes('생성 중')) {
+        alert('다운로드할 스크립트가 없습니다.');
+        return;
+      }
+
+      const title = document.getElementById('dramaTitle').value.trim() || '드라마';
+      const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}_스크립트.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
