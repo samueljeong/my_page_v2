@@ -460,6 +460,64 @@ def health():
     """Health check endpoint"""
     return jsonify({"ok": True})
 
+@app.route('/setup-admin', methods=['GET', 'POST'])
+def setup_admin():
+    """
+    일회성 관리자 설정 엔드포인트
+    사용법: /setup-admin?email=이메일&secret=비밀키
+    """
+    # 환경 변수에서 비밀 키 가져오기 (없으면 기본값)
+    admin_secret = os.getenv('ADMIN_SETUP_SECRET', 'setup-admin-2024')
+
+    # 쿼리 파라미터에서 값 가져오기
+    email = request.args.get('email') or request.form.get('email')
+    secret = request.args.get('secret') or request.form.get('secret')
+
+    if not email or not secret:
+        return jsonify({
+            "ok": False,
+            "error": "email과 secret 파라미터가 필요합니다.",
+            "usage": "/setup-admin?email=이메일&secret=비밀키"
+        }), 400
+
+    # 비밀 키 확인
+    if secret != admin_secret:
+        return jsonify({
+            "ok": False,
+            "error": "잘못된 비밀 키입니다."
+        }), 403
+
+    # 사용자 찾기 및 관리자 권한 부여
+    conn = get_db_connection()
+    user = conn.execute('SELECT id, name, email, is_admin FROM users WHERE email = ?', (email,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({
+            "ok": False,
+            "error": f"이메일 '{email}'을 가진 사용자를 찾을 수 없습니다."
+        }), 404
+
+    if user['is_admin']:
+        conn.close()
+        return jsonify({
+            "ok": True,
+            "message": f"사용자 '{user['name']}' ({user['email']})는 이미 관리자입니다."
+        })
+
+    # 관리자 권한 부여
+    conn.execute('UPDATE users SET is_admin = 1 WHERE id = ?', (user['id'],))
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "message": f"✅ 사용자 '{user['name']}' ({user['email']})가 관리자로 승격되었습니다!",
+        "user_id": user['id'],
+        "email": user['email'],
+        "name": user['name']
+    })
+
 @app.route('/api/sermon/process', methods=['POST'])
 def api_process_step():
     """단일 처리 단계 실행 (gpt-4o-mini 사용)"""
