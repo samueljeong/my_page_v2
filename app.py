@@ -1414,14 +1414,26 @@ def api_bible_drama_get(drama_id):
 
 
 # ===== Video Service API Routes =====
-from video_service import VideoService
-
-video_service = VideoService()
+# Import video_service only when needed (optional dependency)
+try:
+    from video_service import VideoService
+    video_service = VideoService()
+    VIDEO_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Video service not available: {e}")
+    video_service = None
+    VIDEO_SERVICE_AVAILABLE = False
 
 @app.route('/api/video/create', methods=['POST'])
 def api_create_video():
     """묵상메시지 비디오 생성"""
     try:
+        if not VIDEO_SERVICE_AVAILABLE:
+            return jsonify({
+                'ok': False,
+                'error': '비디오 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
+            }), 503
+
         data = request.json
         title = data.get('title', '')
         scripture_reference = data.get('scripture_reference', '')
@@ -1470,6 +1482,12 @@ def api_create_video():
 def api_upload_video():
     """비디오를 소셜 미디어 플랫폼에 업로드"""
     try:
+        if not VIDEO_SERVICE_AVAILABLE:
+            return jsonify({
+                'ok': False,
+                'error': '비디오 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
+            }), 503
+
         data = request.json
         video_id = data.get('video_id')
         platforms = data.get('platforms', [])  # ['youtube', 'instagram', 'tiktok']
