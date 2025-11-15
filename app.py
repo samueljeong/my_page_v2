@@ -8,7 +8,8 @@ from functools import wraps
 from openai import OpenAI
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Secret key for session management
+# Secret key for session management
+app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24))
 
 # OpenAI client setup
 def get_openai_client():
