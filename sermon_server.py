@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
@@ -13,37 +14,67 @@ def get_client():
 
 client = get_client()
 
+def format_json_result(json_data):
+    """JSON 데이터를 보기 좋은 텍스트 형식으로 변환"""
+    result = []
+
+    # JSON의 각 키-값 쌍을 보기 좋게 포맷팅
+    for key, value in json_data.items():
+        # 키를 한국어로 변환 (필요시)
+        key_display = key.replace('_', ' ').title()
+
+        # 값이 리스트인 경우
+        if isinstance(value, list):
+            result.append(f"【 {key_display} 】")
+            for item in value:
+                result.append(f"  - {item}")
+            result.append("")
+        # 값이 딕셔너리인 경우
+        elif isinstance(value, dict):
+            result.append(f"【 {key_display} 】")
+            for sub_key, sub_value in value.items():
+                result.append(f"  {sub_key}: {sub_value}")
+            result.append("")
+        # 값이 문자열인 경우
+        else:
+            result.append(f"【 {key_display} 】")
+            result.append(str(value))
+            result.append("")
+
+    return "\n".join(result).strip()
+
 def remove_markdown(text):
     """마크다운 기호 제거 (#, *, -, **, ###, 등)"""
     # 헤더 제거 (##, ###, #### 등)
     text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
-    
+
     # 볼드 제거 (**, __)
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'__(.+?)__', r'\1', text)
-    
+
     # 이탤릭 제거 (*, _)
     text = re.sub(r'\*(.+?)\*', r'\1', text)
     text = re.sub(r'_(.+?)_', r'\1', text)
-    
+
     # 리스트 마커 제거 (-, *, +)
     text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
-    
+
     # 코드 블록 제거 (```)
     text = re.sub(r'```[\s\S]*?```', '', text)
-    
+
     # 인라인 코드 제거 (`)
     text = re.sub(r'`(.+?)`', r'\1', text)
-    
+
     return text.strip()
 
 def get_system_prompt_for_step(step_name):
     """
     단계별로 최적화된 system prompt 반환
     mini는 개요와 자료만 생성, 설교문 작성 금지
+    JSON 형식으로 응답
     """
     step_lower = step_name.lower()
-    
+
     # 제목 추천 단계
     if '제목' in step_name:
         return """당신은 gpt-4o-mini로서 설교 '제목 후보'만 제안하는 역할입니다.
@@ -58,7 +89,7 @@ CRITICAL RULES:
 하나님의 약속을 믿는 믿음
 약속의 땅을 향한 여정
 아브라함의 신앙 결단"""
-    
+
     # 본문 분석 / 연구 단계
     elif '분석' in step_name or '연구' in step_name or '배경' in step_name:
         return f"""당신은 gpt-4o-mini로서 설교 '초안 자료'만 준비하는 역할입니다.
@@ -67,17 +98,26 @@ CRITICAL RULES:
 
 CRITICAL RULES:
 1. 객관적인 성경 연구 자료만 제공하세요
-2. 다음 항목들을 포함하세요:
-   - 시대적/지리적/문화적 배경
-   - 핵심 단어 분석
-   - 본문 구조 분석
-   - 관련 성경구절 (Cross-reference)
-   - 신학적 주제
+2. 반드시 JSON 형식으로 응답하세요
 3. 설교문 형식으로 작성하지 마세요
 4. 감동적인 표현이나 적용 내용 금지
-5. 마크다운 기호 사용 금지
-6. 순수한 연구 자료만 제공"""
-    
+5. 순수한 연구 자료만 제공
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "background": "시대적/지리적/문화적 배경",
+  "context_before": "본문 이전 맥락",
+  "context_after": "본문 이후 맥락",
+  "characters": "등장인물과 역할",
+  "key_words": "핵심 단어 분석",
+  "structure": "본문 구조 분석",
+  "cross_references": "관련 성경구절",
+  "theological_themes": "신학적 주제",
+  "summary": "본문 요약"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
     # 개요 / 구조 단계
     elif '개요' in step_name or '구조' in step_name or 'outline' in step_lower:
         return f"""당신은 gpt-4o-mini로서 설교 '개요'만 작성하는 역할입니다.
@@ -85,20 +125,32 @@ CRITICAL RULES:
 현재 단계: {step_name}
 
 CRITICAL RULES:
-1. 설교의 뼈대만 제시하세요:
-   - Big Idea (한 문장으로 핵심 메시지)
-   - 서론 포인트 (키워드만)
-   - 1대지 주제 문장
-   - 1대지 소대지 (키워드만)
-   - 2대지 주제 문장
-   - 2대지 소대지 (키워드만)
-   - 3대지 주제 문장
-   - 3대지 소대지 (키워드만)
-   - 결론 방향 (키워드만)
-2. 문단 형태의 설교문은 절대 작성하지 마세요
-3. 구조와 주제 문장만 제시하세요
-4. 마크다운 기호 사용 금지"""
-    
+1. 설교의 뼈대만 제시하세요
+2. 반드시 JSON 형식으로 응답하세요
+3. 문단 형태의 설교문은 절대 작성하지 마세요
+4. 구조와 주제 문장만 제시하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "big_idea": "한 문장으로 핵심 메시지",
+  "intro_points": ["서론 포인트 1", "서론 포인트 2"],
+  "point1": {{
+    "title": "1대지 주제 문장",
+    "sub_points": ["소대지 1", "소대지 2"]
+  }},
+  "point2": {{
+    "title": "2대지 주제 문장",
+    "sub_points": ["소대지 1", "소대지 2"]
+  }},
+  "point3": {{
+    "title": "3대지 주제 문장",
+    "sub_points": ["소대지 1", "소대지 2"]
+  }},
+  "conclusion_direction": "결론 방향 키워드"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
     # 설교문 작성이 의심되는 단계 (경고)
     elif any(word in step_name for word in ['서론', '본론', '결론', '적용', '설교문']):
         return f"""당신은 gpt-4o-mini로서 설교 '자료'만 준비하는 역할입니다.
@@ -109,15 +161,21 @@ CRITICAL RULES:
 
 CRITICAL RULES:
 1. 이 단계는 GPT-5.1에서 최종 작성될 부분입니다
-2. 당신은 자료와 포인트만 제공하세요:
-   - 핵심 메시지 (한 문장)
-   - 주요 포인트 (키워드 나열)
-   - 사용할 성경 구절 리스트
-   - 강조할 내용 (키워드만)
-3. 자연스러운 설교 문장 작성 금지
-4. 감동적인 표현 금지
-5. 마크다운 기호 사용 금지"""
-    
+2. 당신은 자료와 포인트만 제공하세요
+3. 반드시 JSON 형식으로 응답하세요
+4. 자연스러운 설교 문장 작성 금지
+5. 감동적인 표현 금지
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "core_message": "핵심 메시지 (한 문장)",
+  "key_points": ["포인트 1", "포인트 2", "포인트 3"],
+  "scripture_references": ["구절 1", "구절 2"],
+  "emphasis": ["강조할 내용 1", "강조할 내용 2"]
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
     # 기타 단계
     else:
         return f"""당신은 gpt-4o-mini로서 설교 '초안 자료'만 준비하는 역할입니다.
@@ -127,8 +185,17 @@ CRITICAL RULES:
 CRITICAL RULES:
 1. 자료와 정보만 제공하세요
 2. 완성된 설교문은 작성하지 마세요
-3. 객관적 내용만 제시하세요
-4. 마크다운 기호 사용 금지"""
+3. 반드시 JSON 형식으로 응답하세요
+4. 객관적 내용만 제시하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "content": "자료 내용",
+  "points": ["포인트 1", "포인트 2"],
+  "references": ["참고 사항"]
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
 
 @app.route("/")
 def home():
@@ -222,11 +289,38 @@ def api_process_step():
         )
         
         result = completion.choices[0].message.content.strip()
-        
-        # 마크다운 기호 제거
-        result = remove_markdown(result)
-        
-        return jsonify({"ok": True, "result": result})
+
+        # 제목 추천 단계는 JSON 파싱하지 않고 그대로 반환
+        if '제목' in step_name:
+            result = remove_markdown(result)
+            return jsonify({"ok": True, "result": result})
+
+        # JSON 파싱 시도
+        try:
+            # JSON 코드 블록 제거 (```json ... ``` 형태)
+            if result.startswith('```'):
+                # ```json 또는 ``` 로 시작하는 경우
+                lines = result.split('\n')
+                # 첫 줄과 마지막 줄 제거
+                if lines[0].startswith('```'):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith('```'):
+                    lines = lines[:-1]
+                result = '\n'.join(lines).strip()
+
+            # JSON 파싱
+            json_data = json.loads(result)
+
+            # JSON을 보기 좋은 텍스트로 변환
+            formatted_result = format_json_result(json_data)
+
+            return jsonify({"ok": True, "result": formatted_result})
+
+        except json.JSONDecodeError as je:
+            # JSON 파싱 실패 시 원본 텍스트를 마크다운 제거하여 반환
+            print(f"[PROCESS][WARNING] JSON 파싱 실패, 원본 반환: {str(je)}")
+            result = remove_markdown(result)
+            return jsonify({"ok": True, "result": result})
         
     except Exception as e:
         print(f"[PROCESS][ERROR] {str(e)}")
