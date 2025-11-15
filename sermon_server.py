@@ -337,13 +337,32 @@ def api_gpt_pro():
         if not result:
             raise RuntimeError("GPT-5.1 API로부터 결과를 받지 못했습니다.")
 
-        print(f"[GPT-PRO] 완료")
+        draft_length = len(draft_content or "")
+        result_length = len(result)
+        preview = result[:400].strip()
 
-        return jsonify({"ok": True, "result": result})
+        print(
+            f"[GPT-PRO] 완료 | 초안 길이: {draft_length}자, 결과 길이: {result_length}자"
+        )
+
+        return jsonify(
+            {
+                "ok": True,
+                "result": result,
+                "summary": {
+                    "draftCharacters": draft_length,
+                    "resultCharacters": result_length,
+                    "resultPreview": preview,
+                },
+            }
+        )
 
     except Exception as e:
-        print(f"[GPT-PRO][ERROR] {str(e)}")
-        return jsonify({"ok": False, "error": str(e)}), 200
+        print(f"[GPT-PRO][ERROR] {type(e).__name__}: {str(e)}")
+        return (
+            jsonify({"ok": False, "error": str(e), "errorType": type(e).__name__}),
+            200,
+        )
 
 
 # ===== Render 배포를 위한 설정 =====

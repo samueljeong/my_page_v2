@@ -200,6 +200,16 @@
       border-radius: 8px;
       margin-top: .75rem;
     }
+    .gpt-pro-summary {
+      margin-top: .75rem;
+      padding: .6rem .75rem;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-size: .85rem;
+      line-height: 1.5;
+      color: #fff;
+      white-space: pre-line;
+    }
     .gpt-pro-result-box .label {
       color: white;
       font-size: 1.1rem;
@@ -400,6 +410,7 @@
           <div class="label">🎯 GPT PRO 완성본</div>
           <textarea id="gpt-pro-result" class="autosize" readonly placeholder="GPT PRO 처리 결과가 여기에 표시됩니다."></textarea>
           <button id="btn-copy-gpt-pro" style="margin-top: .5rem; width: 100%; background: white; color: #f5576c; font-weight: 600;">📋 완성본 복사</button>
+          <div id="gpt-pro-summary" class="gpt-pro-summary" style="display: none;"></div>
         </div>
       </div>
     </div>
@@ -945,6 +956,11 @@
     const draft = assembleGptProDraft();
     if (draft.error) {
       alert(draft.error);
+      const summaryEl = document.getElementById('gpt-pro-summary');
+      if (summaryEl) {
+        summaryEl.style.display = 'none';
+        summaryEl.textContent = '';
+      }
       return;
     }
 
@@ -968,6 +984,12 @@
     // ===== 2단계: GPT-5.1로 설교문 작성 =====
     showStatus('🚀 GPT PRO 처리 중... (약 30초 소요)');
 
+    const waitingSummary = document.getElementById('gpt-pro-summary');
+    if (waitingSummary) {
+      waitingSummary.textContent = 'GPT-5.1 응답을 기다리는 중입니다...';
+      waitingSummary.style.display = 'block';
+    }
+
     try {
       const response = await fetch('/api/sermon/gpt-pro', {
         method: 'POST',
@@ -987,6 +1009,7 @@
       if (data.ok) {
         const resultTextarea = document.getElementById('gpt-pro-result');
         const resultContainer = document.getElementById('gpt-pro-result-container');
+        const summaryEl = document.getElementById('gpt-pro-summary');
 
         if (resultTextarea && resultContainer) {
           resultTextarea.value = data.result;
@@ -997,13 +1020,45 @@
           resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
+        if (summaryEl) {
+          if (data.summary) {
+            const { draftCharacters, resultCharacters, resultPreview } = data.summary;
+            const lines = [];
+            if (typeof draftCharacters === 'number') {
+              lines.push(`초안 길이: 약 ${draftCharacters.toLocaleString()}자`);
+            }
+            if (typeof resultCharacters === 'number') {
+              lines.push(`완성본 길이: 약 ${resultCharacters.toLocaleString()}자`);
+            }
+            if (resultPreview) {
+              lines.push('미리보기:\n' + resultPreview.trim());
+            }
+            summaryEl.textContent = lines.join('\n\n');
+            summaryEl.style.display = lines.length ? 'block' : 'none';
+          } else {
+            summaryEl.style.display = 'none';
+            summaryEl.textContent = '';
+          }
+        }
+
         showStatus('✅ 전체 복사 + GPT PRO 완성!');
       } else {
-        alert(`오류: ${data.error}`);
+        const summaryEl = document.getElementById('gpt-pro-summary');
+        const errorType = data.errorType ? `(${data.errorType}) ` : '';
+        alert(`오류: ${errorType}${data.error}`);
+        if (summaryEl) {
+          summaryEl.textContent = `오류가 발생했습니다.\n${errorType}${data.error}`;
+          summaryEl.style.display = 'block';
+        }
         showStatus('❌ 실패');
       }
     } catch (err) {
       alert(`네트워크 오류: ${err.message}`);
+      const summaryEl = document.getElementById('gpt-pro-summary');
+      if (summaryEl) {
+        summaryEl.textContent = `네트워크 오류가 발생했습니다.\n${err.message}`;
+        summaryEl.style.display = 'block';
+      }
       showStatus('❌ 오류');
     } finally {
       setTimeout(hideStatus, 3000);
@@ -1093,6 +1148,11 @@
         if (titleBox) titleBox.style.display = 'none';
         const gptProContainer = document.getElementById('gpt-pro-result-container');
         if (gptProContainer) gptProContainer.style.display = 'none';
+        const summaryEl = document.getElementById('gpt-pro-summary');
+        if (summaryEl) {
+          summaryEl.style.display = 'none';
+          summaryEl.textContent = '';
+        }
         renderStyles();
         renderProcessingSteps();
         renderResultBoxes();
@@ -1274,6 +1334,11 @@
       if (titleBox) titleBox.style.display = 'none';
       const gptProContainer = document.getElementById('gpt-pro-result-container');
       if (gptProContainer) gptProContainer.style.display = 'none';
+      const summaryEl = document.getElementById('gpt-pro-summary');
+      if (summaryEl) {
+        summaryEl.style.display = 'none';
+        summaryEl.textContent = '';
+      }
 
       loadMasterGuide(currentCategory);
       renderStyles();
