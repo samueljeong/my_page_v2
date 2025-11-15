@@ -13,6 +13,16 @@ def get_client():
 
 client = get_client()
 
+GPT_PRO_CONTENT_TYPE = os.getenv("GPT_PRO_CONTENT_TYPE", "text").strip() or "text"
+if GPT_PRO_CONTENT_TYPE not in {"text", "input_text"}:
+    print(
+        f"[GPT-PRO][WARN] Unsupported content type '{GPT_PRO_CONTENT_TYPE}' detected."
+        " Falling back to 'text'."
+    )
+    GPT_PRO_CONTENT_TYPE = "text"
+
+print(f"[GPT-PRO] Request content type: {GPT_PRO_CONTENT_TYPE}")
+
 def remove_markdown(text):
     """마크다운 기호 제거 (#, *, -, **, ###, 등)"""
     # 헤더 제거 (##, ###, #### 등)
@@ -304,19 +314,19 @@ def api_gpt_pro():
                     "role": "system",
                     "content": [
                         {
-                            "type": "text",
-                            "text": system_content
+                            "type": GPT_PRO_CONTENT_TYPE,
+                            "text": system_content,
                         }
-                    ]
+                    ],
                 },
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "text",
-                            "text": user_content
+                            "type": GPT_PRO_CONTENT_TYPE,
+                            "text": user_content,
                         }
-                    ]
+                    ],
                 }
             ],
             temperature=0.8,
