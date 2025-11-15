@@ -856,6 +856,7 @@
 
     const categoryLabel = getCategoryLabel(currentCategory);
     const styleName = style ? style.name : '';
+    const styleDescription = style ? style.description : '';
 
     let fullText = `====================================\n`;
     fullText += `📖 설교 초안 자료 (GPT-5.1 작성용)\n`;
@@ -867,6 +868,9 @@
     fullText += `📌 기본 정보\n`;
     fullText += `- 카테고리: ${categoryLabel}\n`;
     fullText += `- 스타일: ${styleName}\n`;
+    if (styleDescription) {
+      fullText += `- 스타일 설명: ${styleDescription}\n`;
+    }
     fullText += `- 성경구절: ${ref}\n`;
     if (finalTitle) {
       fullText += `- 설교 제목: ${finalTitle}\n`;
@@ -904,6 +908,7 @@
         reference: ref,
         seriesName,
         styleName,
+        styleDescription,
         finalTitle,
         categoryLabel
       }
@@ -976,6 +981,7 @@
           title: draft.meta.finalTitle,
           seriesName: draft.meta.seriesName,
           styleName: draft.meta.styleName,
+          styleDescription: draft.meta.styleDescription,
           category: draft.meta.categoryLabel,
           draftContent: draft.draftContent
         })
