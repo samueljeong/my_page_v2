@@ -21,8 +21,12 @@ class ShortsMaker:
         self.width = width
         self.height = height
 
-        # 한글 폰트 경로 (시스템에 따라 다름)
+        # 한글 폰트 경로
+        # 프로젝트 내 폰트를 우선적으로 사용
+        project_font = os.path.join(os.path.dirname(__file__), "fonts", "NotoSansKR-Regular.ttf")
+
         self.font_paths = [
+            project_font,  # 프로젝트 내장 폰트 (우선)
             "/usr/share/fonts/truetype/nanum/NotoSansKR.ttf",  # Google Noto Sans KR
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",  # Ubuntu/Debian
             "/usr/share/fonts/nanum/NanumGothic.ttf",
@@ -189,7 +193,7 @@ class ShortsMaker:
         duration: int = 10
     ) -> Optional[str]:
         """
-        묵상 메시지 비디오 생성 (MoviePy 사용)
+        묵상 메시지 비디오 생성 (OpenCV 사용)
 
         Args:
             background_image_path: 배경 이미지 경로
@@ -202,13 +206,8 @@ class ShortsMaker:
             저장된 파일 경로 또는 None
         """
         try:
-            from moviepy.editor import (
-                ImageClip,
-                TextClip,
-                CompositeVideoClip,
-                concatenate_videoclips
-            )
-            from moviepy.video.fx.all import fadein, fadeout
+            import cv2
+            import numpy as np
 
             # 임시 이미지 생성
             temp_image = output_path.replace('.mp4', '_temp.jpg')
@@ -223,22 +222,43 @@ class ShortsMaker:
                 print("[ShortsMaker] Failed to create temp image")
                 return None
 
-            # 이미지 클립 생성
-            clip = ImageClip(temp_image, duration=duration)
+            # 이미지 읽기
+            img = cv2.imread(temp_image)
+            height, width, _ = img.shape
 
-            # 페이드 효과
-            clip = clip.fx(fadein, 1).fx(fadeout, 1)
-
-            # 비디오 저장
+            # 비디오 writer 설정
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            clip.write_videofile(
-                output_path,
-                fps=24,
-                codec='libx264',
-                audio=False,
-                preset='medium',
-                logger=None  # 진행 로그 숨기기
-            )
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fps = 24
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+            # 총 프레임 수 계산
+            total_frames = duration * fps
+            fade_frames = int(fps * 1)  # 1초 페이드
+
+            print(f"[ShortsMaker] Creating video: {total_frames} frames at {fps} fps")
+
+            # 각 프레임 생성
+            for frame_num in range(total_frames):
+                # 페이드 인/아웃 효과
+                alpha = 1.0
+                if frame_num < fade_frames:
+                    # 페이드 인
+                    alpha = frame_num / fade_frames
+                elif frame_num > total_frames - fade_frames:
+                    # 페이드 아웃
+                    alpha = (total_frames - frame_num) / fade_frames
+
+                # 알파 블렌딩 적용
+                if alpha < 1.0:
+                    frame = (img * alpha).astype(np.uint8)
+                else:
+                    frame = img.copy()
+
+                out.write(frame)
+
+            # 리소스 해제
+            out.release()
 
             # 임시 파일 삭제
             if os.path.exists(temp_image):
