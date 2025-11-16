@@ -1275,46 +1275,27 @@ def api_bible_drama_generate():
 
 20분 분량의 완성된 대본을 작성해주세요."""
 
-        # GPT-5.1 API 호출 (긴 대본 생성)
-        script_completion = openai_client.responses.create(
-            model="gpt-5.1",
-            input=[
+        # GPT-4o API 호출 (긴 대본 생성)
+        script_completion = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
                 {
                     "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": "당신은 성경 드라마 전문 대본 작가입니다. 성경의 사실을 정확히 따르되, 드라마틱한 표현을 사용하여 관객의 몰입도를 높입니다."
-                        }
-                    ]
+                    "content": "당신은 성경 드라마 전문 대본 작가입니다. 성경의 사실을 정확히 따르되, 드라마틱한 표현을 사용하여 관객의 몰입도를 높입니다."
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": script_prompt
-                        }
-                    ]
+                    "content": script_prompt
                 }
             ],
             temperature=0.8,
-            max_output_tokens=16000  # 20분 대본을 위한 충분한 토큰
+            max_tokens=16000  # 20분 대본을 위한 충분한 토큰
         )
 
-        # 결과 추출
-        if getattr(script_completion, "output_text", None):
-            full_script = script_completion.output_text.strip()
-        else:
-            text_chunks = []
-            for item in getattr(script_completion, "output", []) or []:
-                for content in getattr(item, "content", []) or []:
-                    if getattr(content, "type", "") == "text":
-                        text_chunks.append(getattr(content, "text", ""))
-            full_script = "\n".join(text_chunks).strip()
+        full_script = script_completion.choices[0].message.content.strip()
 
         if not full_script:
-            raise RuntimeError("GPT-5.1 API로부터 대본을 받지 못했습니다.")
+            raise RuntimeError("GPT-4o API로부터 대본을 받지 못했습니다.")
 
         # 데이터베이스에 저장
         user_id = session.get('user_id')
