@@ -615,13 +615,17 @@
       });
       
       const data = await response.json();
-      
+
       if (data.ok) {
         const outputId = `${timeOfDay}-message`;
         const textarea = document.getElementById(outputId);
         textarea.value = data.message;
         autoResize(textarea);
-        showStatus('✅ 메시지 생성 완료!');
+        showStatus('✅ 메시지 생성 완료! 이미지 프롬프트 생성 중...');
+
+        // 메시지 생성 완료 후 자동으로 이미지 프롬프트 생성
+        statusIndicator.style.display = 'none';
+        await generateImagePrompts(timeOfDay);
       } else {
         alert(`오류: ${data.error}`);
         showStatus('❌ 생성 실패');
