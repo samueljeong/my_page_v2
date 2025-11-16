@@ -947,13 +947,10 @@
     showStatus('🚀 GPT PRO 처리 중... (약 30초 소요)');
 
     try {
-      const response = await fetch('/api/sermon/gpt-pro', {
+      const response = await fetch('/api/drama/gpt-pro', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          reference: `${draft.meta.categoryLabel} - ${draft.meta.styleName}`,
-          title: '',
-          seriesName: '',
           styleName: draft.meta.styleName,
           styleDescription: draft.meta.styleDescription,
           category: draft.meta.categoryLabel,
@@ -1182,15 +1179,13 @@
     showStatus(`🤖 ${getStepName(stepId)} 처리 중...`);
 
     try {
-      const response = await fetch('/api/sermon/process', {
+      const response = await fetch('/api/drama/process', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           category: currentCategory,
           stepId: stepId,
           stepName: getStepName(stepId),
-          reference: `드라마 유형: ${getCategoryLabel(currentCategory)}`,
-          title: '',
           text: benchmarkScript,
           guide: guide,
           masterGuide: masterGuide,

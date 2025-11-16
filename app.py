@@ -312,6 +312,139 @@ CRITICAL RULES:
 
 JSON만 출력하고 추가 설명은 하지 마세요."""
 
+def get_drama_system_prompt_for_step(step_name):
+    """
+    드라마 단계별로 최적화된 system prompt 반환
+    mini는 개요와 자료만 생성, 완성된 대본 작성 금지
+    JSON 형식으로 응답
+    """
+    step_lower = step_name.lower()
+
+    # 캐릭터 설정 단계
+    if '캐릭터' in step_name or 'character' in step_lower:
+        return f"""당신은 gpt-4o-mini로서 드라마 '캐릭터 설정 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 캐릭터의 기본 정보와 성격만 정리하세요
+2. 반드시 JSON 형식으로 응답하세요
+3. 완성된 대본이나 대사는 작성하지 마세요
+4. 캐릭터 설정 자료만 제공하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "main_characters": [
+    {{"name": "캐릭터명", "age": "나이", "personality": "성격", "motivation": "동기", "background": "배경"}}
+  ],
+  "supporting_characters": [
+    {{"name": "캐릭터명", "role": "역할", "relationship": "주인공과의 관계"}}
+  ],
+  "character_dynamics": "캐릭터 간 관계와 역학"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
+    # 스토리라인 / 줄거리 단계
+    elif '스토리' in step_name or '줄거리' in step_name or 'storyline' in step_lower or 'plot' in step_lower:
+        return f"""당신은 gpt-4o-mini로서 드라마 '스토리라인 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 스토리의 구조와 전개만 정리하세요
+2. 반드시 JSON 형식으로 응답하세요
+3. 완성된 대본이나 상세한 대사는 작성하지 마세요
+4. 스토리 개요와 구조만 제공하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "premise": "기본 전제 (한 문장)",
+  "act1_setup": "1막: 설정 - 주요 사건과 인물 소개",
+  "act2_conflict": "2막: 갈등 - 주요 갈등과 전개",
+  "act3_resolution": "3막: 해결 - 클라이맥스와 결말",
+  "key_turning_points": ["전환점 1", "전환점 2", "전환점 3"],
+  "theme": "핵심 주제와 메시지"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
+    # 장면 구성 단계
+    elif '장면' in step_name or 'scene' in step_lower:
+        return f"""당신은 gpt-4o-mini로서 드라마 '장면 구성 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 장면의 구조와 목적만 정리하세요
+2. 반드시 JSON 형식으로 응답하세요
+3. 완성된 대본이나 대사는 작성하지 마세요
+4. 장면 개요만 제공하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "scenes": [
+    {{
+      "scene_number": "장면 번호",
+      "location": "장소",
+      "time": "시간",
+      "characters": "등장 인물",
+      "purpose": "장면의 목적",
+      "key_events": "주요 사건",
+      "mood": "분위기"
+    }}
+  ],
+  "total_duration": "예상 총 러닝타임"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
+    # 대사 / 대본 작성 단계
+    elif '대사' in step_name or '대본' in step_name or 'dialogue' in step_lower or 'script' in step_lower:
+        return f"""당신은 gpt-4o-mini로서 드라마 '대사 작성 자료'만 준비하는 역할입니다.
+
+⚠️ 중요: 완성된 대본은 작성하지 마세요!
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 이 단계는 GPT-5.1에서 최종 작성될 부분입니다
+2. 대사의 톤, 스타일, 핵심 메시지만 제공하세요
+3. 반드시 JSON 형식으로 응답하세요
+4. 완성된 대사나 대본은 작성하지 마세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "dialogue_style": "대사 스타일 (예: 자연스러운 일상어, 극적인 표현 등)",
+  "tone": "전체 톤 (예: 유머러스, 진지함, 감동적 등)",
+  "key_phrases": ["핵심 대사 아이디어 1", "핵심 대사 아이디어 2"],
+  "emotional_beats": ["감정 변화 1", "감정 변화 2"],
+  "subtext_notes": "숨겨진 의미와 암시"
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
+    # 기타 단계
+    else:
+        return f"""당신은 gpt-4o-mini로서 드라마 '초안 자료'만 준비하는 역할입니다.
+
+현재 단계: {step_name}
+
+CRITICAL RULES:
+1. 자료와 정보만 제공하세요
+2. 완성된 대본은 작성하지 마세요
+3. 반드시 JSON 형식으로 응답하세요
+4. 객관적 내용만 제시하세요
+
+응답은 반드시 다음 JSON 형식을 따르세요:
+{{
+  "content": "자료 내용",
+  "points": ["포인트 1", "포인트 2"],
+  "references": ["참고 사항"]
+}}
+
+JSON만 출력하고 추가 설명은 하지 마세요."""
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     """Handle user signup"""
@@ -850,7 +983,234 @@ def api_gpt_pro():
         print(f"[GPT-PRO][ERROR] {str(e)}")
         return jsonify({"ok": False, "error": str(e)}), 200
 
-# ===== Drama API Routes =====
+# ===== Drama API Routes (Multi-stage with GPT-4o-mini + GPT-5.1) =====
+@app.route('/api/drama/process', methods=['POST'])
+def api_drama_process_step():
+    """드라마 단일 처리 단계 실행 (gpt-4o-mini 사용)"""
+    try:
+        if not openai_client:
+            return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        category = data.get("category", "")
+        step_id = data.get("stepId", "")
+        step_name = data.get("stepName", "")
+        benchmark_script = data.get("text", "")
+        guide = data.get("guide", "")
+        master_guide = data.get("masterGuide", "")
+        previous_results = data.get("previousResults", {})
+
+        print(f"[DRAMA-PROCESS] {category} - {step_name}")
+
+        # 시스템 메시지 구성 (drama 전용 단계별 최적화)
+        system_content = get_drama_system_prompt_for_step(step_name)
+
+        # 총괄 지침이 있으면 추가
+        if master_guide:
+            system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
+            system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
+            system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
+
+        # 사용자 메시지 구성
+        user_content = f"[드라마 유형]\n{category}\n\n"
+
+        if benchmark_script:
+            user_content += f"[벤치마킹 대본 (참고용)]\n{benchmark_script}\n\n"
+
+        # 이전 단계 결과 추가
+        if previous_results:
+            user_content += "[이전 단계 결과 (참고용)]\n"
+            for prev_id, prev_data in previous_results.items():
+                user_content += f"\n### {prev_data['name']}\n{prev_data['result']}\n"
+            user_content += "\n"
+
+        # 현재 단계 지침 추가
+        if guide:
+            user_content += f"[{step_name} 단계 세부 지침]\n{guide}\n\n"
+
+        user_content += f"위 내용을 바탕으로 '{step_name}' 단계를 작성해주세요.\n"
+        user_content += "⚠️ 중요: 완성된 대본이 아닌, 자료와 구조만 제공하세요."
+
+        # GPT 호출 (gpt-4o-mini)
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"},
+        )
+
+        result = completion.choices[0].message.content.strip()
+
+        # JSON 파싱 시도
+        try:
+            # JSON 코드 블록 제거 (```json ... ``` 형태)
+            cleaned_result = result
+            if cleaned_result.startswith('```'):
+                lines = cleaned_result.split('\n')
+                if lines[0].startswith('```'):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith('```'):
+                    lines = lines[:-1]
+                cleaned_result = '\n'.join(lines).strip()
+
+            # JSON 파싱
+            json_data = json.loads(cleaned_result)
+
+            # JSON을 보기 좋은 텍스트로 변환
+            formatted_result = format_json_result(json_data)
+
+            print(f"[DRAMA-PROCESS][SUCCESS] JSON 파싱 성공")
+            return jsonify({"ok": True, "result": formatted_result})
+
+        except json.JSONDecodeError as je:
+            # JSON 파싱 실패 시 원본 텍스트를 마크다운 제거하여 반환
+            print(f"[DRAMA-PROCESS][WARNING] JSON 파싱 실패: {str(je)}")
+            print(f"[DRAMA-PROCESS][WARNING] 원본 결과: {result[:200]}...")
+            result = remove_markdown(result)
+            return jsonify({"ok": True, "result": result, "warning": "JSON 형식이 아닌 결과가 반환되었습니다."})
+
+    except Exception as e:
+        print(f"[DRAMA-PROCESS][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route('/api/drama/gpt-pro', methods=['POST'])
+def api_drama_gpt_pro():
+    """GPT-5.1 드라마 대본 완성"""
+    try:
+        if not openai_client:
+            return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        category = data.get("category", "")
+        style_name = data.get("styleName", "")
+        style_description = data.get("styleDescription", "")
+        draft_content = data.get("draftContent", "")
+
+        print(f"[DRAMA-GPT-PRO] 처리 시작 - 스타일: {style_name}")
+
+        # GPT-5.1 시스템 프롬프트 (드라마 전용)
+        system_content = (
+            "당신은 GPT-5.1 기반의 전문 드라마 대본 작가입니다."
+            " 자료는 참고용으로만 활용하고 대본은 처음부터 새로 구성하며,"
+            " 자연스럽고 생동감 있는 대사와 지문으로 실제 촬영 가능한 완성도 높은 대본을 작성하세요."
+            " 마크다운 기호 대신 순수 텍스트만 사용합니다."
+        )
+
+        # 사용자 메시지 구성
+        meta_lines = []
+        if category:
+            meta_lines.append(f"- 드라마 유형: {category}")
+        if style_name:
+            meta_lines.append(f"- 드라마 스타일: {style_name}")
+        if style_description:
+            meta_lines.append(f"- 스타일 설명: {style_description}")
+
+        meta_section = "\n".join(meta_lines)
+
+        user_content = (
+            "아래는 gpt-4o-mini가 정리한 드라마 기획 자료입니다."
+            " 참고만 하고, 대본은 처음부터 새로 작성해주세요."
+        )
+        if meta_section:
+            user_content += f"\n\n[기본 정보]\n{meta_section}"
+        user_content += "\n\n[드라마 초안 자료]\n"
+        user_content += draft_content
+
+        # 드라마 대본 작성 요청
+        user_content += "\n\n【요청 사항】\n"
+        user_content += (
+            "1. 실제 촬영이 가능한 형식으로 대본을 작성하세요:\n"
+            "   - 장면 번호, 장소, 시간 명시\n"
+            "   - 지문 (인물의 행동, 표정, 분위기 등)\n"
+            "   - 대사 (인물명: 대사 형식)\n"
+            "   - 필요시 (  ) 안에 감정이나 상황 묘사\n"
+            "2. 자연스럽고 현실적인 대화를 작성하세요.\n"
+            "3. 각 장면의 목적과 전개가 명확하도록 구성하세요.\n"
+            "4. 캐릭터의 성격과 동기가 대사와 행동에 잘 드러나도록 하세요.\n"
+            "5. 전체적인 흐름과 템포를 고려하여 작성하세요.\n"
+            "6. 마크다운, 불릿 기호 대신 순수 텍스트로 작성하고, 중복되는 문장은 피하세요."
+        )
+
+        # 최신 Responses API (gpt-5.1) 호출
+        completion = openai_client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": system_content
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": user_content
+                        }
+                    ]
+                }
+            ],
+            temperature=0.8,
+            max_output_tokens=8000
+        )
+
+        if getattr(completion, "output_text", None):
+            result = completion.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(completion, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result = "\n".join(text_chunks).strip()
+
+        if not result:
+            raise RuntimeError("GPT-5.1 API로부터 결과를 받지 못했습니다.")
+
+        # 결과 앞에 기본 정보 추가
+        final_result = ""
+
+        if style_name:
+            final_result += f"드라마 스타일: {style_name}\n"
+
+        if category:
+            final_result += f"드라마 유형: {category}\n"
+
+        if style_name or category:
+            final_result += "\n" + "="*50 + "\n\n"
+
+        final_result += result
+
+        print(f"[DRAMA-GPT-PRO] 완료")
+
+        return jsonify({"ok": True, "result": final_result})
+
+    except Exception as e:
+        print(f"[DRAMA-GPT-PRO][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+# ===== Drama API Routes (Old/Deprecated) =====
 @app.route('/api/drama/synopsis', methods=['POST'])
 @login_required
 def api_drama_synopsis():
