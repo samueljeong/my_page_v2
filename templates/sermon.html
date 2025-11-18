@@ -917,14 +917,25 @@
   function loadGuide(category, stepId) {
     const key = getGuideKey(category, stepId);
     const legacyKey = `guide-${category}-${stepId}`;
+    const migrationKey = `guide-migrated-${category}`;
     let stored = localStorage.getItem(key);
-    const fromLegacy = !stored && localStorage.getItem(legacyKey);
 
-    if (!stored && fromLegacy) {
-      stored = fromLegacy;
-      // 스타일 단위로 키를 분리하면서 기존 데이터를 현재 스타일로 승격
-      localStorage.setItem(key, stored);
-      saveToFirebase(key, stored);
+    if (!stored) {
+      const legacyValue = localStorage.getItem(legacyKey);
+      const migrationTarget = localStorage.getItem(migrationKey);
+
+      if (legacyValue && (!migrationTarget || migrationTarget === currentStyleId)) {
+        stored = legacyValue;
+        // 스타일 단위로 키를 분리하면서 기존 데이터를 현재 스타일로 승격
+        localStorage.setItem(key, stored);
+        saveToFirebase(key, stored);
+
+        if (!migrationTarget) {
+          const targetStyle = currentStyleId || 'default';
+          localStorage.setItem(migrationKey, targetStyle);
+          saveToFirebase(migrationKey, targetStyle);
+        }
+      }
     }
 
     stored = stored || '';
