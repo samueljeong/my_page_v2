@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
   <title>BIBLE LAB</title>
   <style>
     * { box-sizing: border-box; }
@@ -423,6 +424,213 @@
       font-size: .85rem;
       padding: 2rem;
     }
+
+    /* ===== 모바일 반응형 디자인 ===== */
+    @media screen and (max-width: 768px) {
+      .page-wrap {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        padding: .5rem;
+        gap: .5rem;
+      }
+
+      .left-col {
+        width: 100%;
+        overflow-y: visible;
+      }
+
+      .right-col {
+        width: 100%;
+        overflow-y: visible;
+      }
+
+      .box {
+        padding: .65rem;
+      }
+
+      /* 버튼 크기 증가 (터치 친화적) */
+      button {
+        padding: .5rem .75rem;
+        font-size: .9rem;
+        min-height: 44px; /* 터치 권장 크기 */
+      }
+
+      button.step-btn {
+        font-size: .95rem;
+      }
+
+      /* 입력 필드 크기 증가 */
+      input[type="text"],
+      input[type="date"],
+      input[type="password"],
+      select {
+        padding: .5rem .65rem;
+        font-size: 16px; /* iOS 줌 방지 */
+        min-height: 44px;
+      }
+
+      textarea {
+        font-size: 16px; /* iOS 줌 방지 */
+        padding: .5rem;
+      }
+
+      /* 상단 버튼 컨테이너 - 모바일에서는 세로 배치 */
+      .top-buttons-container {
+        flex-direction: column;
+      }
+
+      .top-buttons-container .box {
+        width: 100%;
+      }
+
+      /* 지침 영역 - 모바일에서는 세로 배치 */
+      .guide-row-container {
+        flex-direction: column;
+      }
+
+      .guide-row-container .box {
+        width: 100%;
+      }
+
+      /* 처리 단계 + Q&A - 모바일에서는 세로 배치 */
+      .processing-qa-container {
+        flex-direction: column;
+      }
+
+      .processing-steps-panel,
+      .qa-panel {
+        width: 100%;
+      }
+
+      /* Auth 헤더 - 모바일 최적화 */
+      .auth-header {
+        flex-wrap: wrap;
+        gap: .5rem;
+        padding: .5rem;
+      }
+
+      .auth-header h1 {
+        font-size: 1.1rem;
+      }
+
+      .auth-links {
+        gap: .5rem;
+        flex-wrap: wrap;
+      }
+
+      .auth-links a,
+      .auth-links .user-info {
+        font-size: .8rem;
+        padding: .35rem .6rem;
+      }
+
+      /* 모달 크기 조정 */
+      .modal-content {
+        width: 95%;
+        max-height: 90vh;
+        padding: 1rem;
+      }
+
+      .modal-title {
+        font-size: 1.1rem;
+      }
+
+      /* 스타일 아이템 터치 영역 증가 */
+      .style-item {
+        padding: .6rem .75rem;
+        margin-bottom: .5rem;
+      }
+
+      /* Q&A 메시지 여백 조정 */
+      .qa-message.user {
+        margin-left: .5rem;
+      }
+
+      .qa-message.assistant {
+        margin-right: .5rem;
+      }
+
+      /* 저장 아이템 버튼 크기 */
+      .storage-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .5rem;
+      }
+
+      .storage-item > div:last-child {
+        display: flex;
+        gap: .5rem;
+        width: 100%;
+      }
+
+      .storage-item button {
+        flex: 1;
+        font-size: .85rem;
+      }
+
+      /* 버튼 행 줄바꿈 */
+      .btn-row {
+        flex-wrap: wrap;
+      }
+
+      /* 상태바 */
+      .status-bar {
+        font-size: .75rem;
+        padding: .35rem .5rem;
+      }
+
+      /* 라벨 */
+      .label {
+        font-size: .95rem;
+      }
+
+      /* 제목 선택 라벨 */
+      .title-option-label {
+        padding: .5rem;
+        margin-bottom: .6rem;
+      }
+
+      .title-option-label span {
+        font-size: .9rem;
+      }
+    }
+
+    /* 아주 작은 화면 (360px 이하) */
+    @media screen and (max-width: 360px) {
+      .page-wrap {
+        padding: .25rem;
+      }
+
+      .box {
+        padding: .5rem;
+        border-radius: 6px;
+      }
+
+      button {
+        font-size: .85rem;
+        padding: .45rem .6rem;
+      }
+
+      .auth-header h1 {
+        font-size: 1rem;
+      }
+
+      .modal-content {
+        padding: .75rem;
+      }
+    }
+
+    /* 태블릿 가로 모드 (768px - 1024px) */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+      .left-col {
+        width: 320px;
+      }
+
+      .page-wrap {
+        padding: .75rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -532,15 +740,6 @@
       <!-- 상태 표시 -->
       <div id="status-bar" class="status-bar">작업 중...</div>
 
-      <!-- 백업/복원 버튼 -->
-      <div class="box" style="padding: .5rem;">
-        <div class="btn-row" style="gap: .5rem;">
-          <button id="btn-export-backup" style="flex: 1; font-size: .85rem;">💾 백업 다운로드</button>
-          <button id="btn-import-backup" style="flex: 1; font-size: .85rem;">📥 백업 복원</button>
-        </div>
-        <input type="file" id="backup-file-input" accept=".json" style="display: none;">
-      </div>
-
       <!-- 지침 영역 (50:50 분할) -->
       <div class="guide-row-container">
         <!-- 총괄 지침 영역 -->
@@ -587,6 +786,19 @@
             <div id="guide-tabs" class="btn-row" style="margin-bottom: .5rem;"></div>
             <div id="current-guide-info" style="font-size: .85rem; color: #666; margin-bottom: .5rem;"></div>
             <textarea id="guide-text" class="autosize" style="min-height: 90px;" placeholder="이 처리 단계의 구체적인 지침을 작성하세요."></textarea>
+
+            <!-- 백업/복원 버튼 -->
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+              <div style="font-size: .85rem; color: #666; margin-bottom: .5rem; font-weight: 600;">💾 데이터 백업</div>
+              <div class="btn-row" style="gap: .5rem;">
+                <button id="btn-export-backup" style="flex: 1; font-size: .85rem;">백업 다운로드</button>
+                <button id="btn-import-backup" style="flex: 1; font-size: .85rem;">백업 복원</button>
+              </div>
+              <input type="file" id="backup-file-input" accept=".json" style="display: none;">
+              <div style="font-size: .75rem; color: #999; margin-top: .5rem;">
+                정기적으로 백업 파일을 다운로드하여 안전한 곳에 보관하세요.
+              </div>
+            </div>
           </div>
         </div>
       </div>
