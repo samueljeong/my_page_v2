@@ -1856,6 +1856,12 @@
 
     fullText += `\n📝 작성 지침:\n`;
     fullText += `위의 초안 자료를 참고하여, 완성도 높은 설교문을 처음부터 새로 작성해주세요.\n`;
+    fullText += `⚠️ 중요: max_tokens를 16000으로 설정하고, 충분히 길고 상세하며 풍성한 내용으로 작성해주세요.\n`;
+
+    // 제목 추천 단계를 제외한 완료된 단계 이름들
+    const stepNames = completedSteps
+      .filter(step => step.name !== '제목 추천')
+      .map(step => step.name);
 
     return {
       error: null,
@@ -1868,7 +1874,8 @@
         styleDescription,
         finalTitle,
         categoryLabel
-      }
+      },
+      completedStepNames: stepNames
     };
   }
 
@@ -1940,7 +1947,8 @@
           styleName: draft.meta.styleName,
           styleDescription: draft.meta.styleDescription,
           category: draft.meta.categoryLabel,
-          draftContent: draft.draftContent
+          draftContent: draft.draftContent,
+          completedStepNames: draft.completedStepNames
         })
       });
 
