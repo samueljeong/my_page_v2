@@ -568,6 +568,174 @@ def api_get_suggestions():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+# ===== 워크플로우 박스 실행 API =====
+@app.route("/api/drama/workflow-execute", methods=["POST"])
+def api_workflow_execute():
+    """워크플로우 박스 실행 (선택된 입력 소스 기반)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        box_id = data.get("boxId", "")
+        box_name = data.get("boxName", "")
+        box_number = data.get("boxNumber", 0)
+        guide = data.get("guide", "")
+        inputs = data.get("inputs", {})  # dict with selected input sources
+        category = data.get("category", "")
+
+        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 시작")
+
+        # 선택된 입력 소스들을 조합
+        input_content_parts = []
+
+        # 벤치마킹 대본이 선택된 경우
+        if inputs.get("benchmarkScript"):
+            input_content_parts.append(f"[벤치마킹 대본]\n{inputs['benchmarkScript']}")
+
+        # AI 분석 자료가 선택된 경우
+        if inputs.get("aiAnalysis"):
+            input_content_parts.append(f"[AI 대본 분석 자료]\n{inputs['aiAnalysis']}")
+
+        # 이전 박스 결과들이 선택된 경우
+        for key, value in inputs.items():
+            if key.startswith("box") and key.endswith("Result"):
+                # box1Result, box2Result 등
+                box_num = key.replace("box", "").replace("Result", "")
+                input_content_parts.append(f"[박스 {box_num} 결과]\n{value}")
+
+        # 입력이 없는 경우 오류 반환
+        if not input_content_parts:
+            return jsonify({"ok": False, "error": "선택된 입력 소스가 없습니다. 체크박스를 선택해주세요."}), 400
+
+        # 시스템 프롬프트 구성
+        system_content = f"""당신은 드라마 제작 워크플로우 시스템의 작업 박스 [{box_number}] '{box_name}'를 처리하는 AI 어시스턴트입니다.
+
+사용자가 제공하는 작업 지침을 절대적으로 우선하여 따라야 합니다.
+지침이 명확하면 그대로 수행하고, 지침이 없거나 불명확하면 일반적인 드라마 제작 원칙에 따라 처리하세요.
+
+현재 작업: [{box_number}] {box_name}
+영상 시간: {category}"""
+
+        # 작업 지침 추가
+        if guide:
+            system_content += f"""
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【 작업 지침 (최우선) 】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{guide}
+
+위 지침을 절대적으로 우선하여 따라야 합니다."""
+        else:
+            system_content += "\n\n⚠️ 작업 지침이 제공되지 않았습니다. 일반적인 드라마 제작 원칙에 따라 처리하세요."
+
+        # 사용자 메시지 구성 (선택된 입력 소스들)
+        user_content = "다음은 선택된 입력 자료들입니다:\n\n"
+        user_content += "\n\n".join(input_content_parts)
+        user_content += "\n\n위 자료를 바탕으로 작업 지침에 따라 처리해주세요."
+
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7,
+        )
+
+        result = completion.choices[0].message.content.strip()
+
+        # 마크다운 제거
+        result = remove_markdown(result)
+
+        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 완료")
+
+        return jsonify({"ok": True, "result": result})
+
+    except Exception as e:
+        print(f"[DRAMA-WORKFLOW][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+# ===== 축적된 작성 가이드 조회 API =====
+@app.route("/api/drama/get-accumulated-guide", methods=["POST"])
+def api_get_accumulated_guide():
+    """축적된 대본 분석 결과를 기반으로 작성 가이드 제공"""
+    try:
+        data = request.get_json()
+        category = data.get("category", "") if data else ""
+
+        print(f"[DRAMA-GUIDE] 축적된 가이드 조회 시작")
+
+        # TODO: 향후 Firebase/DB에서 축적된 분석 데이터를 조회
+        # 현재는 GPT로 일반적인 가이드 생성
+
+        system_content = """당신은 드라마 대본 작성 전문가입니다.
+
+수많은 성공적인 드라마 대본들을 분석하여 얻은 보편적인 작성 가이드를 제공하세요.
+
+다음 요소들을 포함하여 구조화된 가이드를 작성하세요:
+
+1. **스토리 구조 모범 사례**
+   - 효과적인 도입부 구성법
+   - 긴장감을 유지하는 전개 방식
+   - 강렬한 클라이맥스 만들기
+   - 여운 남는 결말 작성법
+
+2. **캐릭터 설계 원칙**
+   - 공감 가는 주인공 만들기
+   - 명확한 동기와 목표 설정
+   - 성장 아크 디자인
+   - 갈등의 원천 설정
+
+3. **대사 작성 기법**
+   - 자연스러운 대화 만들기
+   - 캐릭터 개성 드러내기
+   - 핵심 메시지 전달 방법
+   - 감정적 호소력 강화
+
+4. **시청자 몰입 전략**
+   - 공감 포인트 배치
+   - 예상을 뛰어넘는 전개
+   - 감정적 카타르시스 제공
+   - 보편적 주제 다루기
+
+5. **장르별 차별화 요소**
+   - 기독교 드라마의 특성
+   - 감동 드라마의 핵심
+   - 멜로/로맨스의 포인트
+   - 스릴러/서스펜스의 긴장감
+
+각 항목은 실전에서 바로 적용 가능하도록 구체적이고 명확하게 작성하세요."""
+
+        user_content = "드라마 대본 작성 시 참고할 수 있는 보편적이고 실용적인 가이드를 제공해주세요."
+
+        if category:
+            user_content += f"\n\n특히 '{category}' 길이의 드라마에 적합한 가이드를 포함해주세요."
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7,
+        )
+
+        guide = completion.choices[0].message.content.strip()
+
+        print(f"[DRAMA-GUIDE] 가이드 생성 완료")
+
+        return jsonify({"ok": True, "guide": guide})
+
+    except Exception as e:
+        print(f"[DRAMA-GUIDE][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
