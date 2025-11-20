@@ -515,8 +515,26 @@
       <div id="workflow-boxes-container"></div>
     </div>
 
-    <!-- 오른쪽 - 축적된 가이드 조회 영역 -->
+    <!-- 오른쪽 - 가이드 및 지침 관리 영역 -->
     <div class="analysis-area">
+      <!-- 작업 지침 관리 박스 -->
+      <div class="box" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); border: none; padding: 1rem; margin-bottom: .75rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
+          <div style="color: white; font-weight: 600; font-size: 1.1rem;">📝 작업 지침 관리</div>
+          <button id="btn-toggle-guide-panel" style="padding: .3rem .6rem; background: white; color: #e74c3c; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: .85rem;">열기</button>
+        </div>
+        <div id="guide-panel-content" style="display: none;">
+          <div style="background: white; border-radius: 6px; padding: .75rem; margin-bottom: .5rem;">
+            <div style="font-size: .85rem; color: #666; margin-bottom: .5rem;">
+              모든 작업 박스의 지침을 한 곳에서 관리합니다. 지침은 박스 실행 시 AI에게 전달됩니다.
+            </div>
+          </div>
+          <div id="guide-management-container" style="background: white; border-radius: 6px; padding: .75rem; max-height: 400px; overflow-y: auto;">
+            <p style="color: #999; text-align: center; padding: 1rem;">작업 박스를 추가하면 여기에 표시됩니다.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 축적된 가이드 조회 박스 -->
       <div class="box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; padding: 1rem;">
         <div style="color: white; font-weight: 600; font-size: 1.1rem; margin-bottom: .75rem;">📚 축적된 작성 가이드</div>
@@ -1927,12 +1945,6 @@
           </div>
         </div>
 
-        <!-- 지침 입력 -->
-        <div style="margin-bottom: .75rem;">
-          <label style="display: block; font-size: .85rem; font-weight: 600; margin-bottom: .3rem; color: #666;">📝 작업 지침</label>
-          <textarea id="guide-${box.id}" onchange="updateBoxGuide('${box.id}', this.value)" style="width: 100%; min-height: 80px; font-size: .85rem; padding: .5rem; border-radius: 4px;" placeholder="이 작업의 구체적인 지침을 입력하세요...">${box.guide}</textarea>
-        </div>
-
         <!-- 실행 버튼 -->
         <button onclick="executeWorkflowBox('${box.id}')" class="primary" style="width: 100%; padding: .6rem; margin-bottom: .75rem; font-size: .9rem;">▶️ 실행</button>
 
@@ -1944,6 +1956,41 @@
         </div>
         </div>
       </div>
+      `;
+    }).join('');
+
+    // 지침 관리 패널도 업데이트
+    renderGuideManagement();
+  }
+
+  // 지침 관리 패널 렌더링
+  function renderGuideManagement() {
+    const container = document.getElementById('guide-management-container');
+    if (!container) return;
+
+    if (workflowBoxes.length === 0) {
+      container.innerHTML = '<p style="color: #999; text-align: center; padding: 1rem;">작업 박스를 추가하면 여기에 표시됩니다.</p>';
+      return;
+    }
+
+    container.innerHTML = workflowBoxes.map(box => {
+      const stepType = box.stepType || 'step1';
+      const stepBadgeColor = stepType === 'step1' ? '#e74c3c' : '#9b59b6';
+      const stepLabel = stepType === 'step1' ? 'Step1' : 'Step2';
+
+      return `
+        <div style="border: 2px solid ${stepBadgeColor}; border-radius: 6px; padding: .75rem; margin-bottom: .75rem; background: ${stepType === 'step1' ? '#fff5f5' : '#f8f5ff'};">
+          <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+            <span style="background: ${stepBadgeColor}; color: white; padding: .2rem .5rem; border-radius: 4px; font-weight: 600; font-size: .8rem;">[${box.boxNumber}]</span>
+            <span style="background: ${stepBadgeColor}; color: white; padding: .2rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600;">${stepLabel}</span>
+            <span style="font-weight: 600; font-size: .9rem; color: #333;">${box.name}</span>
+          </div>
+          <textarea
+            id="guide-panel-${box.id}"
+            onchange="updateBoxGuide('${box.id}', this.value)"
+            style="width: 100%; min-height: 100px; font-size: .85rem; padding: .5rem; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;"
+            placeholder="이 작업의 구체적인 지침을 입력하세요...">${box.guide || ''}</textarea>
+        </div>
       `;
     }).join('');
   }
@@ -1973,6 +2020,11 @@
     if (box) {
       box.guide = guide;
       await saveWorkflowBoxes();
+      // 다른 텍스트영역도 동기화 (패널과 박스 양쪽)
+      const panelTextarea = document.getElementById(`guide-panel-${boxId}`);
+      if (panelTextarea && panelTextarea.value !== guide) {
+        panelTextarea.value = guide;
+      }
     }
   };
 
@@ -2276,6 +2328,23 @@
       step2Boxes.forEach(box => {
         box.classList.toggle('collapsed');
       });
+    });
+  }
+
+  // 지침 관리 패널 토글 버튼
+  const btnToggleGuidePanel = document.getElementById('btn-toggle-guide-panel');
+  const guidePanelContent = document.getElementById('guide-panel-content');
+
+  if (btnToggleGuidePanel && guidePanelContent) {
+    btnToggleGuidePanel.addEventListener('click', () => {
+      if (guidePanelContent.style.display === 'none') {
+        guidePanelContent.style.display = 'block';
+        btnToggleGuidePanel.textContent = '닫기';
+        renderGuideManagement(); // 열 때 최신 상태로 렌더링
+      } else {
+        guidePanelContent.style.display = 'none';
+        btnToggleGuidePanel.textContent = '열기';
+      }
     });
   }
 
