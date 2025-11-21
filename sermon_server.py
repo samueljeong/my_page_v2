@@ -158,8 +158,20 @@ def api_process_step():
         guide = data.get("guide", "")
         master_guide = data.get("masterGuide", "")
         previous_results = data.get("previousResults", {})
-        
-        print(f"[PROCESS] {category} - {step_name}")
+
+        # 단계 이름 기반 모델 선택
+        # 분석/기획 단계 키워드 체크
+        analysis_keywords = ['제목', '분석', '배경', '개요', '구조', '주해', '해석', '조사', '연구']
+        is_analysis_step = any(keyword in step_name for keyword in analysis_keywords)
+
+        if is_analysis_step:
+            model_name = "gpt-5"
+            use_temperature = False
+        else:
+            model_name = "gpt-4o-mini"
+            use_temperature = True
+
+        print(f"[PROCESS] {category} - {step_name} (모델: {model_name})")
 
         # 시스템 메시지 구성 (단계별 최적화)
         system_content = get_system_prompt_for_step(step_name)
@@ -207,22 +219,37 @@ def api_process_step():
         if title and '제목' not in step_name:
             user_content += f"\n제목 '{title}'을 고려하여 작성하세요."
 
-        # GPT 호출 (gpt-4o-mini)
+        # GPT 호출 (모델 동적 선택)
         # JSON 형식 강제하지 않음 - guide에 따라 자유롭게 출력
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_content
-                },
-                {
-                    "role": "user",
-                    "content": user_content
-                }
-            ],
-            temperature=0.7,
-        )
+        if use_temperature:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_content
+                    },
+                    {
+                        "role": "user",
+                        "content": user_content
+                    }
+                ],
+                temperature=0.7,
+            )
+        else:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_content
+                    },
+                    {
+                        "role": "user",
+                        "content": user_content
+                    }
+                ]
+            )
 
         result = completion.choices[0].message.content.strip()
 
