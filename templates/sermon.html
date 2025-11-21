@@ -196,6 +196,110 @@
       50% { opacity: 0.7; }
     }
 
+    /* GPT 로딩 오버레이 */
+    #gpt-loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .gpt-loading-content {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 3rem 4rem;
+      border-radius: 24px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 100px rgba(102, 126, 234, 0.3);
+      animation: slideUp 0.5s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .gpt-loading-content::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+      animation: shimmer 3s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+
+    .gpt-loading-spinner {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.5rem;
+      border: 5px solid rgba(255, 255, 255, 0.2);
+      border-top: 5px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .gpt-loading-text {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.5px;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .gpt-loading-subtext {
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.9);
+      position: relative;
+      z-index: 1;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.6;
+      }
+    }
+
     .modal {
       display: none;
       position: fixed;
@@ -1169,6 +1273,15 @@
     </div>
   </div>
 
+  <!-- GPT 작업 중 로딩 오버레이 -->
+  <div id="gpt-loading-overlay" style="display: none;">
+    <div class="gpt-loading-content">
+      <div class="gpt-loading-spinner"></div>
+      <div class="gpt-loading-text">AI가 작업 중입니다...</div>
+      <div class="gpt-loading-subtext">잠시만 기다려주세요</div>
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
@@ -1304,6 +1417,21 @@
     if (statusBar) {
       statusBar.textContent = msg;
       statusBar.style.display = 'block';
+    }
+  }
+
+  // ===== GPT 로딩 오버레이 =====
+  function showGptLoading() {
+    const overlay = document.getElementById('gpt-loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+  }
+
+  function hideGptLoading() {
+    const overlay = document.getElementById('gpt-loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
     }
   }
 
@@ -2011,6 +2139,7 @@
     const modelSettings = getModelSettings(currentCategory);
     const gptProModel = modelSettings.gptPro;
 
+    showGptLoading(); // 로딩 오버레이 표시
     showStatus(`🚀 GPT PRO (${gptProModel}) 처리 중... (약 30초 소요)`);
 
     try {
@@ -2054,6 +2183,7 @@
       alert(`네트워크 오류: ${err.message}`);
       showStatus('❌ 오류');
     } finally {
+      hideGptLoading(); // 로딩 오버레이 숨김
       setTimeout(hideStatus, 3000);
     }
   }
@@ -2278,6 +2408,7 @@
       }
     }
 
+    showGptLoading(); // 로딩 오버레이 표시
     showStatus(`🤖 ${getStepName(stepId)} 처리 중...`);
 
     try {
@@ -2330,6 +2461,7 @@
       alert(`네트워크 오류: ${err.message}`);
       showStatus('❌ 오류');
     } finally {
+      hideGptLoading(); // 로딩 오버레이 숨김
       setTimeout(hideStatus, 2000);
     }
   }
@@ -3311,6 +3443,8 @@
     // 입력창 비우기
     input.value = '';
 
+    showGptLoading(); // 로딩 오버레이 표시
+
     try {
       showStatus('🤔 답변 생성 중...');
 
@@ -3325,6 +3459,7 @@
       });
 
       const result = await response.json();
+      hideGptLoading(); // 로딩 오버레이 숨김
       hideStatus();
 
       if (result.ok) {
@@ -3340,6 +3475,7 @@
         renderQAHistory();
       }
     } catch (err) {
+      hideGptLoading(); // 로딩 오버레이 숨김
       hideStatus();
       console.error('Q&A 요청 실패:', err);
       alert('답변 생성 중 오류가 발생했습니다.');
