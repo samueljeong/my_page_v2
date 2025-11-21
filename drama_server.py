@@ -595,8 +595,7 @@ def api_analyze_benchmark():
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
-            ],
-            temperature=0.7,
+            ]
         )
 
         analysis = completion.choices[0].message.content.strip()
@@ -730,8 +729,7 @@ def api_get_suggestions():
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
-            ],
-            temperature=0.7,
+            ]
         )
 
         suggestions = completion.choices[0].message.content.strip()
@@ -904,8 +902,7 @@ def api_get_accumulated_guide():
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
-            ],
-            temperature=0.7,
+            ]
         )
 
         guide = completion.choices[0].message.content.strip()
