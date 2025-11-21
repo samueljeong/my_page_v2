@@ -527,9 +527,15 @@
         <button id="btn-add-step2-box" style="padding: .6rem; font-size: .9rem; background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(78,205,196,.3); transition: all 0.2s ease;">➕ Step2 박스 추가</button>
       </div>
 
-      <!-- 작업 제어 버튼 -->
+      <!-- 순차 실행 버튼 -->
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; margin-bottom: .75rem;">
-        <button id="btn-auto-execute" style="padding: .55rem; font-size: .85rem; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(52,152,219,.3); transition: all 0.2s ease;">⚡ 순차 실행</button>
+        <button id="btn-auto-execute-step1" style="padding: .55rem; font-size: .8rem; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(255,107,107,.3); transition: all 0.2s ease;">⚡ Step1 순차실행</button>
+        <button id="btn-auto-execute-step2" style="padding: .55rem; font-size: .8rem; background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(78,205,196,.3); transition: all 0.2s ease;">⚡ Step2 순차실행</button>
+        <button id="btn-auto-execute-all" style="padding: .55rem; font-size: .8rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(102,126,234,.3); transition: all 0.2s ease;">⚡ 전체 순차실행</button>
+      </div>
+
+      <!-- 복사 버튼 -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: .75rem;">
         <button id="btn-copy-step1-results" style="padding: .55rem; font-size: .85rem; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(255,107,107,.25); transition: all 0.2s ease;">📋 Step1 복사</button>
         <button id="btn-copy-step2-results" style="padding: .55rem; font-size: .85rem; background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(78,205,196,.25); transition: all 0.2s ease;">📋 Step2 복사</button>
       </div>
@@ -2011,7 +2017,7 @@
       return;
     }
 
-    container.innerHTML = workflowBoxes.map(box => {
+    container.innerHTML = workflowBoxes.map((box, index) => {
       const stepType = box.stepType || 'step1';  // 기본값 step1
       const stepBadgeClass = stepType === 'step1' ? 'step1' : 'step2';
       const stepBadgeColor = stepType === 'step1' ? '#ff6b6b' : '#4ecdc4';
@@ -2020,13 +2026,18 @@
       const stepLabel = stepType === 'step1' ? 'Step1' : 'Step2';
 
       return `
-      <div class="box workflow-box ${stepType}" id="workflow-box-${box.id}" style="margin-bottom: .75rem; border-left: 4px solid ${stepBadgeColor};">
+      <div class="box workflow-box ${stepType}" id="workflow-box-${box.id}" draggable="true" data-box-index="${index}" style="margin-bottom: .75rem; border-left: 4px solid ${stepBadgeColor}; cursor: move;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
-          <div style="display: flex; align-items: center; gap: .5rem;">
+          <div style="display: flex; align-items: center; gap: .5rem; flex: 1;">
+            <span style="cursor: grab; font-size: 1.2rem; color: #999; user-select: none;">⋮⋮</span>
             <span style="background: ${stepBadgeGradient}; color: white; padding: .4rem .7rem; border-radius: 8px; font-weight: 600; font-size: .85rem; box-shadow: 0 2px 6px rgba(0,0,0,.15);">${stepLabel} ${box.stepNumber || box.boxNumber}</span>
-            <input type="text" value="${box.name}" onchange="updateBoxName('${box.id}', this.value)" style="font-weight: 600; font-size: .95rem; border: none; padding: .3rem .5rem; border-radius: 6px; background: #f8f9fa; flex: 1;">
+            <input type="text" value="${box.name}" onchange="updateBoxName('${box.id}', this.value)" style="font-weight: 600; font-size: .95rem; border: none; padding: .3rem .5rem; border-radius: 6px; background: #f8f9fa; flex: 1;" onclick="event.stopPropagation()">
           </div>
-          <button onclick="deleteWorkflowBox('${box.id}')" class="danger" style="padding: .4rem .7rem; font-size: .85rem; border-radius: 8px;">🗑️ 삭제</button>
+          <div style="display: flex; gap: .4rem;">
+            ${index > 0 ? `<button onclick="moveBoxUp(${index}); event.stopPropagation();" style="padding: .3rem .5rem; font-size: .85rem; border-radius: 6px; background: #f8f9fa; border: none; cursor: pointer;">▲</button>` : ''}
+            ${index < workflowBoxes.length - 1 ? `<button onclick="moveBoxDown(${index}); event.stopPropagation();" style="padding: .3rem .5rem; font-size: .85rem; border-radius: 6px; background: #f8f9fa; border: none; cursor: pointer;">▼</button>` : ''}
+            <button onclick="deleteWorkflowBox('${box.id}')" class="danger" style="padding: .4rem .7rem; font-size: .85rem; border-radius: 8px;">🗑️ 삭제</button>
+          </div>
         </div>
 
         <div class="box-content">
@@ -2067,6 +2078,9 @@
 
     // 지침 관리 패널도 업데이트
     renderGuideManagement();
+
+    // 드래그 앤 드롭 재설정
+    setupDragAndDrop();
   }
 
   // 지침 관리 패널 렌더링
@@ -2081,20 +2095,20 @@
 
     container.innerHTML = workflowBoxes.map(box => {
       const stepType = box.stepType || 'step1';
-      const stepBadgeColor = stepType === 'step1' ? '#e74c3c' : '#9b59b6';
+      const stepBadgeColor = stepType === 'step1' ? '#ff6b6b' : '#4ecdc4';
+      const stepBadgeGradient = stepType === 'step1' ? 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)' : 'linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%)';
       const stepLabel = stepType === 'step1' ? 'Step1' : 'Step2';
 
       return `
-        <div style="border: 2px solid ${stepBadgeColor}; border-radius: 6px; padding: .75rem; margin-bottom: .75rem; background: ${stepType === 'step1' ? '#fff5f5' : '#f8f5ff'};">
+        <div style="border: 2px solid ${stepBadgeColor}; border-radius: 10px; padding: .75rem; margin-bottom: .75rem; background: ${stepType === 'step1' ? '#fff5f5' : '#f0fdfc'};">
           <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
-            <span style="background: ${stepBadgeColor}; color: white; padding: .2rem .5rem; border-radius: 4px; font-weight: 600; font-size: .8rem;">[${box.boxNumber}]</span>
-            <span style="background: ${stepBadgeColor}; color: white; padding: .2rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600;">${stepLabel}</span>
+            <span style="background: ${stepBadgeGradient}; color: white; padding: .3rem .6rem; border-radius: 6px; font-weight: 600; font-size: .8rem; box-shadow: 0 2px 4px rgba(0,0,0,.1);">${stepLabel} ${box.stepNumber || box.boxNumber}</span>
             <span style="font-weight: 600; font-size: .9rem; color: #333;">${box.name}</span>
           </div>
           <textarea
             id="guide-panel-${box.id}"
             onchange="updateBoxGuide('${box.id}', this.value)"
-            style="width: 100%; min-height: 100px; font-size: .85rem; padding: .5rem; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;"
+            style="width: 100%; min-height: 100px; font-size: .85rem; padding: .6rem; border: none; border-radius: 8px; font-family: inherit; background: white; box-shadow: inset 0 2px 4px rgba(0,0,0,.05);"
             placeholder="이 작업의 구체적인 지침을 입력하세요...">${box.guide || ''}</textarea>
         </div>
       `;
@@ -2209,6 +2223,99 @@
       setTimeout(hideStatus, 1500);
     }
   };
+
+  // 박스 순서 이동 (위로)
+  window.moveBoxUp = function(index) {
+    if (index > 0) {
+      [workflowBoxes[index], workflowBoxes[index - 1]] = [workflowBoxes[index - 1], workflowBoxes[index]];
+      renderWorkflowBoxes();
+      saveWorkflowBoxes();
+    }
+  };
+
+  // 박스 순서 이동 (아래로)
+  window.moveBoxDown = function(index) {
+    if (index < workflowBoxes.length - 1) {
+      [workflowBoxes[index], workflowBoxes[index + 1]] = [workflowBoxes[index + 1], workflowBoxes[index]];
+      renderWorkflowBoxes();
+      saveWorkflowBoxes();
+    }
+  };
+
+  // 드래그 앤 드롭 설정
+  let draggedBoxIndex = null;
+
+  function setupDragAndDrop() {
+    const container = document.getElementById('workflow-boxes-container');
+    if (!container) return;
+
+    container.addEventListener('dragstart', (e) => {
+      if (e.target.classList.contains('workflow-box')) {
+        draggedBoxIndex = parseInt(e.target.dataset.boxIndex);
+        e.target.style.opacity = '0.4';
+      }
+    });
+
+    container.addEventListener('dragend', (e) => {
+      if (e.target.classList.contains('workflow-box')) {
+        e.target.style.opacity = '1';
+        draggedBoxIndex = null;
+      }
+    });
+
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const targetBox = e.target.closest('.workflow-box');
+      if (targetBox && draggedBoxIndex !== null) {
+        const targetIndex = parseInt(targetBox.dataset.boxIndex);
+        if (draggedBoxIndex !== targetIndex) {
+          const rect = targetBox.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          if (e.clientY < midpoint) {
+            targetBox.style.borderTop = '3px solid #667eea';
+            targetBox.style.borderBottom = '';
+          } else {
+            targetBox.style.borderTop = '';
+            targetBox.style.borderBottom = '3px solid #667eea';
+          }
+        }
+      }
+    });
+
+    container.addEventListener('dragleave', (e) => {
+      const targetBox = e.target.closest('.workflow-box');
+      if (targetBox) {
+        targetBox.style.borderTop = '';
+        targetBox.style.borderBottom = '';
+      }
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetBox = e.target.closest('.workflow-box');
+      if (targetBox && draggedBoxIndex !== null) {
+        const targetIndex = parseInt(targetBox.dataset.boxIndex);
+
+        if (draggedBoxIndex !== targetIndex) {
+          const draggedBox = workflowBoxes[draggedBoxIndex];
+          workflowBoxes.splice(draggedBoxIndex, 1);
+
+          const rect = targetBox.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          const insertIndex = e.clientY < midpoint ? targetIndex : targetIndex + 1;
+          const finalIndex = draggedBoxIndex < targetIndex ? insertIndex - 1 : insertIndex;
+
+          workflowBoxes.splice(finalIndex, 0, draggedBox);
+          renderWorkflowBoxes();
+          saveWorkflowBoxes();
+          setupDragAndDrop(); // 재설정
+        }
+
+        targetBox.style.borderTop = '';
+        targetBox.style.borderBottom = '';
+      }
+    });
+  }
 
   // 워크플로우 박스 저장
   async function saveWorkflowBoxes() {
@@ -2334,44 +2441,66 @@
     });
   }
 
-  // 순차 실행 버튼
-  const btnAutoExecute = document.getElementById('btn-auto-execute');
-  if (btnAutoExecute) {
-    btnAutoExecute.addEventListener('click', async () => {
-      if (workflowBoxes.length === 0) {
-        alert('실행할 워크플로우 박스가 없습니다.');
-        return;
-      }
+  // 순차 실행 함수 (공통)
+  async function autoExecuteBoxes(boxes, title) {
+    if (boxes.length === 0) {
+      alert(`실행할 ${title} 박스가 없습니다.`);
+      return;
+    }
 
-      if (!confirm(`${workflowBoxes.length}개의 박스를 순서대로 실행하시겠습니까?\n\n실행 시간이 오래 걸릴 수 있습니다.`)) {
-        return;
-      }
+    if (!confirm(`${boxes.length}개의 ${title} 박스를 순서대로 실행하시겠습니까?\n\n실행 시간이 오래 걸릴 수 있습니다.`)) {
+      return;
+    }
 
-      showLoadingOverlay('순차 실행 중', `전체 ${workflowBoxes.length}개 박스 실행 중...`);
+    showLoadingOverlay(`${title} 순차 실행 중`, `${title} ${boxes.length}개 박스 실행 중...`);
 
-      for (let i = 0; i < workflowBoxes.length; i++) {
-        const box = workflowBoxes[i];
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
 
-        // 로딩 메시지 업데이트
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-          const subtextEl = overlay.querySelector('.loading-subtext');
-          if (subtextEl) {
-            subtextEl.textContent = `[${i + 1}/${workflowBoxes.length}] ${box.name} 실행 중...`;
-          }
+      // 로딩 메시지 업데이트
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        const subtextEl = overlay.querySelector('.loading-subtext');
+        if (subtextEl) {
+          subtextEl.textContent = `[${i + 1}/${boxes.length}] ${box.name} 실행 중...`;
         }
-
-        // 박스 실행 (executeWorkflowBox 함수 내용을 직접 실행)
-        await executeWorkflowBoxDirect(box);
-
-        // 잠시 대기 (API 부하 방지)
-        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      hideLoadingOverlay();
-      showStatus('✅ 전체 순차 실행 완료!');
-      setTimeout(hideStatus, 2000);
-      renderWorkflowBoxes();
+      // 박스 실행 (executeWorkflowBox 함수 내용을 직접 실행)
+      await executeWorkflowBoxDirect(box);
+
+      // 잠시 대기 (API 부하 방지)
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    hideLoadingOverlay();
+    showStatus(`✅ ${title} 순차 실행 완료!`);
+    setTimeout(hideStatus, 2000);
+    renderWorkflowBoxes();
+  }
+
+  // 순차 실행 버튼 이벤트 리스너
+  const btnAutoExecuteStep1 = document.getElementById('btn-auto-execute-step1');
+  const btnAutoExecuteStep2 = document.getElementById('btn-auto-execute-step2');
+  const btnAutoExecuteAll = document.getElementById('btn-auto-execute-all');
+
+  if (btnAutoExecuteStep1) {
+    btnAutoExecuteStep1.addEventListener('click', async () => {
+      const step1Boxes = workflowBoxes.filter(box => (box.stepType || 'step1') === 'step1');
+      await autoExecuteBoxes(step1Boxes, 'Step1');
+    });
+  }
+
+  if (btnAutoExecuteStep2) {
+    btnAutoExecuteStep2.addEventListener('click', async () => {
+      const step2Boxes = workflowBoxes.filter(box => box.stepType === 'step2');
+      await autoExecuteBoxes(step2Boxes, 'Step2');
+    });
+  }
+
+  if (btnAutoExecuteAll) {
+    btnAutoExecuteAll.addEventListener('click', async () => {
+      await autoExecuteBoxes(workflowBoxes, '전체');
     });
   }
 
