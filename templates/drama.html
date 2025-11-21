@@ -1210,23 +1210,23 @@
 
   // ===== Step3 (Claude) 대본 완성 기능 =====
   async function executeStep3() {
-    // Step1, Step2 결과 수집
+    // Step2 결과만 수집 (Step2에서 새로운 대본 제작한 결과)
     let draftContent = '';
     let hasResults = false;
 
     workflowBoxes.forEach(box => {
-      if (box.result) {
+      // Step2 박스만 수집
+      if (box.stepType === 'step2' && box.result) {
         hasResults = true;
-        const stepLabel = box.stepType === 'step1' ? 'Step1' : (box.stepType === 'step2' ? 'Step2' : 'Step');
         draftContent += `\n\n${'='.repeat(50)}\n`;
-        draftContent += `[${stepLabel}] ${box.name}\n`;
+        draftContent += `[Step2] ${box.name}\n`;
         draftContent += `${'='.repeat(50)}\n\n`;
         draftContent += box.result;
       }
     });
 
     if (!hasResults) {
-      alert('Step1 또는 Step2 결과가 없습니다. 먼저 작업 박스를 실행해주세요.');
+      alert('Step2 결과가 없습니다. 먼저 Step2 박스를 실행해주세요.');
       return;
     }
 
