@@ -843,12 +843,21 @@ def api_workflow_execute():
         box_id = data.get("boxId", "")
         box_name = data.get("boxName", "")
         box_number = data.get("boxNumber", 0)
+        step_type = data.get("stepType", "step1")  # step1 or step2
         guide = data.get("guide", "")
         inputs = data.get("inputs", {})  # dict with selected input sources
         category = data.get("category", "")
         main_character = data.get("mainCharacter", "")
 
-        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 시작")
+        # Step 타입에 따른 모델 선택
+        if step_type == "step1":
+            model_name = "gpt-5"
+            use_temperature = False
+        else:  # step2
+            model_name = "gpt-4o-mini"
+            use_temperature = True
+
+        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 시작 (모델: {model_name}, Step: {step_type})")
 
         # 선택된 입력 소스들을 조합
         input_content_parts = []
@@ -910,22 +919,31 @@ def api_workflow_execute():
         user_content += "\n\n".join(input_content_parts)
         user_content += "\n\n위 자료를 바탕으로 작업 지침에 따라 처리해주세요."
 
-        # GPT 호출
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": user_content}
-            ],
-            temperature=0.7,
-        )
+        # GPT 호출 (모델 및 temperature 동적 설정)
+        if use_temperature:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=0.7,
+            )
+        else:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user_content}
+                ]
+            )
 
         result = completion.choices[0].message.content.strip()
 
         # 마크다운 제거
         result = remove_markdown(result)
 
-        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 완료")
+        print(f"[DRAMA-WORKFLOW] Box [{box_number}] {box_name} 실행 완료 (모델: {model_name})")
 
         return jsonify({"ok": True, "result": result})
 
