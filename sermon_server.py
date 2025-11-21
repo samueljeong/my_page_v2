@@ -152,6 +152,7 @@ def api_process_step():
         category = data.get("category", "")
         step_id = data.get("stepId", "")
         step_name = data.get("stepName", "")
+        step_type = data.get("stepType", "step1")
         reference = data.get("reference", "")
         title = data.get("title", "")
         text = data.get("text", "")
@@ -159,19 +160,15 @@ def api_process_step():
         master_guide = data.get("masterGuide", "")
         previous_results = data.get("previousResults", {})
 
-        # 단계 이름 기반 모델 선택
-        # 분석/기획 단계 키워드 체크
-        analysis_keywords = ['제목', '분석', '배경', '개요', '구조', '주해', '해석', '조사', '연구']
-        is_analysis_step = any(keyword in step_name for keyword in analysis_keywords)
-
-        if is_analysis_step:
+        # stepType 기반 모델 선택
+        if step_type == "step1":
             model_name = "gpt-5"
             use_temperature = False
-        else:
+        else:  # step2
             model_name = "gpt-4o-mini"
             use_temperature = True
 
-        print(f"[PROCESS] {category} - {step_name} (모델: {model_name})")
+        print(f"[PROCESS] {category} - {step_name} (Step: {step_type}, 모델: {model_name})")
 
         # 시스템 메시지 구성 (단계별 최적화)
         system_content = get_system_prompt_for_step(step_name)

@@ -1124,7 +1124,10 @@
         스타일: <strong id="modal-steps-style"></strong>
       </p>
       <input type="text" id="new-step-name" placeholder="단계 이름 (예: 제목 추천, 본문 분석, 개요 작성)" style="margin-bottom: .5rem;">
-      <button id="btn-add-step" class="primary" style="width: 100%; margin-bottom: 1rem;">추가</button>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1rem;">
+        <button id="btn-add-step1" class="primary" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); border: none; box-shadow: 0 3px 10px rgba(255,107,107,.3);">➕ Step1 추가</button>
+        <button id="btn-add-step2" class="primary" style="background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); border: none; box-shadow: 0 3px 10px rgba(78,205,196,.3);">➕ Step2 추가</button>
+      </div>
       <div id="steps-list" style="max-height: 300px; overflow-y: auto;"></div>
       <div class="modal-buttons">
         <button id="btn-close-steps">닫기</button>
@@ -2182,6 +2185,9 @@
 
     const steps = getCurrentSteps();
     const currentStepIndex = steps.findIndex(s => s.id === stepId);
+    const currentStep = steps[currentStepIndex];
+    const stepType = currentStep ? (currentStep.stepType || 'step1') : 'step1';
+
     const previousResults = {};
     for (let i = 0; i < currentStepIndex; i++) {
       const prevStep = steps[i];
@@ -2203,6 +2209,7 @@
           category: currentCategory,
           stepId: stepId,
           stepName: getStepName(stepId),
+          stepType: stepType,
           reference: ref,
           title: getSelectedTitle(), // 현재 제목 전달
           text: text,
@@ -2781,17 +2788,25 @@
       return;
     }
 
-    list.innerHTML = style.steps.map((step, idx) => `
-      <div class="storage-item">
-        <span>${step.order}. ${step.name}</span>
-        <div>
-          ${idx > 0 ? `<button onclick="moveStep(${idx}, -1)" style="margin-right: .3rem;">↑</button>` : ''}
-          ${idx < style.steps.length - 1 ? `<button onclick="moveStep(${idx}, 1)" style="margin-right: .3rem;">↓</button>` : ''}
-          <button onclick="renameStep(${idx})" style="margin-right: .3rem;">이름 수정</button>
-          <button class="danger" onclick="deleteStep(${idx})">삭제</button>
+    list.innerHTML = style.steps.map((step, idx) => {
+      const stepType = step.stepType || 'step1';
+      const stepBadgeColor = stepType === 'step1' ? '#ff6b6b' : '#4ecdc4';
+      const stepBadgeText = stepType === 'step1' ? 'Step1' : 'Step2';
+      return `
+        <div class="storage-item">
+          <div style="display: flex; align-items: center; gap: .5rem;">
+            <span style="background: ${stepBadgeColor}; color: white; padding: .2rem .4rem; border-radius: 4px; font-size: .7rem; font-weight: 600;">${stepBadgeText}</span>
+            <span>${step.order}. ${step.name}</span>
+          </div>
+          <div>
+            ${idx > 0 ? `<button onclick="moveStep(${idx}, -1)" style="margin-right: .3rem;">↑</button>` : ''}
+            ${idx < style.steps.length - 1 ? `<button onclick="moveStep(${idx}, 1)" style="margin-right: .3rem;">↓</button>` : ''}
+            <button onclick="renameStep(${idx})" style="margin-right: .3rem;">이름 수정</button>
+            <button class="danger" onclick="deleteStep(${idx})">삭제</button>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   const btnCloseSteps = document.getElementById('btn-close-steps');
@@ -2802,9 +2817,10 @@
     });
   }
 
-  const btnAddStep = document.getElementById('btn-add-step');
-  if (btnAddStep) {
-    btnAddStep.addEventListener('click', async () => {
+  // Step1 추가 버튼
+  const btnAddStep1 = document.getElementById('btn-add-step1');
+  if (btnAddStep1) {
+    btnAddStep1.addEventListener('click', async () => {
       const input = document.getElementById('new-step-name');
       if (!input) return;
 
@@ -2826,7 +2842,49 @@
       style.steps.push({
         id: id,
         name: name,
-        order: maxOrder + 1
+        order: maxOrder + 1,
+        stepType: 'step1'
+      });
+
+      await saveConfig();
+      renderProcessingSteps();
+      renderResultBoxes();
+      renderGuideTabs();
+      const updatedStyle = getCurrentStyle();
+      if (updatedStyle) {
+        renderStepsManageList(updatedStyle);
+      }
+      input.value = '';
+    });
+  }
+
+  // Step2 추가 버튼
+  const btnAddStep2 = document.getElementById('btn-add-step2');
+  if (btnAddStep2) {
+    btnAddStep2.addEventListener('click', async () => {
+      const input = document.getElementById('new-step-name');
+      if (!input) return;
+
+      const name = input.value.trim();
+
+      if (!name) {
+        alert('단계 이름을 입력하세요.');
+        return;
+      }
+
+      const style = getCurrentStyle();
+      if (!style) return;
+
+      if (!style.steps) style.steps = [];
+
+      const id = koreanToId(name);
+      const maxOrder = style.steps.length > 0 ? Math.max(...style.steps.map(s => s.order)) : 0;
+
+      style.steps.push({
+        id: id,
+        name: name,
+        order: maxOrder + 1,
+        stepType: 'step2'
       });
 
       await saveConfig();
