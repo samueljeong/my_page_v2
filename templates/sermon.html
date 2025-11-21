@@ -515,7 +515,7 @@
       overflow-y: auto;
     }
 
-    /* 처리 단계 + Q&A 50:50 분할 */
+    /* 처리 단계 + Q&A 70:30 분할 */
     .processing-qa-container {
       display: flex;
       gap: .75rem;
@@ -523,14 +523,14 @@
       min-height: 0;
     }
     .processing-steps-panel {
-      flex: 1;
+      flex: 7;
       display: flex;
       flex-direction: column;
       gap: .75rem;
       overflow-y: auto;
     }
     .qa-panel {
-      flex: 1;
+      flex: 3;
       display: flex;
       flex-direction: column;
       gap: .75rem;
@@ -826,6 +826,32 @@
       }
     }
 
+    /* Step2 박스 고정 및 블라인드 처리 */
+    .step2-box {
+      position: relative;
+    }
+
+    .step2-content-wrapper {
+      position: relative;
+      max-height: 200px;
+      overflow: hidden;
+    }
+
+    .step2-content-wrapper textarea {
+      resize: none !important;
+      overflow: hidden !important;
+    }
+
+    .step2-gradient-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 40%, rgba(255,255,255,1) 100%);
+      pointer-events: none;
+    }
+
     /* 태블릿 가로 모드 (768px - 1024px) */
     @media screen and (min-width: 769px) and (max-width: 1024px) {
       .left-col {
@@ -918,16 +944,16 @@
       </div>
 
       <!-- 전체 복사 + GPT PRO 버튼 -->
-      <div style="display: flex; gap: .75rem; margin-bottom: .75rem;">
-        <div class="box copy-all-box" style="flex: 1; padding: .75rem;">
-          <div class="box-title" style="font-size: .85rem; margin-bottom: .3rem;">📋 개인 GPT-PRO 사용</div>
-          <div class="box-desc" style="font-size: .75rem; margin-bottom: .5rem;">아래 버튼을 클릭 후 사용하시는 GPT에 붙여넣기 해주세요.</div>
-          <button id="btn-copy-all" style="width: 100%; padding: .5rem; font-size: .85rem;">전체 복사</button>
+      <div style="margin-bottom: .75rem;">
+        <div class="box copy-all-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: .85rem; margin-bottom: .75rem;">
+          <div class="box-title" style="font-size: .95rem; margin-bottom: .4rem; color: white; font-weight: 700;">📋 개인 GPT-PRO 사용</div>
+          <div class="box-desc" style="font-size: .8rem; margin-bottom: .6rem; color: rgba(255,255,255,0.95);">아래 버튼을 클릭 후 사용하시는 GPT에 붙여넣기 해주세요.</div>
+          <button id="btn-copy-all" style="width: 100%; padding: .6rem; font-size: .9rem; background: white; color: #667eea; font-weight: 700; border: none; border-radius: 6px; cursor: pointer;">전체 복사</button>
         </div>
-        <div class="box gpt-pro-box" style="flex: 1; padding: .75rem;">
-          <div class="box-title" style="font-size: .85rem; margin-bottom: .3rem;">🚀 GPT 최신 버전 이용</div>
-          <div class="box-desc" style="font-size: .75rem; margin-bottom: .5rem;">아래 버튼을 클릭 하시면 유료버전 GPT를 이용해서 설교문을 요청합니다.</div>
-          <button id="btn-gpt-pro" style="width: 100%; padding: .5rem; font-size: .85rem;">설교문 작성</button>
+        <div class="box gpt-pro-box" style="background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%); border: none; padding: .85rem;">
+          <div class="box-title" style="font-size: .95rem; margin-bottom: .4rem; color: white; font-weight: 700;">🚀 GPT 최신 버전 이용</div>
+          <div class="box-desc" style="font-size: .8rem; margin-bottom: .6rem; color: rgba(255,255,255,0.95);">아래 버튼을 클릭 하시면 유료버전 GPT를 이용해서 설교문을 요청합니다.</div>
+          <button id="btn-gpt-pro" style="width: 100%; padding: .6rem; font-size: .9rem; background: white; color: #f5576c; font-weight: 700; border: none; border-radius: 6px; cursor: pointer;">설교문 작성</button>
         </div>
       </div>
 
@@ -940,11 +966,8 @@
 
       <!-- 카카오톡 문의 -->
       <div class="box" style="background: linear-gradient(135deg, #FEE500 0%, #FFEB3B 100%); border: none; text-align: center; padding: 1rem;">
-        <div style="font-size: .9rem; font-weight: 600; color: #3C1E1E; margin-bottom: .5rem;">
+        <div style="font-size: .9rem; font-weight: 600; color: #3C1E1E; margin-bottom: .75rem;">
           💬 문의 및 궁금사항
-        </div>
-        <div style="font-size: .8rem; color: #5D4037; margin-bottom: .75rem;">
-          카카오톡 오픈채팅으로 편하게 문의하세요
         </div>
         <a href="https://open.kakao.com/o/sfFpe12h" target="_blank" rel="noopener noreferrer"
            style="display: inline-block; background: #3C1E1E; color: #FEE500; padding: .65rem 1.5rem; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: .9rem; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"
@@ -2293,7 +2316,7 @@
     }
 
     container.innerHTML = steps.map(step =>
-      `<button class="step-btn primary" data-step="${step.id}">${step.order}. ${step.name} <span style="float: right;">(클릭!)</span></button>`
+      `<button class="step-btn primary" data-step="${step.id}">${step.name} <span style="float: right;">(클릭!)</span></button>`
     ).join('');
 
     container.querySelectorAll('.step-btn').forEach(btn => {
@@ -2314,9 +2337,12 @@
     }
 
     container.innerHTML = steps.map(step => `
-      <div class="box">
+      <div class="box ${step.id === 'step2' ? 'step2-box' : ''}">
         <label class="label">${step.name}</label>
-        <textarea id="result-${step.id}" class="autosize" style="min-height: 140px;" placeholder="${step.name} 결과가 표시됩니다."></textarea>
+        <div class="${step.id === 'step2' ? 'step2-content-wrapper' : ''}">
+          <textarea id="result-${step.id}" class="autosize" style="min-height: 140px;" placeholder="${step.name} 결과가 표시됩니다."></textarea>
+          ${step.id === 'step2' ? '<div class="step2-gradient-overlay"></div>' : ''}
+        </div>
       </div>
     `).join('');
 
