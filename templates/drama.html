@@ -2292,11 +2292,15 @@
     'gpt-4o-mini': { input: 0.15, output: 0.60, diff: -94 },      // 매우 저렴
     'gpt-4o': { input: 2.50, output: 10.00, diff: 0 },            // 기준 (평균)
     'gpt-4.5-preview': { input: 75.00, output: 150.00, diff: +2900 }, // 프리미엄
+    'gpt-5': { input: 5.00, output: 20.00, diff: +100 },          // 고품질
+    'gpt-5.1': { input: 7.50, output: 30.00, diff: +200 },        // 최신
     // OpenRouter 모델 (기준: claude-3.5-sonnet = 0%)
-    'anthropic/claude-3.5-sonnet': { input: 3.00, output: 15.00, diff: 0 },    // 기준
+    'anthropic/claude-sonnet-4': { input: 3.00, output: 15.00, diff: +20 },     // 최신 상위
+    'anthropic/claude-3.5-sonnet': { input: 3.00, output: 15.00, diff: 0 },     // 기준
     'anthropic/claude-3.5-sonnet:beta': { input: 3.00, output: 15.00, diff: 0 },
-    'anthropic/claude-3-haiku': { input: 0.25, output: 1.25, diff: -92 },      // 저렴
-    'google/gemini-pro-1.5': { input: 1.25, output: 5.00, diff: -58 },         // 중저가
+    'anthropic/claude-3-opus': { input: 15.00, output: 75.00, diff: +400 },     // 최고 품질
+    'anthropic/claude-3-haiku': { input: 0.25, output: 1.25, diff: -92 },       // 저렴
+    'google/gemini-pro-1.5': { input: 1.25, output: 5.00, diff: -58 },          // 중저가
     'meta-llama/llama-3.1-70b-instruct': { input: 0.52, output: 0.75, diff: -83 } // 저렴
   };
 
@@ -2314,16 +2318,19 @@
     };
   }
 
-  // 사용 가능한 모델 목록 (OpenRouter 형식) - 가격 차이 % 포함
+  // 사용 가능한 모델 목록 - 가격 차이 % 포함
   const availableModels = {
     openai: [
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini (-94% 저렴)' },
       { id: 'gpt-4o', name: 'GPT-4o (기준, 평균)' },
+      { id: 'gpt-5', name: 'GPT-5 (+100% 고품질)' },
+      { id: 'gpt-5.1', name: 'GPT-5.1 (+200% 최신)' },
       { id: 'gpt-4.5-preview', name: 'GPT-4.5 Preview (+2900% 프리미엄)' }
     ],
     openrouter: [
+      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (+20% 최신)' },
       { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (기준)' },
-      { id: 'anthropic/claude-3.5-sonnet:beta', name: 'Claude 3.5 Sonnet Beta (기준)' },
+      { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus (+400% 최고품질)' },
       { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku (-92% 저렴)' },
       { id: 'google/gemini-pro-1.5', name: 'Gemini Pro 1.5 (-58%)' },
       { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (-83% 저렴)' }

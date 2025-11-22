@@ -743,7 +743,7 @@ def api_process_step():
 
 @app.route('/api/sermon/gpt-pro', methods=['POST'])
 def api_gpt_pro():
-    """GPT-5.1 완성본 작성"""
+    """GPT PRO 완성본 작성"""
     try:
         if not openai_client:
             return jsonify({"ok": False, "error": "OpenAI API key not configured"}), 500
@@ -760,7 +760,10 @@ def api_gpt_pro():
         draft_content = data.get("draftContent", "")
         style_description = data.get("styleDescription", "")
 
-        print(f"[GPT-PRO] 처리 시작 - 스타일: {style_name}")
+        # 프론트엔드에서 전달받은 모델 사용 (없으면 기본값 gpt-5.1)
+        selected_model = data.get("model", "gpt-5.1")
+
+        print(f"[GPT-PRO] 처리 시작 - 스타일: {style_name}, 모델: {selected_model}")
 
         # GPT-5.1 시스템 프롬프트 (스타일 동적 적용)
         system_content = (
@@ -842,45 +845,24 @@ def api_gpt_pro():
                 "6. 마크다운, 불릿 기호 대신 순수 텍스트 단락과 번호를 사용하고, 중복되는 문장은 피하세요."
             )
 
-        # 최신 Responses API (gpt-5.1) 호출
-        completion = openai_client.responses.create(
-            model="gpt-5.1",
-            input=[
-                {
-                    "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": system_content
-                        }
-                    ]
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": user_content
-                        }
-                    ]
-                }
+        # 표준 Chat Completions API 호출
+        completion = openai_client.chat.completions.create(
+            model=selected_model,
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
             ],
-            temperature=0.8,
-            max_output_tokens=8000  # 더 긴 설교문을 위해 토큰 증가
+            temperature=0.8
         )
 
-        if getattr(completion, "output_text", None):
-            result = completion.output_text.strip()
-        else:
-            text_chunks = []
-            for item in getattr(completion, "output", []) or []:
-                for content in getattr(item, "content", []) or []:
-                    if getattr(content, "type", "") == "text":
-                        text_chunks.append(getattr(content, "text", ""))
-            result = "\n".join(text_chunks).strip()
+        result = completion.choices[0].message.content.strip() if completion.choices else ""
 
         if not result:
-            raise RuntimeError("GPT-5.1 API로부터 결과를 받지 못했습니다.")
+            raise RuntimeError("GPT API로부터 결과를 받지 못했습니다.")
+
+        # 토큰 사용량 추출
+        input_tokens = completion.usage.prompt_tokens if hasattr(completion, 'usage') and completion.usage else 0
+        output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
         # 결과 앞에 본문과 제목 추가 (제목이 있을 때만)
         final_result = ""
@@ -899,9 +881,17 @@ def api_gpt_pro():
 
         final_result += result
 
-        print(f"[GPT-PRO] 완료")
+        print(f"[GPT-PRO] 완료 - 모델: {selected_model}, 토큰: {input_tokens}/{output_tokens}")
 
-        return jsonify({"ok": True, "result": final_result})
+        return jsonify({
+            "ok": True,
+            "result": final_result,
+            "usage": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "model": selected_model
+            }
+        })
 
     except Exception as e:
         print(f"[GPT-PRO][ERROR] {str(e)}")
