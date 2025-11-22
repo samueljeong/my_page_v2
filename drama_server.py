@@ -1271,14 +1271,12 @@ S#1. 카페 내부 / 낮
 
         # 대본 작성 요청 - 카테고리 기반 분량 지시 추가
         length_guide = ""
-        if "3분" in category:
-            length_guide = "약 800~1000자 분량으로"
-        elif "5분" in category:
-            length_guide = "약 1500~2000자 분량으로"
-        elif "7분" in category:
-            length_guide = "약 2000~2500자 분량으로"
-        elif "10분" in category:
+        if "10분" in category:
             length_guide = "약 3000~4000자 분량으로"
+        elif "20분" in category:
+            length_guide = "약 6000~8000자 분량으로"
+        elif "30분" in category:
+            length_guide = "약 9000~12000자 분량으로"
         else:
             length_guide = "충분히 길고 상세하게"
 
