@@ -782,6 +782,91 @@ def admin_settings():
     return render_template('sermon_settings.html', default_credits=default_credits)
 
 
+@app.route('/admin/benchmark-data')
+@admin_required
+def admin_benchmark_data():
+    """관리자: Benchmark 데이터 조회 페이지 (새 창에서 열림)"""
+    data_type = request.args.get('type', 'sermon')  # 'sermon' 또는 'step1'
+    page = int(request.args.get('page', 1))
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if data_type == 'step1':
+            # Step1 분석 데이터
+            if USE_POSTGRES:
+                cursor.execute("SELECT COUNT(*) as cnt FROM step1_analyses")
+                total = cursor.fetchone()['cnt']
+                cursor.execute("""
+                    SELECT id, reference, category, style_name, step_name,
+                           analysis_text, created_at
+                    FROM step1_analyses
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (per_page, offset))
+            else:
+                cursor.execute("SELECT COUNT(*) as cnt FROM step1_analyses")
+                total = cursor.fetchone()['cnt']
+                cursor.execute("""
+                    SELECT id, reference, category, style_name, step_name,
+                           analysis_text, created_at
+                    FROM step1_analyses
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (per_page, offset))
+
+            items = cursor.fetchall()
+            title = "Step1 분석 데이터"
+        else:
+            # Step3 설교문 분석 데이터
+            if USE_POSTGRES:
+                cursor.execute("SELECT COUNT(*) as cnt FROM sermon_benchmark_analyses")
+                total = cursor.fetchone()['cnt']
+                cursor.execute("""
+                    SELECT id, reference, sermon_title, category, style_name,
+                           sermon_structure, theological_depth, application_elements,
+                           illustration_style, language_style, success_factors,
+                           analysis_tokens, created_at
+                    FROM sermon_benchmark_analyses
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (per_page, offset))
+            else:
+                cursor.execute("SELECT COUNT(*) as cnt FROM sermon_benchmark_analyses")
+                total = cursor.fetchone()['cnt']
+                cursor.execute("""
+                    SELECT id, reference, sermon_title, category, style_name,
+                           sermon_structure, theological_depth, application_elements,
+                           illustration_style, language_style, success_factors,
+                           analysis_tokens, created_at
+                    FROM sermon_benchmark_analyses
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (per_page, offset))
+
+            items = cursor.fetchall()
+            title = "Step3 설교문 분석 데이터"
+
+        conn.close()
+
+        total_pages = (total + per_page - 1) // per_page
+
+        return render_template('sermon_benchmark_view.html',
+                             items=items,
+                             data_type=data_type,
+                             title=title,
+                             total=total,
+                             page=page,
+                             total_pages=total_pages,
+                             per_page=per_page)
+    except Exception as e:
+        print(f"[BENCHMARK-VIEW] 오류: {str(e)}")
+        return f"데이터 조회 오류: {str(e)}", 500
+
+
 def format_json_result(json_data, indent=0):
     """JSON 데이터를 보기 좋은 텍스트 형식으로 변환 (재귀적 처리)"""
     result = []
