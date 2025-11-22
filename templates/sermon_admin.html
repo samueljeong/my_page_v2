@@ -450,7 +450,7 @@
                                 <span class="badge badge-no-credits">0회</span>
                             {% endif %}
                         </td>
-                        <td>{{ user['created_at'][:10] if user['created_at'] else '-' }}</td>
+                        <td>{{ user['created_at'].strftime('%Y-%m-%d') if user['created_at'] else '-' }}</td>
                         <td class="actions-cell">
                             {% if not user['is_admin'] %}
                             <form method="POST" action="/admin/set-credits/{{ user['id'] }}" class="credit-form">
