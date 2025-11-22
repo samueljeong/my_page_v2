@@ -554,36 +554,25 @@ def api_gpt_pro():
         gpt_pro_model = data.get("model", "gpt-5")
         # 사용자 지정 최대 토큰량 (없으면 기본값 16000)
         max_tokens = data.get("maxTokens", 16000)
-        # 사용자 지정 시스템 프롬프트
-        custom_system_prompt = data.get("customSystemPrompt", "")
-        # 사용자 지정 요청 사항 프롬프트
-        custom_request_prompt = data.get("customRequestPrompt", "")
+        # 사용자 지정 지침 (통합된 시스템 지침 + 요청 사항)
+        custom_prompt = data.get("customPrompt", "")
 
         print(f"[GPT-PRO/Step3] 처리 시작 - 스타일: {style_name}, 모델: {gpt_pro_model}, 토큰: {max_tokens}")
 
         # 제목 생성 여부 확인
         has_title = bool(title and title.strip())
 
-        # 시스템 프롬프트 결정 (사용자 지정이 있으면 사용)
-        if custom_system_prompt and custom_system_prompt.strip():
-            system_content = custom_system_prompt.strip()
-        else:
-            # 기본 시스템 프롬프트
-            system_content = (
-                "당신은 한국어 설교 전문가입니다."
-                " 자료는 참고용으로만 활용하고 문장은 처음부터 새로 구성하며,"
-                " 묵직하고 명료한 어조로 신학적 통찰과 실제적 적용을 균형 있게 제시하세요."
-                " 마크다운 기호 대신 순수 텍스트만 사용합니다."
-            )
+        # 시스템 프롬프트 (간단한 역할 정의만)
+        system_content = "당신은 한국어 설교 전문가입니다. 마크다운 기호 대신 순수 텍스트만 사용합니다."
 
         # 제목이 없으면 GPT가 생성하도록 지시
         if not has_title:
             system_content += (
                 "\n\n⚠️ 제목 생성: 설교문 맨 앞에 '설교 제목: (제목 내용)' 형식으로 적절한 제목을 먼저 생성하세요."
-                "\n그 다음 빈 줄을 넣고 바로 설교 내용(서론, 본론, 결론)을 시작하세요. 본문 성경구절은 출력하지 마세요."
+                "\n그 다음 빈 줄을 넣고 바로 설교 내용을 시작하세요. 본문 성경구절은 출력하지 마세요."
             )
         else:
-            system_content += "\n\n⚠️ 중요: 설교 제목과 본문 성경구절은 다시 출력하지 마세요. 바로 설교 내용(서론, 본론, 결론)부터 시작하세요."
+            system_content += "\n\n⚠️ 중요: 설교 제목과 본문 성경구절은 다시 출력하지 마세요. 바로 설교 내용부터 시작하세요."
 
         # 사용자 메시지 구성
         meta_lines = []
@@ -611,13 +600,16 @@ def api_gpt_pro():
         user_content += "\n\n[설교 초안 자료]\n"
         user_content += draft_content
 
-        # 사용자 지정 요청 사항이 있으면 사용, 없으면 기본 요청 사항 사용
-        if custom_request_prompt and custom_request_prompt.strip():
-            user_content += f"\n\n【요청 사항】\n{custom_request_prompt.strip()}"
+        # 사용자 지정 지침 추가 (통합된 지침)
+        if custom_prompt and custom_prompt.strip():
+            user_content += f"\n\n【지침】\n{custom_prompt.strip()}"
         else:
-            # 기본 요청 사항 (하드코딩 - 사용자가 요청 사항을 설정하지 않은 경우)
-            user_content += "\n\n【요청 사항】\n"
+            # 기본 지침 (하드코딩 - 사용자가 지침을 설정하지 않은 경우)
+            user_content += "\n\n【지침】\n"
             user_content += (
+                "당신은 한국어 설교 전문가입니다.\n"
+                "step1,2 자료는 참고용으로만 활용하고 문장은 처음부터 새로 구성하며,\n"
+                "묵직하고 명료한 어조로 신학적 통찰과 실제적 적용을 균형 있게 제시하세요.\n\n"
                 "1. Step2의 설교 구조(서론, 본론, 결론)를 반드시 따라 작성하세요.\n"
                 "2. Step2의 대지(포인트) 구성을 유지하고 각 섹션의 핵심 메시지를 확장하세요.\n"
                 "3. 역사적 배경, 신학적 통찰, 실제 적용을 균형 있게 제시하세요.\n"
