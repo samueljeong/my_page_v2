@@ -2592,6 +2592,7 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         if (creditData.ok) {
           const credits = creditData.credits;
           const unlimited = creditData.unlimited;
+          const authDisabled = creditData.authDisabled; // 체험 모드 여부
 
           if (unlimited || credits > 0) {
             // 크레딧이 있거나 무제한이면 바로 실행
@@ -2609,6 +2610,27 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
               }
               showStatus(`✅ 코드 확인됨! (남은 횟수: ${codeResult.remaining})`);
               executeGptPro();
+            } else if (authDisabled) {
+              // 체험 모드이고 코드가 없으면 코드 입력 안내 팝업 표시
+              const inputCode = await showCodeInputPrompt();
+              if (inputCode === null) {
+                return; // 취소됨
+              }
+              if (inputCode === '') {
+                // 빈 코드로 실행 (체험 모드에서는 허용)
+                console.log('[Step3 Click] 체험 모드 - 코드 없이 실행');
+                executeGptPro();
+              } else {
+                // 입력된 코드 검증
+                const validateResult = await validateAndUseCode(inputCode);
+                if (validateResult.valid) {
+                  showStatus(`✅ 코드 확인됨! (남은 횟수: ${validateResult.remaining})`);
+                  executeGptPro();
+                } else {
+                  showStatus(`❌ ${validateResult.error}`);
+                  alert(validateResult.error);
+                }
+              }
             } else {
               // 코드도 없으면 안내 메시지
               showStatus('⚠️ Step3 사용 크레딧이 부족합니다. 관리자에게 문의하세요.');
@@ -4160,6 +4182,64 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     renderCodeList();
 
     return { valid: true, remaining: step3Codes[code].remaining };
+  }
+
+  // 체험 모드용 코드 입력 프롬프트 (코드 없이 실행 가능)
+  function showCodeInputPrompt() {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 10000;';
+
+      const popup = document.createElement('div');
+      popup.style.cssText = 'background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 380px; width: 90%;';
+      popup.innerHTML = `
+        <div style="font-size: 1.1rem; font-weight: 700; color: #f5576c; margin-bottom: 1rem; text-align: center;">🔑 Step3 사용 코드</div>
+        <div style="font-size: .85rem; color: #666; margin-bottom: 1rem; text-align: center;">
+          발급받은 코드가 있으면 입력해주세요.<br>
+          <span style="color: #888; font-size: .8rem;">코드가 없어도 실행할 수 있습니다.</span>
+        </div>
+        <input type="text" id="code-prompt-input" placeholder="코드 입력 (선택사항)" style="width: 100%; padding: .75rem; font-size: 1rem; border: 2px solid #ddd; border-radius: 8px; text-align: center; text-transform: uppercase; font-family: monospace; font-weight: 600; margin-bottom: 1rem; box-sizing: border-box;">
+        <div style="display: flex; gap: .5rem;">
+          <button id="btn-prompt-cancel" style="flex: 1; padding: .6rem; background: #e0e0e0; color: #666; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">취소</button>
+          <button id="btn-prompt-run" style="flex: 1; padding: .6rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">실행</button>
+        </div>
+      `;
+
+      overlay.appendChild(popup);
+      document.body.appendChild(overlay);
+
+      const input = popup.querySelector('#code-prompt-input');
+      const cancelBtn = popup.querySelector('#btn-prompt-cancel');
+      const runBtn = popup.querySelector('#btn-prompt-run');
+
+      input.focus();
+
+      const cleanup = () => {
+        document.body.removeChild(overlay);
+      };
+
+      cancelBtn.addEventListener('click', () => {
+        cleanup();
+        resolve(null); // 취소
+      });
+
+      runBtn.addEventListener('click', () => {
+        const code = input.value.trim().toUpperCase();
+        cleanup();
+        resolve(code); // 빈 문자열이면 코드 없이 실행
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const code = input.value.trim().toUpperCase();
+          cleanup();
+          resolve(code);
+        } else if (e.key === 'Escape') {
+          cleanup();
+          resolve(null);
+        }
+      });
+    });
   }
 
   // 코드 입력 팝업 표시
