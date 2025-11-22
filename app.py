@@ -30,7 +30,11 @@ def get_openrouter_client():
         raise RuntimeError("OPENROUTER_API_KEY가 비어 있습니다.")
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=key
+        api_key=key,
+        default_headers={
+            "HTTP-Referer": "https://my-page-v2.onrender.com",
+            "X-Title": "Drama Script Generator"
+        }
     )
 
 try:
@@ -1129,7 +1133,7 @@ def api_drama_claude_step3():
     """Step3: OpenRouter를 통한 드라마 대본 완성"""
     try:
         if not openrouter_client:
-            return jsonify({"ok": False, "error": "OpenRouter API key not configured. Render 환경변수에 OPENROUTER_API_KEY를 설정해주세요."}), 500
+            return jsonify({"ok": False, "error": "OpenRouter API key not configured. Render 환경변수에 OPENROUTER_API_KEY를 설정해주세요."}), 200
 
         data = request.get_json()
         if not data:
@@ -1259,11 +1263,7 @@ S#1. 카페 내부 / 낮
                     "content": user_content
                 }
             ],
-            temperature=0.8,
-            extra_headers={
-                "HTTP-Referer": "https://my-page-v2.onrender.com",
-                "X-Title": "Drama Script Generator"
-            }
+            temperature=0.8
         )
 
         # 응답 추출
