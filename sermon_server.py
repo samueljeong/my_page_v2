@@ -123,8 +123,9 @@ def init_db():
         # 기존 사용자에게 step3_credits 컬럼 추가 (이미 있으면 무시)
         try:
             cursor.execute('ALTER TABLE sermon_users ADD COLUMN step3_credits INTEGER DEFAULT 3')
-        except:
-            pass  # 컬럼이 이미 존재하면 무시
+            conn.commit()  # 성공 시 커밋
+        except Exception:
+            conn.rollback()  # 실패 시 롤백 (PostgreSQL 필수)
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sermon_benchmark_analyses (
