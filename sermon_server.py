@@ -717,12 +717,13 @@ def auth_status():
 @api_login_required
 def get_my_credits():
     """내 크레딧 조회"""
-    # 인증이 비활성화된 경우 무제한으로 표시
+    # 인증이 비활성화된 경우에도 코드 입력 기능을 위해 크레딧 0으로 반환
     if not AUTH_ENABLED:
         return jsonify({
             "ok": True,
-            "credits": -1,
-            "unlimited": True
+            "credits": 0,
+            "unlimited": False,
+            "authDisabled": True  # 클라이언트에서 체험 모드임을 알 수 있도록
         })
 
     user_id = session.get('user_id')
