@@ -118,6 +118,68 @@
       margin-bottom: .5rem;
     }
 
+    /* Step 네비게이션 버튼 스타일 */
+    .step-nav-btn {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      width: 100%;
+      padding: .5rem .6rem;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 8px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .step-nav-btn:hover {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      transform: translateX(3px);
+    }
+    .step-nav-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    }
+    .step-nav-btn.completed {
+      background: rgba(16, 185, 129, 0.3);
+      color: #10b981;
+    }
+    .step-nav-btn .step-num {
+      width: 20px;
+      height: 20px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      font-weight: 700;
+    }
+    .step-nav-btn.active .step-num {
+      background: white;
+      color: #667eea;
+    }
+    .step-nav-btn.completed .step-num {
+      background: #10b981;
+      color: white;
+    }
+    .step-nav-btn .step-name {
+      flex: 1;
+      font-size: .8rem;
+      font-weight: 500;
+    }
+    .step-nav-btn .step-status {
+      font-size: .6rem;
+      opacity: 0.7;
+    }
+    .step-nav-btn.completed .step-status {
+      color: #10b981;
+      opacity: 1;
+    }
+
     .style-item {
       display: flex;
       justify-content: space-between;
@@ -857,6 +919,48 @@
   <div class="page-wrap">
     <!-- 왼쪽 -->
     <div class="left-col">
+      <!-- Step 네비게이션 -->
+      <div class="step-nav" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; padding: .75rem; margin-bottom: .5rem;">
+        <div style="color: white; font-weight: 700; font-size: .9rem; margin-bottom: .75rem; text-align: center;">📍 워크플로우</div>
+        <div class="step-nav-items" style="display: flex; flex-direction: column; gap: .4rem;">
+          <button class="step-nav-btn active" data-step="step1" onclick="scrollToStep('step1-container')">
+            <span class="step-num">1</span>
+            <span class="step-name">주제 선정</span>
+            <span class="step-status">●</span>
+          </button>
+          <button class="step-nav-btn" data-step="step2" onclick="scrollToStep('step2-container')">
+            <span class="step-num">2</span>
+            <span class="step-name">자료 조사</span>
+            <span class="step-status">○</span>
+          </button>
+          <button class="step-nav-btn" data-step="step3" onclick="scrollToStep('step3-container')">
+            <span class="step-num">3</span>
+            <span class="step-name">대본 작성</span>
+            <span class="step-status">○</span>
+          </button>
+          <button class="step-nav-btn" data-step="step4" onclick="scrollToStep('step4-container')">
+            <span class="step-num">4</span>
+            <span class="step-name">이미지 생성</span>
+            <span class="step-status">○</span>
+          </button>
+          <button class="step-nav-btn" data-step="step5" onclick="scrollToStep('step5-container')">
+            <span class="step-num">5</span>
+            <span class="step-name">음성 합성</span>
+            <span class="step-status">○</span>
+          </button>
+          <button class="step-nav-btn" data-step="step6" onclick="scrollToStep('step6-container')">
+            <span class="step-num">6</span>
+            <span class="step-name">영상 제작</span>
+            <span class="step-status">○</span>
+          </button>
+          <button class="step-nav-btn" data-step="step7" onclick="scrollToStep('step7-container')">
+            <span class="step-num">7</span>
+            <span class="step-name">업로드</span>
+            <span class="step-status">○</span>
+          </button>
+        </div>
+      </div>
+
       <!-- 날짜 + 영상 시간 + 콘텐츠 유형 -->
       <div class="box" style="padding: .5rem .75rem;">
         <div style="display: flex; gap: .5rem; align-items: center;">
@@ -941,7 +1045,8 @@
 
     <!-- 가운데 - 워크플로우 영역 -->
     <div class="content-area">
-      <!-- Step1 컨트롤 (한 줄) -->
+      <!-- Step1 앵커 및 컨트롤 -->
+      <div id="step1-container"></div>
       <div style="display: flex; gap: .3rem; margin-bottom: .5rem; align-items: center;">
         <button id="btn-add-step1-box" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">➕ 박스추가</button>
         <button id="btn-auto-execute-step1" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ 순차실행</button>
@@ -950,7 +1055,8 @@
         <span style="font-size: .7rem; color: #ff6b6b; font-weight: 700; min-width: 40px;">Step1</span>
       </div>
 
-      <!-- Step2 컨트롤 (한 줄) -->
+      <!-- Step2 앵커 및 컨트롤 -->
+      <div id="step2-container"></div>
       <div style="display: flex; gap: .3rem; margin-bottom: .5rem; align-items: center;">
         <button id="btn-add-step2-box" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">➕ 박스추가</button>
         <button id="btn-auto-execute-step2" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #4ecdc4 0%, #44a3c2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ 순차실행</button>
@@ -959,7 +1065,8 @@
         <span style="font-size: .7rem; color: #4ecdc4; font-weight: 700; min-width: 40px;">Step2</span>
       </div>
 
-      <!-- 전체 순차실행 + Step3 -->
+      <!-- Step3 앵커 및 전체 순차실행 -->
+      <div id="step3-container"></div>
       <div style="display: flex; gap: .3rem; margin-bottom: .75rem; align-items: center;">
         <button id="btn-auto-execute-all" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ 전체 순차실행</button>
         <button id="btn-execute-step3" style="flex: 2; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">🎬 Step3: OpenRouter 대본완성</button>
@@ -1692,6 +1799,67 @@
   let currentCategory = '10min';
   let currentGuideStep = '';
   let stepResults = {};
+
+  // ===== Step 네비게이션 함수 =====
+  function scrollToStep(containerId) {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // 네비게이션 버튼 활성화 상태 업데이트
+      const stepNum = containerId.replace('-container', '');
+      updateStepNavActive(stepNum);
+    }
+  }
+
+  function updateStepNavActive(stepNum) {
+    document.querySelectorAll('.step-nav-btn').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.step === stepNum) {
+        btn.classList.add('active');
+      }
+    });
+  }
+
+  function updateStepNavCompleted(stepNum, completed = true) {
+    const btn = document.querySelector(`.step-nav-btn[data-step="${stepNum}"]`);
+    if (btn) {
+      if (completed) {
+        btn.classList.add('completed');
+        btn.querySelector('.step-status').textContent = '✓';
+      } else {
+        btn.classList.remove('completed');
+        btn.querySelector('.step-status').textContent = '○';
+      }
+    }
+  }
+
+  // 스크롤 위치에 따라 현재 Step 감지
+  function detectCurrentStep() {
+    const steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6', 'step7'];
+    const contentArea = document.querySelector('.content-area');
+    if (!contentArea) return;
+
+    const scrollTop = contentArea.scrollTop;
+    let currentStep = 'step1';
+
+    for (const step of steps) {
+      const container = document.getElementById(`${step}-container`);
+      if (container && container.offsetTop <= scrollTop + 100) {
+        currentStep = step;
+      }
+    }
+
+    updateStepNavActive(currentStep);
+  }
+
+  // content-area 스크롤 이벤트 리스너
+  document.addEventListener('DOMContentLoaded', () => {
+    const contentArea = document.querySelector('.content-area');
+    if (contentArea) {
+      contentArea.addEventListener('scroll', detectCurrentStep);
+    }
+  });
 
   // 워크플로우 박스 시스템
   let workflowBoxes = [];
