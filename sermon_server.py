@@ -1883,6 +1883,71 @@ def api_sermon_qa():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+@app.route("/api/sermon/recommend-scripture", methods=["POST"])
+@api_login_required
+def api_recommend_scripture():
+    """상황에 맞는 성경 본문 추천"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        query = data.get("query", "")
+        if not query:
+            return jsonify({"ok": False, "error": "상황을 입력해주세요"}), 400
+
+        print(f"[본문추천] 검색어: {query}")
+
+        system_content = """당신은 성경 전문가입니다. 사용자가 제시하는 상황이나 행사에 적합한 성경 본문을 추천해주세요.
+
+응답 형식 (반드시 이 JSON 형식으로만 응답):
+[
+  {"scripture": "요한복음 3:16", "reason": "하나님의 사랑을 가장 명확하게 보여주는 구절"},
+  {"scripture": "시편 23:1-6", "reason": "위로와 평안을 주는 대표적인 시편"},
+  ...
+]
+
+주의사항:
+- 정확히 5개의 추천을 제공하세요
+- scripture는 한글 성경 표기법 (예: 창세기 1:1, 요한복음 3:16)
+- reason은 20자 이내로 간결하게
+- JSON 형식만 응답하세요 (다른 텍스트 없이)"""
+
+        user_content = f"다음 상황/행사에 적합한 성경 본문 5개를 추천해주세요: {query}"
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7
+        )
+
+        response_text = completion.choices[0].message.content.strip()
+
+        # JSON 파싱
+        import json
+        try:
+            # 코드블록 제거
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            recommendations = json.loads(response_text)
+        except json.JSONDecodeError:
+            print(f"[본문추천] JSON 파싱 실패: {response_text[:200]}")
+            return jsonify({"ok": False, "error": "추천 결과 파싱 실패"}), 200
+
+        print(f"[본문추천] 완료: {len(recommendations)}개 추천")
+
+        return jsonify({"ok": True, "recommendations": recommendations})
+
+    except Exception as e:
+        print(f"[본문추천][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
 # ===== 설교문 벤치마크 분석 함수 =====
 def analyze_sermon_for_benchmark(sermon_text, reference="", sermon_title="", category="", style_name=""):
     """
