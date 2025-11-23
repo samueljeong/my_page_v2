@@ -603,6 +603,88 @@
       color: white;
     }
 
+    /* Step6 영상 제작 박스 스타일 */
+    .step6-container {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      border: none;
+      padding: 1rem;
+      border-radius: 12px;
+      margin-top: .75rem;
+    }
+    .step6-container .label {
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .step6-section {
+      background: white;
+      border-radius: 8px;
+      padding: .75rem;
+      margin-bottom: .75rem;
+    }
+    .step6-section .section-label {
+      font-weight: 600;
+      font-size: .9rem;
+      margin-bottom: .4rem;
+      color: #333;
+    }
+    .step6-btn {
+      background: white;
+      color: #e74c3c;
+      border: none;
+      padding: .5rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: .85rem;
+      transition: all 0.2s;
+    }
+    .step6-btn:hover {
+      background: #f0f0f0;
+      transform: translateY(-1px);
+    }
+    .step6-btn.generating {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .step6-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: .5rem;
+      margin-top: .5rem;
+    }
+    .step6-preview-item {
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .step6-preview-item:hover {
+      border-color: #e74c3c;
+    }
+    .step6-preview-item.selected {
+      border-color: #e74c3c;
+      box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+    }
+    .step6-preview-item img {
+      width: 100%;
+      height: 80px;
+      object-fit: cover;
+    }
+    .step6-video-preview {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .step6-video-preview video {
+      max-width: 100%;
+      max-height: 400px;
+      border-radius: 6px;
+    }
+
     /* Step 접기/펼치기 */
     .workflow-box.collapsed .box-content {
       display: none;
@@ -917,6 +999,112 @@
         <!-- 비용 정보 -->
         <div id="step5-cost-info" style="font-size: .75rem; color: rgba(255,255,255,0.9); margin-top: .5rem; display: none;">
           🎙️ TTS 생성 비용: <span id="step5-tts-cost">₩0</span> | 글자 수: <span id="step5-char-count">0</span>자
+        </div>
+      </div>
+
+      <!-- Step6: 영상 제작 -->
+      <div id="step6-container" class="step6-container" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
+          <div class="label">🎬 Step6: 영상 제작</div>
+          <div style="display: flex; gap: .5rem;">
+            <button id="btn-clear-step6" class="step6-btn" style="background: rgba(255,255,255,0.3); color: white;">🗑️ 초기화</button>
+          </div>
+        </div>
+
+        <!-- 이미지 선택 영역 -->
+        <div class="step6-section">
+          <div class="section-label">🖼️ 사용할 이미지 선택 (Step4에서 생성)</div>
+          <div id="step6-image-grid" class="step6-preview-grid">
+            <div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">
+              Step4에서 이미지를 생성하면 여기에 표시됩니다
+            </div>
+          </div>
+        </div>
+
+        <!-- 오디오 선택 영역 -->
+        <div class="step6-section">
+          <div class="section-label">🎙️ 사용할 음성 (Step5에서 생성)</div>
+          <div id="step6-audio-status" style="padding: .5rem; background: #f8f9fa; border-radius: 6px; font-size: .85rem; color: #666;">
+            Step5에서 음성을 생성하면 자동으로 연결됩니다
+          </div>
+          <audio id="step6-audio-preview" style="width: 100%; margin-top: .5rem; display: none;" controls></audio>
+        </div>
+
+        <!-- 자막 옵션 -->
+        <div class="step6-section">
+          <div class="section-label">📝 자막 옵션</div>
+          <div style="display: flex; gap: 1rem; align-items: center;">
+            <label style="display: flex; align-items: center; gap: .3rem; cursor: pointer;">
+              <input type="checkbox" id="step6-include-subtitle" checked>
+              <span style="font-size: .85rem;">자막 포함</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: .3rem; cursor: pointer;">
+              <input type="checkbox" id="step6-burn-subtitle">
+              <span style="font-size: .85rem;">자막 하드코딩 (영상에 굽기)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 영상 설정 -->
+        <div class="step6-section">
+          <div class="section-label">⚙️ 영상 설정</div>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-size: .8rem; color: #666;">해상도</label>
+              <select id="step6-resolution" style="width: 100%; padding: .4rem; border-radius: 6px; border: 1px solid #ddd;">
+                <option value="1920x1080">1920x1080 (FHD)</option>
+                <option value="1280x720">1280x720 (HD)</option>
+                <option value="1080x1920">1080x1920 (세로형)</option>
+                <option value="1080x1080">1080x1080 (정사각형)</option>
+              </select>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-size: .8rem; color: #666;">FPS</label>
+              <select id="step6-fps" style="width: 100%; padding: .4rem; border-radius: 6px; border: 1px solid #ddd;">
+                <option value="24">24 fps (영화)</option>
+                <option value="30" selected>30 fps (표준)</option>
+                <option value="60">60 fps (부드러움)</option>
+              </select>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-size: .8rem; color: #666;">이미지 전환 효과</label>
+              <select id="step6-transition" style="width: 100%; padding: .4rem; border-radius: 6px; border: 1px solid #ddd;">
+                <option value="none">없음</option>
+                <option value="fade" selected>페이드</option>
+                <option value="crossfade">크로스페이드</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 영상 생성 버튼 -->
+        <div style="display: flex; gap: .5rem; margin-bottom: .75rem;">
+          <button id="btn-generate-video" class="step6-btn" style="flex: 1; padding: .75rem; font-size: .95rem; font-weight: 700;">
+            🎬 영상 생성
+          </button>
+        </div>
+
+        <!-- 영상 미리보기 -->
+        <div class="step6-section" id="step6-video-section" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .4rem;">
+            <div class="section-label">🎥 생성된 영상</div>
+            <button id="btn-download-video" class="step6-btn" style="padding: .3rem .6rem; font-size: .75rem;">💾 다운로드 (MP4)</button>
+          </div>
+          <div class="step6-video-preview">
+            <video id="step6-video-player" controls></video>
+          </div>
+        </div>
+
+        <!-- 진행 상태 -->
+        <div id="step6-progress" style="display: none;">
+          <div style="background: white; border-radius: 8px; padding: .75rem;">
+            <div style="font-size: .85rem; color: #333; margin-bottom: .5rem;">
+              <span id="step6-progress-text">영상 생성 중...</span>
+            </div>
+            <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
+              <div id="step6-progress-bar" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2223,6 +2411,218 @@
   document.getElementById('btn-download-srt')?.addEventListener('click', downloadSRT);
   document.getElementById('btn-download-vtt')?.addEventListener('click', downloadVTT);
   document.getElementById('btn-clear-step5')?.addEventListener('click', clearStep5);
+
+  // ===== Step6: 영상 제작 기능 =====
+  let step6SelectedImages = [];
+  let step6VideoUrl = null;
+
+  // Step4/Step5 결과가 있으면 Step6 컨테이너 표시
+  function updateStep6Visibility() {
+    const step6Container = document.getElementById('step6-container');
+    const hasImages = step4GeneratedImages && step4GeneratedImages.length > 0;
+    const hasAudio = step5AudioUrl;
+
+    if (step6Container) {
+      step6Container.style.display = (hasImages || hasAudio) ? 'block' : 'none';
+    }
+
+    // 이미지 그리드 업데이트
+    updateStep6ImageGrid();
+    // 오디오 상태 업데이트
+    updateStep6AudioStatus();
+  }
+
+  // Step6 이미지 그리드 업데이트
+  function updateStep6ImageGrid() {
+    const grid = document.getElementById('step6-image-grid');
+    if (!grid) return;
+
+    if (!step4GeneratedImages || step4GeneratedImages.length === 0) {
+      grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step4에서 이미지를 생성하면 여기에 표시됩니다</div>';
+      return;
+    }
+
+    grid.innerHTML = step4GeneratedImages.map((img, idx) => `
+      <div class="step6-preview-item ${step6SelectedImages.includes(img.url) ? 'selected' : ''}" data-url="${img.url}" onclick="toggleStep6Image('${img.url}')">
+        <img src="${img.url}" alt="Scene ${idx + 1}">
+      </div>
+    `).join('');
+  }
+
+  // 이미지 선택 토글
+  function toggleStep6Image(url) {
+    const idx = step6SelectedImages.indexOf(url);
+    if (idx > -1) {
+      step6SelectedImages.splice(idx, 1);
+    } else {
+      step6SelectedImages.push(url);
+    }
+    updateStep6ImageGrid();
+  }
+
+  // Step6 오디오 상태 업데이트
+  function updateStep6AudioStatus() {
+    const statusDiv = document.getElementById('step6-audio-status');
+    const audioPreview = document.getElementById('step6-audio-preview');
+
+    if (step5AudioUrl) {
+      statusDiv.innerHTML = '✅ 음성이 연결되었습니다';
+      statusDiv.style.color = '#27ae60';
+      audioPreview.src = step5AudioUrl;
+      audioPreview.style.display = 'block';
+    } else {
+      statusDiv.innerHTML = 'Step5에서 음성을 생성하면 자동으로 연결됩니다';
+      statusDiv.style.color = '#666';
+      audioPreview.style.display = 'none';
+    }
+  }
+
+  // Step6 가시성 체크 (주기적)
+  setInterval(updateStep6Visibility, 2000);
+
+  // 영상 생성 함수
+  async function generateVideo() {
+    // 유효성 검사
+    if (step6SelectedImages.length === 0) {
+      alert('최소 1개 이상의 이미지를 선택해주세요.');
+      return;
+    }
+
+    if (!step5AudioUrl) {
+      alert('Step5에서 음성을 먼저 생성해주세요.');
+      return;
+    }
+
+    const resolution = document.getElementById('step6-resolution')?.value || '1920x1080';
+    const fps = document.getElementById('step6-fps')?.value || '30';
+    const transition = document.getElementById('step6-transition')?.value || 'fade';
+    const includeSubtitle = document.getElementById('step6-include-subtitle')?.checked || false;
+    const burnSubtitle = document.getElementById('step6-burn-subtitle')?.checked || false;
+
+    const btnGenerateVideo = document.getElementById('btn-generate-video');
+    const progressDiv = document.getElementById('step6-progress');
+    const progressBar = document.getElementById('step6-progress-bar');
+    const progressText = document.getElementById('step6-progress-text');
+
+    if (btnGenerateVideo) {
+      btnGenerateVideo.disabled = true;
+      btnGenerateVideo.classList.add('generating');
+      btnGenerateVideo.textContent = '⏳ 영상 생성 중...';
+    }
+
+    progressDiv.style.display = 'block';
+    progressBar.style.width = '10%';
+    progressText.textContent = '영상 준비 중...';
+
+    showStatus('🎬 Step6: 영상 생성 중...');
+
+    try {
+      // 진행 상황 시뮬레이션
+      let progress = 10;
+      const progressInterval = setInterval(() => {
+        progress += 5;
+        if (progress < 90) {
+          progressBar.style.width = progress + '%';
+          if (progress < 30) progressText.textContent = '이미지 처리 중...';
+          else if (progress < 50) progressText.textContent = '오디오 처리 중...';
+          else if (progress < 70) progressText.textContent = '영상 인코딩 중...';
+          else progressText.textContent = '마무리 중...';
+        }
+      }, 500);
+
+      const response = await fetch('/api/drama/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          images: step6SelectedImages,
+          audioUrl: step5AudioUrl,
+          subtitleData: includeSubtitle ? step5SubtitleData : null,
+          burnSubtitle: burnSubtitle,
+          resolution: resolution,
+          fps: parseInt(fps),
+          transition: transition
+        })
+      });
+
+      clearInterval(progressInterval);
+
+      const data = await response.json();
+
+      if (data.ok) {
+        progressBar.style.width = '100%';
+        progressText.textContent = '완료!';
+
+        // 영상 플레이어 표시
+        const videoSection = document.getElementById('step6-video-section');
+        const videoPlayer = document.getElementById('step6-video-player');
+
+        if (videoPlayer && data.videoUrl) {
+          step6VideoUrl = data.videoUrl;
+          videoPlayer.src = data.videoUrl;
+          videoSection.style.display = 'block';
+        }
+
+        showStatus('✅ 영상 생성 완료!');
+
+        setTimeout(() => {
+          progressDiv.style.display = 'none';
+        }, 1500);
+      } else {
+        progressDiv.style.display = 'none';
+        alert(`오류: ${data.error}`);
+        showStatus('❌ 영상 생성 실패');
+      }
+    } catch (err) {
+      progressDiv.style.display = 'none';
+      alert(`네트워크 오류: ${err.message}`);
+      showStatus('❌ 영상 생성 오류');
+    } finally {
+      setTimeout(hideStatus, 3000);
+      if (btnGenerateVideo) {
+        btnGenerateVideo.disabled = false;
+        btnGenerateVideo.classList.remove('generating');
+        btnGenerateVideo.textContent = '🎬 영상 생성';
+      }
+    }
+  }
+
+  // 영상 다운로드
+  function downloadVideo() {
+    if (!step6VideoUrl) {
+      alert('먼저 영상을 생성해주세요.');
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = step6VideoUrl;
+    a.download = `drama-video-${Date.now()}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Step6 초기화
+  function clearStep6() {
+    if (!confirm('Step6의 모든 내용을 초기화하시겠습니까?')) return;
+
+    step6SelectedImages = [];
+    step6VideoUrl = null;
+
+    document.getElementById('step6-video-section').style.display = 'none';
+    document.getElementById('step6-progress').style.display = 'none';
+
+    const videoPlayer = document.getElementById('step6-video-player');
+    if (videoPlayer) videoPlayer.src = '';
+
+    updateStep6ImageGrid();
+
+    showStatus('🗑️ Step6가 초기화되었습니다.');
+    setTimeout(hideStatus, 2000);
+  }
+
+  // Step6 버튼 이벤트 바인딩
+  document.getElementById('btn-generate-video')?.addEventListener('click', generateVideo);
+  document.getElementById('btn-download-video')?.addEventListener('click', downloadVideo);
+  document.getElementById('btn-clear-step6')?.addEventListener('click', clearStep6);
 
   // ===== 렌더링 함수 =====
   function renderCategories() {

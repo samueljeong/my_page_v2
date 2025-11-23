@@ -1838,6 +1838,181 @@ def api_generate_subtitle():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+# ===== Step6: 영상 제작 API =====
+@app.route('/api/drama/generate-video', methods=['POST'])
+def api_generate_video():
+    """이미지와 오디오를 합쳐서 영상 생성"""
+    try:
+        import requests
+        import base64
+        import tempfile
+        import subprocess
+        import shutil
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        images = data.get("images", [])
+        audio_url = data.get("audioUrl", "")
+        subtitle_data = data.get("subtitleData")
+        burn_subtitle = data.get("burnSubtitle", False)
+        resolution = data.get("resolution", "1920x1080")
+        fps = data.get("fps", 30)
+        transition = data.get("transition", "fade")
+
+        if not images:
+            return jsonify({"ok": False, "error": "이미지가 없습니다."}), 400
+
+        if not audio_url:
+            return jsonify({"ok": False, "error": "오디오가 없습니다."}), 400
+
+        print(f"[DRAMA-STEP6-VIDEO] 영상 생성 시작 - 이미지: {len(images)}개, 해상도: {resolution}")
+
+        # FFmpeg 설치 확인
+        ffmpeg_path = shutil.which('ffmpeg')
+        if not ffmpeg_path:
+            return jsonify({"ok": False, "error": "FFmpeg가 설치되어 있지 않습니다. 서버에 FFmpeg를 설치해주세요."}), 200
+
+        # 임시 디렉토리 생성
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # 1. 이미지 다운로드
+            image_paths = []
+            for idx, img_url in enumerate(images):
+                img_path = os.path.join(temp_dir, f"image_{idx:03d}.png")
+
+                if img_url.startswith('data:'):
+                    # Base64 데이터 URL
+                    header, encoded = img_url.split(',', 1)
+                    img_data = base64.b64decode(encoded)
+                    with open(img_path, 'wb') as f:
+                        f.write(img_data)
+                else:
+                    # HTTP URL
+                    response = requests.get(img_url, timeout=30)
+                    if response.status_code == 200:
+                        with open(img_path, 'wb') as f:
+                            f.write(response.content)
+                    else:
+                        print(f"[DRAMA-STEP6-VIDEO] 이미지 다운로드 실패: {img_url}")
+                        continue
+
+                image_paths.append(img_path)
+
+            if not image_paths:
+                return jsonify({"ok": False, "error": "이미지를 다운로드할 수 없습니다."}), 200
+
+            # 2. 오디오 저장
+            audio_path = os.path.join(temp_dir, "audio.mp3")
+            if audio_url.startswith('data:'):
+                header, encoded = audio_url.split(',', 1)
+                audio_data = base64.b64decode(encoded)
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_data)
+            else:
+                response = requests.get(audio_url, timeout=30)
+                if response.status_code == 200:
+                    with open(audio_path, 'wb') as f:
+                        f.write(response.content)
+                else:
+                    return jsonify({"ok": False, "error": "오디오를 다운로드할 수 없습니다."}), 200
+
+            # 3. 오디오 길이 확인
+            probe_cmd = [
+                'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
+            ]
+            result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            audio_duration = float(result.stdout.strip()) if result.stdout.strip() else 60.0
+
+            # 4. 이미지당 표시 시간 계산
+            image_duration = audio_duration / len(image_paths)
+
+            # 5. 이미지 리스트 파일 생성 (FFmpeg용)
+            list_path = os.path.join(temp_dir, "images.txt")
+            with open(list_path, 'w') as f:
+                for img_path in image_paths:
+                    f.write(f"file '{img_path}'\n")
+                    f.write(f"duration {image_duration}\n")
+                # 마지막 이미지 한번 더 (FFmpeg concat demuxer 요구사항)
+                f.write(f"file '{image_paths[-1]}'\n")
+
+            # 6. 해상도 파싱
+            width, height = resolution.split('x')
+
+            # 7. FFmpeg로 영상 생성
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            # 기본 FFmpeg 명령어
+            ffmpeg_cmd = [
+                'ffmpeg', '-y',
+                '-f', 'concat', '-safe', '0', '-i', list_path,
+                '-i', audio_path,
+                '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+                '-c:a', 'aac', '-b:a', '128k',
+                '-r', str(fps),
+                '-shortest',
+                '-pix_fmt', 'yuv420p',
+                output_path
+            ]
+
+            # 자막 하드코딩 옵션
+            if burn_subtitle and subtitle_data and subtitle_data.get('srt'):
+                srt_path = os.path.join(temp_dir, "subtitle.srt")
+                with open(srt_path, 'w', encoding='utf-8') as f:
+                    f.write(subtitle_data['srt'])
+
+                # 자막 필터 추가
+                vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,subtitles={srt_path}:force_style='FontSize=24,PrimaryColour=&HFFFFFF&'"
+                ffmpeg_cmd = [
+                    'ffmpeg', '-y',
+                    '-f', 'concat', '-safe', '0', '-i', list_path,
+                    '-i', audio_path,
+                    '-vf', vf_filter,
+                    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-r', str(fps),
+                    '-shortest',
+                    '-pix_fmt', 'yuv420p',
+                    output_path
+                ]
+
+            print(f"[DRAMA-STEP6-VIDEO] FFmpeg 명령어 실행: {' '.join(ffmpeg_cmd[:5])}...")
+
+            # FFmpeg 실행
+            process = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+
+            if process.returncode != 0:
+                print(f"[DRAMA-STEP6-VIDEO][ERROR] FFmpeg 오류: {process.stderr}")
+                return jsonify({"ok": False, "error": f"영상 인코딩 실패: {process.stderr[:200]}"}), 200
+
+            # 8. 생성된 영상을 Base64로 인코딩
+            with open(output_path, 'rb') as f:
+                video_data = f.read()
+
+            video_base64 = base64.b64encode(video_data).decode('utf-8')
+            video_url = f"data:video/mp4;base64,{video_base64}"
+
+            # 파일 크기 확인
+            file_size = len(video_data)
+            file_size_mb = file_size / (1024 * 1024)
+
+            print(f"[DRAMA-STEP6-VIDEO] 영상 생성 완료 - 크기: {file_size_mb:.2f}MB, 길이: {audio_duration:.1f}초")
+
+            return jsonify({
+                "ok": True,
+                "videoUrl": video_url,
+                "duration": audio_duration,
+                "fileSize": file_size,
+                "fileSizeMB": round(file_size_mb, 2)
+            })
+
+    except Exception as e:
+        print(f"[DRAMA-STEP6-VIDEO][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
