@@ -1746,62 +1746,166 @@ COMBINED_PROMPT: [통합 장면 프롬프트 - 영어]"""
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
-# ===== Step4: DALL-E 3 이미지 생성 API =====
+# ===== Step4: 이미지 생성 API (FLUX.1 Pro / DALL-E 3 선택) =====
 @app.route('/api/drama/generate-image', methods=['POST'])
 def api_generate_image():
-    """DALL-E 3를 사용하여 이미지 생성"""
+    """이미지 생성 - FLUX.1 Pro (기본) 또는 DALL-E 3"""
     try:
+        import requests as req
+
         data = request.get_json()
         if not data:
             return jsonify({"ok": False, "error": "No data received"}), 400
 
         prompt = data.get("prompt", "")
         size = data.get("size", "1024x1024")
+        image_provider = data.get("imageProvider", "flux")  # flux 또는 dalle
 
         if not prompt:
             return jsonify({"ok": False, "error": "프롬프트가 없습니다."}), 400
 
-        # 허용된 사이즈 검증
-        allowed_sizes = ["1024x1024", "1792x1024", "1024x1792"]
-        if size not in allowed_sizes:
-            size = "1024x1024"
+        # FLUX.1 Pro (Replicate API)
+        if image_provider == "flux":
+            replicate_api_key = os.getenv("REPLICATE_API_TOKEN", "")
 
-        print(f"[DRAMA-STEP4-IMAGE] DALL-E 3 이미지 생성 시작 - 사이즈: {size}")
+            if not replicate_api_key:
+                return jsonify({"ok": False, "error": "Replicate API 키가 설정되지 않았습니다. 환경변수 REPLICATE_API_TOKEN을 설정해주세요."}), 200
 
-        # 프롬프트에 스타일 가이드 추가
-        enhanced_prompt = f"{prompt}, high quality, photorealistic, cinematic lighting, professional photography, 8k resolution"
+            # 사이즈 변환 (FLUX는 aspect_ratio 사용)
+            if size == "1792x1024":
+                aspect_ratio = "16:9"
+                width, height = 1344, 768
+            elif size == "1024x1792":
+                aspect_ratio = "9:16"
+                width, height = 768, 1344
+            else:
+                aspect_ratio = "1:1"
+                width, height = 1024, 1024
 
-        # DALL-E 3 API 호출
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=enhanced_prompt,
-            size=size,
-            quality="standard",
-            n=1
-        )
+            print(f"[DRAMA-STEP4-IMAGE] FLUX.1 Pro 이미지 생성 시작 - 사이즈: {aspect_ratio}")
 
-        image_url = response.data[0].url
+            # 프롬프트에 스타일 가이드 추가
+            enhanced_prompt = f"{prompt}, high quality, photorealistic, cinematic lighting, professional photography, 8k resolution, detailed"
 
-        # DALL-E 3 비용 계산 (2024년 기준)
-        # Standard quality: $0.040 (1024x1024), $0.080 (1792x1024, 1024x1792)
-        # HD quality: $0.080 (1024x1024), $0.120 (1792x1024, 1024x1792)
-        cost_usd = 0.04 if size == "1024x1024" else 0.08
-        cost_krw = int(cost_usd * 1350)  # 대략적인 환율
+            # Replicate API 호출 (FLUX.1 Pro)
+            headers = {
+                "Authorization": f"Token {replicate_api_key}",
+                "Content-Type": "application/json"
+            }
 
-        print(f"[DRAMA-STEP4-IMAGE] 이미지 생성 완료 - 비용: ${cost_usd}")
+            # FLUX.1 Pro 모델
+            payload = {
+                "version": "black-forest-labs/flux-pro",
+                "input": {
+                    "prompt": enhanced_prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "output_format": "png",
+                    "output_quality": 90,
+                    "safety_tolerance": 2
+                }
+            }
 
-        return jsonify({
-            "ok": True,
-            "imageUrl": image_url,
-            "cost": cost_krw,
-            "costUsd": cost_usd
-        })
+            # 예측 생성
+            response = req.post(
+                "https://api.replicate.com/v1/models/black-forest-labs/flux-pro/predictions",
+                headers=headers,
+                json={"input": payload["input"]}
+            )
+
+            if response.status_code != 201:
+                error_text = response.text
+                print(f"[DRAMA-STEP4-IMAGE][ERROR] Replicate API 응답: {response.status_code} - {error_text}")
+                return jsonify({"ok": False, "error": f"FLUX API 오류: {error_text}"}), 200
+
+            prediction = response.json()
+            prediction_id = prediction.get("id")
+
+            # 결과 폴링 (최대 60초)
+            import time
+            max_wait = 60
+            waited = 0
+            image_url = None
+
+            while waited < max_wait:
+                status_response = req.get(
+                    f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                    headers=headers
+                )
+                status_data = status_response.json()
+                status = status_data.get("status")
+
+                if status == "succeeded":
+                    output = status_data.get("output")
+                    if isinstance(output, list) and len(output) > 0:
+                        image_url = output[0]
+                    elif isinstance(output, str):
+                        image_url = output
+                    break
+                elif status == "failed":
+                    error = status_data.get("error", "알 수 없는 오류")
+                    return jsonify({"ok": False, "error": f"FLUX 생성 실패: {error}"}), 200
+
+                time.sleep(2)
+                waited += 2
+
+            if not image_url:
+                return jsonify({"ok": False, "error": "이미지 생성 시간 초과"}), 200
+
+            # FLUX.1 Pro 비용: $0.055/장
+            cost_usd = 0.055
+            cost_krw = int(cost_usd * 1350)
+
+            print(f"[DRAMA-STEP4-IMAGE] FLUX.1 Pro 완료 - 비용: ${cost_usd}")
+
+            return jsonify({
+                "ok": True,
+                "imageUrl": image_url,
+                "cost": cost_krw,
+                "costUsd": cost_usd,
+                "provider": "flux"
+            })
+
+        # DALL-E 3 (기존 코드)
+        else:
+            # 허용된 사이즈 검증
+            allowed_sizes = ["1024x1024", "1792x1024", "1024x1792"]
+            if size not in allowed_sizes:
+                size = "1024x1024"
+
+            print(f"[DRAMA-STEP4-IMAGE] DALL-E 3 이미지 생성 시작 - 사이즈: {size}")
+
+            # 프롬프트에 스타일 가이드 추가
+            enhanced_prompt = f"{prompt}, high quality, photorealistic, cinematic lighting, professional photography, 8k resolution"
+
+            # DALL-E 3 API 호출
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=enhanced_prompt,
+                size=size,
+                quality="standard",
+                n=1
+            )
+
+            image_url = response.data[0].url
+
+            # DALL-E 3 비용 계산
+            cost_usd = 0.04 if size == "1024x1024" else 0.08
+            cost_krw = int(cost_usd * 1350)
+
+            print(f"[DRAMA-STEP4-IMAGE] DALL-E 3 완료 - 비용: ${cost_usd}")
+
+            return jsonify({
+                "ok": True,
+                "imageUrl": image_url,
+                "cost": cost_krw,
+                "costUsd": cost_usd,
+                "provider": "dalle"
+            })
 
     except Exception as e:
         error_msg = str(e)
         print(f"[DRAMA-STEP4-IMAGE][ERROR] {error_msg}")
 
-        # DALL-E 관련 오류 메시지 개선
         if "content_policy" in error_msg.lower():
             return jsonify({"ok": False, "error": "이미지 생성이 콘텐츠 정책에 위배됩니다. 프롬프트를 수정해주세요."}), 200
         elif "rate_limit" in error_msg.lower():
@@ -1810,107 +1914,189 @@ def api_generate_image():
         return jsonify({"ok": False, "error": error_msg}), 200
 
 
-# ===== Step5: 네이버 클로바 TTS API =====
+# ===== Step5: TTS API (Google Cloud / 네이버 클로바 선택) =====
 @app.route('/api/drama/generate-tts', methods=['POST'])
 def api_generate_tts():
-    """네이버 클로바 TTS를 사용하여 음성 생성"""
+    """TTS 음성 생성 - Google Cloud TTS (기본) 또는 네이버 클로바"""
     try:
         import requests
         import base64
-        import tempfile
 
         data = request.get_json()
         if not data:
             return jsonify({"ok": False, "error": "No data received"}), 400
 
         text = data.get("text", "")
-        speaker = data.get("speaker", "nara")
-        speed = data.get("speed", 0)
+        speaker = data.get("speaker", "ko-KR-Wavenet-A")
+        speed = data.get("speed", 1.0)
         pitch = data.get("pitch", 0)
         volume = data.get("volume", 0)
+        tts_provider = data.get("ttsProvider", "google")  # google 또는 naver
 
         if not text:
             return jsonify({"ok": False, "error": "텍스트가 없습니다."}), 400
 
-        # 네이버 클라우드 플랫폼 API 키
-        ncp_client_id = os.getenv("NCP_CLIENT_ID", "")
-        ncp_client_secret = os.getenv("NCP_CLIENT_SECRET", "")
-
-        if not ncp_client_id or not ncp_client_secret:
-            return jsonify({"ok": False, "error": "네이버 클라우드 API 키가 설정되지 않았습니다. 환경변수 NCP_CLIENT_ID, NCP_CLIENT_SECRET을 설정해주세요."}), 200
-
-        print(f"[DRAMA-STEP5-TTS] TTS 생성 시작 - 음성: {speaker}, 텍스트 길이: {len(text)}자")
-
-        # 텍스트 길이 제한 (네이버 클로바는 최대 1000자)
-        # 긴 텍스트는 분할 처리
-        max_chars = 1000
-        text_chunks = []
-
-        if len(text) > max_chars:
-            # 문장 단위로 분할
-            sentences = text.replace('\n', ' ').split('. ')
-            current_chunk = ""
-            for sentence in sentences:
-                if len(current_chunk) + len(sentence) + 2 < max_chars:
-                    current_chunk += sentence + ". "
-                else:
-                    if current_chunk:
-                        text_chunks.append(current_chunk.strip())
-                    current_chunk = sentence + ". "
-            if current_chunk:
-                text_chunks.append(current_chunk.strip())
-        else:
-            text_chunks = [text]
-
-        # 각 청크에 대해 TTS 호출
-        audio_data_list = []
-
-        for chunk in text_chunks:
-            # 네이버 클로바 TTS API 호출
-            url = "https://naveropenapi.apigw.ntruss.com/tts-premium/v1/tts"
-            headers = {
-                "X-NCP-APIGW-API-KEY-ID": ncp_client_id,
-                "X-NCP-APIGW-API-KEY": ncp_client_secret,
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
-
-            payload = {
-                "speaker": speaker,
-                "volume": str(volume),
-                "speed": str(speed),
-                "pitch": str(pitch),
-                "format": "mp3",
-                "text": chunk
-            }
-
-            response = requests.post(url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                audio_data_list.append(response.content)
-            else:
-                error_text = response.text
-                print(f"[DRAMA-STEP5-TTS][ERROR] API 응답: {response.status_code} - {error_text}")
-                return jsonify({"ok": False, "error": f"TTS API 오류: {error_text}"}), 200
-
-        # 오디오 데이터 합치기 (단순 연결)
-        combined_audio = b''.join(audio_data_list)
-
-        # Base64로 인코딩하여 data URL 생성
-        audio_base64 = base64.b64encode(combined_audio).decode('utf-8')
-        audio_url = f"data:audio/mp3;base64,{audio_base64}"
-
-        # 비용 계산 (네이버 클로바 Premium TTS 기준: 약 4원/글자)
         char_count = len(text)
-        cost_krw = int(char_count * 4)
 
-        print(f"[DRAMA-STEP5-TTS] TTS 생성 완료 - 글자 수: {char_count}, 비용: ₩{cost_krw}")
+        # Google Cloud TTS
+        if tts_provider == "google":
+            google_api_key = os.getenv("GOOGLE_CLOUD_API_KEY", "")
 
-        return jsonify({
-            "ok": True,
-            "audioUrl": audio_url,
-            "charCount": char_count,
-            "cost": cost_krw
-        })
+            if not google_api_key:
+                return jsonify({"ok": False, "error": "Google Cloud API 키가 설정되지 않았습니다. 환경변수 GOOGLE_CLOUD_API_KEY를 설정해주세요."}), 200
+
+            print(f"[DRAMA-STEP5-TTS] Google TTS 생성 시작 - 음성: {speaker}, 텍스트 길이: {char_count}자")
+
+            # Google Cloud TTS는 최대 5000바이트 (약 2500자 한글)
+            max_chars = 2500
+            text_chunks = []
+
+            if len(text) > max_chars:
+                sentences = text.replace('\n', ' ').split('. ')
+                current_chunk = ""
+                for sentence in sentences:
+                    if len(current_chunk) + len(sentence) + 2 < max_chars:
+                        current_chunk += sentence + ". "
+                    else:
+                        if current_chunk:
+                            text_chunks.append(current_chunk.strip())
+                        current_chunk = sentence + ". "
+                if current_chunk:
+                    text_chunks.append(current_chunk.strip())
+            else:
+                text_chunks = [text]
+
+            audio_data_list = []
+            url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
+
+            # 속도 변환: 네이버(-5~5) -> Google(0.25~4.0), 기본값 1.0
+            if isinstance(speed, (int, float)):
+                if speed == 0:
+                    google_speed = 1.0
+                else:
+                    google_speed = 1.0 + (speed * 0.1)  # -5->0.5, 0->1.0, 5->1.5
+                    google_speed = max(0.25, min(4.0, google_speed))
+            else:
+                google_speed = 1.0
+
+            # 피치 변환: 네이버(-5~5) -> Google(-20~20)
+            google_pitch = pitch * 4 if isinstance(pitch, (int, float)) else 0
+
+            for chunk in text_chunks:
+                payload = {
+                    "input": {"text": chunk},
+                    "voice": {
+                        "languageCode": "ko-KR",
+                        "name": speaker
+                    },
+                    "audioConfig": {
+                        "audioEncoding": "MP3",
+                        "speakingRate": google_speed,
+                        "pitch": google_pitch
+                    }
+                }
+
+                response = requests.post(url, json=payload)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    audio_content = base64.b64decode(result.get("audioContent", ""))
+                    audio_data_list.append(audio_content)
+                else:
+                    error_text = response.text
+                    print(f"[DRAMA-STEP5-TTS][ERROR] Google API 응답: {response.status_code} - {error_text}")
+                    return jsonify({"ok": False, "error": f"Google TTS API 오류: {error_text}"}), 200
+
+            combined_audio = b''.join(audio_data_list)
+            audio_base64 = base64.b64encode(combined_audio).decode('utf-8')
+            audio_url = f"data:audio/mp3;base64,{audio_base64}"
+
+            # Google Cloud TTS 비용: $4/100만 글자 (Wavenet), $16/100만 글자 (Neural2)
+            # 약 0.0054원/글자 (Wavenet 기준, 환율 1350원)
+            cost_per_char = 0.0054 if "Wavenet" in speaker else 0.0216
+            cost_krw = int(char_count * cost_per_char)
+
+            print(f"[DRAMA-STEP5-TTS] Google TTS 완료 - 글자 수: {char_count}, 비용: ₩{cost_krw}")
+
+            return jsonify({
+                "ok": True,
+                "audioUrl": audio_url,
+                "charCount": char_count,
+                "cost": cost_krw,
+                "provider": "google"
+            })
+
+        # 네이버 클로바 TTS (기존 코드)
+        else:
+            ncp_client_id = os.getenv("NCP_CLIENT_ID", "")
+            ncp_client_secret = os.getenv("NCP_CLIENT_SECRET", "")
+
+            if not ncp_client_id or not ncp_client_secret:
+                return jsonify({"ok": False, "error": "네이버 클라우드 API 키가 설정되지 않았습니다. 환경변수 NCP_CLIENT_ID, NCP_CLIENT_SECRET을 설정해주세요."}), 200
+
+            print(f"[DRAMA-STEP5-TTS] 네이버 TTS 생성 시작 - 음성: {speaker}, 텍스트 길이: {char_count}자")
+
+            max_chars = 1000
+            text_chunks = []
+
+            if len(text) > max_chars:
+                sentences = text.replace('\n', ' ').split('. ')
+                current_chunk = ""
+                for sentence in sentences:
+                    if len(current_chunk) + len(sentence) + 2 < max_chars:
+                        current_chunk += sentence + ". "
+                    else:
+                        if current_chunk:
+                            text_chunks.append(current_chunk.strip())
+                        current_chunk = sentence + ". "
+                if current_chunk:
+                    text_chunks.append(current_chunk.strip())
+            else:
+                text_chunks = [text]
+
+            audio_data_list = []
+
+            for chunk in text_chunks:
+                url = "https://naveropenapi.apigw.ntruss.com/tts-premium/v1/tts"
+                headers = {
+                    "X-NCP-APIGW-API-KEY-ID": ncp_client_id,
+                    "X-NCP-APIGW-API-KEY": ncp_client_secret,
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+
+                payload = {
+                    "speaker": speaker,
+                    "volume": str(volume),
+                    "speed": str(speed),
+                    "pitch": str(pitch),
+                    "format": "mp3",
+                    "text": chunk
+                }
+
+                response = requests.post(url, headers=headers, data=payload)
+
+                if response.status_code == 200:
+                    audio_data_list.append(response.content)
+                else:
+                    error_text = response.text
+                    print(f"[DRAMA-STEP5-TTS][ERROR] 네이버 API 응답: {response.status_code} - {error_text}")
+                    return jsonify({"ok": False, "error": f"네이버 TTS API 오류: {error_text}"}), 200
+
+            combined_audio = b''.join(audio_data_list)
+            audio_base64 = base64.b64encode(combined_audio).decode('utf-8')
+            audio_url = f"data:audio/mp3;base64,{audio_base64}"
+
+            cost_krw = int(char_count * 4)
+
+            print(f"[DRAMA-STEP5-TTS] 네이버 TTS 완료 - 글자 수: {char_count}, 비용: ₩{cost_krw}")
+
+            return jsonify({
+                "ok": True,
+                "audioUrl": audio_url,
+                "charCount": char_count,
+                "cost": cost_krw,
+                "provider": "naver"
+            })
 
     except Exception as e:
         print(f"[DRAMA-STEP5-TTS][ERROR] {str(e)}")
