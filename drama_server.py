@@ -1170,6 +1170,84 @@ def api_get_accumulated_guide():
 
 
 # ===== Step3: OpenRouter를 통한 Claude 대본 완성 =====
+@app.route('/api/drama/generate-metadata', methods=['POST'])
+def api_generate_metadata():
+    """대본에서 YouTube 메타데이터 자동 생성 (제목, 설명, 태그)"""
+    try:
+        data = request.get_json()
+        script = data.get('script', '')
+        content_type = data.get('contentType', 'testimony')
+
+        if not script:
+            return jsonify({"ok": False, "error": "대본이 없습니다"}), 400
+
+        # 대본 앞부분만 사용 (토큰 절약)
+        script_preview = script[:2000] if len(script) > 2000 else script
+
+        content_type_name = "간증" if content_type == "testimony" else "드라마"
+
+        system_prompt = f"""당신은 YouTube 콘텐츠 메타데이터 전문가입니다.
+주어진 {content_type_name} 대본을 분석하여 YouTube 업로드용 메타데이터를 생성하세요.
+
+반드시 아래 JSON 형식으로만 응답하세요:
+{{
+  "title": "시청자의 호기심을 자극하는 제목 (50자 이내)",
+  "description": "영상 설명 (200자 내외, 핵심 내용 요약)",
+  "tags": ["태그1", "태그2", "태그3", ...] (10-15개)
+}}
+
+【 제목 작성 가이드 】
+- 감정을 자극하는 단어 사용 (기적, 눈물, 고백, 비밀 등)
+- 숫자 활용 (40년, 3번의 시도 등)
+- 궁금증 유발 (왜, 어떻게, 결국 등)
+- 50자 이내로 작성
+
+【 설명 작성 가이드 】
+- 첫 문장에 핵심 메시지
+- 시청 후 얻을 수 있는 것 언급
+- 구독/좋아요 유도 문구 포함
+
+【 태그 가이드 】
+- 핵심 키워드 포함
+- 관련 감정/상황 태그
+- 검색 가능한 일반적 태그"""
+
+        user_prompt = f"다음 {content_type_name} 대본의 메타데이터를 생성하세요:\n\n{script_preview}"
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱 시도
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', result_text)
+        if json_match:
+            metadata = json.loads(json_match.group())
+            return jsonify({
+                "ok": True,
+                "metadata": metadata,
+                "usage": {
+                    "input_tokens": response.usage.prompt_tokens,
+                    "output_tokens": response.usage.completion_tokens
+                }
+            })
+        else:
+            return jsonify({"ok": False, "error": "메타데이터 파싱 실패", "raw": result_text})
+
+    except json.JSONDecodeError as e:
+        return jsonify({"ok": False, "error": f"JSON 파싱 오류: {str(e)}"})
+    except Exception as e:
+        print(f"[METADATA] 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
 @app.route('/api/drama/step3-test', methods=['GET'])
 def api_drama_step3_test():
     """Step3 테스트 엔드포인트"""

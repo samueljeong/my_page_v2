@@ -866,6 +866,43 @@
     </div>
   </div>
 
+  <!-- 지침 보기 모달 -->
+  <div id="guidelines-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>📋 대본 작성 지침</span>
+        <button onclick="closeGuidelinesModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+      </div>
+      <div id="guidelines-modal-content" style="padding: 1rem 0; white-space: pre-wrap; font-size: 0.9rem; line-height: 1.8;"></div>
+      <div class="modal-buttons">
+        <button onclick="closeGuidelinesModal()" class="primary">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSON 뷰어 모달 -->
+  <div id="json-viewer-modal" class="modal">
+    <div class="modal-content" style="max-width: 95vw; max-height: 95vh; overflow: hidden; display: flex; flex-direction: column;">
+      <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+        <span>🔍 현재 적용 중인 JSON 데이터</span>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button onclick="refreshJsonViewer()" style="padding: 0.3rem 0.8rem; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">🔄 새로고침</button>
+          <button onclick="closeJsonViewerModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.5rem; margin: 0.5rem 0; flex-shrink: 0;">
+        <button onclick="showJsonTab('session')" id="json-tab-session" class="json-tab active" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">📦 세션 데이터</button>
+        <button onclick="showJsonTab('guidelines')" id="json-tab-guidelines" class="json-tab" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">📋 지침 (style_guide)</button>
+        <button onclick="showJsonTab('structure')" id="json-tab-structure" class="json-tab" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">🏗️ 대본 구조</button>
+      </div>
+      <div id="json-viewer-content" style="flex: 1; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; white-space: pre-wrap;"></div>
+      <div class="modal-buttons" style="flex-shrink: 0; margin-top: 0.5rem;">
+        <button onclick="copyJsonContent()" style="flex: 1; background: #2196F3;">📋 복사</button>
+        <button onclick="closeJsonViewerModal()" class="primary" style="flex: 1;">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Auth Header -->
   <div class="auth-header">
     <h1>🎭 드라마 스크립트 작성 도구</h1>
@@ -1070,6 +1107,8 @@
       <div style="display: flex; gap: .3rem; margin-bottom: .75rem; align-items: center;">
         <button id="btn-auto-execute-all" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ 전체 순차실행</button>
         <button id="btn-execute-step3" style="flex: 2; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">🎬 Step3: OpenRouter 대본완성</button>
+        <button id="btn-view-guidelines" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📋 지침 보기</button>
+        <button id="btn-view-json" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">🔍 JSON 보기</button>
       </div>
 
       <!-- 상태 표시 -->
@@ -1860,6 +1899,219 @@
       contentArea.addEventListener('scroll', detectCurrentStep);
     }
   });
+
+  // ===== 워크플로우 세션 관리 시스템 =====
+  // 모든 Step이 공유하는 단일 세션 데이터
+  let workflowSession = {
+    sessionId: null,
+    createdAt: null,
+    updatedAt: null,
+    category: '10min',
+    contentType: 'testimony',
+
+    // YouTube 메타데이터 (Step3에서 생성 → Step7에서 사용)
+    metadata: {
+      title: '',
+      description: '',
+      tags: [],
+      thumbnail: { prompt: '', url: '' }
+    },
+
+    step1: { topic: '', mainCharacter: '', benchmark: {} },
+    step2: { character: {}, storyline: {}, scene: {}, dialogue: {} },
+    step3: { guide: '', script: '', scenes: [] },
+    step4: { provider: 'flux', aspectRatio: '16:9', images: [] },
+    step5: { provider: 'google', voices: {}, audioFiles: [] },
+    step6: { videoUrl: '', duration: '', format: 'mp4' },
+    step7: { status: 'draft', youtubeId: '', youtubeUrl: '', scheduledAt: '' }
+  };
+
+  // 세션 초기화
+  function initWorkflowSession() {
+    workflowSession.sessionId = 'session_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+    workflowSession.createdAt = new Date().toISOString();
+    workflowSession.updatedAt = new Date().toISOString();
+    console.log('[SESSION] 새 세션 생성:', workflowSession.sessionId);
+    return workflowSession;
+  }
+
+  // 세션 데이터 업데이트
+  function updateSession(path, value) {
+    const keys = path.split('.');
+    let obj = workflowSession;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!obj[keys[i]]) obj[keys[i]] = {};
+      obj = obj[keys[i]];
+    }
+    obj[keys[keys.length - 1]] = value;
+    workflowSession.updatedAt = new Date().toISOString();
+    saveSessionToStorage();
+    console.log(`[SESSION] 업데이트: ${path}`, value);
+  }
+
+  // 세션 데이터 조회
+  function getSession(path, defaultValue = null) {
+    const keys = path.split('.');
+    let value = workflowSession;
+    try {
+      for (const key of keys) {
+        value = value[key];
+      }
+      return value !== undefined ? value : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  }
+
+  // 메타데이터 업데이트 (Step3 → Step7 연동용)
+  function updateMetadata(data) {
+    if (data.title) workflowSession.metadata.title = data.title;
+    if (data.description) workflowSession.metadata.description = data.description;
+    if (data.tags) workflowSession.metadata.tags = data.tags;
+    if (data.thumbnail) workflowSession.metadata.thumbnail = data.thumbnail;
+    workflowSession.updatedAt = new Date().toISOString();
+    saveSessionToStorage();
+    console.log('[SESSION] 메타데이터 업데이트:', workflowSession.metadata);
+
+    // Step7 UI 자동 업데이트
+    syncMetadataToStep7();
+  }
+
+  // Step7 UI에 메타데이터 동기화
+  function syncMetadataToStep7() {
+    const titleInput = document.getElementById('youtube-title');
+    const descInput = document.getElementById('youtube-description');
+    const tagsInput = document.getElementById('youtube-tags');
+
+    if (titleInput && workflowSession.metadata.title) {
+      titleInput.value = workflowSession.metadata.title;
+    }
+    if (descInput && workflowSession.metadata.description) {
+      descInput.value = workflowSession.metadata.description;
+    }
+    if (tagsInput && workflowSession.metadata.tags?.length) {
+      tagsInput.value = workflowSession.metadata.tags.join(', ');
+    }
+  }
+
+  // 세션 저장 (localStorage)
+  function saveSessionToStorage() {
+    try {
+      localStorage.setItem('_drama-workflow-session', JSON.stringify(workflowSession));
+    } catch (e) {
+      console.warn('[SESSION] 저장 실패:', e);
+    }
+  }
+
+  // 세션 로드 (localStorage)
+  function loadSessionFromStorage() {
+    try {
+      const saved = localStorage.getItem('_drama-workflow-session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 기존 구조 유지하면서 저장된 값으로 업데이트
+        workflowSession = { ...workflowSession, ...parsed };
+        console.log('[SESSION] 로드 완료:', workflowSession.sessionId);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[SESSION] 로드 실패:', e);
+    }
+    return false;
+  }
+
+  // 세션 초기화 (새로 시작)
+  function resetSession() {
+    if (confirm('현재 작업 내용이 모두 초기화됩니다. 계속하시겠습니까?')) {
+      localStorage.removeItem('_drama-workflow-session');
+      initWorkflowSession();
+      location.reload();
+    }
+  }
+
+  // 세션 전체 조회 (디버깅/AI 컨텍스트용)
+  function getFullSession() {
+    return JSON.parse(JSON.stringify(workflowSession));
+  }
+
+  // 세션을 AI 컨텍스트로 변환 (프롬프트에 포함용)
+  function getSessionContext() {
+    return `【 현재 작업 세션 정보 】
+- 카테고리: ${workflowSession.category}
+- 콘텐츠 유형: ${workflowSession.contentType === 'testimony' ? '간증' : '드라마'}
+- 주제: ${workflowSession.step1.topic || '(미설정)'}
+- 주인공: ${workflowSession.step1.mainCharacter || '(미설정)'}
+- 제목: ${workflowSession.metadata.title || '(미생성)'}
+`;
+  }
+
+  // 대본에서 메타데이터 자동 생성
+  async function generateMetadataFromScript(script, contentType) {
+    if (!script) return;
+
+    console.log('[METADATA] 메타데이터 생성 시작...');
+    showStatus('🏷️ 메타데이터 생성 중...');
+
+    try {
+      const response = await fetch('/api/drama/generate-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script, contentType })
+      });
+
+      const data = await response.json();
+
+      if (data.ok && data.metadata) {
+        // 세션에 메타데이터 저장
+        updateMetadata({
+          title: data.metadata.title,
+          description: data.metadata.description,
+          tags: data.metadata.tags
+        });
+
+        console.log('[METADATA] 생성 완료:', data.metadata);
+        showStatus('✅ 메타데이터 자동 생성 완료!');
+
+        // 사용자에게 알림
+        showMetadataNotification(data.metadata);
+      } else {
+        console.warn('[METADATA] 생성 실패:', data.error);
+      }
+    } catch (err) {
+      console.error('[METADATA] 오류:', err);
+    }
+
+    setTimeout(hideStatus, 3000);
+  }
+
+  // 메타데이터 생성 알림 표시
+  function showMetadataNotification(metadata) {
+    const notification = document.createElement('div');
+    notification.className = 'metadata-notification';
+    notification.innerHTML = `
+      <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                  border: 1px solid #4CAF50; border-radius: 12px; padding: 16px;
+                  position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+                  max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+        <div style="color: #4CAF50; font-weight: bold; margin-bottom: 8px;">
+          🏷️ YouTube 메타데이터 자동 생성 완료
+        </div>
+        <div style="color: #aaa; font-size: 13px; margin-bottom: 4px;">
+          <strong>제목:</strong> ${metadata.title}
+        </div>
+        <div style="color: #888; font-size: 12px;">
+          Step7에서 자동으로 사용됩니다
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()"
+                style="position: absolute; top: 8px; right: 8px; background: none;
+                       border: none; color: #666; cursor: pointer; font-size: 16px;">×</button>
+      </div>
+    `;
+    document.body.appendChild(notification);
+
+    // 5초 후 자동 제거
+    setTimeout(() => notification.remove(), 5000);
+  }
 
   // 워크플로우 박스 시스템
   let workflowBoxes = [];
@@ -2714,6 +2966,12 @@ S#1. 장소 / 시간
           step3Result = data.result;
           localStorage.setItem('_drama-step3-result', step3Result);
           saveToFirebase('_drama-step3-result', step3Result);
+
+          // ⭐ 세션에 대본 저장
+          updateSession('step3.script', step3Result);
+
+          // ⭐ 메타데이터 자동 생성 (백그라운드에서 실행)
+          generateMetadataFromScript(step3Result, contentType);
 
           // 토큰 정보 및 비용 표시
           if (data.usage && tokenInfo) {
@@ -4425,6 +4683,8 @@ S#1. 장소 / 시간
         // 사용자가 편집한 내용을 stepResults에 저장
         const stepId = textarea.id.replace('result-', '');
         stepResults[stepId] = textarea.value;
+        // ⭐ 세션에도 저장
+        saveStep2ResultToSession(stepId, textarea.value);
       });
     });
   }
@@ -4495,6 +4755,9 @@ S#1. 장소 / 시간
 
       if (data.ok) {
         stepResults[stepId] = data.result;
+        // ⭐ 세션에도 저장
+        saveStep2ResultToSession(stepId, data.result);
+
         const textarea = document.getElementById(`result-${stepId}`);
         if (textarea) {
           textarea.value = data.result;
@@ -6208,6 +6471,13 @@ S#1. 장소 / 시간
       dateInput.value = new Date().toISOString().split('T')[0];
     }
 
+    // ⭐ 워크플로우 세션 로드 또는 새로 생성
+    if (!loadSessionFromStorage()) {
+      initWorkflowSession();
+    }
+    // Step7에 메타데이터 동기화
+    syncMetadataToStep7();
+
     // ⭐ JSON 지침 로드 (비동기, 실패해도 계속 진행)
     loadDramaGuidelines().then(loaded => {
       if (loaded) {
@@ -6254,7 +6524,309 @@ S#1. 장소 / 시간
     renderSavedList();
 
     document.querySelectorAll('textarea').forEach(autoResize);
+
+    // ⭐ Step1 입력 필드 변경 시 세션 자동 저장
+    setupStep1SessionSync();
   });
+
+  // ===== 지침 보기 모달 =====
+  function openGuidelinesModal() {
+    const modal = document.getElementById('guidelines-modal');
+    const content = document.getElementById('guidelines-modal-content');
+
+    // 지침 내용 구성
+    let guidelineText = '';
+
+    // 대본 구조 (7단계) 표시
+    if (dramaGuidelines?.structure?.sections) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏗️ 대본 구조 (7단계) - 총 ${dramaGuidelines.structure.total_length}자
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+`;
+      dramaGuidelines.structure.sections.forEach(section => {
+        const charCount = Math.round(dramaGuidelines.structure.total_length * section.length_ratio);
+        guidelineText += `【 ${section.id}. ${section.korean_name} 】 (${(section.length_ratio * 100).toFixed(0)}% ≈ ${charCount}자)
+목적: ${section.purpose}
+필수 요소: ${section.must_include.join(', ')}
+예시: "${section.example?.substring(0, 50)}..."
+
+`;
+      });
+    }
+
+    // 대사 비율
+    if (dramaGuidelines?.dialogue_ratio) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💬 대사 비율
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 서술/나레이션: ${dramaGuidelines.dialogue_ratio.narration}%
+• 내면 독백: ${dramaGuidelines.dialogue_ratio.inner_monologue}%
+• 직접 대화: ${dramaGuidelines.dialogue_ratio.direct_dialogue}%
+
+`;
+    }
+
+    // 디테일 요구사항
+    if (dramaGuidelines?.detail_requirements) {
+      const dr = dramaGuidelines.detail_requirements;
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 필수 디테일 요구사항
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 이름: ${dr.naming?.min_count}개 이상 (예: ${dr.naming?.examples?.join(', ')})
+• 나이: ${dr.ages?.min_count}개 이상 (예: ${dr.ages?.examples?.join(', ')})
+• 장소: ${dr.locations?.min_count}개 이상 (예: ${dr.locations?.examples?.join(', ')})
+• 숫자: ${dr.amounts?.min_count}개 이상 (예: ${dr.amounts?.examples?.join(', ')})
+• 시간: ${dr.time_periods?.min_count}개 이상 (예: ${dr.time_periods?.examples?.join(', ')})
+
+`;
+    }
+
+    // 감정 표현
+    if (dramaGuidelines?.emotional_expressions) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❤️ 감정 표현 가이드
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+신체 반응:
+${dramaGuidelines.emotional_expressions.physical_reactions?.map(p => `  • ${p}`).join('\n')}
+
+감정 상태:
+${dramaGuidelines.emotional_expressions.emotional_states?.map(p => `  • ${p}`).join('\n')}
+
+`;
+    }
+
+    // 금지 패턴
+    if (dramaGuidelines?.forbidden_patterns) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 금지 패턴
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+포맷팅:
+${dramaGuidelines.forbidden_patterns.formatting?.map(p => `  ✗ ${p}`).join('\n')}
+
+콘텐츠:
+${dramaGuidelines.forbidden_patterns.content?.map(p => `  ✗ ${p}`).join('\n')}
+
+스타일:
+${dramaGuidelines.forbidden_patterns.style?.map(p => `  ✗ ${p}`).join('\n')}
+
+`;
+    }
+
+    // 품질 체크리스트
+    if (dramaGuidelines?.quality_checklist) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 품질 체크리스트
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+구조:
+${dramaGuidelines.quality_checklist.structure?.map(q => `  ☐ ${q}`).join('\n')}
+
+디테일:
+${dramaGuidelines.quality_checklist.details?.map(q => `  ☐ ${q}`).join('\n')}
+
+감정:
+${dramaGuidelines.quality_checklist.emotion?.map(q => `  ☐ ${q}`).join('\n')}
+
+대사:
+${dramaGuidelines.quality_checklist.dialogue?.map(q => `  ☐ ${q}`).join('\n')}
+`;
+    }
+
+    if (!guidelineText) {
+      guidelineText = '지침이 로드되지 않았습니다. 새로고침 후 다시 시도해주세요.';
+    }
+
+    content.textContent = guidelineText;
+    modal.classList.add('show');
+  }
+
+  function closeGuidelinesModal() {
+    const modal = document.getElementById('guidelines-modal');
+    modal.classList.remove('show');
+  }
+
+  // 지침 보기 버튼 이벤트
+  document.getElementById('btn-view-guidelines')?.addEventListener('click', openGuidelinesModal);
+
+  // 모달 외부 클릭 시 닫기
+  document.getElementById('guidelines-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'guidelines-modal') {
+      closeGuidelinesModal();
+    }
+  });
+
+  // ===== JSON 뷰어 모달 =====
+  let currentJsonTab = 'session';
+  let currentJsonContent = '';
+
+  function openJsonViewerModal() {
+    const modal = document.getElementById('json-viewer-modal');
+    modal.classList.add('show');
+    showJsonTab('session');
+  }
+
+  function closeJsonViewerModal() {
+    const modal = document.getElementById('json-viewer-modal');
+    modal.classList.remove('show');
+  }
+
+  function showJsonTab(tabName) {
+    currentJsonTab = tabName;
+
+    // 탭 버튼 활성화 스타일
+    document.querySelectorAll('.json-tab').forEach(btn => {
+      btn.style.background = '#e0e0e0';
+      btn.style.color = '#333';
+    });
+    document.getElementById(`json-tab-${tabName}`).style.background = '#6c5ce7';
+    document.getElementById(`json-tab-${tabName}`).style.color = 'white';
+
+    const content = document.getElementById('json-viewer-content');
+
+    if (tabName === 'session') {
+      currentJsonContent = JSON.stringify(workflowSession, null, 2);
+      content.innerHTML = syntaxHighlight(currentJsonContent);
+    } else if (tabName === 'guidelines') {
+      currentJsonContent = dramaGuidelines ? JSON.stringify(dramaGuidelines, null, 2) : '// 지침이 로드되지 않았습니다.';
+      content.innerHTML = syntaxHighlight(currentJsonContent);
+    } else if (tabName === 'structure') {
+      // 대본 구조만 표시
+      if (dramaGuidelines?.structure) {
+        const structureInfo = {
+          total_length: dramaGuidelines.structure.total_length,
+          sections: dramaGuidelines.structure.sections.map(s => ({
+            id: s.id,
+            name: s.korean_name,
+            ratio: `${(s.length_ratio * 100).toFixed(0)}%`,
+            purpose: s.purpose,
+            must_include: s.must_include
+          })),
+          dialogue_ratio: dramaGuidelines.dialogue_ratio,
+          mandatory_elements: dramaGuidelines.mandatory_elements
+        };
+        currentJsonContent = JSON.stringify(structureInfo, null, 2);
+        content.innerHTML = syntaxHighlight(currentJsonContent);
+      } else {
+        content.textContent = '// 지침이 로드되지 않았습니다.';
+      }
+    }
+  }
+
+  function refreshJsonViewer() {
+    showJsonTab(currentJsonTab);
+    showStatus('🔄 JSON 새로고침 완료');
+    setTimeout(hideStatus, 1500);
+  }
+
+  function copyJsonContent() {
+    navigator.clipboard.writeText(currentJsonContent).then(() => {
+      showStatus('📋 JSON 복사 완료!');
+      setTimeout(hideStatus, 1500);
+    });
+  }
+
+  // JSON 구문 강조
+  function syntaxHighlight(json) {
+    if (typeof json !== 'string') {
+      json = JSON.stringify(json, null, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+      let cls = 'number';
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          cls = 'key';
+        } else {
+          cls = 'string';
+        }
+      } else if (/true|false/.test(match)) {
+        cls = 'boolean';
+      } else if (/null/.test(match)) {
+        cls = 'null';
+      }
+      const colors = {
+        key: '#9cdcfe',
+        string: '#ce9178',
+        number: '#b5cea8',
+        boolean: '#569cd6',
+        null: '#569cd6'
+      };
+      return `<span style="color: ${colors[cls]}">${match}</span>`;
+    });
+  }
+
+  // JSON 뷰어 버튼 이벤트
+  document.getElementById('btn-view-json')?.addEventListener('click', openJsonViewerModal);
+
+  // JSON 뷰어 모달 외부 클릭 시 닫기
+  document.getElementById('json-viewer-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'json-viewer-modal') {
+      closeJsonViewerModal();
+    }
+  });
+
+  // Step1 입력 필드들을 세션과 동기화
+  function setupStep1SessionSync() {
+    // 벤치마크 대본
+    const benchmarkScript = document.getElementById('benchmark-script');
+    if (benchmarkScript) {
+      // 세션에서 불러오기
+      if (workflowSession.step1.benchmark?.script) {
+        benchmarkScript.value = workflowSession.step1.benchmark.script;
+      }
+      // 변경 시 저장
+      benchmarkScript.addEventListener('change', () => {
+        updateSession('step1.benchmark.script', benchmarkScript.value);
+      });
+    }
+
+    // 주인공 정보
+    const mainCharacter = document.getElementById('main-character');
+    if (mainCharacter) {
+      if (workflowSession.step1.mainCharacter) {
+        mainCharacter.value = workflowSession.step1.mainCharacter;
+      }
+      mainCharacter.addEventListener('change', () => {
+        updateSession('step1.mainCharacter', mainCharacter.value);
+      });
+    }
+
+    // 카테고리 변경
+    const categorySelect = document.getElementById('category-select');
+    if (categorySelect) {
+      categorySelect.addEventListener('change', () => {
+        updateSession('category', categorySelect.value);
+      });
+    }
+
+    // 콘텐츠 유형 변경
+    const contentType = document.getElementById('content-type');
+    if (contentType) {
+      if (workflowSession.contentType) {
+        contentType.value = workflowSession.contentType;
+      }
+      contentType.addEventListener('change', () => {
+        updateSession('contentType', contentType.value);
+      });
+    }
+
+    console.log('[SESSION] Step1 동기화 설정 완료');
+  }
+
+  // Step2 결과를 세션에 저장하는 함수 (기존 stepResults에 저장할 때 호출)
+  function saveStep2ResultToSession(stepId, result) {
+    const stepMap = {
+      'character': 'character',
+      'storyline': 'storyline',
+      'scene': 'scene',
+      'dialogue': 'dialogue'
+    };
+
+    const sessionKey = stepMap[stepId];
+    if (sessionKey) {
+      updateSession(`step2.${sessionKey}`, { result, completedAt: new Date().toISOString() });
+    }
+  }
   </script>
 </body>
 </html>
