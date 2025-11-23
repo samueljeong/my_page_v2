@@ -4013,13 +4013,19 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const reference = document.getElementById('sermon-ref').value.trim();
 
     // 현재 처리 단계 결과들 수집
+    // stepResults는 { stepId: "결과 문자열" } 형태로 저장됨
     const contextStepResults = {};
     for (const [stepId, stepData] of Object.entries(stepResults)) {
-      if (stepData && stepData.result) {
-        contextStepResults[stepId] = {
-          name: stepData.name || stepId,
-          result: stepData.result
-        };
+      if (stepData) {
+        // stepData가 문자열인 경우 직접 사용
+        const result = typeof stepData === 'string' ? stepData : (stepData.result || '');
+        const name = typeof stepData === 'string' ? getStepName(stepId) : (stepData.name || stepId);
+        if (result) {
+          contextStepResults[stepId] = {
+            name: name,
+            result: result
+          };
+        }
       }
     }
 
