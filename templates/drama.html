@@ -1861,6 +1861,219 @@
     }
   });
 
+  // ===== 워크플로우 세션 관리 시스템 =====
+  // 모든 Step이 공유하는 단일 세션 데이터
+  let workflowSession = {
+    sessionId: null,
+    createdAt: null,
+    updatedAt: null,
+    category: '10min',
+    contentType: 'testimony',
+
+    // YouTube 메타데이터 (Step3에서 생성 → Step7에서 사용)
+    metadata: {
+      title: '',
+      description: '',
+      tags: [],
+      thumbnail: { prompt: '', url: '' }
+    },
+
+    step1: { topic: '', mainCharacter: '', benchmark: {} },
+    step2: { character: {}, storyline: {}, scene: {}, dialogue: {} },
+    step3: { guide: '', script: '', scenes: [] },
+    step4: { provider: 'flux', aspectRatio: '16:9', images: [] },
+    step5: { provider: 'google', voices: {}, audioFiles: [] },
+    step6: { videoUrl: '', duration: '', format: 'mp4' },
+    step7: { status: 'draft', youtubeId: '', youtubeUrl: '', scheduledAt: '' }
+  };
+
+  // 세션 초기화
+  function initWorkflowSession() {
+    workflowSession.sessionId = 'session_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+    workflowSession.createdAt = new Date().toISOString();
+    workflowSession.updatedAt = new Date().toISOString();
+    console.log('[SESSION] 새 세션 생성:', workflowSession.sessionId);
+    return workflowSession;
+  }
+
+  // 세션 데이터 업데이트
+  function updateSession(path, value) {
+    const keys = path.split('.');
+    let obj = workflowSession;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!obj[keys[i]]) obj[keys[i]] = {};
+      obj = obj[keys[i]];
+    }
+    obj[keys[keys.length - 1]] = value;
+    workflowSession.updatedAt = new Date().toISOString();
+    saveSessionToStorage();
+    console.log(`[SESSION] 업데이트: ${path}`, value);
+  }
+
+  // 세션 데이터 조회
+  function getSession(path, defaultValue = null) {
+    const keys = path.split('.');
+    let value = workflowSession;
+    try {
+      for (const key of keys) {
+        value = value[key];
+      }
+      return value !== undefined ? value : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  }
+
+  // 메타데이터 업데이트 (Step3 → Step7 연동용)
+  function updateMetadata(data) {
+    if (data.title) workflowSession.metadata.title = data.title;
+    if (data.description) workflowSession.metadata.description = data.description;
+    if (data.tags) workflowSession.metadata.tags = data.tags;
+    if (data.thumbnail) workflowSession.metadata.thumbnail = data.thumbnail;
+    workflowSession.updatedAt = new Date().toISOString();
+    saveSessionToStorage();
+    console.log('[SESSION] 메타데이터 업데이트:', workflowSession.metadata);
+
+    // Step7 UI 자동 업데이트
+    syncMetadataToStep7();
+  }
+
+  // Step7 UI에 메타데이터 동기화
+  function syncMetadataToStep7() {
+    const titleInput = document.getElementById('youtube-title');
+    const descInput = document.getElementById('youtube-description');
+    const tagsInput = document.getElementById('youtube-tags');
+
+    if (titleInput && workflowSession.metadata.title) {
+      titleInput.value = workflowSession.metadata.title;
+    }
+    if (descInput && workflowSession.metadata.description) {
+      descInput.value = workflowSession.metadata.description;
+    }
+    if (tagsInput && workflowSession.metadata.tags?.length) {
+      tagsInput.value = workflowSession.metadata.tags.join(', ');
+    }
+  }
+
+  // 세션 저장 (localStorage)
+  function saveSessionToStorage() {
+    try {
+      localStorage.setItem('_drama-workflow-session', JSON.stringify(workflowSession));
+    } catch (e) {
+      console.warn('[SESSION] 저장 실패:', e);
+    }
+  }
+
+  // 세션 로드 (localStorage)
+  function loadSessionFromStorage() {
+    try {
+      const saved = localStorage.getItem('_drama-workflow-session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 기존 구조 유지하면서 저장된 값으로 업데이트
+        workflowSession = { ...workflowSession, ...parsed };
+        console.log('[SESSION] 로드 완료:', workflowSession.sessionId);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[SESSION] 로드 실패:', e);
+    }
+    return false;
+  }
+
+  // 세션 초기화 (새로 시작)
+  function resetSession() {
+    if (confirm('현재 작업 내용이 모두 초기화됩니다. 계속하시겠습니까?')) {
+      localStorage.removeItem('_drama-workflow-session');
+      initWorkflowSession();
+      location.reload();
+    }
+  }
+
+  // 세션 전체 조회 (디버깅/AI 컨텍스트용)
+  function getFullSession() {
+    return JSON.parse(JSON.stringify(workflowSession));
+  }
+
+  // 세션을 AI 컨텍스트로 변환 (프롬프트에 포함용)
+  function getSessionContext() {
+    return `【 현재 작업 세션 정보 】
+- 카테고리: ${workflowSession.category}
+- 콘텐츠 유형: ${workflowSession.contentType === 'testimony' ? '간증' : '드라마'}
+- 주제: ${workflowSession.step1.topic || '(미설정)'}
+- 주인공: ${workflowSession.step1.mainCharacter || '(미설정)'}
+- 제목: ${workflowSession.metadata.title || '(미생성)'}
+`;
+  }
+
+  // 대본에서 메타데이터 자동 생성
+  async function generateMetadataFromScript(script, contentType) {
+    if (!script) return;
+
+    console.log('[METADATA] 메타데이터 생성 시작...');
+    showStatus('🏷️ 메타데이터 생성 중...');
+
+    try {
+      const response = await fetch('/api/drama/generate-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script, contentType })
+      });
+
+      const data = await response.json();
+
+      if (data.ok && data.metadata) {
+        // 세션에 메타데이터 저장
+        updateMetadata({
+          title: data.metadata.title,
+          description: data.metadata.description,
+          tags: data.metadata.tags
+        });
+
+        console.log('[METADATA] 생성 완료:', data.metadata);
+        showStatus('✅ 메타데이터 자동 생성 완료!');
+
+        // 사용자에게 알림
+        showMetadataNotification(data.metadata);
+      } else {
+        console.warn('[METADATA] 생성 실패:', data.error);
+      }
+    } catch (err) {
+      console.error('[METADATA] 오류:', err);
+    }
+
+    setTimeout(hideStatus, 3000);
+  }
+
+  // 메타데이터 생성 알림 표시
+  function showMetadataNotification(metadata) {
+    const notification = document.createElement('div');
+    notification.className = 'metadata-notification';
+    notification.innerHTML = `
+      <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                  border: 1px solid #4CAF50; border-radius: 12px; padding: 16px;
+                  position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+                  max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+        <div style="color: #4CAF50; font-weight: bold; margin-bottom: 8px;">
+          🏷️ YouTube 메타데이터 자동 생성 완료
+        </div>
+        <div style="color: #aaa; font-size: 13px; margin-bottom: 4px;">
+          <strong>제목:</strong> ${metadata.title}
+        </div>
+        <div style="color: #888; font-size: 12px;">
+          Step7에서 자동으로 사용됩니다
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()"
+                style="position: absolute; top: 8px; right: 8px; background: none;
+                       border: none; color: #666; cursor: pointer; font-size: 16px;">×</button>
+      </div>
+    `;
+    document.body.appendChild(notification);
+
+    // 5초 후 자동 제거
+    setTimeout(() => notification.remove(), 5000);
+  }
+
   // 워크플로우 박스 시스템
   let workflowBoxes = [];
   let nextBoxId = 1;
@@ -2714,6 +2927,12 @@ S#1. 장소 / 시간
           step3Result = data.result;
           localStorage.setItem('_drama-step3-result', step3Result);
           saveToFirebase('_drama-step3-result', step3Result);
+
+          // ⭐ 세션에 대본 저장
+          updateSession('step3.script', step3Result);
+
+          // ⭐ 메타데이터 자동 생성 (백그라운드에서 실행)
+          generateMetadataFromScript(step3Result, contentType);
 
           // 토큰 정보 및 비용 표시
           if (data.usage && tokenInfo) {
@@ -6207,6 +6426,13 @@ S#1. 장소 / 시간
     if (dateInput) {
       dateInput.value = new Date().toISOString().split('T')[0];
     }
+
+    // ⭐ 워크플로우 세션 로드 또는 새로 생성
+    if (!loadSessionFromStorage()) {
+      initWorkflowSession();
+    }
+    // Step7에 메타데이터 동기화
+    syncMetadataToStep7();
 
     // ⭐ JSON 지침 로드 (비동기, 실패해도 계속 진행)
     loadDramaGuidelines().then(loaded => {
