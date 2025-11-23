@@ -1299,6 +1299,159 @@ CRITICAL RULES:
 
 ⚠️ 중요: 사용자의 세부 지침이 제공되면 그것을 절대적으로 우선하여 따라야 합니다."""
 
+
+# ===== JSON 지침 처리 함수들 =====
+def is_json_guide(guide_text):
+    """guide가 JSON 형식인지 확인"""
+    if not guide_text or not isinstance(guide_text, str):
+        return False
+    stripped = guide_text.strip()
+    return stripped.startswith('{') and stripped.endswith('}')
+
+
+def parse_json_guide(guide_text):
+    """JSON guide를 파싱하여 딕셔너리로 반환"""
+    try:
+        return json.loads(guide_text)
+    except json.JSONDecodeError as e:
+        print(f"[JSON Parse Error] {e}")
+        return None
+
+
+def build_prompt_from_json(json_guide, step_type="step1"):
+    """
+    JSON 지침을 기반으로 시스템 프롬프트 생성
+
+    JSON 구조 예시:
+    {
+        "step": "step1",
+        "style": "강해설교",
+        "role": "성경 본문 분석가",
+        "principle": "강해설교는 '본문이 말하는 그대로'를 해석해야 한다",
+        "output_format": {
+            "historical_background": { "label": "역사·정황 배경", "description": "..." },
+            ...
+        }
+    }
+    """
+    role = json_guide.get("role", "설교 자료 작성자")
+    principle = json_guide.get("principle", "")
+    output_format = json_guide.get("output_format", {})
+
+    # 시스템 프롬프트 구성
+    prompt = f"""당신은 '{role}'입니다.
+
+【 핵심 원칙 】
+{principle}
+
+【 출력 형식 】
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.
+
+```json
+{{
+"""
+
+    # output_format에서 필드들 추출
+    fields = []
+    for key, value in output_format.items():
+        label = value.get("label", key) if isinstance(value, dict) else key
+        description = value.get("description", "") if isinstance(value, dict) else ""
+        fields.append(f'  "{key}": "/* {label}: {description} */"')
+
+    prompt += ",\n".join(fields)
+    prompt += "\n}\n```\n"
+
+    # 각 필드 상세 설명 추가
+    prompt += "\n【 각 필드 상세 지침 】\n"
+    for key, value in output_format.items():
+        if isinstance(value, dict):
+            label = value.get("label", key)
+            description = value.get("description", "")
+            purpose = value.get("purpose", "")
+            items = value.get("items", [])
+
+            prompt += f"\n▶ {key} ({label})\n"
+            if description:
+                prompt += f"  - 설명: {description}\n"
+            if purpose:
+                prompt += f"  - 목적: {purpose}\n"
+            if items:
+                prompt += f"  - 포함 항목: {', '.join(items)}\n"
+
+            # 중첩 구조 처리 (per_verse, sub_items 등)
+            for sub_key in ["per_verse", "per_term", "sub_items", "format"]:
+                if sub_key in value:
+                    sub_value = value[sub_key]
+                    if isinstance(sub_value, dict):
+                        prompt += f"  - {sub_key}:\n"
+                        for sk, sv in sub_value.items():
+                            if isinstance(sv, dict):
+                                prompt += f"    • {sk}: {sv.get('description', sv)}\n"
+                            else:
+                                prompt += f"    • {sk}: {sv}\n"
+                    elif isinstance(sub_value, list):
+                        prompt += f"  - {sub_key}: {', '.join(str(x) for x in sub_value)}\n"
+
+    prompt += "\n⚠️ 중요: 반드시 위 JSON 형식으로만 응답하세요. 마크다운이나 추가 설명 없이 순수 JSON만 출력하세요."
+
+    return prompt
+
+
+def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_result):
+    """
+    Step3용 프롬프트 생성 - Step1, Step2 JSON 결과와 meta 데이터 통합
+
+    json_guide: Step3 지침 (writing_spec 포함)
+    meta_data: 사용자 입력 정보 (scripture, title, target, worship_type 등)
+    step1_result: Step1 JSON 결과
+    step2_result: Step2 JSON 결과 (writing_spec 포함)
+    """
+    prompt = "【 설교문 작성 지침 】\n\n"
+
+    # Meta 정보
+    prompt += "▶ 기본 정보\n"
+    for key, value in meta_data.items():
+        if value:
+            prompt += f"  - {key}: {value}\n"
+    prompt += "\n"
+
+    # Step2의 writing_spec 적용
+    if step2_result and isinstance(step2_result, dict):
+        writing_spec = step2_result.get("writing_spec", {})
+        if writing_spec:
+            prompt += "▶ 작성 규격\n"
+            for key, value in writing_spec.items():
+                if isinstance(value, list):
+                    prompt += f"  - {key}: {', '.join(value)}\n"
+                else:
+                    prompt += f"  - {key}: {value}\n"
+            prompt += "\n"
+
+    # Step1 분석 자료
+    if step1_result:
+        prompt += "▶ Step1 분석 자료\n"
+        if isinstance(step1_result, dict):
+            prompt += json.dumps(step1_result, ensure_ascii=False, indent=2)
+        else:
+            prompt += str(step1_result)
+        prompt += "\n\n"
+
+    # Step2 구조
+    if step2_result:
+        prompt += "▶ Step2 설교 구조\n"
+        if isinstance(step2_result, dict):
+            # writing_spec은 이미 위에서 처리했으므로 제외
+            step2_without_spec = {k: v for k, v in step2_result.items() if k != "writing_spec"}
+            prompt += json.dumps(step2_without_spec, ensure_ascii=False, indent=2)
+        else:
+            prompt += str(step2_result)
+        prompt += "\n\n"
+
+    prompt += "위 자료를 바탕으로 설교문을 작성하세요. Step2의 구조와 writing_spec을 반드시 따르세요."
+
+    return prompt
+
+
 @app.route("/")
 @login_required
 def home():
@@ -1354,23 +1507,39 @@ def api_process_step():
 
         print(f"[PROCESS] {category} - {step_name} (Step: {step_type}, 모델: {model_name})")
 
-        # 시스템 메시지 구성 (단계별 최적화)
-        system_content = get_system_prompt_for_step(step_name)
+        # JSON 지침 여부 확인
+        is_json = is_json_guide(guide)
+        json_guide = None
 
-        # 총괄 지침이 있으면 추가
-        if master_guide:
-            system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
-            system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
-            system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
+        if is_json:
+            json_guide = parse_json_guide(guide)
+            if json_guide:
+                print(f"[PROCESS] JSON 지침 감지됨 - style: {json_guide.get('style', 'unknown')}")
+                # JSON 지침 기반 시스템 프롬프트 생성
+                system_content = build_prompt_from_json(json_guide, step_type)
+            else:
+                # JSON 파싱 실패시 기존 방식 사용
+                print(f"[PROCESS] JSON 파싱 실패 - 기존 텍스트 방식 사용")
+                is_json = False
 
-        # ★ 중요: 단계별 세부 지침을 시스템 프롬프트에 포함 (최우선 지침)
-        if guide:
-            system_content += f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            system_content += f"【 최우선 지침: {step_name} 단계 세부 지침 】\n"
-            system_content += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            system_content += guide
-            system_content += f"\n\n위 지침을 절대적으로 우선하여 따라야 합니다."
-            system_content += f"\n이 지침이 기본 역할과 충돌하면, 이 지침을 따르세요."
+        if not is_json:
+            # 기존 텍스트 방식
+            system_content = get_system_prompt_for_step(step_name)
+
+            # 총괄 지침이 있으면 추가
+            if master_guide:
+                system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
+                system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
+                system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
+
+            # ★ 중요: 단계별 세부 지침을 시스템 프롬프트에 포함 (최우선 지침)
+            if guide:
+                system_content += f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                system_content += f"【 최우선 지침: {step_name} 단계 세부 지침 】\n"
+                system_content += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                system_content += guide
+                system_content += f"\n\n위 지침을 절대적으로 우선하여 따라야 합니다."
+                system_content += f"\n이 지침이 기본 역할과 충돌하면, 이 지침을 따르세요."
 
         # 사용자 메시지 구성
         user_content = f"[성경구절]\n{reference}\n\n"
@@ -1569,6 +1738,15 @@ def api_gpt_pro():
         # 사용자 지정 지침 (통합된 시스템 지침 + 요청 사항)
         custom_prompt = data.get("customPrompt", "")
 
+        # JSON 모드 데이터 (새로 추가)
+        step1_result = data.get("step1Result")  # Step1 JSON 결과
+        step2_result = data.get("step2Result")  # Step2 JSON 결과 (writing_spec 포함)
+        target_audience = data.get("target", "")  # 대상
+        worship_type = data.get("worshipType", "")  # 예배 유형
+
+        # JSON 모드 여부 확인
+        is_json_mode = step1_result is not None or step2_result is not None
+
         print(f"[GPT-PRO/Step3] 처리 시작 - 스타일: {style_name}, 모델: {gpt_pro_model}, 토큰: {max_tokens}")
         print(f"[GPT-PRO/Step3] draft_content 길이: {len(draft_content)}, 완료된 단계: {completed_step_names}")
         if len(draft_content) < 100:
@@ -1606,33 +1784,74 @@ def api_gpt_pro():
 
         meta_section = "\n".join(meta_lines)
 
-        user_content = (
-            "아래는 gpt-4o-mini가 정리한 연구·개요 자료입니다."
-            " 참고만 하고, 문장은 처음부터 새로 작성해주세요."
-        )
-        if meta_section:
-            user_content += f"\n\n[기본 정보]\n{meta_section}"
-        user_content += "\n\n[설교 초안 자료]\n"
-        user_content += draft_content
+        # JSON 모드 vs 기존 텍스트 모드
+        if is_json_mode:
+            print(f"[GPT-PRO/Step3] JSON 모드 활성화")
+            # meta 데이터 구성
+            meta_data = {
+                "scripture": reference,
+                "title": title,
+                "target": target_audience,
+                "worship_type": worship_type,
+                "sermon_style": style_name,
+                "category": category
+            }
 
-        # 사용자 지정 지침 추가 (통합된 지침)
-        if custom_prompt and custom_prompt.strip():
-            user_content += f"\n\n【지침】\n{custom_prompt.strip()}"
-        else:
-            # 기본 지침 (하드코딩 - 사용자가 지침을 설정하지 않은 경우)
-            user_content += "\n\n【지침】\n"
-            user_content += (
-                "당신은 한국어 설교 전문가입니다.\n"
-                "step1,2 자료는 참고용으로만 활용하고 문장은 처음부터 새로 구성하며,\n"
-                "묵직하고 명료한 어조로 신학적 통찰과 실제적 적용을 균형 있게 제시하세요.\n\n"
-                "1. Step2의 설교 구조(서론, 본론, 결론)를 반드시 따라 작성하세요.\n"
-                "2. Step2의 대지(포인트) 구성을 유지하고 각 섹션의 핵심 메시지를 확장하세요.\n"
-                "3. 역사적 배경, 신학적 통찰, 실제 적용을 균형 있게 제시하세요.\n"
-                "4. 관련 성경구절을 적절히 인용하세요.\n"
-                "5. 가독성을 위해 각 섹션 사이에 빈 줄을 넣으세요.\n"
-                "6. 마크다운, 불릿 기호 대신 순수 텍스트 단락을 사용하세요.\n"
-                "7. 충분히 길고 상세하며 풍성한 내용으로 작성해주세요."
+            # Step2에서 writing_spec 추출하여 시스템 프롬프트에 반영
+            writing_spec = {}
+            if step2_result and isinstance(step2_result, dict):
+                writing_spec = step2_result.get("writing_spec", {})
+
+            # 시스템 프롬프트에 writing_spec 반영
+            if writing_spec:
+                system_content += "\n\n【 작성 규격 】\n"
+                for key, value in writing_spec.items():
+                    if isinstance(value, list):
+                        system_content += f"- {key}: {', '.join(value)}\n"
+                    else:
+                        system_content += f"- {key}: {value}\n"
+
+            # JSON 기반 user_content 생성
+            user_content = build_step3_prompt_from_json(
+                json_guide=None,
+                meta_data=meta_data,
+                step1_result=step1_result,
+                step2_result=step2_result
             )
+
+            # 추가 지침이 있으면 포함
+            if custom_prompt and custom_prompt.strip():
+                user_content += f"\n\n【추가 지침】\n{custom_prompt.strip()}"
+
+        else:
+            # 기존 텍스트 모드
+            user_content = (
+                "아래는 gpt-4o-mini가 정리한 연구·개요 자료입니다."
+                " 참고만 하고, 문장은 처음부터 새로 작성해주세요."
+            )
+            if meta_section:
+                user_content += f"\n\n[기본 정보]\n{meta_section}"
+            user_content += "\n\n[설교 초안 자료]\n"
+            user_content += draft_content
+
+            # 사용자 지정 지침 추가 (통합된 지침)
+            if custom_prompt and custom_prompt.strip():
+                user_content += f"\n\n【지침】\n{custom_prompt.strip()}"
+            else:
+                # 기본 지침 (하드코딩 - 사용자가 지침을 설정하지 않은 경우)
+                user_content += "\n\n【지침】\n"
+                user_content += (
+                    "당신은 한국어 설교 전문가입니다.\n"
+                    "step1,2 자료는 참고용으로만 활용하고 문장은 처음부터 새로 구성하며,\n"
+                    "묵직하고 명료한 어조로 신학적 통찰과 실제적 적용을 균형 있게 제시하세요.\n\n"
+                    "1. Step2의 설교 구조(서론, 본론, 결론)를 반드시 따라 작성하세요.\n"
+                    "2. Step2의 대지(포인트) 구성을 유지하고 각 섹션의 핵심 메시지를 확장하세요.\n"
+                    "3. 역사적 배경, 신학적 통찰, 실제 적용을 균형 있게 제시하세요.\n"
+                    "4. 관련 성경구절을 적절히 인용하세요.\n"
+                    "5. 가독성을 위해 각 섹션 사이에 빈 줄을 넣으세요.\n"
+                    "6. 마크다운, 불릿 기호 대신 순수 텍스트 단락을 사용하세요.\n"
+                    "7. 충분히 길고 상세하며 풍성한 내용으로 작성해주세요."
+                )
 
         # 공통 지침 추가
         user_content += f"\n\n⚠️ 중요: 충분히 길고 상세하며 풍성한 내용으로 작성해주세요 (최대 {max_tokens} 토큰)."

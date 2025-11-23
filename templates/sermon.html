@@ -2445,7 +2445,15 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
 
       hasContent = true;
       fullText += `【 ${sectionIndex}. ${step.name} 】\n\n`;
-      fullText += stepResults[step.id];
+
+      // stepResults가 객체(JSON)인지 문자열인지 확인
+      const resultData = stepResults[step.id];
+      if (typeof resultData === 'object' && resultData !== null) {
+        fullText += JSON.stringify(resultData, null, 2);
+      } else {
+        fullText += resultData;
+      }
+
       fullText += `\n\n${'='.repeat(50)}\n\n`;
       sectionIndex += 1;
     });
@@ -2556,23 +2564,53 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const tokenInfo = styleToken ? `스타일 토큰: ${step3MaxTokens}` : `기본 토큰: ${step3MaxTokens}`;
     showStatus(`🚀 Step3 (${gptProModel}, ${tokenInfo}) 처리 중... (약 30초 소요)`);
 
+    // JSON 모드 확인: stepResults에 객체가 있으면 JSON 모드
+    const step1Data = stepResults['step1'];
+    const step2Data = stepResults['step2'];
+    const isJsonMode = (typeof step1Data === 'object' && step1Data !== null) ||
+                       (typeof step2Data === 'object' && step2Data !== null);
+
+    // 대상 및 예배 유형 가져오기
+    const targetEl = document.getElementById('sermon-target');
+    const worshipTypeEl = document.getElementById('worship-type');
+    const targetAudience = targetEl ? targetEl.value.trim() : '';
+    const worshipType = worshipTypeEl ? worshipTypeEl.value.trim() : '';
+
+    console.log(`[Step3] JSON 모드: ${isJsonMode}, 대상: ${targetAudience}, 예배유형: ${worshipType}`);
+
     try {
+      const requestBody = {
+        model: gptProModel, // 선택된 모델 전달
+        maxTokens: step3MaxTokens, // 최대 토큰량
+        customPrompt: step3Prompt, // 사용자 정의 지침 (통합)
+        reference: draft.meta.reference,
+        title: draft.meta.finalTitle,
+        seriesName: draft.meta.seriesName,
+        styleName: draft.meta.styleName,
+        styleDescription: draft.meta.styleDescription,
+        category: draft.meta.categoryLabel,
+        draftContent: draft.draftContent,
+        completedStepNames: draft.completedStepNames,
+        // 추가 필드
+        target: targetAudience,
+        worshipType: worshipType
+      };
+
+      // JSON 모드일 경우 step1Result, step2Result 추가
+      if (isJsonMode) {
+        if (typeof step1Data === 'object') {
+          requestBody.step1Result = step1Data;
+        }
+        if (typeof step2Data === 'object') {
+          requestBody.step2Result = step2Data;
+        }
+        console.log('[Step3] JSON 데이터 전송:', { step1Result: !!requestBody.step1Result, step2Result: !!requestBody.step2Result });
+      }
+
       const response = await fetch('/api/sermon/gpt-pro', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          model: gptProModel, // 선택된 모델 전달
-          maxTokens: step3MaxTokens, // 최대 토큰량
-          customPrompt: step3Prompt, // 사용자 정의 지침 (통합)
-          reference: draft.meta.reference,
-          title: draft.meta.finalTitle,
-          seriesName: draft.meta.seriesName,
-          styleName: draft.meta.styleName,
-          styleDescription: draft.meta.styleDescription,
-          category: draft.meta.categoryLabel,
-          draftContent: draft.draftContent,
-          completedStepNames: draft.completedStepNames
-        })
+        body: JSON.stringify(requestBody)
       });
 
       // 응답 상태 확인
@@ -3059,14 +3097,42 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
       const data = await response.json();
 
       if (data.ok) {
-        stepResults[stepId] = data.result;  // 전체 결과는 저장
+        // JSON 응답인지 확인하고 파싱 시도
+        let resultData = data.result;
+        let isJsonResult = false;
+
+        try {
+          // JSON 코드 블록 제거 후 파싱 시도
+          let cleanResult = data.result.trim();
+          if (cleanResult.startsWith('```json')) {
+            cleanResult = cleanResult.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanResult.startsWith('```')) {
+            cleanResult = cleanResult.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+
+          if (cleanResult.startsWith('{') && cleanResult.endsWith('}')) {
+            const parsed = JSON.parse(cleanResult);
+            resultData = parsed;
+            isJsonResult = true;
+            console.log(`[${stepId}] JSON 응답 파싱 성공`);
+          }
+        } catch (e) {
+          console.log(`[${stepId}] 텍스트 응답 (JSON 아님)`);
+        }
+
+        // stepResults에 저장 (JSON이면 객체, 아니면 문자열)
+        stepResults[stepId] = resultData;
+
         const textarea = document.getElementById(`result-${stepId}`);
         if (textarea) {
+          // 표시용 텍스트 생성
+          const displayText = isJsonResult ? JSON.stringify(resultData, null, 2) : data.result;
+
           // Step2는 서론까지만 표시
           if (stepId === 'step2' || stepType === 'step2') {
-            textarea.value = truncateToIntro(data.result);
+            textarea.value = isJsonResult ? displayText : truncateToIntro(data.result);
           } else {
-            textarea.value = data.result;
+            textarea.value = displayText;
             autoResize(textarea);
           }
         }
