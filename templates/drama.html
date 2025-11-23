@@ -602,6 +602,28 @@
       background: #667eea;
       color: white;
     }
+    .step5-voice-option.selected .voice-preview-btn {
+      background: rgba(255,255,255,0.3);
+      color: white;
+    }
+    .voice-preview-btn {
+      padding: .25rem .5rem;
+      border: none;
+      border-radius: 4px;
+      background: #f0f0f0;
+      cursor: pointer;
+      font-size: .8rem;
+      transition: all 0.2s;
+    }
+    .voice-preview-btn:hover {
+      background: #667eea;
+      color: white;
+      transform: scale(1.1);
+    }
+    .voice-preview-btn.loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
 
     /* Step6 영상 제작 박스 스타일 */
     .step6-container {
@@ -1091,61 +1113,121 @@
 
         <!-- 음성 선택 영역 -->
         <div class="step5-section">
-          <div class="section-label" id="step5-voice-label">🎤 음성 선택 (Google Cloud)</div>
+          <div class="section-label" id="step5-voice-label">🎤 음성 선택 (Google Cloud) <span style="font-size: .75rem; font-weight: normal; color: rgba(255,255,255,0.7);">- 클릭하여 미리듣기</span></div>
 
           <!-- Google TTS 음성 -->
           <div id="step5-voice-google" class="step5-voice-select">
             <div class="step5-voice-option selected" data-voice="ko-KR-Wavenet-A" data-provider="google">
-              <div style="font-weight: 600;">여성 A</div>
-              <div style="font-size: .7rem; color: #666;">Wavenet (자연스러움)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">여성 A</div>
+                  <div style="font-size: .7rem; color: #666;">Wavenet (자연스러움)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Wavenet-A', 'google')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="ko-KR-Wavenet-B" data-provider="google">
-              <div style="font-weight: 600;">여성 B</div>
-              <div style="font-size: .7rem; color: #666;">Wavenet</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">여성 B</div>
+                  <div style="font-size: .7rem; color: #666;">Wavenet</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Wavenet-B', 'google')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="ko-KR-Wavenet-C" data-provider="google">
-              <div style="font-weight: 600;">남성 A</div>
-              <div style="font-size: .7rem; color: #666;">Wavenet</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">남성 A</div>
+                  <div style="font-size: .7rem; color: #666;">Wavenet</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Wavenet-C', 'google')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="ko-KR-Wavenet-D" data-provider="google">
-              <div style="font-weight: 600;">남성 B</div>
-              <div style="font-size: .7rem; color: #666;">Wavenet</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">남성 B</div>
+                  <div style="font-size: .7rem; color: #666;">Wavenet</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Wavenet-D', 'google')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="ko-KR-Neural2-A" data-provider="google">
-              <div style="font-weight: 600;">여성 (Neural)</div>
-              <div style="font-size: .7rem; color: #666;">Neural2 (최고품질)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">여성 (Neural)</div>
+                  <div style="font-size: .7rem; color: #666;">Neural2 (최고품질)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Neural2-A', 'google')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="ko-KR-Neural2-C" data-provider="google">
-              <div style="font-weight: 600;">남성 (Neural)</div>
-              <div style="font-size: .7rem; color: #666;">Neural2 (최고품질)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">남성 (Neural)</div>
+                  <div style="font-size: .7rem; color: #666;">Neural2 (최고품질)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('ko-KR-Neural2-C', 'google')">▶️</button>
+              </div>
             </div>
           </div>
 
           <!-- 네이버 TTS 음성 (숨김) -->
           <div id="step5-voice-naver" class="step5-voice-select" style="display: none;">
             <div class="step5-voice-option" data-voice="nara" data-provider="naver">
-              <div style="font-weight: 600;">나라</div>
-              <div style="font-size: .7rem; color: #666;">여성 (기본)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">나라</div>
+                  <div style="font-size: .7rem; color: #666;">여성 (기본)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('nara', 'naver')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="nara_call" data-provider="naver">
-              <div style="font-weight: 600;">나라 (밝음)</div>
-              <div style="font-size: .7rem; color: #666;">여성 (경쾌)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">나라 (밝음)</div>
+                  <div style="font-size: .7rem; color: #666;">여성 (경쾌)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('nara_call', 'naver')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="nminsang" data-provider="naver">
-              <div style="font-weight: 600;">민상</div>
-              <div style="font-size: .7rem; color: #666;">남성</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">민상</div>
+                  <div style="font-size: .7rem; color: #666;">남성</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('nminsang', 'naver')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="njiyun" data-provider="naver">
-              <div style="font-weight: 600;">지윤</div>
-              <div style="font-size: .7rem; color: #666;">여성 (밝음)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">지윤</div>
+                  <div style="font-size: .7rem; color: #666;">여성 (밝음)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('njiyun', 'naver')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="nsujin" data-provider="naver">
-              <div style="font-weight: 600;">수진</div>
-              <div style="font-size: .7rem; color: #666;">여성 (차분)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">수진</div>
+                  <div style="font-size: .7rem; color: #666;">여성 (차분)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('nsujin', 'naver')">▶️</button>
+              </div>
             </div>
             <div class="step5-voice-option" data-voice="jinho" data-provider="naver">
-              <div style="font-weight: 600;">진호</div>
-              <div style="font-size: .7rem; color: #666;">남성 (차분)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600;">진호</div>
+                  <div style="font-size: .7rem; color: #666;">남성 (차분)</div>
+                </div>
+                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('jinho', 'naver')">▶️</button>
+              </div>
             </div>
           </div>
         </div>
@@ -3152,6 +3234,78 @@ S#1. 장소 / 시간
   let step5SelectedVoice = 'ko-KR-Wavenet-A';  // Google 기본 음성
   let step5AudioUrl = null;
   let step5SubtitleData = null;
+  let step5PreviewAudio = null;  // 미리듣기용 오디오
+
+  // 음성 미리듣기 함수
+  async function previewVoice(voice, provider) {
+    const sampleText = "안녕하세요. 이 목소리로 드라마 나레이션을 진행합니다. 감동적인 이야기를 전해드릴게요.";
+
+    // 기존 재생 중인 오디오 중지
+    if (step5PreviewAudio) {
+      step5PreviewAudio.pause();
+      step5PreviewAudio = null;
+    }
+
+    // 버튼 로딩 상태
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳';
+    btn.classList.add('loading');
+
+    try {
+      const response = await fetch('/api/drama/generate-tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: sampleText,
+          speaker: voice,
+          speed: 0,
+          pitch: 0,
+          volume: 0,
+          ttsProvider: provider
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.ok && data.audioUrl) {
+        step5PreviewAudio = new Audio(data.audioUrl);
+        step5PreviewAudio.play();
+
+        // 재생 중 버튼 표시
+        btn.textContent = '⏸️';
+
+        // 재생 완료 시 버튼 복원
+        step5PreviewAudio.onended = () => {
+          btn.textContent = '▶️';
+          btn.classList.remove('loading');
+        };
+
+        // 클릭하면 정지
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          if (step5PreviewAudio) {
+            step5PreviewAudio.pause();
+            step5PreviewAudio = null;
+          }
+          btn.textContent = '▶️';
+          btn.classList.remove('loading');
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            previewVoice(voice, provider);
+          };
+        };
+      } else {
+        alert(`미리듣기 실패: ${data.error || '알 수 없는 오류'}`);
+        btn.textContent = '▶️';
+        btn.classList.remove('loading');
+      }
+    } catch (err) {
+      alert(`미리듣기 오류: ${err.message}`);
+      btn.textContent = '▶️';
+      btn.classList.remove('loading');
+    }
+  }
 
   // Step3 결과가 있으면 Step5 컨테이너 표시
   function updateStep5Visibility() {
