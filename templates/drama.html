@@ -1003,7 +1003,7 @@
       </div>
 
       <!-- Step6: 영상 제작 -->
-      <div id="step6-container" class="step6-container" style="display: none;">
+      <div id="step6-container" class="step6-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
           <div class="label">🎬 Step6: 영상 제작</div>
           <div style="display: flex; gap: .5rem;">
@@ -2416,16 +2416,8 @@
   let step6SelectedImages = [];
   let step6VideoUrl = null;
 
-  // Step4/Step5 결과가 있으면 Step6 컨테이너 표시
+  // Step6 컨테이너 업데이트 (이미지/오디오 상태 갱신)
   function updateStep6Visibility() {
-    const step6Container = document.getElementById('step6-container');
-    const hasImages = step4GeneratedImages && step4GeneratedImages.length > 0;
-    const hasAudio = step5AudioUrl;
-
-    if (step6Container) {
-      step6Container.style.display = (hasImages || hasAudio) ? 'block' : 'none';
-    }
-
     // 이미지 그리드 업데이트
     updateStep6ImageGrid();
     // 오디오 상태 업데이트
