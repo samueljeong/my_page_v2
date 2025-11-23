@@ -880,6 +880,29 @@
     </div>
   </div>
 
+  <!-- JSON 뷰어 모달 -->
+  <div id="json-viewer-modal" class="modal">
+    <div class="modal-content" style="max-width: 95vw; max-height: 95vh; overflow: hidden; display: flex; flex-direction: column;">
+      <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+        <span>🔍 현재 적용 중인 JSON 데이터</span>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button onclick="refreshJsonViewer()" style="padding: 0.3rem 0.8rem; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">🔄 새로고침</button>
+          <button onclick="closeJsonViewerModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.5rem; margin: 0.5rem 0; flex-shrink: 0;">
+        <button onclick="showJsonTab('session')" id="json-tab-session" class="json-tab active" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">📦 세션 데이터</button>
+        <button onclick="showJsonTab('guidelines')" id="json-tab-guidelines" class="json-tab" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">📋 지침 (style_guide)</button>
+        <button onclick="showJsonTab('structure')" id="json-tab-structure" class="json-tab" style="flex: 1; padding: 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">🏗️ 대본 구조</button>
+      </div>
+      <div id="json-viewer-content" style="flex: 1; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; white-space: pre-wrap;"></div>
+      <div class="modal-buttons" style="flex-shrink: 0; margin-top: 0.5rem;">
+        <button onclick="copyJsonContent()" style="flex: 1; background: #2196F3;">📋 복사</button>
+        <button onclick="closeJsonViewerModal()" class="primary" style="flex: 1;">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Auth Header -->
   <div class="auth-header">
     <h1>🎭 드라마 스크립트 작성 도구</h1>
@@ -1085,6 +1108,7 @@
         <button id="btn-auto-execute-all" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ 전체 순차실행</button>
         <button id="btn-execute-step3" style="flex: 2; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">🎬 Step3: OpenRouter 대본완성</button>
         <button id="btn-view-guidelines" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📋 지침 보기</button>
+        <button id="btn-view-json" style="flex: 1; padding: .35rem .5rem; font-size: .75rem; background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">🔍 JSON 보기</button>
       </div>
 
       <!-- 상태 표시 -->
@@ -6509,64 +6533,107 @@ S#1. 장소 / 시간
   function openGuidelinesModal() {
     const modal = document.getElementById('guidelines-modal');
     const content = document.getElementById('guidelines-modal-content');
-    const contentType = document.getElementById('content-type')?.value || 'testimony';
-    const contentTypeName = contentType === 'testimony' ? '간증' : '드라마';
-
-    // 현재 선택된 콘텐츠 유형의 프롬프트 가져오기
-    const prompt = contentTypePrompts[contentType] || contentTypePrompts.testimony;
 
     // 지침 내용 구성
-    let guidelineText = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 현재 설정: ${contentTypeName} 모드
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    let guidelineText = '';
 
-【 시스템 프롬프트 】
-${prompt.systemPrompt}
-
+    // 대본 구조 (7단계) 표시
+    if (dramaGuidelines?.structure?.sections) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏗️ 대본 구조 (7단계) - 총 ${dramaGuidelines.structure.total_length}자
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【 추가 지시사항 (User Prompt Suffix) 】
-${prompt.userPromptSuffix}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
+      dramaGuidelines.structure.sections.forEach(section => {
+        const charCount = Math.round(dramaGuidelines.structure.total_length * section.length_ratio);
+        guidelineText += `【 ${section.id}. ${section.korean_name} 】 (${(section.length_ratio * 100).toFixed(0)}% ≈ ${charCount}자)
+목적: ${section.purpose}
+필수 요소: ${section.must_include.join(', ')}
+예시: "${section.example?.substring(0, 50)}..."
 
-    // 금지 패턴 추가 (JSON 지침에서)
-    if (dramaGuidelines?.forbiddenPatterns) {
-      guidelineText += `
-【 금지 패턴 】
+`;
+      });
+    }
 
-📝 포맷팅:
-${dramaGuidelines.forbiddenPatterns.formatting?.map(p => `  - ${p}`).join('\n') || '  (없음)'}
-
-📝 콘텐츠:
-${dramaGuidelines.forbiddenPatterns.content?.map(p => `  - ${p}`).join('\n') || '  (없음)'}
-
-📝 구조:
-${dramaGuidelines.forbiddenPatterns.structure?.map(p => `  - ${p}`).join('\n') || '  (없음)'}
-
+    // 대사 비율
+    if (dramaGuidelines?.dialogue_ratio) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💬 대사 비율
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 서술/나레이션: ${dramaGuidelines.dialogue_ratio.narration}%
+• 내면 독백: ${dramaGuidelines.dialogue_ratio.inner_monologue}%
+• 직접 대화: ${dramaGuidelines.dialogue_ratio.direct_dialogue}%
+
 `;
     }
 
-    // 품질 체크리스트 추가 (JSON 지침에서)
-    if (dramaGuidelines?.qualityChecklist) {
-      guidelineText += `
-【 품질 체크리스트 】
+    // 디테일 요구사항
+    if (dramaGuidelines?.detail_requirements) {
+      const dr = dramaGuidelines.detail_requirements;
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 필수 디테일 요구사항
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 이름: ${dr.naming?.min_count}개 이상 (예: ${dr.naming?.examples?.join(', ')})
+• 나이: ${dr.ages?.min_count}개 이상 (예: ${dr.ages?.examples?.join(', ')})
+• 장소: ${dr.locations?.min_count}개 이상 (예: ${dr.locations?.examples?.join(', ')})
+• 숫자: ${dr.amounts?.min_count}개 이상 (예: ${dr.amounts?.examples?.join(', ')})
+• 시간: ${dr.time_periods?.min_count}개 이상 (예: ${dr.time_periods?.examples?.join(', ')})
 
-📖 스토리:
-${dramaGuidelines.qualityChecklist.story?.map(q => `  ☐ ${q}`).join('\n') || '  (없음)'}
-
-👤 캐릭터:
-${dramaGuidelines.qualityChecklist.character?.map(q => `  ☐ ${q}`).join('\n') || '  (없음)'}
-
-💬 대사:
-${dramaGuidelines.qualityChecklist.dialogue?.map(q => `  ☐ ${q}`).join('\n') || '  (없음)'}
-
-❤️ 감정:
-${dramaGuidelines.qualityChecklist.emotion?.map(q => `  ☐ ${q}`).join('\n') || '  (없음)'}
 `;
+    }
+
+    // 감정 표현
+    if (dramaGuidelines?.emotional_expressions) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❤️ 감정 표현 가이드
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+신체 반응:
+${dramaGuidelines.emotional_expressions.physical_reactions?.map(p => `  • ${p}`).join('\n')}
+
+감정 상태:
+${dramaGuidelines.emotional_expressions.emotional_states?.map(p => `  • ${p}`).join('\n')}
+
+`;
+    }
+
+    // 금지 패턴
+    if (dramaGuidelines?.forbidden_patterns) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 금지 패턴
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+포맷팅:
+${dramaGuidelines.forbidden_patterns.formatting?.map(p => `  ✗ ${p}`).join('\n')}
+
+콘텐츠:
+${dramaGuidelines.forbidden_patterns.content?.map(p => `  ✗ ${p}`).join('\n')}
+
+스타일:
+${dramaGuidelines.forbidden_patterns.style?.map(p => `  ✗ ${p}`).join('\n')}
+
+`;
+    }
+
+    // 품질 체크리스트
+    if (dramaGuidelines?.quality_checklist) {
+      guidelineText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 품질 체크리스트
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+구조:
+${dramaGuidelines.quality_checklist.structure?.map(q => `  ☐ ${q}`).join('\n')}
+
+디테일:
+${dramaGuidelines.quality_checklist.details?.map(q => `  ☐ ${q}`).join('\n')}
+
+감정:
+${dramaGuidelines.quality_checklist.emotion?.map(q => `  ☐ ${q}`).join('\n')}
+
+대사:
+${dramaGuidelines.quality_checklist.dialogue?.map(q => `  ☐ ${q}`).join('\n')}
+`;
+    }
+
+    if (!guidelineText) {
+      guidelineText = '지침이 로드되지 않았습니다. 새로고침 후 다시 시도해주세요.';
     }
 
     content.textContent = guidelineText;
@@ -6585,6 +6652,116 @@ ${dramaGuidelines.qualityChecklist.emotion?.map(q => `  ☐ ${q}`).join('\n') ||
   document.getElementById('guidelines-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'guidelines-modal') {
       closeGuidelinesModal();
+    }
+  });
+
+  // ===== JSON 뷰어 모달 =====
+  let currentJsonTab = 'session';
+  let currentJsonContent = '';
+
+  function openJsonViewerModal() {
+    const modal = document.getElementById('json-viewer-modal');
+    modal.classList.add('show');
+    showJsonTab('session');
+  }
+
+  function closeJsonViewerModal() {
+    const modal = document.getElementById('json-viewer-modal');
+    modal.classList.remove('show');
+  }
+
+  function showJsonTab(tabName) {
+    currentJsonTab = tabName;
+
+    // 탭 버튼 활성화 스타일
+    document.querySelectorAll('.json-tab').forEach(btn => {
+      btn.style.background = '#e0e0e0';
+      btn.style.color = '#333';
+    });
+    document.getElementById(`json-tab-${tabName}`).style.background = '#6c5ce7';
+    document.getElementById(`json-tab-${tabName}`).style.color = 'white';
+
+    const content = document.getElementById('json-viewer-content');
+
+    if (tabName === 'session') {
+      currentJsonContent = JSON.stringify(workflowSession, null, 2);
+      content.innerHTML = syntaxHighlight(currentJsonContent);
+    } else if (tabName === 'guidelines') {
+      currentJsonContent = dramaGuidelines ? JSON.stringify(dramaGuidelines, null, 2) : '// 지침이 로드되지 않았습니다.';
+      content.innerHTML = syntaxHighlight(currentJsonContent);
+    } else if (tabName === 'structure') {
+      // 대본 구조만 표시
+      if (dramaGuidelines?.structure) {
+        const structureInfo = {
+          total_length: dramaGuidelines.structure.total_length,
+          sections: dramaGuidelines.structure.sections.map(s => ({
+            id: s.id,
+            name: s.korean_name,
+            ratio: `${(s.length_ratio * 100).toFixed(0)}%`,
+            purpose: s.purpose,
+            must_include: s.must_include
+          })),
+          dialogue_ratio: dramaGuidelines.dialogue_ratio,
+          mandatory_elements: dramaGuidelines.mandatory_elements
+        };
+        currentJsonContent = JSON.stringify(structureInfo, null, 2);
+        content.innerHTML = syntaxHighlight(currentJsonContent);
+      } else {
+        content.textContent = '// 지침이 로드되지 않았습니다.';
+      }
+    }
+  }
+
+  function refreshJsonViewer() {
+    showJsonTab(currentJsonTab);
+    showStatus('🔄 JSON 새로고침 완료');
+    setTimeout(hideStatus, 1500);
+  }
+
+  function copyJsonContent() {
+    navigator.clipboard.writeText(currentJsonContent).then(() => {
+      showStatus('📋 JSON 복사 완료!');
+      setTimeout(hideStatus, 1500);
+    });
+  }
+
+  // JSON 구문 강조
+  function syntaxHighlight(json) {
+    if (typeof json !== 'string') {
+      json = JSON.stringify(json, null, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+      let cls = 'number';
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          cls = 'key';
+        } else {
+          cls = 'string';
+        }
+      } else if (/true|false/.test(match)) {
+        cls = 'boolean';
+      } else if (/null/.test(match)) {
+        cls = 'null';
+      }
+      const colors = {
+        key: '#9cdcfe',
+        string: '#ce9178',
+        number: '#b5cea8',
+        boolean: '#569cd6',
+        null: '#569cd6'
+      };
+      return `<span style="color: ${colors[cls]}">${match}</span>`;
+    });
+  }
+
+  // JSON 뷰어 버튼 이벤트
+  document.getElementById('btn-view-json')?.addEventListener('click', openJsonViewerModal);
+
+  // JSON 뷰어 모달 외부 클릭 시 닫기
+  document.getElementById('json-viewer-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'json-viewer-modal') {
+      closeJsonViewerModal();
     }
   });
 
