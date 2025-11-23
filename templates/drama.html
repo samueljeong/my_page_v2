@@ -685,6 +685,84 @@
       border-radius: 6px;
     }
 
+    /* Step7 유튜브 업로드 박스 스타일 */
+    .step7-container {
+      display: block !important;
+      background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+      border: none;
+      padding: 1rem;
+      border-radius: 12px;
+      margin-top: .75rem;
+    }
+    .step7-container .label {
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .step7-section {
+      background: white;
+      border-radius: 8px;
+      padding: .75rem;
+      margin-bottom: .75rem;
+    }
+    .step7-section .section-label {
+      font-weight: 600;
+      font-size: .9rem;
+      margin-bottom: .4rem;
+      color: #333;
+    }
+    .step7-btn {
+      background: white;
+      color: #ff0000;
+      border: none;
+      padding: .5rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: .85rem;
+      transition: all 0.2s;
+    }
+    .step7-btn:hover {
+      background: #f0f0f0;
+      transform: translateY(-1px);
+    }
+    .step7-btn.uploading {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .step7-input {
+      width: 100%;
+      padding: .5rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: .85rem;
+      margin-bottom: .5rem;
+    }
+    .step7-input:focus {
+      outline: none;
+      border-color: #ff0000;
+    }
+    .step7-privacy-option {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .4rem .8rem;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .8rem;
+      transition: all 0.2s;
+      margin-right: .5rem;
+    }
+    .step7-privacy-option:hover {
+      border-color: #ff0000;
+    }
+    .step7-privacy-option.selected {
+      border-color: #ff0000;
+      background: #ff0000;
+      color: white;
+    }
+
     /* Step 접기/펼치기 */
     .workflow-box.collapsed .box-content {
       display: none;
@@ -1003,7 +1081,7 @@
       </div>
 
       <!-- Step6: 영상 제작 -->
-      <div id="step6-container" class="step6-container" style="display: none;">
+      <div id="step6-container" class="step6-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
           <div class="label">🎬 Step6: 영상 제작</div>
           <div style="display: flex; gap: .5rem;">
@@ -1104,6 +1182,94 @@
             <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
               <div id="step6-progress-bar" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step7: 유튜브 업로드 -->
+      <div id="step7-container" class="step7-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
+          <div class="label">📺 Step7: 유튜브 업로드</div>
+          <div style="display: flex; gap: .5rem;">
+            <button id="btn-youtube-auth" class="step7-btn">🔑 YouTube 연결</button>
+          </div>
+        </div>
+
+        <!-- 인증 상태 -->
+        <div class="step7-section">
+          <div id="step7-auth-status" style="padding: .5rem; background: #fff3cd; border-radius: 6px; font-size: .85rem; color: #856404;">
+            ⚠️ YouTube 계정을 연결해주세요
+          </div>
+        </div>
+
+        <!-- 영상 정보 입력 -->
+        <div class="step7-section">
+          <div class="section-label">📝 영상 정보</div>
+          <input type="text" id="step7-title" class="step7-input" placeholder="영상 제목" maxlength="100">
+          <textarea id="step7-description" class="step7-input" style="min-height: 80px; resize: vertical;" placeholder="영상 설명&#10;&#10;해시태그, 링크 등을 포함할 수 있습니다." maxlength="5000"></textarea>
+          <input type="text" id="step7-tags" class="step7-input" placeholder="태그 (쉼표로 구분: 드라마, 단편영화, 감동)" maxlength="500">
+        </div>
+
+        <!-- 공개 설정 -->
+        <div class="step7-section">
+          <div class="section-label">🔒 공개 설정</div>
+          <div id="step7-privacy-options">
+            <label class="step7-privacy-option selected" data-privacy="private">
+              <input type="radio" name="step7-privacy" value="private" checked style="display: none;">
+              🔒 비공개
+            </label>
+            <label class="step7-privacy-option" data-privacy="unlisted">
+              <input type="radio" name="step7-privacy" value="unlisted" style="display: none;">
+              🔗 일부공개
+            </label>
+            <label class="step7-privacy-option" data-privacy="public">
+              <input type="radio" name="step7-privacy" value="public" style="display: none;">
+              🌍 공개
+            </label>
+          </div>
+        </div>
+
+        <!-- 카테고리 -->
+        <div class="step7-section">
+          <div class="section-label">📁 카테고리</div>
+          <select id="step7-category" class="step7-input" style="margin-bottom: 0;">
+            <option value="22">사람 및 블로그</option>
+            <option value="24">엔터테인먼트</option>
+            <option value="1">영화 및 애니메이션</option>
+            <option value="10">음악</option>
+            <option value="23">코미디</option>
+            <option value="27">교육</option>
+            <option value="25">뉴스 및 정치</option>
+            <option value="26">노하우 및 스타일</option>
+          </select>
+        </div>
+
+        <!-- 업로드 버튼 -->
+        <div style="display: flex; gap: .5rem; margin-bottom: .75rem;">
+          <button id="btn-upload-youtube" class="step7-btn" style="flex: 1; padding: .75rem; font-size: .95rem; font-weight: 700;" disabled>
+            📺 YouTube에 업로드
+          </button>
+        </div>
+
+        <!-- 업로드 진행 상태 -->
+        <div id="step7-progress" style="display: none;">
+          <div style="background: white; border-radius: 8px; padding: .75rem;">
+            <div style="font-size: .85rem; color: #333; margin-bottom: .5rem;">
+              <span id="step7-progress-text">업로드 준비 중...</span>
+            </div>
+            <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
+              <div id="step7-progress-bar" style="background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 업로드 결과 -->
+        <div class="step7-section" id="step7-result" style="display: none;">
+          <div class="section-label">✅ 업로드 완료</div>
+          <div style="padding: .5rem; background: #d4edda; border-radius: 6px;">
+            <a id="step7-video-link" href="#" target="_blank" style="color: #155724; font-weight: 600; text-decoration: none;">
+              🎬 업로드된 영상 보기
+            </a>
           </div>
         </div>
       </div>
@@ -2416,16 +2582,8 @@
   let step6SelectedImages = [];
   let step6VideoUrl = null;
 
-  // Step4/Step5 결과가 있으면 Step6 컨테이너 표시
+  // Step6 컨테이너 업데이트 (이미지/오디오 상태 갱신)
   function updateStep6Visibility() {
-    const step6Container = document.getElementById('step6-container');
-    const hasImages = step4GeneratedImages && step4GeneratedImages.length > 0;
-    const hasAudio = step5AudioUrl;
-
-    if (step6Container) {
-      step6Container.style.display = (hasImages || hasAudio) ? 'block' : 'none';
-    }
-
     // 이미지 그리드 업데이트
     updateStep6ImageGrid();
     // 오디오 상태 업데이트
@@ -2623,6 +2781,228 @@
   document.getElementById('btn-generate-video')?.addEventListener('click', generateVideo);
   document.getElementById('btn-download-video')?.addEventListener('click', downloadVideo);
   document.getElementById('btn-clear-step6')?.addEventListener('click', clearStep6);
+
+  // ===== Step7: 유튜브 업로드 =====
+  let youtubeAuthenticated = false;
+
+  // 개인정보 옵션 선택
+  function selectStep7Privacy(value) {
+    document.querySelectorAll('.step7-privacy-btn').forEach(btn => {
+      btn.classList.remove('selected');
+      if (btn.dataset.value === value) {
+        btn.classList.add('selected');
+      }
+    });
+  }
+
+  // 개인정보 버튼 이벤트
+  document.querySelectorAll('.step7-privacy-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectStep7Privacy(btn.dataset.value));
+  });
+
+  // 유튜브 인증
+  async function authenticateYouTube() {
+    const authBtn = document.getElementById('btn-youtube-auth');
+    const authStatus = document.getElementById('youtube-auth-status');
+
+    authBtn.disabled = true;
+    authBtn.textContent = '🔄 인증 중...';
+    authStatus.innerHTML = '<span style="color: #f39c12;">⏳ YouTube 인증을 진행 중입니다...</span>';
+
+    try {
+      const response = await fetch('/api/drama/youtube-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        youtubeAuthenticated = true;
+        authBtn.textContent = '✅ 인증 완료';
+        authBtn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
+        authStatus.innerHTML = '<span style="color: #27ae60;">✅ YouTube 인증이 완료되었습니다.</span>';
+        document.getElementById('btn-upload-youtube').disabled = false;
+      } else if (data.auth_url) {
+        // OAuth URL이 제공되면 새 창에서 열기
+        window.open(data.auth_url, '_blank', 'width=600,height=700');
+        authBtn.textContent = '🔗 인증 대기 중';
+        authStatus.innerHTML = '<span style="color: #f39c12;">⏳ 새 창에서 YouTube 인증을 완료해주세요.</span>';
+
+        // 인증 상태 폴링
+        pollYouTubeAuth();
+      } else {
+        throw new Error(data.error || '인증 실패');
+      }
+    } catch (error) {
+      console.error('YouTube auth error:', error);
+      authBtn.disabled = false;
+      authBtn.textContent = '🔗 YouTube 인증';
+      authStatus.innerHTML = `<span style="color: #e74c3c;">❌ 인증 실패: ${error.message}</span>`;
+    }
+  }
+
+  // 인증 상태 폴링
+  async function pollYouTubeAuth() {
+    const authBtn = document.getElementById('btn-youtube-auth');
+    const authStatus = document.getElementById('youtube-auth-status');
+
+    for (let i = 0; i < 60; i++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      try {
+        const response = await fetch('/api/drama/youtube-auth-status');
+        const data = await response.json();
+
+        if (data.authenticated) {
+          youtubeAuthenticated = true;
+          authBtn.textContent = '✅ 인증 완료';
+          authBtn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
+          authBtn.disabled = true;
+          authStatus.innerHTML = '<span style="color: #27ae60;">✅ YouTube 인증이 완료되었습니다.</span>';
+          document.getElementById('btn-upload-youtube').disabled = false;
+          return;
+        }
+      } catch (e) {
+        console.error('Poll error:', e);
+      }
+    }
+
+    authBtn.disabled = false;
+    authBtn.textContent = '🔗 YouTube 인증';
+    authStatus.innerHTML = '<span style="color: #e74c3c;">❌ 인증 시간이 초과되었습니다. 다시 시도해주세요.</span>';
+  }
+
+  // Step6 비디오 가져오기
+  function getStep6Video() {
+    const videoPlayer = document.getElementById('step6-video-player');
+    if (videoPlayer && videoPlayer.src && videoPlayer.src !== window.location.href) {
+      return videoPlayer.src;
+    }
+    return null;
+  }
+
+  // 유튜브 업로드
+  async function uploadToYouTube() {
+    const videoSrc = getStep6Video();
+    if (!videoSrc) {
+      showStatus('❌ 업로드할 비디오가 없습니다. Step6에서 먼저 비디오를 생성해주세요.');
+      return;
+    }
+
+    const title = document.getElementById('step7-title').value.trim();
+    if (!title) {
+      showStatus('❌ 비디오 제목을 입력해주세요.');
+      return;
+    }
+
+    const description = document.getElementById('step7-description').value.trim();
+    const tags = document.getElementById('step7-tags').value.trim();
+    const category = document.getElementById('step7-category').value;
+    const privacyBtn = document.querySelector('.step7-privacy-btn.selected');
+    const privacy = privacyBtn ? privacyBtn.dataset.value : 'private';
+
+    const uploadBtn = document.getElementById('btn-upload-youtube');
+    const progressContainer = document.getElementById('step7-progress');
+    const progressFill = document.getElementById('step7-progress-fill');
+    const progressText = document.getElementById('step7-progress-text');
+    const resultContainer = document.getElementById('step7-result');
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = '⏳ 업로드 중...';
+    progressContainer.style.display = 'block';
+    resultContainer.style.display = 'none';
+
+    try {
+      // 비디오 데이터 가져오기
+      progressText.textContent = '비디오 데이터 준비 중...';
+      progressFill.style.width = '10%';
+
+      const videoResponse = await fetch(videoSrc);
+      const videoBlob = await videoResponse.blob();
+      const videoBase64 = await blobToBase64(videoBlob);
+
+      progressText.textContent = '유튜브에 업로드 중...';
+      progressFill.style.width = '30%';
+
+      const response = await fetch('/api/drama/upload-youtube', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_data: videoBase64,
+          title: title,
+          description: description,
+          tags: tags.split(',').map(t => t.trim()).filter(t => t),
+          category_id: category,
+          privacy_status: privacy
+        })
+      });
+
+      progressFill.style.width = '80%';
+
+      const data = await response.json();
+
+      if (data.success) {
+        progressFill.style.width = '100%';
+        progressText.textContent = '업로드 완료!';
+
+        resultContainer.style.display = 'block';
+        document.getElementById('step7-video-link').href = data.video_url;
+        document.getElementById('step7-video-link').textContent = data.video_url;
+        document.getElementById('step7-video-id').textContent = data.video_id;
+
+        showStatus('🎉 YouTube 업로드가 완료되었습니다!');
+      } else {
+        throw new Error(data.error || '업로드 실패');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      progressText.textContent = `업로드 실패: ${error.message}`;
+      progressFill.style.background = '#e74c3c';
+      showStatus(`❌ 업로드 실패: ${error.message}`);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = '📤 YouTube 업로드';
+    }
+  }
+
+  // Blob을 Base64로 변환
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // Step7 초기화
+  function clearStep7() {
+    document.getElementById('step7-title').value = '';
+    document.getElementById('step7-description').value = '';
+    document.getElementById('step7-tags').value = '';
+    document.getElementById('step7-category').value = '22';
+    selectStep7Privacy('private');
+
+    document.getElementById('step7-progress').style.display = 'none';
+    document.getElementById('step7-progress-fill').style.width = '0%';
+    document.getElementById('step7-progress-fill').style.background = 'linear-gradient(135deg, #ff0000, #cc0000)';
+    document.getElementById('step7-result').style.display = 'none';
+
+    showStatus('🗑️ Step7이 초기화되었습니다.');
+    setTimeout(hideStatus, 2000);
+  }
+
+  // Step7 버튼 이벤트 바인딩
+  document.getElementById('btn-youtube-auth')?.addEventListener('click', authenticateYouTube);
+  document.getElementById('btn-upload-youtube')?.addEventListener('click', uploadToYouTube);
+  document.getElementById('btn-clear-step7')?.addEventListener('click', clearStep7);
+
+  // Step7 초기화 - 기본 개인정보 설정
+  selectStep7Privacy('private');
 
   // ===== 렌더링 함수 =====
   function renderCategories() {

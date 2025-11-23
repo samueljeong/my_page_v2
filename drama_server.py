@@ -2013,6 +2013,277 @@ def api_generate_video():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+# ===== Step7: 유튜브 업로드 API =====
+
+# YouTube OAuth 인증 상태 저장 (세션 기반)
+youtube_auth_state = {}
+
+@app.route('/api/drama/youtube-auth', methods=['POST'])
+def youtube_auth():
+    """YouTube OAuth 인증 시작"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from google.oauth2.credentials import Credentials
+        import json as json_module
+
+        # 환경 변수에서 OAuth 클라이언트 정보 가져오기
+        client_id = os.getenv('YOUTUBE_CLIENT_ID')
+        client_secret = os.getenv('YOUTUBE_CLIENT_SECRET')
+        redirect_uri = os.getenv('YOUTUBE_REDIRECT_URI', 'http://localhost:5059/api/drama/youtube-callback')
+
+        if not client_id or not client_secret:
+            return jsonify({
+                "success": False,
+                "error": "YouTube API 인증 정보가 설정되지 않았습니다. YOUTUBE_CLIENT_ID와 YOUTUBE_CLIENT_SECRET 환경 변수를 설정해주세요."
+            })
+
+        # 이미 인증된 토큰이 있는지 확인
+        token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
+        if os.path.exists(token_file):
+            try:
+                with open(token_file, 'r') as f:
+                    token_data = json_module.load(f)
+                credentials = Credentials.from_authorized_user_info(token_data)
+                if credentials and credentials.valid:
+                    return jsonify({"success": True, "message": "이미 인증되어 있습니다."})
+            except Exception as e:
+                print(f"[YOUTUBE-AUTH] 기존 토큰 로드 실패: {e}")
+
+        # OAuth 플로우 생성
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [redirect_uri]
+            }
+        }
+
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=['https://www.googleapis.com/auth/youtube.upload'],
+            redirect_uri=redirect_uri
+        )
+
+        auth_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+
+        # 상태 저장
+        youtube_auth_state['state'] = state
+        youtube_auth_state['flow'] = flow
+
+        return jsonify({
+            "success": False,
+            "auth_url": auth_url,
+            "message": "인증 URL로 이동하여 권한을 승인해주세요."
+        })
+
+    except ImportError:
+        return jsonify({
+            "success": False,
+            "error": "Google 인증 라이브러리가 설치되지 않았습니다. pip install google-auth-oauthlib google-api-python-client를 실행해주세요."
+        })
+    except Exception as e:
+        print(f"[YOUTUBE-AUTH][ERROR] {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/drama/youtube-callback')
+def youtube_callback():
+    """YouTube OAuth 콜백 처리"""
+    try:
+        import json as json_module
+
+        code = request.args.get('code')
+        state = request.args.get('state')
+
+        if not code:
+            return "인증 코드가 없습니다.", 400
+
+        if 'flow' not in youtube_auth_state:
+            return "인증 플로우가 만료되었습니다. 다시 시도해주세요.", 400
+
+        flow = youtube_auth_state['flow']
+        flow.fetch_token(code=code)
+
+        credentials = flow.credentials
+
+        # 토큰 저장
+        token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
+        token_data = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
+
+        with open(token_file, 'w') as f:
+            json_module.dump(token_data, f)
+
+        youtube_auth_state['authenticated'] = True
+
+        return """
+        <html>
+        <head><title>YouTube 인증 완료</title></head>
+        <body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #ff0000, #cc0000);">
+            <div style="text-align: center; color: white; padding: 40px; background: rgba(0,0,0,0.3); border-radius: 16px;">
+                <h1>✅ YouTube 인증 완료!</h1>
+                <p>이 창을 닫고 원래 페이지로 돌아가세요.</p>
+                <script>setTimeout(() => window.close(), 3000);</script>
+            </div>
+        </body>
+        </html>
+        """
+
+    except Exception as e:
+        print(f"[YOUTUBE-CALLBACK][ERROR] {str(e)}")
+        return f"인증 오류: {str(e)}", 500
+
+
+@app.route('/api/drama/youtube-auth-status')
+def youtube_auth_status():
+    """YouTube 인증 상태 확인"""
+    try:
+        from google.oauth2.credentials import Credentials
+        import json as json_module
+
+        token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
+
+        if os.path.exists(token_file):
+            try:
+                with open(token_file, 'r') as f:
+                    token_data = json_module.load(f)
+                credentials = Credentials.from_authorized_user_info(token_data)
+                if credentials and (credentials.valid or credentials.refresh_token):
+                    return jsonify({"authenticated": True})
+            except Exception:
+                pass
+
+        # 인메모리 상태 확인
+        if youtube_auth_state.get('authenticated'):
+            return jsonify({"authenticated": True})
+
+        return jsonify({"authenticated": False})
+
+    except Exception as e:
+        return jsonify({"authenticated": False, "error": str(e)})
+
+
+@app.route('/api/drama/upload-youtube', methods=['POST'])
+def upload_youtube():
+    """YouTube에 비디오 업로드"""
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+        import json as json_module
+
+        data = request.get_json()
+        video_data = data.get('video_data')
+        title = data.get('title', 'AI 드라마')
+        description = data.get('description', '')
+        tags = data.get('tags', [])
+        category_id = data.get('category_id', '22')  # 22 = People & Blogs
+        privacy_status = data.get('privacy_status', 'private')
+
+        if not video_data:
+            return jsonify({"success": False, "error": "비디오 데이터가 없습니다."})
+
+        # 토큰 로드
+        token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
+        if not os.path.exists(token_file):
+            return jsonify({"success": False, "error": "YouTube 인증이 필요합니다."})
+
+        with open(token_file, 'r') as f:
+            token_data = json_module.load(f)
+
+        credentials = Credentials.from_authorized_user_info(token_data)
+
+        # 토큰 갱신
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            # 갱신된 토큰 저장
+            token_data['token'] = credentials.token
+            with open(token_file, 'w') as f:
+                json_module.dump(token_data, f)
+
+        # 비디오 파일 임시 저장
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video_path = os.path.join(temp_dir, 'upload_video.mp4')
+
+            # Base64 디코딩
+            video_bytes = base64.b64decode(video_data)
+            with open(video_path, 'wb') as f:
+                f.write(video_bytes)
+
+            print(f"[YOUTUBE-UPLOAD] 비디오 파일 준비 완료: {len(video_bytes)} bytes")
+
+            # YouTube API 클라이언트 생성
+            youtube = build('youtube', 'v3', credentials=credentials)
+
+            # 비디오 메타데이터
+            body = {
+                'snippet': {
+                    'title': title,
+                    'description': description,
+                    'tags': tags,
+                    'categoryId': category_id
+                },
+                'status': {
+                    'privacyStatus': privacy_status,
+                    'selfDeclaredMadeForKids': False
+                }
+            }
+
+            # 업로드 실행
+            media = MediaFileUpload(
+                video_path,
+                mimetype='video/mp4',
+                resumable=True,
+                chunksize=1024*1024  # 1MB chunks
+            )
+
+            insert_request = youtube.videos().insert(
+                part='snippet,status',
+                body=body,
+                media_body=media
+            )
+
+            response = None
+            while response is None:
+                status, response = insert_request.next_chunk()
+                if status:
+                    print(f"[YOUTUBE-UPLOAD] 업로드 진행률: {int(status.progress() * 100)}%")
+
+            video_id = response['id']
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+            print(f"[YOUTUBE-UPLOAD] 업로드 완료! Video ID: {video_id}")
+
+            return jsonify({
+                "success": True,
+                "video_id": video_id,
+                "video_url": video_url,
+                "message": "YouTube 업로드가 완료되었습니다!"
+            })
+
+    except ImportError:
+        return jsonify({
+            "success": False,
+            "error": "Google API 라이브러리가 설치되지 않았습니다. pip install google-auth-oauthlib google-api-python-client를 실행해주세요."
+        })
+    except Exception as e:
+        print(f"[YOUTUBE-UPLOAD][ERROR] {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
