@@ -2498,6 +2498,13 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
   // ===== GPT PRO 처리 기능 =====
   async function executeGptPro() {
     const draft = assembleGptProDraft();
+
+    // 디버그: stepResults와 draft 내용 확인
+    console.log('[Step3 Debug] stepResults:', JSON.stringify(stepResults, null, 2));
+    console.log('[Step3 Debug] getCurrentSteps():', getCurrentSteps());
+    console.log('[Step3 Debug] draft.completedStepNames:', draft.completedStepNames);
+    console.log('[Step3 Debug] draft.draftContent 길이:', draft.draftContent?.length || 0);
+
     if (draft.error) {
       alert(draft.error);
       return;
@@ -4013,13 +4020,19 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const reference = document.getElementById('sermon-ref').value.trim();
 
     // 현재 처리 단계 결과들 수집
+    // stepResults는 { stepId: "결과 문자열" } 형태로 저장됨
     const contextStepResults = {};
     for (const [stepId, stepData] of Object.entries(stepResults)) {
-      if (stepData && stepData.result) {
-        contextStepResults[stepId] = {
-          name: stepData.name || stepId,
-          result: stepData.result
-        };
+      if (stepData) {
+        // stepData가 문자열인 경우 직접 사용
+        const result = typeof stepData === 'string' ? stepData : (stepData.result || '');
+        const name = typeof stepData === 'string' ? getStepName(stepId) : (stepData.name || stepId);
+        if (result) {
+          contextStepResults[stepId] = {
+            name: name,
+            result: result
+          };
+        }
       }
     }
 
