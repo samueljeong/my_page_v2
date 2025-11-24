@@ -986,23 +986,23 @@
       </div>
       <div style="color: rgba(255,255,255,0.5);">→</div>
       <div class="progress-step" data-step="step3" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step3: 대본 완성">3</div>
+        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step1: 대본 완성">1</div>
       </div>
       <div style="color: rgba(255,255,255,0.5);">→</div>
       <div class="progress-step" data-step="step4" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step4: 이미지 생성">4</div>
+        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step2: 이미지 생성">2</div>
       </div>
       <div style="color: rgba(255,255,255,0.5);">+</div>
       <div class="progress-step" data-step="step5" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step5: 음성+자막">5</div>
+        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step3: 음성+자막">3</div>
       </div>
       <div style="color: rgba(255,255,255,0.5);">→</div>
       <div class="progress-step" data-step="step6" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step6: 영상 제작">6</div>
+        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step4: 영상 제작">4</div>
       </div>
       <div style="color: rgba(255,255,255,0.5);">→</div>
       <div class="progress-step" data-step="step7" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step7: YouTube 업로드">7</div>
+        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step5: YouTube 업로드">5</div>
       </div>
     </div>
     <div id="progress-status" style="color: rgba(255,255,255,0.9); font-size: .75rem; white-space: nowrap;">Step1부터 시작하세요</div>
@@ -1281,7 +1281,7 @@
       <!-- Step3 결과 박스 -->
       <div id="step3-result-container" class="step3-result-box" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem;">
-          <div class="label">🎬 Step3: OpenRouter 대본 완성 결과</div>
+          <div class="label">🎬 Step1: OpenRouter 대본 완성 결과</div>
           <div style="display: flex; gap: .5rem;">
             <button id="btn-copy-step3-result" style="padding: .4rem .8rem; background: white; color: #f39c12; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem;">📋 복사</button>
             <button id="btn-clear-step3-result" style="padding: .4rem .8rem; background: rgba(255,255,255,0.3); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem;">🗑️ 지우기</button>
@@ -1296,7 +1296,7 @@
       <!-- Step4: 이미지 생성 -->
       <div id="step4-container" class="step4-container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
-          <div class="label">🎨 Step4: 장면 이미지 생성</div>
+          <div class="label">🎨 Step2: 장면 이미지 생성</div>
           <div style="display: flex; gap: .5rem;">
             <button id="btn-clear-step4" class="step4-btn" style="background: rgba(255,255,255,0.3); color: white;">🗑️ 초기화</button>
           </div>
@@ -1402,7 +1402,7 @@
       <!-- Step5: TTS 음성 합성 및 자막 생성 -->
       <div id="step5-container" class="step5-container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
-          <div class="label">🎙️ Step5: 음성 합성 (TTS) & 자막</div>
+          <div class="label">🎙️ Step3: 음성 합성 (TTS) & 자막</div>
           <div style="display: flex; gap: .5rem;">
             <button id="btn-clear-step5" class="step5-btn" style="background: rgba(255,255,255,0.3); color: white;">🗑️ 초기화</button>
           </div>
@@ -1621,7 +1621,7 @@
       <!-- Step6: 영상 제작 -->
       <div id="step6-container" class="step6-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
-          <div class="label">🎬 Step6: 영상 제작</div>
+          <div class="label">🎬 Step4: 영상 제작</div>
           <div style="display: flex; gap: .5rem;">
             <button id="btn-clear-step6" class="step6-btn" style="background: rgba(255,255,255,0.3); color: white;">🗑️ 초기화</button>
           </div>
@@ -1632,7 +1632,7 @@
           <div class="section-label">🖼️ 사용할 이미지 선택 (Step4에서 생성)</div>
           <div id="step6-image-grid" class="step6-preview-grid">
             <div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">
-              Step4에서 이미지를 생성하면 여기에 표시됩니다
+              Step2에서 이미지를 생성하면 여기에 표시됩니다
             </div>
           </div>
         </div>
@@ -1641,7 +1641,7 @@
         <div class="step6-section">
           <div class="section-label">🎙️ 사용할 음성 (Step5에서 생성)</div>
           <div id="step6-audio-status" style="padding: .5rem; background: #f8f9fa; border-radius: 6px; font-size: .85rem; color: #666;">
-            Step5에서 음성을 생성하면 자동으로 연결됩니다
+            Step3에서 음성을 생성하면 자동으로 연결됩니다
           </div>
           <audio id="step6-audio-preview" style="width: 100%; margin-top: .5rem; display: none;" controls></audio>
         </div>
@@ -1727,7 +1727,7 @@
       <!-- Step7: 유튜브 업로드 -->
       <div id="step7-container" class="step7-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
-          <div class="label">📺 Step7: 유튜브 업로드</div>
+          <div class="label">📺 Step5: 유튜브 업로드</div>
           <div style="display: flex; gap: .5rem;">
             <button id="btn-youtube-auth" class="step7-btn">🔑 YouTube 연결</button>
           </div>
@@ -1798,7 +1798,7 @@
 
         <!-- 업로드 상태 메시지 -->
         <div id="step7-upload-status" style="padding: .4rem .6rem; background: #fff3cd; border-radius: 6px; font-size: .8rem; color: #856404; margin-bottom: .75rem;">
-          Step6에서 영상을 먼저 생성해주세요
+          Step4에서 영상을 먼저 생성해주세요
         </div>
 
         <!-- 업로드 진행 상태 -->
@@ -2873,11 +2873,11 @@ S#1. 장소 / 시간
     const statusEl = document.getElementById('progress-status');
     const stepMessages = {
       step1: 'Step2로 진행하세요',
-      step2: 'Step3 대본 완성을 실행하세요',
-      step3: 'Step4(이미지) + Step5(음성)을 진행하세요',
-      step4: completedSteps.has('step5') ? 'Step6 영상 생성 가능!' : 'Step5 음성 생성을 진행하세요',
-      step5: completedSteps.has('step4') ? 'Step6 영상 생성 가능!' : 'Step4 이미지 생성을 진행하세요',
-      step6: 'Step7 YouTube 업로드 가능!',
+      step2: 'Step1 대본 완성을 실행하세요',
+      step3: 'Step2(이미지) + Step3(음성)을 진행하세요',
+      step4: completedSteps.has('step5') ? 'Step4 영상 생성 가능!' : 'Step3 음성 생성을 진행하세요',
+      step5: completedSteps.has('step4') ? 'Step4 영상 생성 가능!' : 'Step2 이미지 생성을 진행하세요',
+      step6: 'Step5 YouTube 업로드 가능!',
       step7: '모든 단계 완료!'
     };
     if (statusEl) {
@@ -2943,8 +2943,8 @@ S#1. 장소 / 시간
       <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1rem; border-radius: 8px; margin: .75rem 0; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
         <div style="color: white; font-weight: 700; font-size: 1rem; margin-bottom: .5rem;">다음 단계로 진행하세요!</div>
         <div style="color: rgba(255,255,255,0.95); font-size: .85rem; line-height: 1.5;">
-          <div style="margin-bottom: .3rem;"><strong>Step4:</strong> 대본에서 인물을 추출하고 이미지를 생성하세요</div>
-          <div><strong>Step5:</strong> TTS 음성과 자막을 생성하세요 (텍스트가 자동 입력됨)</div>
+          <div style="margin-bottom: .3rem;"><strong>Step2:</strong> 대본에서 인물을 추출하고 이미지를 생성하세요</div>
+          <div><strong>Step3:</strong> TTS 음성과 자막을 생성하세요 (텍스트가 자동 입력됨)</div>
           <div style="margin-top: .5rem; font-size: .75rem; opacity: 0.8;">Step4와 Step5는 동시에 진행할 수 있습니다</div>
         </div>
         <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: .5rem; right: .5rem; background: rgba(255,255,255,0.3); border: none; color: white; padding: .25rem .5rem; border-radius: 4px; cursor: pointer; font-size: .75rem;">닫기</button>
@@ -3017,7 +3017,7 @@ S#1. 장소 / 시간
 
     // 로딩 표시
     showLoadingOverlay('OpenRouter 대본 완성 중', 'AI가 대본을 작성하고 있습니다...');
-    showStatus('🎬 Step3: OpenRouter 대본 완성 중... (약 30-60초 소요)');
+    showStatus('🎬 Step1: OpenRouter 대본 완성 중... (약 30-60초 소요)');
 
     // 콘텐츠 유형 가져오기 (간증/드라마)
     const contentType = document.getElementById('content-type')?.value || 'testimony';
@@ -3087,7 +3087,7 @@ S#1. 장소 / 시간
           activateNextSteps(step3Result);
         }
 
-        showStatus('✅ Step3: OpenRouter 대본 완성!');
+        showStatus('✅ Step1: OpenRouter 대본 완성!');
         updateProgressIndicator('step3');
       } else {
         alert(`오류: ${data.error}`);
@@ -3213,7 +3213,7 @@ S#1. 장소 / 시간
   async function analyzeCharacters() {
     const step3Result = document.getElementById('step3-result')?.value || '';
     if (!step3Result.trim()) {
-      alert('먼저 Step3 대본 완성을 실행해주세요.');
+      alert('먼저 Step1 대본 완성을 실행해주세요.');
       return;
     }
 
@@ -3657,7 +3657,7 @@ S#1. 장소 / 시간
     }
 
     const modelName = step4ImageProvider === 'gemini' ? 'Gemini' : (step4ImageProvider === 'flux' ? 'FLUX.1 Pro' : 'DALL-E 3');
-    showStatus(`🖼️ Step4: ${modelName} 씬 이미지 생성 중...`);
+    showStatus(`🖼️ Step2: ${modelName} 씬 이미지 생성 중...`);
     showLoadingOverlay();
 
     try {
@@ -3742,7 +3742,7 @@ S#1. 장소 / 시간
 
   // Step4 초기화 함수
   function clearStep4() {
-    if (!confirm('Step4의 모든 데이터(인물, 씬, 이미지)를 초기화하시겠습니까?')) return;
+    if (!confirm('Step2의 모든 데이터(인물, 씬, 이미지)를 초기화하시겠습니까?')) return;
 
     step4Characters = [];
     step4CharacterImages = {};
@@ -3969,7 +3969,7 @@ S#1. 장소 / 시간
   function extractNarration() {
     const step3Result = document.getElementById('step3-result')?.value || '';
     if (!step3Result.trim()) {
-      alert('먼저 Step3 대본 완성을 실행해주세요.');
+      alert('먼저 Step1 대본 완성을 실행해주세요.');
       return;
     }
 
@@ -4010,7 +4010,7 @@ S#1. 장소 / 시간
     }
 
     const providerName = step5TtsProvider === 'google' ? 'Google Cloud' : '네이버 클로바';
-    showStatus(`🎙️ Step5: ${providerName} TTS 음성 생성 중...`);
+    showStatus(`🎙️ Step3: ${providerName} TTS 음성 생성 중...`);
     showLoadingOverlay();
 
     try {
@@ -4223,7 +4223,7 @@ S#1. 장소 / 시간
     if (!grid) return;
 
     if (!step4GeneratedImages || step4GeneratedImages.length === 0) {
-      grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step4에서 이미지를 생성하면 여기에 표시됩니다</div>';
+      grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step2에서 이미지를 생성하면 여기에 표시됩니다</div>';
       return;
     }
 
@@ -4256,7 +4256,7 @@ S#1. 장소 / 시간
       audioPreview.src = step5AudioUrl;
       audioPreview.style.display = 'block';
     } else {
-      statusDiv.innerHTML = 'Step5에서 음성을 생성하면 자동으로 연결됩니다';
+      statusDiv.innerHTML = 'Step3에서 음성을 생성하면 자동으로 연결됩니다';
       statusDiv.style.color = '#666';
       audioPreview.style.display = 'none';
     }
@@ -4274,7 +4274,7 @@ S#1. 장소 / 시간
     }
 
     if (!step5AudioUrl) {
-      alert('Step5에서 음성을 먼저 생성해주세요.');
+      alert('Step3에서 음성을 먼저 생성해주세요.');
       return;
     }
 
@@ -4299,7 +4299,7 @@ S#1. 장소 / 시간
     progressBar.style.width = '10%';
     progressText.textContent = '영상 준비 중...';
 
-    showStatus('🎬 Step6: 영상 생성 중...');
+    showStatus('🎬 Step4: 영상 생성 중...');
 
     try {
       // 진행 상황 시뮬레이션
@@ -4347,7 +4347,7 @@ S#1. 장소 / 시간
           videoSection.style.display = 'block';
         }
 
-        showStatus('✅ 영상 생성 완료! Step7에서 YouTube 업로드가 가능합니다.');
+        showStatus('✅ 영상 생성 완료! Step5에서 YouTube 업로드가 가능합니다.');
         updateProgressIndicator('step6');
         updateStep7Status();
 
@@ -4430,7 +4430,7 @@ S#1. 장소 / 시간
     } else if (!videoSrc) {
       statusEl.style.background = '#fff3cd';
       statusEl.style.color = '#856404';
-      statusEl.textContent = 'Step6에서 영상을 먼저 생성해주세요';
+      statusEl.textContent = 'Step4에서 영상을 먼저 생성해주세요';
       if (uploadBtn) uploadBtn.disabled = true;
     } else {
       statusEl.style.background = '#d4edda';
@@ -4467,7 +4467,7 @@ S#1. 장소 / 시간
     const step3Result = document.getElementById('step3-result')?.value || '';
 
     if (!step3Result.trim()) {
-      showStatus('Step3 대본 결과가 없습니다. 먼저 대본을 작성해주세요.');
+      showStatus('Step1 대본 결과가 없습니다. 먼저 대본을 작성해주세요.');
       return;
     }
 
