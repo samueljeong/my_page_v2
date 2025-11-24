@@ -3351,6 +3351,18 @@ S#1. 장소 / 시간
 
         showStatus('✅ Step1: OpenRouter 대본 완성!');
         updateProgressIndicator('step3');
+
+        // 🚀 전체 자동화 시작: 대본 → 이미지 → TTS → 영상
+        hideLoadingOverlay();
+        console.log('[AUTO] 대본 생성 완료, 전체 자동화 시작...');
+        showStatus('🚀 자동화: 이미지 생성 시작...');
+
+        // 2초 후 자동화 시작 (UI 업데이트 대기)
+        setTimeout(async () => {
+          isFullAutoMode = true;
+          await generateAllAuto(true);  // confirm 건너뛰기
+        }, 2000);
+
       } else {
         alert(`오류: ${data.error}`);
         showStatus('❌ Step3 실패');
@@ -3360,7 +3372,6 @@ S#1. 장소 / 시간
       showStatus('❌ Step3 오류');
     } finally {
       hideLoadingOverlay();
-      setTimeout(hideStatus, 3000);
     }
   }
 
@@ -3577,6 +3588,7 @@ S#1. 장소 / 시간
   let step4CharacterImages = JSON.parse(localStorage.getItem('_drama-step4-character-images') || '{}');
   let step4Scenes = JSON.parse(localStorage.getItem('_drama-step4-scenes') || '[]');
   let step4ImageProvider = 'gemini';  // 기본: Gemini (OpenRouter)
+  let isFullAutoMode = false;  // 🚀 대본→영상 전체 자동화 모드 플래그
 
   // 이미지 모델 선택 이벤트
   document.querySelectorAll('.step4-image-provider').forEach(btn => {
@@ -4237,7 +4249,7 @@ S#1. 장소 / 시간
   // ===== 전체 자동 생성 기능 =====
   let isAutoGenerating = false;
 
-  async function generateAllAuto() {
+  async function generateAllAuto(skipConfirm = false) {
     if (isAutoGenerating) {
       alert('이미 자동 생성이 진행 중입니다.');
       return;
@@ -4249,8 +4261,11 @@ S#1. 장소 / 시간
       return;
     }
 
-    if (!confirm('전체 자동 생성을 시작하시겠습니까?\n\n1. 대본에서 인물/씬 분석\n2. 모든 인물 이미지 생성\n3. 모든 씬 배경 이미지 생성 (대본 기반 인물 자동 배치)\n\n⚠️ 많은 API 호출이 발생합니다.')) {
-      return;
+    // 자동화 모드에서는 confirm 건너뛰기
+    if (!skipConfirm && !isFullAutoMode) {
+      if (!confirm('전체 자동 생성을 시작하시겠습니까?\n\n1. 대본에서 인물/씬 분석\n2. 모든 인물 이미지 생성\n3. 모든 씬 배경 이미지 생성 (대본 기반 인물 자동 배치)\n\n⚠️ 많은 API 호출이 발생합니다.')) {
+        return;
+      }
     }
 
     isAutoGenerating = true;
@@ -4439,6 +4454,13 @@ S#1. 장소 / 시간
         if (progressContainer) progressContainer.style.display = 'none';
       }, 5000);
 
+      // 🚀 전체 자동화 모드: TTS 및 영상 자동 생성
+      if (isFullAutoMode) {
+        console.log('[AUTO] 이미지 생성 완료, TTS 자동 시작...');
+        showStatus('🎙️ 자동화: TTS 음성 생성 시작...');
+        await runAutoTTSAndVideo();
+      }
+
     } catch (err) {
       console.error('전체 자동 생성 오류:', err);
       updateProgress(0, `❌ 오류 발생: ${err.message}`, '다시 시도해주세요');
@@ -4449,6 +4471,270 @@ S#1. 장소 / 시간
         btnGenerateAll.disabled = false;
         btnGenerateAll.textContent = '🚀 전체 생성';
       }
+    }
+  }
+
+  // 🚀 전체 자동화: TTS + 영상 생성
+  async function runAutoTTSAndVideo() {
+    try {
+      // 1. 지문 추출 (자동)
+      console.log('[AUTO] 지문 추출 중...');
+      extractNarration();
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const scriptText = document.getElementById('step5-script-text')?.value || '';
+      if (!scriptText.trim()) {
+        console.error('[AUTO] 지문 추출 실패: 텍스트 없음');
+        showStatus('❌ 자동화 오류: 지문 추출 실패');
+        return;
+      }
+
+      // 2. TTS 생성
+      console.log('[AUTO] TTS 생성 시작...');
+      showLoadingOverlay('TTS 음성 생성 중', '자동화 모드: 음성을 생성하고 있습니다...');
+
+      const speed = document.getElementById('step5-speed')?.value || 0;
+      const pitch = document.getElementById('step5-pitch')?.value || 0;
+      const volume = document.getElementById('step5-volume')?.value || 0;
+
+      const ttsResponse = await fetch('/api/drama/generate-tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: scriptText,
+          speaker: step5SelectedVoice,
+          speed: parseInt(speed),
+          pitch: parseInt(pitch),
+          volume: parseInt(volume),
+          ttsProvider: step5TtsProvider
+        })
+      });
+
+      const ttsData = await ttsResponse.json();
+      hideLoadingOverlay();
+
+      if (!ttsData.ok) {
+        throw new Error(ttsData.error || 'TTS 생성 실패');
+      }
+
+      // TTS 결과 표시
+      const audioSection = document.getElementById('step5-audio-section');
+      const audioPlayer = document.getElementById('step5-audio-player');
+      if (audioPlayer && ttsData.audioUrl) {
+        step5AudioUrl = ttsData.audioUrl;
+        audioPlayer.src = ttsData.audioUrl;
+        audioSection.style.display = 'block';
+      }
+
+      console.log('[AUTO] TTS 완료, SRT 자막 생성...');
+      showStatus('✅ TTS 완료! SRT 자막 생성 중...');
+
+      // 3. SRT 자막 자동 생성
+      await generateSubtitleAuto();
+      updateProgressIndicator('step5');
+
+      // 4. 영상 생성을 위한 이미지 자동 선택
+      console.log('[AUTO] 영상 생성용 이미지 자동 선택...');
+      await autoSelectImagesForVideo();
+
+      // 5. 영상 생성
+      if (step6SelectedImages.length > 0 && step5AudioUrl) {
+        console.log('[AUTO] 영상 생성 시작...');
+        showStatus('🎬 자동화: 영상 생성 시작...');
+        await generateVideoAuto();
+      } else {
+        console.error('[AUTO] 영상 생성 불가: 이미지 또는 오디오 없음');
+        showStatus('⚠️ 자동화 완료 (영상 생성은 수동으로 진행해주세요)');
+      }
+
+    } catch (err) {
+      console.error('[AUTO] 자동화 오류:', err);
+      showStatus(`❌ 자동화 오류: ${err.message}`);
+      hideLoadingOverlay();
+    } finally {
+      isFullAutoMode = false;
+    }
+  }
+
+  // 🚀 영상 생성용 이미지 자동 선택
+  async function autoSelectImagesForVideo() {
+    step6SelectedImages = [];
+
+    // 생성된 씬 이미지들을 순서대로 선택
+    if (step4GeneratedImages.length > 0) {
+      step4GeneratedImages.forEach(img => {
+        if (img.url) {
+          step6SelectedImages.push(img.url);
+        }
+      });
+      console.log(`[AUTO] ${step6SelectedImages.length}개 씬 이미지 선택됨`);
+    }
+
+    // 씬 이미지가 없으면 인물 이미지 사용
+    if (step6SelectedImages.length === 0 && Object.keys(step4CharacterImages).length > 0) {
+      Object.values(step4CharacterImages).forEach(img => {
+        if (img.url) {
+          step6SelectedImages.push(img.url);
+        }
+      });
+      console.log(`[AUTO] ${step6SelectedImages.length}개 인물 이미지 선택됨`);
+    }
+
+    updateStep6ImageGrid();
+  }
+
+  // 🚀 자동 영상 생성 (확인 없이)
+  async function generateVideoAuto() {
+    if (step6SelectedImages.length === 0) {
+      console.error('[AUTO] 영상 생성 실패: 이미지 없음');
+      return;
+    }
+
+    if (!step5AudioUrl) {
+      console.error('[AUTO] 영상 생성 실패: 오디오 없음');
+      return;
+    }
+
+    const resolution = document.getElementById('step6-resolution')?.value || '1920x1080';
+    const fps = document.getElementById('step6-fps')?.value || '30';
+    const transition = document.getElementById('step6-transition')?.value || 'fade';
+    const includeSubtitle = document.getElementById('step6-include-subtitle')?.checked || false;
+    const burnSubtitle = document.getElementById('step6-burn-subtitle')?.checked || false;
+
+    const progressDiv = document.getElementById('step6-progress');
+    const progressBar = document.getElementById('step6-progress-bar');
+    const progressText = document.getElementById('step6-progress-text');
+
+    progressDiv.style.display = 'block';
+    progressBar.style.width = '5%';
+    progressText.textContent = '[자동화] 이미지 업로드 준비 중...';
+
+    showStatus('🎬 자동화: 영상 생성 중...');
+
+    try {
+      // 1. 이미지 업로드
+      const uploadedImageUrls = [];
+      const totalImages = step6SelectedImages.length;
+
+      for (let i = 0; i < totalImages; i++) {
+        progressBar.style.width = (5 + (i / totalImages) * 25) + '%';
+        progressText.textContent = `[자동화] 이미지 업로드 중... (${i + 1}/${totalImages})`;
+
+        try {
+          const uploadedUrl = await uploadImageToServer(step6SelectedImages[i]);
+          uploadedImageUrls.push(uploadedUrl);
+        } catch (uploadErr) {
+          console.error(`[AUTO] 이미지 ${i + 1} 업로드 실패:`, uploadErr);
+          throw new Error(`이미지 ${i + 1} 업로드 실패: ${uploadErr.message}`);
+        }
+      }
+
+      console.log(`[AUTO] ${uploadedImageUrls.length}개 이미지 업로드 완료`);
+
+      // 2. 진행 상황 업데이트
+      let progress = 30;
+      const progressInterval = setInterval(() => {
+        progress += 5;
+        if (progress < 90) {
+          progressBar.style.width = progress + '%';
+          if (progress < 50) progressText.textContent = '[자동화] 오디오 처리 중...';
+          else if (progress < 70) progressText.textContent = '[자동화] 영상 인코딩 중...';
+          else progressText.textContent = '[자동화] 마무리 중...';
+        }
+      }, 500);
+
+      // 3. 영상 생성 요청
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+      const maxRetries = 3;
+      let response;
+      let lastError;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          response = await fetch('/api/drama/generate-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              images: uploadedImageUrls,
+              audioUrl: step5AudioUrl,
+              subtitleData: includeSubtitle ? step5SubtitleData : null,
+              burnSubtitle: burnSubtitle,
+              resolution: resolution,
+              fps: parseInt(fps),
+              transition: transition
+            }),
+            signal: controller.signal
+          });
+
+          if ([502, 503, 504].includes(response.status)) {
+            const retryDelay = Math.pow(2, attempt + 1) * 1000;
+            console.log(`[AUTO] 서버 오류 (${response.status}), ${retryDelay/1000}초 후 재시도...`);
+            progressText.textContent = `[자동화] 서버 오류, 재시도 중... (${attempt + 1}/${maxRetries})`;
+            lastError = `서버 오류 (${response.status})`;
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            continue;
+          }
+          break;
+        } catch (fetchErr) {
+          if (fetchErr.name === 'AbortError') throw fetchErr;
+          lastError = fetchErr.message;
+          if (attempt < maxRetries - 1) {
+            const retryDelay = Math.pow(2, attempt + 1) * 1000;
+            console.log(`[AUTO] 네트워크 오류, ${retryDelay/1000}초 후 재시도...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
+        }
+      }
+
+      clearTimeout(timeoutId);
+      clearInterval(progressInterval);
+
+      if (!response) {
+        throw new Error(`네트워크 오류: ${lastError || '응답 없음'}`);
+      }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`서버 오류 (${response.status}): ${errorText || '응답 없음'}`);
+      }
+
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('서버에서 빈 응답이 반환되었습니다.');
+      }
+
+      const data = JSON.parse(responseText);
+
+      if (data.ok) {
+        progressBar.style.width = '100%';
+        progressText.textContent = '🎉 자동화 완료!';
+
+        const videoSection = document.getElementById('step6-video-section');
+        const videoPlayer = document.getElementById('step6-video-player');
+
+        if (videoPlayer && data.videoUrl) {
+          step6VideoUrl = data.videoUrl;
+          step6VideoFileUrl = data.videoFileUrl || data.videoUrl;
+          videoPlayer.src = data.videoUrl;
+          videoSection.style.display = 'block';
+        }
+
+        showStatus('🎉 자동화 완료! 영상이 생성되었습니다. YouTube 업로드를 진행하세요.');
+        updateProgressIndicator('step6');
+        updateStep7Status();
+
+        setTimeout(() => {
+          progressDiv.style.display = 'none';
+        }, 3000);
+      } else {
+        throw new Error(data.error || '영상 생성 실패');
+      }
+
+    } catch (err) {
+      console.error('[AUTO] 영상 생성 오류:', err);
+      progressDiv.style.display = 'none';
+      showStatus(`❌ 자동화 영상 생성 오류: ${err.message}`);
     }
   }
 
