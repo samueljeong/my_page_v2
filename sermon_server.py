@@ -1406,7 +1406,27 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
     step1_result: Step1 JSON 결과
     step2_result: Step2 JSON 결과 (writing_spec 포함)
     """
-    prompt = "【 설교문 작성 지침 】\n\n"
+    # 분량과 예배유형 추출
+    duration = meta_data.get("duration", "")
+    worship_type = meta_data.get("worship_type", "")
+
+    prompt = ""
+
+    # ★★★ 맨 앞에 분량/예배유형 최우선 강조 ★★★
+    prompt += "=" * 50 + "\n"
+    prompt += "【 ★★★ 최우선 지침 ★★★ 】\n"
+    prompt += "=" * 50 + "\n"
+    if duration:
+        prompt += f"\n🚨 분량: {duration}\n"
+        prompt += f"   → 이 설교는 반드시 {duration} 분량으로 작성하세요.\n"
+        prompt += f"   → Step1/Step2 자료가 길더라도 {duration}에 맞춰 압축하세요.\n"
+        prompt += "   → 분량 제한은 다른 모든 지침보다 우선합니다.\n"
+    if worship_type:
+        prompt += f"\n🚨 예배/집회 유형: {worship_type}\n"
+        prompt += f"   → '{worship_type}'에 적합한 톤과 내용으로 작성하세요.\n"
+    prompt += "\n" + "=" * 50 + "\n\n"
+
+    prompt += "【 설교문 작성 지침 】\n\n"
 
     # Meta 정보 (한글 키 매핑)
     key_labels = {
@@ -1426,23 +1446,16 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
             prompt += f"  - {label}: {value}\n"
     prompt += "\n"
 
-    # 분량 강조 (duration이 있으면 명확히 지시)
-    duration = meta_data.get("duration", "")
-    if duration:
-        prompt += f"⚠️ 중요: 설교문 분량은 반드시 {duration} 분량으로 작성하세요.\n\n"
-
-    # 예배 유형 강조 (worship_type이 있으면 명확히 지시)
-    worship_type = meta_data.get("worship_type", "")
-    if worship_type:
-        prompt += f"⚠️ 중요: 이 설교는 '{worship_type}' 예배/집회용입니다. 해당 상황과 분위기에 맞게 작성하세요.\n\n"
-
-    # Step2의 writing_spec 적용
+    # Step2의 writing_spec 적용 (단, 홈화면 duration이 우선)
     if step2_result and isinstance(step2_result, dict):
         writing_spec = step2_result.get("writing_spec", {})
         if writing_spec:
-            prompt += "▶ 작성 규격\n"
+            prompt += "▶ 작성 규격 (참고용 - 홈화면 분량 설정이 우선)\n"
             for key, value in writing_spec.items():
-                if isinstance(value, list):
+                # length는 홈화면 duration이 우선하므로 표시만
+                if key == "length" and duration:
+                    prompt += f"  - {key}: {value} (※ 홈화면 설정 '{duration}'이 우선)\n"
+                elif isinstance(value, list):
                     prompt += f"  - {key}: {', '.join(value)}\n"
                 else:
                     prompt += f"  - {key}: {value}\n"
@@ -1450,7 +1463,7 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
 
     # Step1 분석 자료
     if step1_result:
-        prompt += "▶ Step1 분석 자료\n"
+        prompt += "▶ Step1 분석 자료 (참고용)\n"
         if isinstance(step1_result, dict):
             prompt += json.dumps(step1_result, ensure_ascii=False, indent=2)
         else:
@@ -1459,7 +1472,7 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
 
     # Step2 구조
     if step2_result:
-        prompt += "▶ Step2 설교 구조\n"
+        prompt += "▶ Step2 설교 구조 (참고용 - 분량에 맞게 조절)\n"
         if isinstance(step2_result, dict):
             # writing_spec은 이미 위에서 처리했으므로 제외
             step2_without_spec = {k: v for k, v in step2_result.items() if k != "writing_spec"}
@@ -1468,7 +1481,13 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
             prompt += str(step2_result)
         prompt += "\n\n"
 
-    prompt += "위 자료를 바탕으로 설교문을 작성하세요. Step2의 구조와 writing_spec을 반드시 따르세요."
+    # 마지막 지침
+    prompt += "=" * 50 + "\n"
+    prompt += "【 최종 작성 지침 】\n"
+    prompt += "위 Step1/Step2 자료를 참고하여 설교문을 작성하세요.\n"
+    if duration:
+        prompt += f"⚠️ 단, 반드시 {duration} 분량을 지켜주세요. 이것이 가장 중요합니다.\n"
+    prompt += "=" * 50
 
     return prompt
 
@@ -1782,6 +1801,20 @@ def api_gpt_pro():
 
         # 시스템 프롬프트 (간단한 역할 정의만)
         system_content = "당신은 한국어 설교 전문가입니다. 마크다운 기호 대신 순수 텍스트만 사용합니다."
+
+        # ★★★ 최우선 지침: 홈화면 설정 (분량, 예배유형) - 다른 모든 지침보다 우선 ★★★
+        system_content += "\n\n" + "=" * 50
+        system_content += "\n【 ★ 최우선 지침 - 반드시 준수 ★ 】"
+        system_content += "\n" + "=" * 50
+        if duration:
+            system_content += f"\n\n🚨 분량 제한: 이 설교는 반드시 {duration} 분량으로 작성하세요."
+            system_content += f"\n   - {duration} 분량을 절대 초과하지 마세요."
+            system_content += "\n   - Step1, Step2의 구조가 길더라도 {duration} 안에 맞춰 압축하세요."
+            system_content += "\n   - 이 분량 제한은 다른 모든 지침보다 우선합니다."
+        if worship_type:
+            system_content += f"\n\n🚨 예배/집회 유형: '{worship_type}'"
+            system_content += f"\n   - 이 설교는 '{worship_type}'에 맞는 톤과 내용으로 작성하세요."
+        system_content += "\n" + "=" * 50
 
         # 제목이 없으면 GPT가 생성하도록 지시
         if not has_title:
