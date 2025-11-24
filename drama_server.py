@@ -2288,17 +2288,52 @@ def api_generate_image():
                 ]
             }
 
-            response = req.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=60
-            )
+            # 재시도 로직 (quota 오류 대응)
+            import time
+            max_retries = 3
+            retry_delay = 5  # 초
 
-            if response.status_code != 200:
-                error_text = response.text
-                print(f"[DRAMA-STEP4-IMAGE][ERROR] OpenRouter API 응답: {response.status_code} - {error_text}")
-                return jsonify({"ok": False, "error": f"Gemini API 오류: {error_text}"}), 200
+            response = None
+            last_error = None
+
+            for attempt in range(max_retries):
+                try:
+                    response = req.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=90
+                    )
+
+                    # 성공 또는 quota 외 오류
+                    if response.status_code == 200:
+                        break
+                    elif response.status_code == 429 or "quota" in response.text.lower() or "rate" in response.text.lower():
+                        # Rate limit / Quota 오류 - 재시도
+                        last_error = response.text
+                        print(f"[DRAMA-STEP4-IMAGE][RETRY] Gemini quota/rate limit (시도 {attempt + 1}/{max_retries}), {retry_delay}초 후 재시도...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # 지수 백오프
+                        continue
+                    else:
+                        # 다른 오류
+                        break
+
+                except req.exceptions.Timeout:
+                    last_error = "요청 시간 초과"
+                    print(f"[DRAMA-STEP4-IMAGE][RETRY] 타임아웃 (시도 {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    continue
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"[DRAMA-STEP4-IMAGE][RETRY] 오류: {e} (시도 {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    continue
+
+            if response is None or response.status_code != 200:
+                error_text = last_error or (response.text if response else "알 수 없는 오류")
+                print(f"[DRAMA-STEP4-IMAGE][ERROR] OpenRouter API 최종 실패: {error_text}")
+                return jsonify({"ok": False, "error": f"Gemini API 오류 (재시도 실패): {error_text[:200]}"}), 200
 
             result = response.json()
 
