@@ -4643,11 +4643,11 @@ S#1. 장소 / 시간
         }
       }, 500);
 
-      // 3. 영상 생성 요청
+      // 3. 영상 생성 요청 (10분 타임아웃)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000);
+      const timeoutId = setTimeout(() => controller.abort(), 600000);
 
-      const maxRetries = 3;
+      const maxRetries = 5;
       let response;
       let lastError;
 
@@ -4669,10 +4669,11 @@ S#1. 장소 / 시간
           });
 
           if ([502, 503, 504].includes(response.status)) {
-            const retryDelay = Math.pow(2, attempt + 1) * 1000;
-            console.log(`[AUTO] 서버 오류 (${response.status}), ${retryDelay/1000}초 후 재시도...`);
-            progressText.textContent = `[자동화] 서버 오류, 재시도 중... (${attempt + 1}/${maxRetries})`;
-            lastError = `서버 오류 (${response.status})`;
+            const retryDelay = Math.pow(2, attempt + 1) * 2000; // 4초, 8초, 16초, 32초, 64초
+            const errorMsg = response.status === 503 ? '서비스 일시 불가' : '서버 오류';
+            console.log(`[AUTO] ${errorMsg} (${response.status}), ${retryDelay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+            progressText.textContent = `[자동화] ⚠️ ${errorMsg} (${response.status}) - ${retryDelay/1000}초 후 재시도 (${attempt + 1}/${maxRetries})`;
+            lastError = `${errorMsg} (${response.status})`;
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             continue;
           }
@@ -4681,8 +4682,9 @@ S#1. 장소 / 시간
           if (fetchErr.name === 'AbortError') throw fetchErr;
           lastError = fetchErr.message;
           if (attempt < maxRetries - 1) {
-            const retryDelay = Math.pow(2, attempt + 1) * 1000;
-            console.log(`[AUTO] 네트워크 오류, ${retryDelay/1000}초 후 재시도...`);
+            const retryDelay = Math.pow(2, attempt + 1) * 2000; // 4초, 8초, 16초, 32초, 64초
+            console.log(`[AUTO] 네트워크 오류, ${retryDelay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+            progressText.textContent = `[자동화] ⚠️ 네트워크 오류 - ${retryDelay/1000}초 후 재시도 (${attempt + 1}/${maxRetries})`;
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
@@ -5435,12 +5437,12 @@ S#1. 장소 / 시간
         }
       }, 500);
 
-      // 3. 5분 타임아웃 설정 (영상 생성은 오래 걸릴 수 있음)
+      // 3. 10분 타임아웃 설정 (영상 생성은 오래 걸릴 수 있음)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5분
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10분
 
       // 4. 업로드된 URL로 영상 생성 요청 (작은 요청 크기) - 502/503/504 재시도 포함
-      const maxRetries = 3;
+      const maxRetries = 5;
       let response;
       let lastError;
 
@@ -5463,10 +5465,11 @@ S#1. 장소 / 시간
 
           // 502, 503, 504 서버 오류는 재시도
           if ([502, 503, 504].includes(response.status)) {
-            const retryDelay = Math.pow(2, attempt + 1) * 1000; // 2초, 4초, 8초
-            console.log(`[VIDEO] 서버 오류 (${response.status}), ${retryDelay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
-            progressText.textContent = `서버 오류 (${response.status}), 재시도 중... (${attempt + 1}/${maxRetries})`;
-            lastError = `서버 오류 (${response.status})`;
+            const retryDelay = Math.pow(2, attempt + 1) * 2000; // 4초, 8초, 16초, 32초, 64초
+            const errorMsg = response.status === 503 ? '서비스 일시 불가' : '서버 오류';
+            console.log(`[VIDEO] ${errorMsg} (${response.status}), ${retryDelay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+            progressText.textContent = `⚠️ ${errorMsg} (${response.status}) - ${retryDelay/1000}초 후 재시도 (${attempt + 1}/${maxRetries})`;
+            lastError = `${errorMsg} (${response.status})`;
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             continue;
           }
@@ -5477,9 +5480,9 @@ S#1. 장소 / 시간
           if (fetchErr.name === 'AbortError') throw fetchErr;
           lastError = fetchErr.message;
           if (attempt < maxRetries - 1) {
-            const retryDelay = Math.pow(2, attempt + 1) * 1000;
+            const retryDelay = Math.pow(2, attempt + 1) * 2000; // 4초, 8초, 16초, 32초, 64초
             console.log(`[VIDEO] 네트워크 오류, ${retryDelay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
-            progressText.textContent = `네트워크 오류, 재시도 중... (${attempt + 1}/${maxRetries})`;
+            progressText.textContent = `⚠️ 네트워크 오류 - ${retryDelay/1000}초 후 재시도 (${attempt + 1}/${maxRetries})`;
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
