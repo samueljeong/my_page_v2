@@ -3345,13 +3345,21 @@ S#1. 장소 / 시간
       const data = await response.json();
 
       if (data.ok) {
-        // 인물 이미지 저장
+        // 인물 이미지 저장 (메모리에만 - base64는 localStorage에 저장하지 않음)
         step4CharacterImages[step4Characters[idx].name] = {
           url: data.imageUrl,
           prompt: characterPrompt,
           createdAt: new Date().toISOString()
         };
-        localStorage.setItem('_drama-step4-character-images', JSON.stringify(step4CharacterImages));
+
+        // base64가 아닌 외부 URL만 localStorage에 저장
+        if (!data.imageUrl.startsWith('data:')) {
+          try {
+            localStorage.setItem('_drama-step4-character-images', JSON.stringify(step4CharacterImages));
+          } catch (e) {
+            console.warn('localStorage 저장 실패 (용량 초과):', e.message);
+          }
+        }
 
         // 인물 이미지 표시
         renderCharacterImages();
@@ -3612,7 +3620,15 @@ S#1. 장소 / 시간
             size: imageSize,
             createdAt: new Date().toISOString()
           });
-          localStorage.setItem('_drama-step4-images', JSON.stringify(step4GeneratedImages.slice(0, 20)));
+
+          // base64가 아닌 외부 URL만 localStorage에 저장
+          if (!imageData.imageUrl.startsWith('data:')) {
+            try {
+              localStorage.setItem('_drama-step4-images', JSON.stringify(step4GeneratedImages.slice(0, 20)));
+            } catch (e) {
+              console.warn('localStorage 저장 실패 (용량 초과):', e.message);
+            }
+          }
         }
 
         if (costInfo && imageData.cost) {
@@ -3711,7 +3727,15 @@ S#1. 장소 / 시간
             size: imageSize,
             createdAt: new Date().toISOString()
           });
-          localStorage.setItem('_drama-step4-images', JSON.stringify(step4GeneratedImages.slice(0, 20)));
+
+          // base64가 아닌 외부 URL만 localStorage에 저장
+          if (!data.imageUrl.startsWith('data:')) {
+            try {
+              localStorage.setItem('_drama-step4-images', JSON.stringify(step4GeneratedImages.slice(0, 20)));
+            } catch (e) {
+              console.warn('localStorage 저장 실패 (용량 초과):', e.message);
+            }
+          }
         }
 
         if (costInfo && data.cost) {
