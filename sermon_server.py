@@ -1787,6 +1787,9 @@ def api_gpt_pro():
 
         meta_section = "\n".join(meta_lines)
 
+        # 글자수 제한 변수 초기화 (JSON 모드에서 writing_spec.length로 설정됨)
+        length_constraint = None
+
         # JSON 모드 vs 기존 텍스트 모드
         if is_json_mode:
             try:
@@ -1803,8 +1806,12 @@ def api_gpt_pro():
 
                 # Step2에서 writing_spec 추출하여 시스템 프롬프트에 반영
                 writing_spec = {}
+                length_constraint = None  # 글자수 제한 (예: "1800-2800자")
                 if step2_result and isinstance(step2_result, dict):
                     writing_spec = step2_result.get("writing_spec", {})
+                    length_constraint = writing_spec.get("length")  # 글자수 제한 추출
+                    if length_constraint:
+                        print(f"[GPT-PRO/Step3] writing_spec length 감지: {length_constraint}")
 
                 # 시스템 프롬프트에 writing_spec 반영
                 if writing_spec:
@@ -1861,8 +1868,12 @@ def api_gpt_pro():
                     "7. 충분히 길고 상세하며 풍성한 내용으로 작성해주세요."
                 )
 
-        # 공통 지침 추가
-        user_content += f"\n\n⚠️ 중요: 충분히 길고 상세하며 풍성한 내용으로 작성해주세요 (최대 {max_tokens} 토큰)."
+        # 공통 지침 추가 - length_constraint가 있으면 글자수 제한 강조
+        if length_constraint:
+            user_content += f"\n\n⚠️ 매우 중요 - 글자수 제한: 설교문 전체 분량을 반드시 '{length_constraint}' 범위 내로 작성하세요!"
+            user_content += f"\n이 글자수 제한은 설교 유형에 맞춘 필수 규격입니다. 초과하거나 부족하지 않도록 주의하세요."
+        else:
+            user_content += f"\n\n⚠️ 중요: 충분히 길고 상세하며 풍성한 내용으로 작성해주세요 (최대 {max_tokens} 토큰)."
 
         # 토큰 사용량 저장용 변수
         usage_data = None
