@@ -3290,12 +3290,33 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
     """
     실제 영상 생성 로직 (동기)
     백그라운드 워커에서 호출됨
+    메모리 최적화: 512MB 제한 환경에서 작동
     """
     import requests
     import base64
     import tempfile
     import subprocess
     import shutil
+    import gc
+    from PIL import Image
+
+    # 메모리 최적화: 해상도 자동 제한 (512MB 환경)
+    width, height = resolution.split('x')
+    width, height = int(width), int(height)
+
+    # 1280x720 초과 시 자동으로 다운스케일
+    MAX_WIDTH = 1280
+    MAX_HEIGHT = 720
+    if width > MAX_WIDTH or height > MAX_HEIGHT:
+        aspect_ratio = width / height
+        if aspect_ratio > 16/9:  # 와이드
+            width = MAX_WIDTH
+            height = int(MAX_WIDTH / aspect_ratio)
+        else:
+            height = MAX_HEIGHT
+            width = int(MAX_HEIGHT * aspect_ratio)
+        resolution = f"{width}x{height}"
+        print(f"[DRAMA-STEP6-VIDEO][메모리 최적화] 해상도 조정: {resolution}")
 
     print(f"[DRAMA-STEP6-VIDEO] 영상 생성 시작 - 이미지: {len(images)}개, 해상도: {resolution}, job_id: {job_id}")
 
@@ -3328,17 +3349,20 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             update_progress(10 + (idx / len(images)) * 15, f"이미지 다운로드 중... ({idx+1}/{len(images)})")
 
             try:
+                # 임시 원본 이미지 경로
+                temp_img_path = os.path.join(temp_dir, f"temp_{idx:03d}.png")
+
                 if img_url.startswith('data:'):
                     # Base64 데이터 URL
                     header, encoded = img_url.split(',', 1)
                     img_data = base64.b64decode(encoded)
-                    with open(img_path, 'wb') as f:
+                    with open(temp_img_path, 'wb') as f:
                         f.write(img_data)
                 elif img_url.startswith('/static/'):
                     # 로컬 static 파일 경로
                     local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
                     if os.path.exists(local_path):
-                        shutil.copy2(local_path, img_path)
+                        shutil.copy2(local_path, temp_img_path)
                     else:
                         print(f"[DRAMA-STEP6-VIDEO] 로컬 이미지 파일 없음: {local_path}")
                         failed_images.append(f"이미지 {idx+1}")
@@ -3350,7 +3374,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
                         try:
                             response = requests.get(img_url, timeout=60)
                             if response.status_code == 200:
-                                with open(img_path, 'wb') as f:
+                                with open(temp_img_path, 'wb') as f:
                                     f.write(response.content)
                                 break
                             else:
@@ -3365,6 +3389,24 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
                                 continue
                             import time
                             time.sleep(1)
+
+                # 메모리 최적화: 이미지 리사이즈 (메모리 사용량 감소)
+                if os.path.exists(temp_img_path):
+                    try:
+                        img = Image.open(temp_img_path)
+                        # 목표 해상도로 리사이즈 (aspect ratio 유지)
+                        img.thumbnail((width, height), Image.Resampling.LANCZOS)
+                        # 최적화된 이미지 저장
+                        img.save(img_path, 'PNG', optimize=True)
+                        img.close()
+                        # 임시 파일 즉시 삭제
+                        os.remove(temp_img_path)
+                        # 가비지 컬렉션
+                        gc.collect()
+                    except Exception as resize_err:
+                        print(f"[DRAMA-STEP6-VIDEO] 이미지 리사이즈 실패, 원본 사용: {resize_err}")
+                        if os.path.exists(temp_img_path):
+                            shutil.move(temp_img_path, img_path)
 
                 image_paths.append(img_path)
             except Exception as e:
@@ -3445,17 +3487,18 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         # 7. FFmpeg로 영상 생성
         output_path = os.path.join(temp_dir, "output.mp4")
 
-        # 기본 FFmpeg 명령어
+        # 기본 FFmpeg 명령어 (메모리 최적화)
         ffmpeg_cmd = [
             'ffmpeg', '-y',
             '-f', 'concat', '-safe', '0', '-i', list_path,
             '-i', audio_path,
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-            '-c:a', 'aac', '-b:a', '128k',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',  # 메모리 최적화: ultrafast preset, 높은 CRF
+            '-c:a', 'aac', '-b:a', '96k',  # 오디오 비트레이트 감소
             '-r', str(fps),
             '-shortest',
             '-pix_fmt', 'yuv420p',
+            '-threads', '2',  # 스레드 수 제한 (메모리 절약)
             output_path
         ]
 
@@ -3465,18 +3508,19 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             with open(srt_path, 'w', encoding='utf-8') as f:
                 f.write(subtitle_data['srt'])
 
-            # 자막 필터 추가
+            # 자막 필터 추가 (메모리 최적화)
             vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,subtitles={srt_path}:force_style='FontSize=24,PrimaryColour=&HFFFFFF&'"
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat', '-safe', '0', '-i', list_path,
                 '-i', audio_path,
                 '-vf', vf_filter,
-                '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-                '-c:a', 'aac', '-b:a', '128k',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',  # 메모리 최적화
+                '-c:a', 'aac', '-b:a', '96k',  # 오디오 비트레이트 감소
                 '-r', str(fps),
                 '-shortest',
                 '-pix_fmt', 'yuv420p',
+                '-threads', '2',  # 스레드 수 제한
                 output_path
             ]
 
@@ -3522,17 +3566,24 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         file_size = os.path.getsize(final_video_path)
         file_size_mb = file_size / (1024 * 1024)
 
-        # 파일 크기가 50MB 이하면 Base64로도 제공 (기존 호환성)
+        # 메모리 최적화: Base64 인코딩 제한을 20MB로 낮춤 (512MB 환경)
         video_url = f"/static/videos/{video_filename}"
-        if file_size_mb <= 50:
+        if file_size_mb <= 20:
             with open(final_video_path, 'rb') as f:
                 video_data = f.read()
             video_base64 = base64.b64encode(video_data).decode('utf-8')
             video_url_base64 = f"data:video/mp4;base64,{video_base64}"
+            # 즉시 메모리 해제
+            del video_data
+            del video_base64
+            gc.collect()
         else:
             video_url_base64 = None
 
         print(f"[DRAMA-STEP6-VIDEO] 영상 생성 완료 - 크기: {file_size_mb:.2f}MB, 길이: {audio_duration:.1f}초, 파일: {video_filename}")
+
+        # 메모리 정리
+        gc.collect()
 
         # 결과를 dict로 반환 (jsonify 대신)
         return {
