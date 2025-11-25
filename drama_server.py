@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import queue
 import uuid
+import tempfile
 from datetime import datetime as dt
 from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
@@ -4133,6 +4134,67 @@ def youtube_auth_status():
         return jsonify({"authenticated": False, "error": str(e)})
 
 
+@app.route('/api/drama/youtube-channels')
+def youtube_channels():
+    """YouTube 채널 목록 가져오기"""
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        import json as json_module
+
+        token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
+
+        if not os.path.exists(token_file):
+            return jsonify({
+                "success": False,
+                "error": "YouTube 인증이 필요합니다."
+            })
+
+        with open(token_file, 'r') as f:
+            token_data = json_module.load(f)
+
+        credentials = Credentials.from_authorized_user_info(token_data)
+
+        # 토큰 갱신 필요시
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            # 갱신된 토큰 저장
+            token_data['token'] = credentials.token
+            with open(token_file, 'w') as f:
+                json_module.dump(token_data, f)
+
+        # YouTube API 클라이언트 생성
+        youtube = build('youtube', 'v3', credentials=credentials)
+
+        # 내 채널 목록 가져오기
+        channels_response = youtube.channels().list(
+            part='snippet,contentDetails',
+            mine=True
+        ).execute()
+
+        channels = []
+        for channel in channels_response.get('items', []):
+            channels.append({
+                'id': channel['id'],
+                'title': channel['snippet']['title'],
+                'description': channel['snippet']['description'],
+                'thumbnail': channel['snippet']['thumbnails'].get('default', {}).get('url', '')
+            })
+
+        return jsonify({
+            "success": True,
+            "channels": channels
+        })
+
+    except Exception as e:
+        print(f"[YOUTUBE-CHANNELS][ERROR] {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+
 @app.route('/api/drama/upload-youtube', methods=['POST'])
 def upload_youtube():
     """YouTube에 비디오 업로드"""
@@ -4151,9 +4213,13 @@ def upload_youtube():
         category_id = data.get('category_id', '22')  # 22 = People & Blogs
         privacy_status = data.get('privacy_status', 'private')
         publish_at = data.get('publish_at')  # ISO 8601 형식의 예약 공개 시간
+        channel_id = data.get('channel_id')  # 선택된 채널 ID
 
         if not video_data:
             return jsonify({"success": False, "error": "비디오 데이터가 없습니다."})
+
+        if channel_id:
+            print(f"[YOUTUBE-UPLOAD] 선택된 채널 ID: {channel_id}")
 
         # 토큰 로드
         token_file = os.path.join(tempfile.gettempdir(), 'youtube_token.json')
