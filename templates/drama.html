@@ -1474,6 +1474,23 @@
           </select>
         </div>
 
+        <!-- 썸네일 미리보기 -->
+        <div id="step4-thumbnail-preview" style="background: white; border-radius: 8px; padding: .75rem; margin-bottom: .75rem; display: none;">
+          <div style="display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem;">
+            <div style="font-weight: 700; font-size: .95rem; color: #333;">📌 썸네일 미리보기</div>
+            <div style="font-size: .75rem; color: #666;">(첫 번째 씬 이미지가 썸네일로 사용됩니다)</div>
+          </div>
+          <div style="display: flex; gap: .75rem; align-items: flex-start;">
+            <img id="step4-thumbnail-image" style="max-width: 200px; max-height: 150px; border-radius: 6px; border: 2px solid #10b981; object-fit: cover;" />
+            <div style="flex: 1;">
+              <div style="font-size: .85rem; color: #666; line-height: 1.6;">
+                <p style="margin: 0 0 .5rem 0;">✅ 이 이미지가 유튜브 썸네일로 사용됩니다</p>
+                <p style="margin: 0; font-size: .8rem; color: #999;">다른 이미지를 썸네일로 사용하려면 씬 이미지 생성 순서를 변경하세요</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 생성된 이미지 표시 영역 -->
         <div id="step4-image-result" style="background: white; border-radius: 8px; padding: .75rem; min-height: 100px;">
           <div id="step4-image-placeholder" style="text-align: center; color: #999; padding: 2rem;">
@@ -1745,7 +1762,7 @@
               <span style="font-size: .85rem;">자막 포함</span>
             </label>
             <label style="display: flex; align-items: center; gap: .3rem; cursor: pointer;">
-              <input type="checkbox" id="step6-burn-subtitle">
+              <input type="checkbox" id="step6-burn-subtitle" checked>
               <span style="font-size: .85rem;">자막 하드코딩 (영상에 굽기)</span>
             </label>
           </div>
@@ -4500,6 +4517,11 @@ S#1. 장소 / 시간
                 createdAt: new Date().toISOString()
               });
 
+              // 첫 번째 씬 이미지를 썸네일로 표시
+              if (i === 0) {
+                updateThumbnailPreview(imageData.imageUrl);
+              }
+
               if (!imageData.imageUrl.startsWith('data:')) {
                 try {
                   localStorage.setItem('_drama-step4-images', JSON.stringify(step4GeneratedImages.slice(-20)));
@@ -5369,6 +5391,18 @@ S#1. 장소 / 시간
     updateStep6AudioStatus();
   }
 
+  // 썸네일 미리보기 업데이트
+  function updateThumbnailPreview(imageUrl) {
+    const thumbnailPreview = document.getElementById('step4-thumbnail-preview');
+    const thumbnailImage = document.getElementById('step4-thumbnail-image');
+
+    if (thumbnailPreview && thumbnailImage) {
+      thumbnailImage.src = imageUrl;
+      thumbnailPreview.style.display = 'block';
+      console.log('[THUMBNAIL] 썸네일 업데이트:', imageUrl);
+    }
+  }
+
   // Step6 이미지 그리드 업데이트
   function updateStep6ImageGrid() {
     const grid = document.getElementById('step6-image-grid');
@@ -5871,6 +5905,7 @@ S#1. 장소 / 시간
       });
 
       const data = await response.json();
+      console.log('[YOUTUBE-AUTH] 응답 데이터:', data);
 
       if (data.success) {
         youtubeAuthenticated = true;
@@ -5880,14 +5915,26 @@ S#1. 장소 / 시간
         updateStep7Status();
       } else if (data.auth_url) {
         // OAuth URL이 제공되면 새 창에서 열기
-        window.open(data.auth_url, '_blank', 'width=600,height=700');
+        console.log('[YOUTUBE-AUTH] OAuth URL:', data.auth_url);
+        const popup = window.open(data.auth_url, '_blank', 'width=600,height=700');
+
+        if (!popup) {
+          authBtn.disabled = false;
+          authBtn.textContent = '🔑 YouTube 연결';
+          authStatus.innerHTML = '<span style="color: #e74c3c;">❌ 팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.</span>';
+          return;
+        }
+
         authBtn.textContent = '🔗 인증 대기 중';
         authStatus.innerHTML = '<span style="color: #f39c12;">⏳ 새 창에서 YouTube 인증을 완료해주세요.</span>';
 
         // 인증 상태 폴링
         pollYouTubeAuth();
       } else {
-        throw new Error(data.error || '인증 실패');
+        // 에러 메시지를 더 명확하게 표시
+        const errorMsg = data.error || '인증 실패 (알 수 없는 오류)';
+        console.error('[YOUTUBE-AUTH] 에러:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error('YouTube auth error:', error);
