@@ -3511,8 +3511,9 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
 
             # 자막 필터 추가 (메모리 최적화, 한글 폰트 지원 개선)
             # FontSize를 36으로 증가, 한글 지원을 위한 폰트 명시
+            # fontsdir로 시스템 폰트 디렉토리 지정하여 한글 폰트 자동 감지
             # 아웃라인과 그림자 추가로 가독성 향상
-            vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,subtitles={srt_path}:force_style='FontName=Noto Sans CJK KR,FontSize=36,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Bold=1,Alignment=2'"
+            vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,subtitles={srt_path}:fontsdir=/usr/share/fonts:force_style='FontSize=36,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Bold=1,Alignment=2'"
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat', '-safe', '0', '-i', list_path,
