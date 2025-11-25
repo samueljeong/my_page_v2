@@ -973,41 +973,6 @@
     </div>
   </div>
 
-  <!-- 전체 진행 상황 Progress Bar -->
-  <div id="workflow-progress" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: .6rem 1.5rem; display: flex; align-items: center; gap: 1rem;">
-    <div style="color: white; font-weight: 600; font-size: .85rem; white-space: nowrap;">진행 상황:</div>
-    <div style="flex: 1; display: flex; gap: .3rem; align-items: center;">
-      <div class="progress-step" data-step="step1" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step1: 상황 제시">1</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">→</div>
-      <div class="progress-step" data-step="step2" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step2: 대사+지문">2</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">→</div>
-      <div class="progress-step" data-step="step3" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step1: 대본 완성">1</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">→</div>
-      <div class="progress-step" data-step="step4" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step2: 이미지 생성">2</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">+</div>
-      <div class="progress-step" data-step="step5" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step3: 음성+자막">3</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">→</div>
-      <div class="progress-step" data-step="step6" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step4: 영상 제작">4</div>
-      </div>
-      <div style="color: rgba(255,255,255,0.5);">→</div>
-      <div class="progress-step" data-step="step7" style="flex: 1; text-align: center;">
-        <div style="background: rgba(255,255,255,0.3); border-radius: 4px; padding: .25rem .4rem; font-size: .7rem; color: white; cursor: default;" title="Step5: YouTube 업로드">5</div>
-      </div>
-    </div>
-    <div id="progress-status" style="color: rgba(255,255,255,0.9); font-size: .75rem; white-space: nowrap;">Step1부터 시작하세요</div>
-  </div>
-
   <div class="page-wrap">
     <!-- 왼쪽 -->
     <div class="left-col">
@@ -1041,6 +1006,102 @@
           <span class="nav-label">🚀 Step5 업로드</span>
           <span class="nav-desc">메타데이터 & 게시</span>
         </button>
+      </div>
+
+      <!-- 진행 상황 트래커 -->
+      <div id="workflow-progress-sidebar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: .75rem; margin-top: .5rem;">
+        <div style="color: white; font-weight: 700; font-size: .9rem; margin-bottom: .75rem; text-align: center;">📊 진행 현황</div>
+
+        <div style="display: flex; flex-direction: column; gap: .35rem;">
+          <!-- Step 1 -->
+          <div class="progress-step-sidebar" data-step="step1">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">1</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">대본 생성</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="progress-step-sidebar" data-step="step2">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">2</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">대사+지문</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="progress-step-sidebar" data-step="step3">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">3</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">대본 완성</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="progress-step-sidebar" data-step="step4">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">4</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">이미지 생성</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="progress-step-sidebar" data-step="step5">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">5</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">음성+자막</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 6 -->
+          <div class="progress-step-sidebar" data-step="step6">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">6</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">영상 제작</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+
+          <!-- Step 7 -->
+          <div class="progress-step-sidebar" data-step="step7">
+            <div style="display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; background: rgba(255,255,255,0.1); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.3);">
+              <div class="step-indicator" style="min-width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white;">7</div>
+              <div style="flex: 1;">
+                <div style="font-size: .75rem; font-weight: 600; color: white;">YouTube 업로드</div>
+                <div class="step-substatus" style="font-size: .65rem; color: rgba(255,255,255,0.7);">대기</div>
+              </div>
+              <div class="step-status-icon" style="font-size: .8rem;">○</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 전체 상태 메시지 -->
+        <div id="progress-status" style="margin-top: .75rem; padding: .4rem .5rem; background: rgba(255,255,255,0.15); border-radius: 6px; text-align: center;">
+          <div style="color: rgba(255,255,255,0.95); font-size: .7rem; font-weight: 600;">Step1부터 시작하세요</div>
+        </div>
       </div>
 
       <div class="legacy-left-content" style="display: none;">
@@ -2979,13 +3040,24 @@ S#1. 장소 / 시간
   function updateProgressIndicator(stepName) {
     completedSteps.add(stepName);
 
-    // 각 단계 표시 업데이트
-    document.querySelectorAll('.progress-step').forEach(stepEl => {
+    // 사이드바 진행 상황 업데이트
+    document.querySelectorAll('.progress-step-sidebar').forEach(stepEl => {
       const step = stepEl.dataset.step;
-      const innerDiv = stepEl.querySelector('div');
+      const indicator = stepEl.querySelector('.step-indicator');
+      const statusIcon = stepEl.querySelector('.step-status-icon');
+      const substatus = stepEl.querySelector('.step-substatus');
+      const container = stepEl.querySelector('div');
+
       if (completedSteps.has(step)) {
-        innerDiv.style.background = '#27ae60';
-        innerDiv.style.fontWeight = '700';
+        // 완료 상태
+        indicator.style.background = '#10b981';
+        indicator.style.color = 'white';
+        statusIcon.textContent = '✓';
+        statusIcon.style.color = '#10b981';
+        substatus.textContent = '완료';
+        substatus.style.color = 'rgba(16, 185, 129, 0.9)';
+        container.style.borderLeftColor = '#10b981';
+        container.style.background = 'rgba(16, 185, 129, 0.2)';
       }
     });
 
@@ -3001,7 +3073,8 @@ S#1. 장소 / 시간
       step7: '모든 단계 완료!'
     };
     if (statusEl) {
-      statusEl.textContent = stepMessages[stepName] || '';
+      const messageDiv = statusEl.querySelector('div') || statusEl;
+      messageDiv.textContent = stepMessages[stepName] || '';
     }
   }
 
@@ -5397,6 +5470,42 @@ S#1. 장소 / 시간
     throw new Error(lastError || '이미지 업로드 실패');
   }
 
+  // 사이드바 진행 상태 업데이트 함수
+  function updateSidebarStepProgress(stepName, status, message) {
+    const stepEl = document.querySelector(`.progress-step-sidebar[data-step="${stepName}"]`);
+    if (!stepEl) return;
+
+    const substatus = stepEl.querySelector('.step-substatus');
+    const statusIcon = stepEl.querySelector('.step-status-icon');
+    const container = stepEl.querySelector('div');
+    const indicator = stepEl.querySelector('.step-indicator');
+
+    if (status === 'processing') {
+      substatus.textContent = message || '진행 중...';
+      substatus.style.color = 'rgba(255, 193, 7, 0.9)';
+      statusIcon.textContent = '⏳';
+      statusIcon.style.color = '#ffc107';
+      container.style.borderLeftColor = '#ffc107';
+      container.style.background = 'rgba(255, 193, 7, 0.2)';
+      indicator.style.background = '#ffc107';
+    } else if (status === 'completed') {
+      substatus.textContent = '완료';
+      substatus.style.color = 'rgba(16, 185, 129, 0.9)';
+      statusIcon.textContent = '✓';
+      statusIcon.style.color = '#10b981';
+      container.style.borderLeftColor = '#10b981';
+      container.style.background = 'rgba(16, 185, 129, 0.2)';
+      indicator.style.background = '#10b981';
+    } else if (status === 'error') {
+      substatus.textContent = message || '오류';
+      substatus.style.color = 'rgba(239, 68, 68, 0.9)';
+      statusIcon.textContent = '✗';
+      statusIcon.style.color = '#ef4444';
+      container.style.borderLeftColor = '#ef4444';
+      container.style.background = 'rgba(239, 68, 68, 0.2)';
+    }
+  }
+
   // 영상 생성 함수
   async function generateVideo() {
     // 유효성 검사
@@ -5438,6 +5547,9 @@ S#1. 장소 / 시간
 
     showStatus('🎬 Step4: 영상 생성 시작...');
 
+    // 사이드바 진행 상태 업데이트
+    updateSidebarStepProgress('step6', 'processing', '준비 중...');
+
     try {
       // 1. Base64 이미지를 서버에 먼저 업로드 (요청 크기 줄이기)
       const uploadedImageUrls = [];
@@ -5446,6 +5558,7 @@ S#1. 장소 / 시간
       for (let i = 0; i < totalImages; i++) {
         progressBar.style.width = (5 + (i / totalImages) * 20) + '%';
         progressText.textContent = `이미지 업로드 중... (${i + 1}/${totalImages})`;
+        updateSidebarStepProgress('step6', 'processing', `업로드 ${i + 1}/${totalImages}`);
 
         try {
           const uploadedUrl = await uploadImageToServer(step6SelectedImages[i]);
@@ -5460,6 +5573,7 @@ S#1. 장소 / 시간
 
       progressBar.style.width = '25%';
       progressText.textContent = '영상 생성 작업 시작 중...';
+      updateSidebarStepProgress('step6', 'processing', '영상 생성 중...');
 
       // 2. 영상 생성 작업 시작 (즉시 job_id 반환)
       const response = await fetch('/api/drama/generate-video', {
@@ -5523,6 +5637,9 @@ S#1. 장소 / 시간
           progressBar.style.width = displayProgress + '%';
           progressText.textContent = statusData.message || '영상 생성 중...';
 
+          // 사이드바 진행 상황 업데이트
+          updateSidebarStepProgress('step6', 'processing', `${Math.round(displayProgress)}%`);
+
           console.log(`[VIDEO] 상태: ${statusData.status}, 진행률: ${serverProgress}%`);
 
           // 완료 확인
@@ -5584,6 +5701,9 @@ S#1. 장소 / 시간
       progressDiv.style.display = 'none';
       alert(`오류: ${err.message}`);
       showStatus('❌ 영상 생성 실패');
+
+      // 사이드바에 오류 표시
+      updateSidebarStepProgress('step6', 'error', '오류 발생');
 
       // 실패 알림
       if (Notification.permission === 'granted') {
