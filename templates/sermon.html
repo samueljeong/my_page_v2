@@ -1106,6 +1106,24 @@
         <div id="meditation-content" style="display: none;">
           <div class="box" style="background: linear-gradient(135deg, #f8f9ff 0%, #e8f4fd 100%); border: 2px solid #667eea;">
             <div class="label" style="margin-bottom: 1rem;">🙏 묵상메시지 작성</div>
+
+            <!-- 첫 번째 줄: 날짜, 요일 -->
+            <div style="display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: .75rem;">
+              <div style="min-width: 140px;">
+                <label style="font-size: .8rem; color: #666; display: block; margin-bottom: .3rem;">날짜</label>
+                <input type="date" id="meditation-date" style="width: 100%;">
+              </div>
+              <div style="min-width: 80px;">
+                <label style="font-size: .8rem; color: #666; display: block; margin-bottom: .3rem;">요일</label>
+                <input type="text" id="meditation-day" readonly style="width: 100%; background: #f0f0f0; text-align: center; font-weight: 600;">
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: .8rem; color: #666; display: block; margin-bottom: .3rem;">보내는 사람 <span style="color: #999;">(선택)</span></label>
+                <input type="text" id="meditation-sender" placeholder="예) 초대교회, 홍길동 목사" style="width: 100%;">
+              </div>
+            </div>
+
+            <!-- 두 번째 줄: 성경구절, 본문말씀, 버튼 -->
             <div style="display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap;">
               <div style="flex: 1; min-width: 150px;">
                 <label style="font-size: .8rem; color: #666; display: block; margin-bottom: .3rem;">성경구절</label>
@@ -1113,7 +1131,7 @@
               </div>
               <div style="flex: 2; min-width: 200px;">
                 <label style="font-size: .8rem; color: #666; display: block; margin-bottom: .3rem;">본문말씀</label>
-                <input type="text" id="meditation-verse" placeholder="예) 여호와는 나의 목자시니 내게 부족함이 없으리로다" style="width: 100%;">
+                <textarea id="meditation-verse" placeholder="예) 여호와는 나의 목자시니 내게 부족함이 없으리로다" style="width: 100%; min-height: 60px; resize: vertical;"></textarea>
               </div>
               <button id="btn-create-meditation" class="primary" style="white-space: nowrap; padding: .6rem 1.2rem;">메시지 제작</button>
             </div>
@@ -1125,7 +1143,7 @@
                 <div class="label" style="margin: 0; color: white;">📱 묵상메시지</div>
                 <button id="btn-copy-meditation" style="background: white; color: #667eea; border: none; padding: .4rem .8rem; border-radius: 6px; font-weight: 600; cursor: pointer;">📋 복사</button>
               </div>
-              <textarea id="meditation-result" readonly style="width: 100%; min-height: 200px; padding: .75rem; border-radius: 6px; border: none; font-size: .9rem; line-height: 1.6; resize: vertical;"></textarea>
+              <textarea id="meditation-result" readonly style="width: 100%; min-height: 300px; padding: .75rem; border-radius: 6px; border: none; font-size: .9rem; line-height: 1.6; resize: vertical;"></textarea>
             </div>
           </div>
         </div>
@@ -3092,6 +3110,10 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     // 카테고리에 따라 해당 콘텐츠만 표시
     if (category === 'meditation') {
       if (meditationContent) meditationContent.style.display = 'block';
+      // 묵상메시지 날짜 초기화
+      if (typeof initMeditationDate === 'function') {
+        initMeditationDate();
+      }
     } else if (category === 'bible-knowledge') {
       if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'block';
     } else {
@@ -3502,11 +3524,54 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
   }
 
   // ===== 묵상메시지 생성 기능 =====
+
+  // 요일 배열 (한국어)
+  const koreanDays = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 날짜에서 요일 계산
+  function updateMeditationDay() {
+    const dateInput = document.getElementById('meditation-date');
+    const dayInput = document.getElementById('meditation-day');
+    if (dateInput && dayInput && dateInput.value) {
+      const date = new Date(dateInput.value);
+      const dayIndex = date.getDay();
+      dayInput.value = koreanDays[dayIndex];
+    }
+  }
+
+  // 묵상메시지 날짜 초기화 (서울 시간)
+  function initMeditationDate() {
+    const dateInput = document.getElementById('meditation-date');
+    if (dateInput) {
+      // 서울 시간대로 현재 날짜 계산
+      const now = new Date();
+      const seoulOffset = 9 * 60; // UTC+9
+      const localOffset = now.getTimezoneOffset();
+      const seoulTime = new Date(now.getTime() + (seoulOffset + localOffset) * 60 * 1000);
+
+      const year = seoulTime.getFullYear();
+      const month = String(seoulTime.getMonth() + 1).padStart(2, '0');
+      const day = String(seoulTime.getDate()).padStart(2, '0');
+      dateInput.value = `${year}-${month}-${day}`;
+
+      updateMeditationDay();
+    }
+  }
+
+  // 날짜 변경 시 요일 자동 업데이트
+  const meditationDateInput = document.getElementById('meditation-date');
+  if (meditationDateInput) {
+    meditationDateInput.addEventListener('change', updateMeditationDay);
+  }
+
   const btnCreateMeditation = document.getElementById('btn-create-meditation');
   if (btnCreateMeditation) {
     btnCreateMeditation.addEventListener('click', async () => {
+      const dateInput = document.getElementById('meditation-date');
+      const dayInput = document.getElementById('meditation-day');
       const ref = document.getElementById('meditation-ref')?.value.trim();
       const verse = document.getElementById('meditation-verse')?.value.trim();
+      const sender = document.getElementById('meditation-sender')?.value.trim();
 
       if (!ref) {
         alert('성경구절을 입력해주세요.');
@@ -3515,6 +3580,16 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
       if (!verse) {
         alert('본문말씀을 입력해주세요.');
         return;
+      }
+
+      // 날짜 포맷팅 (예: 11월 18일 (화))
+      let dateStr = '';
+      if (dateInput && dateInput.value) {
+        const date = new Date(dateInput.value);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const dayName = dayInput ? dayInput.value : koreanDays[date.getDay()];
+        dateStr = `${month}월 ${day}일 (${dayName})`;
       }
 
       showStatus('🙏 묵상메시지 생성 중...');
@@ -3526,7 +3601,9 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             reference: ref,
-            verse: verse
+            verse: verse,
+            dateStr: dateStr,
+            sender: sender
           })
         });
 
@@ -3536,7 +3613,29 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
           const resultContainer = document.getElementById('meditation-result-container');
           const resultTextarea = document.getElementById('meditation-result');
           if (resultContainer && resultTextarea) {
-            resultTextarea.value = data.result;
+            // 최종 메시지 조합
+            let finalMessage = '';
+
+            // 날짜 + 오늘의 말씀
+            if (dateStr) {
+              finalMessage += `${dateStr} 오늘의 말씀\n\n`;
+            }
+
+            // 성경구절
+            finalMessage += `${ref}\n`;
+
+            // 본문말씀
+            finalMessage += `${verse}\n\n`;
+
+            // 묵상메시지 (GPT 생성 결과)
+            finalMessage += data.result;
+
+            // 보내는 사람
+            if (sender) {
+              finalMessage += `\n\n(${sender})`;
+            }
+
+            resultTextarea.value = finalMessage;
             resultContainer.style.display = 'block';
           }
           showStatus('✅ 묵상메시지 생성 완료!');
