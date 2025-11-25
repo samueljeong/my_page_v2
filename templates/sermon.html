@@ -3107,14 +3107,19 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     if (meditationContent) meditationContent.style.display = 'none';
     if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'none';
 
+    // 카테고리 value 또는 label로 판단 (한글 카테고리명 지원)
+    const categoryLower = category.toLowerCase();
+    const isMeditation = categoryLower === 'meditation' || category.includes('묵상');
+    const isBibleKnowledge = categoryLower === 'bible-knowledge' || category.includes('배경지식');
+
     // 카테고리에 따라 해당 콘텐츠만 표시
-    if (category === 'meditation') {
+    if (isMeditation) {
       if (meditationContent) meditationContent.style.display = 'block';
       // 묵상메시지 날짜 초기화
       if (typeof initMeditationDate === 'function') {
         initMeditationDate();
       }
-    } else if (category === 'bible-knowledge') {
+    } else if (isBibleKnowledge) {
       if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'block';
     } else {
       // 설교 관련 카테고리 (general, series 등)
