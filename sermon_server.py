@@ -1731,6 +1731,69 @@ def api_process_step():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+# ===== 묵상메시지 생성 API =====
+@app.route("/api/sermon/meditation", methods=["POST"])
+@api_login_required
+def api_meditation():
+    """묵상메시지 생성 (GPT-4o-mini 사용)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        reference = data.get("reference", "")
+        verse = data.get("verse", "")
+
+        if not reference:
+            return jsonify({"ok": False, "error": "성경구절을 입력해주세요."}), 400
+        if not verse:
+            return jsonify({"ok": False, "error": "본문말씀을 입력해주세요."}), 400
+
+        print(f"[Meditation] 묵상메시지 생성 시작 - 구절: {reference}")
+
+        system_content = """당신은 따뜻하고 은혜로운 묵상메시지를 작성하는 전문가입니다.
+주어진 성경구절과 본문말씀을 바탕으로 짧고 감동적인 묵상메시지를 작성합니다.
+
+작성 지침:
+1. 메시지는 문자로 전송하기 적합한 길이로 작성 (200-400자 내외)
+2. 본문말씀의 핵심 의미를 쉽게 풀어서 설명
+3. 일상생활에 적용할 수 있는 실천적 교훈 포함
+4. 따뜻하고 위로가 되는 어조 사용
+5. 마지막에 짧은 기도문이나 묵상 질문 추가 가능
+6. 마크다운 기호 사용하지 않고 순수 텍스트로 작성"""
+
+        user_content = f"""성경구절: {reference}
+본문말씀: {verse}
+
+위 말씀을 바탕으로 오늘의 묵상메시지를 작성해주세요."""
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+
+        result = completion.choices[0].message.content.strip()
+        print(f"[Meditation] 생성 완료 - 길이: {len(result)}자")
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+            "usage": {
+                "input_tokens": completion.usage.prompt_tokens if hasattr(completion, 'usage') else 0,
+                "output_tokens": completion.usage.completion_tokens if hasattr(completion, 'usage') else 0
+            }
+        })
+
+    except Exception as e:
+        print(f"[Meditation] 오류: {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ===== GPT PRO (Step3) 처리 API =====
 @app.route("/api/sermon/gpt-pro", methods=["POST"])
 @api_login_required
