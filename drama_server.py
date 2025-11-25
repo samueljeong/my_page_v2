@@ -3288,41 +3288,65 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         update_progress(10, "이미지 다운로드 중...")
         # 1. 이미지 다운로드
         image_paths = []
+        failed_images = []
+
         for idx, img_url in enumerate(images):
             img_path = os.path.join(temp_dir, f"image_{idx:03d}.png")
+            update_progress(10 + (idx / len(images)) * 15, f"이미지 다운로드 중... ({idx+1}/{len(images)})")
 
-            if img_url.startswith('data:'):
-                # Base64 데이터 URL
-                header, encoded = img_url.split(',', 1)
-                img_data = base64.b64decode(encoded)
-                with open(img_path, 'wb') as f:
-                    f.write(img_data)
-            elif img_url.startswith('/static/'):
-                # 로컬 static 파일 경로
-                local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
-                if os.path.exists(local_path):
-                    shutil.copy2(local_path, img_path)
-                else:
-                    print(f"[DRAMA-STEP6-VIDEO] 로컬 이미지 파일 없음: {local_path}")
-                    continue
-            else:
-                # HTTP URL
-                response = requests.get(img_url, timeout=30)
-                if response.status_code == 200:
+            try:
+                if img_url.startswith('data:'):
+                    # Base64 데이터 URL
+                    header, encoded = img_url.split(',', 1)
+                    img_data = base64.b64decode(encoded)
                     with open(img_path, 'wb') as f:
-                        f.write(response.content)
+                        f.write(img_data)
+                elif img_url.startswith('/static/'):
+                    # 로컬 static 파일 경로
+                    local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
+                    if os.path.exists(local_path):
+                        shutil.copy2(local_path, img_path)
+                    else:
+                        print(f"[DRAMA-STEP6-VIDEO] 로컬 이미지 파일 없음: {local_path}")
+                        failed_images.append(f"이미지 {idx+1}")
+                        continue
                 else:
-                    print(f"[DRAMA-STEP6-VIDEO] 이미지 다운로드 실패: {img_url}")
-                    continue
+                    # HTTP URL (재시도 로직 추가)
+                    max_retries = 3
+                    for retry in range(max_retries):
+                        try:
+                            response = requests.get(img_url, timeout=60)
+                            if response.status_code == 200:
+                                with open(img_path, 'wb') as f:
+                                    f.write(response.content)
+                                break
+                            else:
+                                if retry == max_retries - 1:
+                                    print(f"[DRAMA-STEP6-VIDEO] 이미지 다운로드 실패: {img_url} (상태: {response.status_code})")
+                                    failed_images.append(f"이미지 {idx+1}")
+                                    continue
+                        except requests.exceptions.RequestException as e:
+                            if retry == max_retries - 1:
+                                print(f"[DRAMA-STEP6-VIDEO] 이미지 다운로드 오류: {img_url} - {str(e)}")
+                                failed_images.append(f"이미지 {idx+1}")
+                                continue
+                            import time
+                            time.sleep(1)
 
-            image_paths.append(img_path)
+                image_paths.append(img_path)
+            except Exception as e:
+                print(f"[DRAMA-STEP6-VIDEO] 이미지 처리 오류 ({idx+1}): {str(e)}")
+                failed_images.append(f"이미지 {idx+1}")
 
         if not image_paths:
-            raise Exception("이미지를 다운로드할 수 없습니다.")
+            raise Exception(f"모든 이미지 다운로드 실패. 실패한 이미지: {', '.join(failed_images)}")
+
+        if failed_images:
+            print(f"[DRAMA-STEP6-VIDEO] 일부 이미지 실패 ({len(failed_images)}개): {', '.join(failed_images)}")
 
         update_progress(30, "오디오 처리 중...")
 
-        # 2. 오디오 저장
+        # 2. 오디오 저장 (재시도 로직 추가)
         audio_path = os.path.join(temp_dir, "audio.mp3")
         if audio_url.startswith('data:'):
             header, encoded = audio_url.split(',', 1)
@@ -3337,11 +3361,27 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             else:
                 raise Exception(f"오디오 파일을 찾을 수 없습니다: {audio_url}")
         else:
-            response = requests.get(audio_url, timeout=30)
-            if response.status_code == 200:
-                with open(audio_path, 'wb') as f:
-                    f.write(response.content)
-            else:
+            # HTTP URL (재시도 로직 추가)
+            max_retries = 3
+            audio_downloaded = False
+            for retry in range(max_retries):
+                try:
+                    response = requests.get(audio_url, timeout=60)
+                    if response.status_code == 200:
+                        with open(audio_path, 'wb') as f:
+                            f.write(response.content)
+                        audio_downloaded = True
+                        break
+                    else:
+                        if retry == max_retries - 1:
+                            raise Exception(f"오디오 다운로드 실패 (HTTP {response.status_code})")
+                except requests.exceptions.RequestException as e:
+                    if retry == max_retries - 1:
+                        raise Exception(f"오디오 다운로드 오류: {str(e)}")
+                    import time
+                    time.sleep(1)
+
+            if not audio_downloaded:
                 raise Exception("오디오를 다운로드할 수 없습니다.")
 
         update_progress(40, "영상 인코딩 준비 중...")
@@ -3410,12 +3450,26 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         print(f"[DRAMA-STEP6-VIDEO] FFmpeg 명령어 실행: {' '.join(ffmpeg_cmd[:5])}...")
         update_progress(50, "영상 인코딩 중...")
 
-        # FFmpeg 실행
-        process = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        # FFmpeg 실행 (타임아웃 15분)
+        try:
+            process = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=900)
+        except subprocess.TimeoutExpired:
+            print(f"[DRAMA-STEP6-VIDEO][ERROR] FFmpeg 타임아웃 (15분)")
+            raise Exception("영상 인코딩 시간 초과 (15분). 이미지 수를 줄이거나 해상도를 낮춰주세요.")
 
         if process.returncode != 0:
-            print(f"[DRAMA-STEP6-VIDEO][ERROR] FFmpeg 오류: {process.stderr}")
-            raise Exception(f"영상 인코딩 실패: {process.stderr[:200]}")
+            error_msg = process.stderr.strip()
+            print(f"[DRAMA-STEP6-VIDEO][ERROR] FFmpeg 오류: {error_msg}")
+
+            # 일반적인 오류 메시지 개선
+            if "No such file or directory" in error_msg:
+                raise Exception("파일을 찾을 수 없습니다. 이미지나 오디오 파일이 손상되었을 수 있습니다.")
+            elif "Invalid data" in error_msg or "corrupt" in error_msg:
+                raise Exception("손상된 파일이 감지되었습니다. 이미지나 오디오를 다시 생성해주세요.")
+            elif "Permission denied" in error_msg:
+                raise Exception("파일 권한 오류. 서버 관리자에게 문의하세요.")
+            else:
+                raise Exception(f"영상 인코딩 실패: {error_msg[:300]}")
 
         update_progress(80, "영상 저장 중...")
 
