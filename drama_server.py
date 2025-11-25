@@ -4289,9 +4289,25 @@ def youtube_auth():
         token_data = load_youtube_token_from_db()
         if token_data and token_data.get('refresh_token'):
             try:
+                from google.auth.transport.requests import Request
                 credentials = Credentials.from_authorized_user_info(token_data)
-                if credentials and (credentials.valid or credentials.refresh_token):
-                    return jsonify({"success": True, "message": "이미 인증되어 있습니다."})
+                if credentials:
+                    # 토큰이 만료되었으면 갱신 시도
+                    if credentials.expired and credentials.refresh_token:
+                        try:
+                            credentials.refresh(Request())
+                            # 갱신된 토큰 저장
+                            token_data['token'] = credentials.token
+                            save_youtube_token_to_db(token_data)
+                            print(f"[YOUTUBE-AUTH] 토큰 갱신 성공")
+                        except Exception as refresh_error:
+                            print(f"[YOUTUBE-AUTH] 토큰 갱신 실패: {refresh_error}")
+                            # 갱신 실패 시 새로운 인증 필요
+                            pass
+
+                    # 유효한 토큰이 있으면 성공 반환
+                    if credentials.valid or (credentials.refresh_token and not credentials.expired):
+                        return jsonify({"success": True, "message": "이미 인증되어 있습니다."})
             except Exception as e:
                 print(f"[YOUTUBE-AUTH] 기존 토큰 검증 실패: {e}")
 
@@ -4315,10 +4331,12 @@ def youtube_auth():
             redirect_uri=redirect_uri
         )
 
+        # prompt='consent'는 매번 동의 화면을 강제로 표시하므로 제거
+        # access_type='offline'만으로 refresh_token을 받을 수 있음
+        # 단, 이미 권한을 부여한 사용자는 자동으로 승인됨
         auth_url, state = flow.authorization_url(
             access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent'
+            include_granted_scopes='true'
         )
 
         # 상태를 파일에 저장 (멀티 워커 대응)
@@ -4433,15 +4451,30 @@ def youtube_auth_status():
     """YouTube 인증 상태 확인"""
     try:
         from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
 
         # 데이터베이스에서 토큰 로드
         token_data = load_youtube_token_from_db()
-        if token_data:
+        if token_data and token_data.get('refresh_token'):
             try:
                 credentials = Credentials.from_authorized_user_info(token_data)
-                if credentials and (credentials.valid or credentials.refresh_token):
-                    return jsonify({"authenticated": True})
-            except Exception:
+                if credentials:
+                    # 토큰이 만료되었으면 갱신 시도
+                    if credentials.expired and credentials.refresh_token:
+                        try:
+                            credentials.refresh(Request())
+                            # 갱신된 토큰 저장
+                            token_data['token'] = credentials.token
+                            save_youtube_token_to_db(token_data)
+                            print(f"[YOUTUBE-AUTH-STATUS] 토큰 갱신 성공")
+                        except Exception as refresh_error:
+                            print(f"[YOUTUBE-AUTH-STATUS] 토큰 갱신 실패: {refresh_error}")
+                            return jsonify({"authenticated": False})
+
+                    if credentials.valid:
+                        return jsonify({"authenticated": True})
+            except Exception as e:
+                print(f"[YOUTUBE-AUTH-STATUS] 인증 확인 실패: {e}")
                 pass
 
         return jsonify({"authenticated": False})
