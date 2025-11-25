@@ -6192,7 +6192,7 @@ S#1. 장소 / 시간
 
     const uploadBtn = document.getElementById('btn-upload-youtube');
     const progressContainer = document.getElementById('step7-progress');
-    const progressFill = document.getElementById('step7-progress-fill');
+    const progressFill = document.getElementById('step7-progress-bar');
     const progressText = document.getElementById('step7-progress-text');
     const resultContainer = document.getElementById('step7-result');
 
@@ -6280,8 +6280,8 @@ S#1. 장소 / 시간
     selectStep7Privacy('scheduled');
 
     document.getElementById('step7-progress').style.display = 'none';
-    document.getElementById('step7-progress-fill').style.width = '0%';
-    document.getElementById('step7-progress-fill').style.background = 'linear-gradient(135deg, #ff0000, #cc0000)';
+    document.getElementById('step7-progress-bar').style.width = '0%';
+    document.getElementById('step7-progress-bar').style.background = 'linear-gradient(135deg, #ff0000, #cc0000)';
     document.getElementById('step7-result').style.display = 'none';
 
     showStatus('Step7이 초기화되었습니다.');

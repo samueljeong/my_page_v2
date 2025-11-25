@@ -3752,7 +3752,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # ASS 파일 작성
             with open(ass_path, 'w', encoding='utf-8') as f:
                 f.write(ass_header)
-                f.write('\n'.join(ass_events))
+                # 이벤트 줄 사이에 줄바꿈 추가 (첫 이벤트 앞에도 줄바꿈 필요)
+                if ass_events:
+                    f.write('\n'.join(ass_events) + '\n')
 
             # ASS 자막 필터 추가 (경로 이스케이프 처리)
             # FFmpeg ass 필터는 경로에서 콜론(:)과 백슬래시(\)를 이스케이프해야 함
