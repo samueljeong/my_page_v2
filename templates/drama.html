@@ -1866,6 +1866,14 @@
           </div>
         </div>
 
+        <!-- 채널 선택 -->
+        <div class="step7-section" id="youtube-channel-section" style="display: none;">
+          <div class="section-label">📺 업로드 채널 선택</div>
+          <select id="step7-channel-select" class="step7-input" style="cursor: pointer;">
+            <option value="">채널을 선택하세요</option>
+          </select>
+        </div>
+
         <!-- 영상 정보 입력 -->
         <div class="step7-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem;">
@@ -5987,6 +5995,8 @@ S#1. 장소 / 시간
         authBtn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
         authStatus.innerHTML = '<span style="color: #27ae60;">✅ YouTube 인증이 완료되었습니다.</span>';
         updateStep7Status();
+        // 채널 목록 로드
+        await loadYouTubeChannels();
       } else if (data.auth_url) {
         // OAuth URL이 제공되면 새 창에서 열기
         console.log('[YOUTUBE-AUTH] OAuth URL:', data.auth_url);
@@ -6018,6 +6028,40 @@ S#1. 장소 / 시간
     }
   }
 
+  // YouTube 채널 목록 로드
+  async function loadYouTubeChannels() {
+    try {
+      const response = await fetch('/api/drama/youtube-channels');
+      const data = await response.json();
+
+      if (data.success && data.channels && data.channels.length > 0) {
+        const channelSelect = document.getElementById('step7-channel-select');
+        const channelSection = document.getElementById('youtube-channel-section');
+
+        // 기존 옵션 제거 (첫 번째 제외)
+        channelSelect.innerHTML = '<option value="">채널을 선택하세요</option>';
+
+        // 채널 추가
+        data.channels.forEach(channel => {
+          const option = document.createElement('option');
+          option.value = channel.id;
+          option.textContent = channel.title;
+          channelSelect.appendChild(option);
+        });
+
+        // 채널이 하나면 자동 선택
+        if (data.channels.length === 1) {
+          channelSelect.value = data.channels[0].id;
+        }
+
+        // 채널 선택 섹션 표시
+        channelSection.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('채널 목록 로드 실패:', error);
+    }
+  }
+
   // 인증 상태 폴링
   async function pollYouTubeAuth() {
     const authBtn = document.getElementById('btn-youtube-auth');
@@ -6037,6 +6081,8 @@ S#1. 장소 / 시간
           authBtn.disabled = true;
           authStatus.innerHTML = '<span style="color: #27ae60;">✅ YouTube 인증이 완료되었습니다.</span>';
           updateStep7Status();
+          // 채널 목록 로드
+          await loadYouTubeChannels();
           return;
         }
       } catch (e) {
@@ -6069,6 +6115,14 @@ S#1. 장소 / 시간
     const title = document.getElementById('step7-title').value.trim();
     if (!title) {
       showStatus('❌ 비디오 제목을 입력해주세요.');
+      return;
+    }
+
+    // 선택된 채널 확인
+    const channelSelect = document.getElementById('step7-channel-select');
+    const selectedChannelId = channelSelect.value;
+    if (!selectedChannelId) {
+      showStatus('❌ 업로드할 채널을 선택해주세요.');
       return;
     }
 
@@ -6120,7 +6174,8 @@ S#1. 장소 / 시간
           tags: tags.split(',').map(t => t.trim()).filter(t => t),
           category_id: category,
           privacy_status: privacy,
-          publish_at: publishAt
+          publish_at: publishAt,
+          channel_id: selectedChannelId
         })
       });
 
@@ -8113,6 +8168,30 @@ S#1. 장소 / 시간
 
     // ⭐ Step1 입력 필드 변경 시 세션 자동 저장
     setupStep1SessionSync();
+
+    // ⭐ YouTube 인증 상태 확인 및 채널 목록 로드
+    try {
+      const authResponse = await fetch('/api/drama/youtube-auth-status');
+      const authData = await authResponse.json();
+      if (authData.authenticated) {
+        youtubeAuthenticated = true;
+        const authBtn = document.getElementById('btn-youtube-auth');
+        const authStatus = document.getElementById('youtube-auth-status');
+        if (authBtn) {
+          authBtn.textContent = '✅ 인증 완료';
+          authBtn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
+          authBtn.disabled = true;
+        }
+        if (authStatus) {
+          authStatus.innerHTML = '<span style="color: #27ae60;">✅ YouTube 인증이 완료되었습니다.</span>';
+        }
+        updateStep7Status();
+        // 채널 목록 로드
+        await loadYouTubeChannels();
+      }
+    } catch (e) {
+      console.log('YouTube 인증 상태 확인 실패:', e);
+    }
   });
 
   // ===== 지침 보기 모달 =====
