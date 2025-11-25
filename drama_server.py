@@ -3757,7 +3757,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # ASS 자막 필터 추가 (경로 이스케이프 처리)
             # FFmpeg ass 필터는 경로에서 콜론(:)과 백슬래시(\)를 이스케이프해야 함
             escaped_ass_path = ass_path.replace('\\', '\\\\').replace(':', '\\:')
-            vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,ass={escaped_ass_path}"
+
+            # 폰트 디렉토리 설정 (프로젝트 내 fonts 폴더 사용)
+            fonts_dir = os.path.join(base_dir, 'fonts')
+            escaped_fonts_dir = fonts_dir.replace('\\', '\\\\').replace(':', '\\:')
+
+            # fontsdir 옵션으로 FFmpeg이 프로젝트 내 폰트를 인식하도록 설정
+            if font_found and os.path.exists(fonts_dir):
+                vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,ass={escaped_ass_path}:fontsdir={escaped_fonts_dir}"
+            else:
+                vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,ass={escaped_ass_path}"
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat', '-safe', '0', '-i', list_path,
@@ -4299,7 +4308,10 @@ def youtube_auth():
 
         flow = Flow.from_client_config(
             client_config,
-            scopes=['https://www.googleapis.com/auth/youtube.upload'],
+            scopes=[
+                'https://www.googleapis.com/auth/youtube.upload',
+                'https://www.googleapis.com/auth/youtube.readonly'
+            ],
             redirect_uri=redirect_uri
         )
 
@@ -4367,7 +4379,10 @@ def youtube_callback():
 
         flow = Flow.from_client_config(
             client_config,
-            scopes=['https://www.googleapis.com/auth/youtube.upload'],
+            scopes=[
+                'https://www.googleapis.com/auth/youtube.upload',
+                'https://www.googleapis.com/auth/youtube.readonly'
+            ],
             redirect_uri=oauth_state['redirect_uri']
         )
 
