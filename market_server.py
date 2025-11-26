@@ -290,7 +290,11 @@ MOCK_ORDERS = [
 # ===== 네이버 스마트스토어 API 헬퍼 =====
 def get_naver_access_token():
     """네이버 커머스 API OAuth 토큰 발급"""
+    print(f"[Naver API] 토큰 발급 시도...")
+    print(f"[Naver API] CLIENT_ID 존재: {bool(NAVER_CLIENT_ID)}, SECRET 존재: {bool(NAVER_CLIENT_SECRET)}")
+
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        print("[Naver API] CLIENT_ID 또는 SECRET이 없음")
         return None
 
     timestamp = str(int(time.time() * 1000))
@@ -302,6 +306,7 @@ def get_naver_access_token():
     ).hexdigest()
 
     try:
+        print(f"[Naver API] 토큰 요청 URL: {NAVER_API_BASE}/v1/oauth2/token")
         response = requests.post(
             f"{NAVER_API_BASE}/v1/oauth2/token",
             data={
@@ -312,16 +317,26 @@ def get_naver_access_token():
                 "type": "SELF"
             }
         )
+        print(f"[Naver API] 토큰 응답 상태: {response.status_code}")
+        print(f"[Naver API] 토큰 응답 내용: {response.text[:500]}")
+
         if response.status_code == 200:
-            return response.json().get('access_token')
+            token = response.json().get('access_token')
+            print(f"[Naver API] 토큰 발급 성공: {token[:20] if token else 'None'}...")
+            return token
+        else:
+            print(f"[Naver API] 토큰 발급 실패: {response.status_code}")
     except Exception as e:
         print(f"[Naver API] Token error: {e}")
     return None
 
 def call_naver_api(endpoint, method='GET', data=None):
     """네이버 커머스 API 호출"""
+    print(f"[Naver API] API 호출 시작: {method} {endpoint}")
+
     token = get_naver_access_token()
     if not token:
+        print("[Naver API] 토큰 없음 - API 호출 중단")
         return None
 
     headers = {
@@ -331,6 +346,8 @@ def call_naver_api(endpoint, method='GET', data=None):
 
     try:
         url = f"{NAVER_API_BASE}{endpoint}"
+        print(f"[Naver API] 요청 URL: {url}")
+
         if method == 'GET':
             response = requests.get(url, headers=headers)
         elif method == 'POST':
@@ -338,8 +355,13 @@ def call_naver_api(endpoint, method='GET', data=None):
         elif method == 'PUT':
             response = requests.put(url, headers=headers, json=data)
 
+        print(f"[Naver API] 응답 상태: {response.status_code}")
+        print(f"[Naver API] 응답 내용: {response.text[:500]}")
+
         if response.status_code == 200:
             return response.json()
+        else:
+            print(f"[Naver API] API 호출 실패: {response.status_code}")
     except Exception as e:
         print(f"[Naver API] Error: {e}")
     return None
