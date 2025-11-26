@@ -1361,6 +1361,71 @@
               <li>Flux Pro 사용 시 <strong>FAL_KEY</strong> 환경변수 설정이 필요합니다. (<a href="https://fal.ai" target="_blank" style="color: #b45309;">fal.ai</a>에서 발급)</li>
             </ul>
           </div>
+
+          <!-- 참조 이미지 학습 -->
+          <div class="box" style="margin-top: 1rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;">
+              <div style="font-weight: 700; color: #0369a1; font-size: 1rem;">📚 참조 이미지 학습</div>
+              <span id="ref-count-badge" style="background: #0ea5e9; color: white; padding: .2rem .6rem; border-radius: 12px; font-size: .75rem;">0개</span>
+            </div>
+            <div style="font-size: .85rem; color: #0c4a6e; margin-bottom: 1rem; line-height: 1.5;">
+              좋은 현수막 이미지 URL을 등록하면 AI가 스타일을 학습하여 더 나은 결과물을 생성합니다.<br>
+              데이터가 쌓일수록 품질이 향상됩니다.
+            </div>
+
+            <!-- 참조 이미지 추가 폼 -->
+            <div style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+              <div style="font-weight: 600; color: #0369a1; margin-bottom: .75rem; font-size: .9rem;">➕ 참조 이미지 추가</div>
+              <div style="display: flex; flex-direction: column; gap: .5rem;">
+                <input type="text" id="ref-image-url" placeholder="이미지 URL (https://...)" style="padding: .5rem; border-radius: 6px; border: 1px solid #7dd3fc;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;">
+                  <select id="ref-template-type" style="padding: .5rem; border-radius: 6px; border: 1px solid #7dd3fc;">
+                    <option value="general">일반</option>
+                    <option value="revival">부흥회</option>
+                    <option value="christmas">성탄절</option>
+                    <option value="easter">부활절</option>
+                    <option value="thanksgiving">추수감사절</option>
+                    <option value="new_year">신년/송년</option>
+                    <option value="special_service">특별집회</option>
+                    <option value="bible_school">성경학교</option>
+                    <option value="baptism">세례/침례</option>
+                    <option value="ordination">임직/취임</option>
+                    <option value="mission">선교/전도</option>
+                  </select>
+                  <input type="text" id="ref-style-tags" placeholder="스타일 태그 (예: 모던,그라데이션,미니멀)" style="padding: .5rem; border-radius: 6px; border: 1px solid #7dd3fc;">
+                </div>
+                <input type="text" id="ref-description" placeholder="설명 (선택, 예: 파란 그라데이션 배경, 깔끔한 레이아웃)" style="padding: .5rem; border-radius: 6px; border: 1px solid #7dd3fc;">
+                <div style="display: flex; gap: .5rem;">
+                  <button onclick="addReferenceImage()" style="flex: 1; padding: .6rem; background: #0ea5e9; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    📥 참조 이미지 추가
+                  </button>
+                  <button onclick="previewReferenceImage()" style="padding: .6rem 1rem; background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 6px; cursor: pointer;">
+                    👁️ 미리보기
+                  </button>
+                </div>
+              </div>
+              <!-- 미리보기 영역 -->
+              <div id="ref-preview-container" style="display: none; margin-top: .75rem;">
+                <img id="ref-preview-image" src="" style="max-width: 100%; max-height: 150px; border-radius: 6px; border: 1px solid #ddd;">
+              </div>
+            </div>
+
+            <!-- 등록된 참조 이미지 목록 -->
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem;">
+                <div style="font-weight: 600; color: #0369a1; font-size: .9rem;">📋 등록된 참조 이미지</div>
+                <button onclick="loadReferenceImages()" style="padding: .3rem .6rem; background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 4px; cursor: pointer; font-size: .75rem;">
+                  🔄 새로고침
+                </button>
+              </div>
+              <div id="ref-images-list" style="max-height: 300px; overflow-y: auto; background: white; border-radius: 8px; padding: .5rem;">
+                <div style="text-align: center; color: #888; padding: 2rem; font-size: .85rem;">
+                  등록된 참조 이미지가 없습니다.<br>
+                  좋은 현수막 이미지 URL을 추가해주세요.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <!-- // 디자인 도우미 콘텐츠 끝 -->
       </div>
@@ -5900,6 +5965,181 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
   function regenerateBanner() {
     generateBanner();
   }
+
+  // ===== 참조 이미지 관리 함수 =====
+
+  // 참조 이미지 미리보기
+  function previewReferenceImage() {
+    const url = document.getElementById('ref-image-url').value.trim();
+    const previewContainer = document.getElementById('ref-preview-container');
+    const previewImage = document.getElementById('ref-preview-image');
+
+    if (!url) {
+      alert('이미지 URL을 입력해주세요.');
+      return;
+    }
+
+    previewImage.src = url;
+    previewImage.onerror = () => {
+      previewContainer.style.display = 'none';
+      alert('이미지를 불러올 수 없습니다. URL을 확인해주세요.');
+    };
+    previewImage.onload = () => {
+      previewContainer.style.display = 'block';
+    };
+  }
+
+  // 참조 이미지 추가
+  async function addReferenceImage() {
+    const url = document.getElementById('ref-image-url').value.trim();
+    const templateType = document.getElementById('ref-template-type').value;
+    const styleTags = document.getElementById('ref-style-tags').value.trim();
+    const description = document.getElementById('ref-description').value.trim();
+
+    if (!url) {
+      alert('이미지 URL을 입력해주세요.');
+      return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      alert('올바른 URL 형식이 아닙니다. (http:// 또는 https://로 시작)');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/banner/references', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          image_url: url,
+          template_type: templateType,
+          style_tags: styleTags,
+          description: description
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        alert('참조 이미지가 추가되었습니다!');
+        // 입력 필드 초기화
+        document.getElementById('ref-image-url').value = '';
+        document.getElementById('ref-style-tags').value = '';
+        document.getElementById('ref-description').value = '';
+        document.getElementById('ref-preview-container').style.display = 'none';
+        // 목록 새로고침
+        loadReferenceImages();
+      } else {
+        alert('추가 실패: ' + data.error);
+      }
+    } catch (err) {
+      alert('네트워크 오류: ' + err.message);
+    }
+  }
+
+  // 참조 이미지 목록 로드
+  async function loadReferenceImages() {
+    try {
+      const response = await fetch('/api/banner/references');
+      const data = await response.json();
+
+      const listContainer = document.getElementById('ref-images-list');
+      const countBadge = document.getElementById('ref-count-badge');
+
+      if (data.ok && data.references.length > 0) {
+        countBadge.textContent = data.count + '개';
+
+        const templateNames = {
+          general: '일반', revival: '부흥회', christmas: '성탄절',
+          easter: '부활절', thanksgiving: '추수감사절', new_year: '신년/송년',
+          special_service: '특별집회', bible_school: '성경학교',
+          baptism: '세례/침례', ordination: '임직/취임', mission: '선교/전도'
+        };
+
+        let html = '<div style="display: flex; flex-direction: column; gap: .5rem;">';
+
+        data.references.forEach(ref => {
+          const templateName = templateNames[ref.template_type] || ref.template_type;
+          const tags = ref.style_tags ? ref.style_tags.split(',').slice(0, 3).join(', ') : '';
+          const colors = ref.color_palette ? ref.color_palette.split(',').slice(0, 3) : [];
+
+          html += `
+            <div style="display: flex; gap: .75rem; padding: .75rem; background: #f8f9fa; border-radius: 8px; align-items: center;">
+              <img src="${ref.image_url}" style="width: 80px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer;" onclick="window.open('${ref.image_url}', '_blank')" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/><text fill=%22%23999%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22>No Image</text></svg>'">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; font-size: .85rem; color: #333;">${templateName}</div>
+                ${tags ? `<div style="font-size: .75rem; color: #666; margin-top: .2rem;">${tags}</div>` : ''}
+                ${colors.length > 0 ? `
+                  <div style="display: flex; gap: .2rem; margin-top: .3rem;">
+                    ${colors.map(c => `<span style="width: 16px; height: 16px; border-radius: 3px; background: ${c}; border: 1px solid #ddd;"></span>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div style="display: flex; flex-direction: column; gap: .3rem;">
+                <div style="font-size: .7rem; color: #888;">품질: ${ref.quality_score}/10</div>
+                <button onclick="deleteReferenceImage(${ref.id})" style="padding: .3rem .5rem; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; cursor: pointer; font-size: .7rem;">삭제</button>
+              </div>
+            </div>
+          `;
+        });
+
+        html += '</div>';
+        listContainer.innerHTML = html;
+      } else {
+        countBadge.textContent = '0개';
+        listContainer.innerHTML = `
+          <div style="text-align: center; color: #888; padding: 2rem; font-size: .85rem;">
+            등록된 참조 이미지가 없습니다.<br>
+            좋은 현수막 이미지 URL을 추가해주세요.
+          </div>
+        `;
+      }
+    } catch (err) {
+      console.error('참조 이미지 로드 실패:', err);
+    }
+  }
+
+  // 참조 이미지 삭제
+  async function deleteReferenceImage(refId) {
+    if (!confirm('이 참조 이미지를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/banner/references/${refId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        loadReferenceImages();
+      } else {
+        alert('삭제 실패: ' + data.error);
+      }
+    } catch (err) {
+      alert('네트워크 오류: ' + err.message);
+    }
+  }
+
+  // 페이지 로드 시 참조 이미지 목록 로드
+  document.addEventListener('DOMContentLoaded', function() {
+    // 디자인 도우미가 활성화될 때 참조 이미지 로드
+    const designHelperContent = document.getElementById('design-helper-content');
+    if (designHelperContent) {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.attributeName === 'style') {
+            const display = window.getComputedStyle(designHelperContent).display;
+            if (display !== 'none') {
+              loadReferenceImages();
+            }
+          }
+        });
+      });
+      observer.observe(designHelperContent, { attributes: true });
+    }
+  });
   </script>
 </body>
 </html>

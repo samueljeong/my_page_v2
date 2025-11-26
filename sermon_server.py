@@ -244,6 +244,34 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_usage_created_at
             ON api_usage_logs(created_at DESC)
         ''')
+
+        # 현수막 참조 이미지 테이블 생성 (PostgreSQL)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS banner_references (
+                id SERIAL PRIMARY KEY,
+                image_url TEXT NOT NULL,
+                image_data TEXT,
+                template_type VARCHAR(50) NOT NULL,
+                title VARCHAR(200),
+                description TEXT,
+                color_palette TEXT,
+                style_tags TEXT,
+                quality_score INTEGER DEFAULT 5,
+                use_count INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_banner_ref_template
+            ON banner_references(template_type)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_banner_ref_quality
+            ON banner_references(quality_score DESC)
+        ''')
     else:
         # SQLite: Users 테이블 생성 (Sermon 전용)
         cursor.execute('''
@@ -392,6 +420,34 @@ def init_db():
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_usage_created_at
             ON api_usage_logs(created_at DESC)
+        ''')
+
+        # 현수막 참조 이미지 테이블 생성 (SQLite)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS banner_references (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_url TEXT NOT NULL,
+                image_data TEXT,
+                template_type TEXT NOT NULL,
+                title TEXT,
+                description TEXT,
+                color_palette TEXT,
+                style_tags TEXT,
+                quality_score INTEGER DEFAULT 5,
+                use_count INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_banner_ref_template
+            ON banner_references(template_type)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_banner_ref_quality
+            ON banner_references(quality_score DESC)
         ''')
 
     conn.commit()
@@ -3082,20 +3138,35 @@ def generate_banner_with_text():
         layout_info = templates['layouts'].get(layout, templates['layouts']['horizontal'])
         model_info = templates['models'].get(model, templates['models']['dalle3'])
 
+        # 참조 이미지 스타일 정보 가져오기
+        ref_style = get_reference_style_description(template_type)
+        style_enhancement = ""
+        if ref_style:
+            if ref_style.get('tags'):
+                style_enhancement += f" Design style: {', '.join(ref_style['tags'][:5])}."
+            if ref_style.get('colors'):
+                style_enhancement += f" Color palette inspiration: {', '.join(ref_style['colors'][:3])}."
+            if ref_style.get('descriptions'):
+                style_enhancement += f" Reference: {ref_style['descriptions'][0][:100]}."
+            print(f"[BANNER] 참조 스타일 적용: {len(ref_style.get('tags', []))}개 태그, {len(ref_style.get('colors', []))}개 색상")
+
         # 이미지 생성 프롬프트 구성
         if custom_prompt:
             base_prompt = custom_prompt
         else:
-            base_prompt = f"Create a beautiful church banner background for {template_info['name_en']}."
+            base_prompt = f"Create a beautiful Korean church banner background for {template_info['name_en']}."
             if event_name:
                 base_prompt += f" Event theme: {event_name}."
             if theme:
                 base_prompt += f" Message: {theme}."
 
         full_prompt = f"{base_prompt} Style: {template_info['prompt_style']}. "
+        full_prompt += style_enhancement  # 참조 스타일 추가
+        full_prompt += "Modern, clean, professional Korean church banner design. "
+        full_prompt += "Soft gradient background with elegant composition. "
         full_prompt += "The image should be atmospheric and suitable for text overlay. "
         full_prompt += "No text, letters, or words in the image. High quality, professional design, "
-        full_prompt += "beautiful lighting, church-appropriate aesthetic. Leave space in center for text overlay."
+        full_prompt += "beautiful lighting, church-appropriate aesthetic. Leave clear space in center for text overlay."
 
         print(f"[BANNER] 생성 요청 - 모델: {model}, 텍스트 오버레이: {add_text}")
 
@@ -3254,6 +3325,253 @@ def generate_banner_prompt():
     except Exception as e:
         print(f"[BANNER-PROMPT][ERROR] {str(e)}")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ===== 현수막 참조 이미지 관리 API =====
+
+@app.route('/api/banner/references', methods=['GET'])
+def get_banner_references():
+    """참조 이미지 목록 조회"""
+    try:
+        template_type = request.args.get('template', None)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            if template_type:
+                cursor.execute('''
+                    SELECT id, image_url, template_type, title, description,
+                           color_palette, style_tags, quality_score, use_count, created_at
+                    FROM banner_references
+                    WHERE is_active = 1 AND template_type = %s
+                    ORDER BY quality_score DESC, use_count DESC
+                ''', (template_type,))
+            else:
+                cursor.execute('''
+                    SELECT id, image_url, template_type, title, description,
+                           color_palette, style_tags, quality_score, use_count, created_at
+                    FROM banner_references
+                    WHERE is_active = 1
+                    ORDER BY quality_score DESC, use_count DESC
+                ''')
+        else:
+            if template_type:
+                cursor.execute('''
+                    SELECT id, image_url, template_type, title, description,
+                           color_palette, style_tags, quality_score, use_count, created_at
+                    FROM banner_references
+                    WHERE is_active = 1 AND template_type = ?
+                    ORDER BY quality_score DESC, use_count DESC
+                ''', (template_type,))
+            else:
+                cursor.execute('''
+                    SELECT id, image_url, template_type, title, description,
+                           color_palette, style_tags, quality_score, use_count, created_at
+                    FROM banner_references
+                    WHERE is_active = 1
+                    ORDER BY quality_score DESC, use_count DESC
+                ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        references = []
+        for row in rows:
+            references.append({
+                'id': row['id'],
+                'image_url': row['image_url'],
+                'template_type': row['template_type'],
+                'title': row['title'],
+                'description': row['description'],
+                'color_palette': row['color_palette'],
+                'style_tags': row['style_tags'],
+                'quality_score': row['quality_score'],
+                'use_count': row['use_count'],
+                'created_at': str(row['created_at']) if row['created_at'] else None
+            })
+
+        return jsonify({"ok": True, "references": references, "count": len(references)})
+
+    except Exception as e:
+        print(f"[BANNER-REF][ERROR] 조회 실패: {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/banner/references', methods=['POST'])
+def add_banner_reference():
+    """참조 이미지 추가"""
+    try:
+        data = request.json
+        image_url = data.get('image_url')
+        template_type = data.get('template_type', 'general')
+        title = data.get('title', '')
+        description = data.get('description', '')
+        style_tags = data.get('style_tags', '')
+
+        if not image_url:
+            return jsonify({"ok": False, "error": "이미지 URL이 필요합니다."}), 400
+
+        # 이미지 URL 유효성 검사 및 색상 추출 시도
+        color_palette = ''
+        try:
+            # 이미지를 다운로드하여 주요 색상 추출
+            response = requests.get(image_url, timeout=10)
+            if response.status_code == 200:
+                img = Image.open(io.BytesIO(response.content))
+                img_small = img.resize((100, 100))
+                colors = img_small.convert('RGB').getcolors(10000)
+                if colors:
+                    # 가장 많이 사용된 상위 5개 색상 추출
+                    sorted_colors = sorted(colors, key=lambda x: x[0], reverse=True)[:5]
+                    hex_colors = ['#{:02x}{:02x}{:02x}'.format(c[1][0], c[1][1], c[1][2]) for c in sorted_colors]
+                    color_palette = ','.join(hex_colors)
+        except Exception as color_error:
+            print(f"[BANNER-REF] 색상 추출 실패 (무시): {str(color_error)}")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                INSERT INTO banner_references (image_url, template_type, title, description, color_palette, style_tags)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (image_url, template_type, title, description, color_palette, style_tags))
+            new_id = cursor.fetchone()['id']
+        else:
+            cursor.execute('''
+                INSERT INTO banner_references (image_url, template_type, title, description, color_palette, style_tags)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (image_url, template_type, title, description, color_palette, style_tags))
+            new_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "message": "참조 이미지가 추가되었습니다.",
+            "id": new_id,
+            "color_palette": color_palette
+        })
+
+    except Exception as e:
+        print(f"[BANNER-REF][ERROR] 추가 실패: {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/banner/references/<int:ref_id>', methods=['DELETE'])
+def delete_banner_reference(ref_id):
+    """참조 이미지 삭제 (비활성화)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('UPDATE banner_references SET is_active = 0 WHERE id = %s', (ref_id,))
+        else:
+            cursor.execute('UPDATE banner_references SET is_active = 0 WHERE id = ?', (ref_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True, "message": "참조 이미지가 삭제되었습니다."})
+
+    except Exception as e:
+        print(f"[BANNER-REF][ERROR] 삭제 실패: {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/banner/references/<int:ref_id>/rate', methods=['POST'])
+def rate_banner_reference(ref_id):
+    """참조 이미지 품질 점수 업데이트"""
+    try:
+        data = request.json
+        score = data.get('score', 5)
+
+        if not 1 <= score <= 10:
+            return jsonify({"ok": False, "error": "점수는 1-10 사이여야 합니다."}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('UPDATE banner_references SET quality_score = %s WHERE id = %s', (score, ref_id))
+        else:
+            cursor.execute('UPDATE banner_references SET quality_score = ? WHERE id = ?', (score, ref_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True, "message": "점수가 업데이트되었습니다."})
+
+    except Exception as e:
+        print(f"[BANNER-REF][ERROR] 점수 업데이트 실패: {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def get_reference_style_description(template_type):
+    """참조 이미지들의 스타일 설명 생성 (AI 프롬프트용)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                SELECT style_tags, color_palette, description
+                FROM banner_references
+                WHERE is_active = 1 AND template_type = %s
+                ORDER BY quality_score DESC, use_count DESC
+                LIMIT 5
+            ''', (template_type,))
+        else:
+            cursor.execute('''
+                SELECT style_tags, color_palette, description
+                FROM banner_references
+                WHERE is_active = 1 AND template_type = ?
+                ORDER BY quality_score DESC, use_count DESC
+                LIMIT 5
+            ''', (template_type,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        # 스타일 태그와 색상 팔레트 수집
+        all_tags = []
+        all_colors = []
+        descriptions = []
+
+        for row in rows:
+            if row['style_tags']:
+                all_tags.extend(row['style_tags'].split(','))
+            if row['color_palette']:
+                all_colors.extend(row['color_palette'].split(','))
+            if row['description']:
+                descriptions.append(row['description'])
+
+        # 중복 제거 및 빈도순 정렬
+        from collections import Counter
+        tag_counts = Counter(all_tags)
+        top_tags = [tag for tag, _ in tag_counts.most_common(10)]
+
+        color_counts = Counter(all_colors)
+        top_colors = [color for color, _ in color_counts.most_common(5)]
+
+        style_desc = {
+            'tags': top_tags,
+            'colors': top_colors,
+            'descriptions': descriptions[:3]
+        }
+
+        return style_desc
+
+    except Exception as e:
+        print(f"[BANNER-REF][ERROR] 스타일 설명 생성 실패: {str(e)}")
+        return None
 
 
 # ===== Render 배포를 위한 설정 =====
