@@ -3379,7 +3379,7 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         specialNotes: draft.meta.specialNotes  // 특별 참고 사항
       };
 
-      // JSON 모드일 경우 step1Result, step2Result 추가
+      // JSON 모드일 경우 step1Result, step2Result, step3Guide 추가
       if (isJsonMode) {
         if (typeof step1Data === 'object') {
           requestBody.step1Result = step1Data;
@@ -3387,7 +3387,31 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         if (typeof step2Data === 'object') {
           requestBody.step2Result = step2Data;
         }
-        console.log('[Step3] JSON 데이터 전송:', { step1Result: !!requestBody.step1Result, step2Result: !!requestBody.step2Result });
+
+        // Step3 지침 불러오기 (스타일별)
+        const step3GuideKey = getGuideKey(currentCategory, 'step3');
+        const step3Guide = localStorage.getItem(step3GuideKey) || '';
+        if (step3Guide.trim()) {
+          try {
+            // JSON 형식인지 확인
+            if (step3Guide.trim().startsWith('{')) {
+              requestBody.step3Guide = JSON.parse(step3Guide);
+              console.log('[Step3] Step3 지침 (JSON):', requestBody.step3Guide);
+            } else {
+              requestBody.step3Guide = step3Guide;
+              console.log('[Step3] Step3 지침 (텍스트):', step3Guide.substring(0, 100) + '...');
+            }
+          } catch (e) {
+            requestBody.step3Guide = step3Guide;
+            console.log('[Step3] Step3 지침 (파싱 실패, 텍스트로 전송):', step3Guide.substring(0, 100) + '...');
+          }
+        }
+
+        console.log('[Step3] JSON 데이터 전송:', {
+          step1Result: !!requestBody.step1Result,
+          step2Result: !!requestBody.step2Result,
+          step3Guide: !!requestBody.step3Guide
+        });
       }
 
       const response = await fetch('/api/sermon/gpt-pro', {
@@ -3860,14 +3884,45 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
 
     if (!container) return;
 
-    if (!steps.find(step => step.id === currentGuideStep)) {
-      currentGuideStep = steps.length > 0 ? steps[0].id : '';
+    // Step3를 고정으로 추가 (모든 스타일에 공통)
+    const allSteps = [
+      ...steps,
+      { id: 'step3', name: '📝 Step3 (설교문 작성)', stepType: 'step3' }
+    ];
+
+    if (!allSteps.find(step => step.id === currentGuideStep)) {
+      currentGuideStep = allSteps.length > 0 ? allSteps[0].id : '';
     }
 
-    container.innerHTML = steps.map(step =>
-      `<button class="${step.id === currentGuideStep ? 'primary' : ''}"
-        data-step="${step.id}">${step.name}</button>`
-    ).join('');
+    // Step1/Step2와 Step3 그룹 분리하여 표시
+    const step12 = allSteps.filter(s => s.stepType !== 'step3');
+    const step3 = allSteps.filter(s => s.stepType === 'step3');
+
+    let html = '';
+
+    // Step1/Step2 탭들
+    if (step12.length > 0) {
+      html += '<div style="display: flex; gap: .3rem; flex-wrap: wrap; margin-bottom: .5rem;">';
+      html += step12.map(step =>
+        `<button class="${step.id === currentGuideStep ? 'primary' : ''}"
+          data-step="${step.id}" style="font-size: .8rem;">${step.name}</button>`
+      ).join('');
+      html += '</div>';
+    }
+
+    // Step3 탭 (강조 스타일)
+    if (step3.length > 0) {
+      html += '<div style="display: flex; gap: .3rem;">';
+      html += step3.map(step =>
+        `<button class="${step.id === currentGuideStep ? '' : ''}"
+          data-step="${step.id}"
+          style="font-size: .8rem; background: ${step.id === currentGuideStep ? 'linear-gradient(135deg, #f5576c 0%, #f093fb 100%)' : 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'}; color: ${step.id === currentGuideStep ? 'white' : '#333'}; border: none; font-weight: 600;">
+          ${step.name}</button>`
+      ).join('');
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
 
     container.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', () => {

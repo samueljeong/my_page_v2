@@ -1457,9 +1457,9 @@ def build_prompt_from_json(json_guide, step_type="step1"):
 
 def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_result):
     """
-    Step3용 프롬프트 생성 - Step1, Step2 JSON 결과와 meta 데이터 통합
+    Step3용 프롬프트 생성 - Step3 지침, Step1/Step2 JSON 결과와 meta 데이터 통합
 
-    json_guide: Step3 지침 (writing_spec 포함)
+    json_guide: Step3 스타일별 지침 (priority_order, use_from_step1, use_from_step2, writing_rules 등)
     meta_data: 사용자 입력 정보 (scripture, title, target, worship_type, duration 등)
     step1_result: Step1 JSON 결과
     step2_result: Step2 JSON 결과 (writing_spec 포함)
@@ -1467,24 +1467,31 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
     # 분량과 예배유형 추출
     duration = meta_data.get("duration", "")
     worship_type = meta_data.get("worship_type", "")
+    special_notes = meta_data.get("special_notes", "")
 
     prompt = ""
 
-    # ★★★ 맨 앞에 분량/예배유형 최우선 강조 ★★★
-    prompt += "=" * 50 + "\n"
-    prompt += "【 ★★★ 최우선 지침 ★★★ 】\n"
-    prompt += "=" * 50 + "\n"
+    # ═══════════════════════════════════════════════════════
+    # 1. 최우선 지침: 홈화면 설정 (meta_override)
+    # ═══════════════════════════════════════════════════════
+    prompt += "=" * 60 + "\n"
+    prompt += "【 ★★★ 1순위: 홈화면 설정 (최우선) ★★★ 】\n"
+    prompt += "=" * 60 + "\n"
+
     if duration:
         prompt += f"\n🚨 분량: {duration}\n"
         prompt += f"   → 이 설교는 반드시 {duration} 분량으로 작성하세요.\n"
         prompt += f"   → Step1/Step2 자료가 길더라도 {duration}에 맞춰 압축하세요.\n"
         prompt += "   → 분량 제한은 다른 모든 지침보다 우선합니다.\n"
+
     if worship_type:
         prompt += f"\n🚨 예배/집회 유형: {worship_type}\n"
         prompt += f"   → '{worship_type}'에 적합한 톤과 내용으로 작성하세요.\n"
-    prompt += "\n" + "=" * 50 + "\n\n"
 
-    prompt += "【 설교문 작성 지침 】\n\n"
+    if special_notes:
+        prompt += f"\n🚨 특별 참고 사항:\n"
+        prompt += f"   {special_notes}\n"
+        prompt += "   → 위 내용을 설교문에 반드시 반영하세요.\n"
 
     # Meta 정보 (한글 키 매핑)
     key_labels = {
@@ -1497,55 +1504,180 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
         "category": "카테고리"
     }
 
-    prompt += "▶ 기본 정보\n"
+    prompt += "\n▶ 기본 정보\n"
     for key, value in meta_data.items():
-        if value:
+        if value and key != "special_notes":
             label = key_labels.get(key, key)
             prompt += f"  - {label}: {value}\n"
     prompt += "\n"
 
-    # Step2의 writing_spec 적용 (단, 홈화면 duration이 우선)
+    # ═══════════════════════════════════════════════════════
+    # 2. Step3 스타일별 지침 적용
+    # ═══════════════════════════════════════════════════════
+    if json_guide and isinstance(json_guide, dict):
+        prompt += "=" * 60 + "\n"
+        prompt += "【 ★★ 스타일별 작성 지침 ★★ 】\n"
+        prompt += "=" * 60 + "\n\n"
+
+        # 우선순위 표시
+        priority_order = json_guide.get("priority_order", {})
+        if priority_order:
+            prompt += "▶ 우선순위\n"
+            for key, value in priority_order.items():
+                prompt += f"  {key}: {value}\n"
+            prompt += "\n"
+
+        # Step1 활용 지침
+        use_from_step1 = json_guide.get("use_from_step1", {})
+        if use_from_step1:
+            prompt += "▶ Step1 자료 활용법 (반드시 적용)\n"
+            for field, config in use_from_step1.items():
+                if isinstance(config, dict):
+                    instruction = config.get("instruction", "")
+                    format_hint = config.get("format", "")
+                    prompt += f"  • {field}: {instruction}\n"
+                    if format_hint:
+                        prompt += f"    (형식: {format_hint})\n"
+                else:
+                    prompt += f"  • {field}: {config}\n"
+            prompt += "\n"
+
+        # Step2 활용 지침
+        use_from_step2 = json_guide.get("use_from_step2", {})
+        if use_from_step2:
+            prompt += "▶ Step2 구조 활용법 (반드시 적용)\n"
+            for field, config in use_from_step2.items():
+                if isinstance(config, dict):
+                    instruction = config.get("instruction", "")
+                    priority = config.get("priority", "")
+                    prompt += f"  • {field}: {instruction}"
+                    if priority:
+                        prompt += f" [{priority}]"
+                    prompt += "\n"
+                else:
+                    prompt += f"  • {field}: {config}\n"
+            prompt += "\n"
+
+        # 작성 규칙
+        writing_rules = json_guide.get("writing_rules", {})
+        if writing_rules:
+            prompt += "▶ 작성 규칙\n"
+            for rule_name, rule_config in writing_rules.items():
+                if isinstance(rule_config, dict):
+                    label = rule_config.get("label", rule_name)
+                    rules = rule_config.get("rules", [])
+                    prompt += f"  [{label}]\n"
+                    for rule in rules:
+                        prompt += f"    - {rule}\n"
+                else:
+                    prompt += f"  • {rule_name}: {rule_config}\n"
+            prompt += "\n"
+
+    # ═══════════════════════════════════════════════════════
+    # 3. Step2 필수 반영: 설교 구조
+    # ═══════════════════════════════════════════════════════
+    prompt += "=" * 60 + "\n"
+    prompt += "【 ★★ 2순위: Step2 설교 구조 (필수 반영) ★★ 】\n"
+    prompt += "=" * 60 + "\n\n"
+
     if step2_result and isinstance(step2_result, dict):
+        # writing_spec 먼저 표시
         writing_spec = step2_result.get("writing_spec", {})
         if writing_spec:
-            prompt += "▶ 작성 규격 (참고용 - 홈화면 분량 설정이 우선)\n"
+            prompt += "▶ 작성 규격\n"
             for key, value in writing_spec.items():
-                # length는 홈화면 duration이 우선하므로 표시만
                 if key == "length" and duration:
-                    prompt += f"  - {key}: {value} (※ 홈화면 설정 '{duration}'이 우선)\n"
+                    prompt += f"  - {key}: {value} (※ 홈화면 '{duration}'이 우선)\n"
                 elif isinstance(value, list):
-                    prompt += f"  - {key}: {', '.join(value)}\n"
+                    prompt += f"  - {key}: {', '.join(str(v) for v in value)}\n"
                 else:
                     prompt += f"  - {key}: {value}\n"
             prompt += "\n"
 
-    # Step1 분석 자료
-    if step1_result:
-        prompt += "▶ Step1 분석 자료 (참고용)\n"
-        if isinstance(step1_result, dict):
-            prompt += json.dumps(step1_result, ensure_ascii=False, indent=2)
-        else:
-            prompt += str(step1_result)
-        prompt += "\n\n"
+        # 핵심 구조 필드 강조
+        sermon_outline = step2_result.get("sermon_outline")
+        if sermon_outline:
+            prompt += "▶ 설교 구조 (이 구조를 반드시 따르세요!)\n"
+            if isinstance(sermon_outline, dict):
+                prompt += json.dumps(sermon_outline, ensure_ascii=False, indent=2)
+            elif isinstance(sermon_outline, list):
+                for item in sermon_outline:
+                    prompt += f"  {item}\n"
+            else:
+                prompt += f"  {sermon_outline}\n"
+            prompt += "\n\n"
 
-    # Step2 구조
-    if step2_result:
-        prompt += "▶ Step2 설교 구조 (참고용 - 분량에 맞게 조절)\n"
-        if isinstance(step2_result, dict):
-            # writing_spec은 이미 위에서 처리했으므로 제외
-            step2_without_spec = {k: v for k, v in step2_result.items() if k != "writing_spec"}
-            prompt += json.dumps(step2_without_spec, ensure_ascii=False, indent=2)
-        else:
-            prompt += str(step2_result)
-        prompt += "\n\n"
+        # detailed_points 강조
+        detailed_points = step2_result.get("detailed_points")
+        if detailed_points:
+            prompt += "▶ 상세 구조 (각 대지/소대지 내용을 확장하세요)\n"
+            prompt += json.dumps(detailed_points, ensure_ascii=False, indent=2)
+            prompt += "\n\n"
 
-    # 마지막 지침
-    prompt += "=" * 50 + "\n"
+        # 나머지 Step2 필드
+        excluded_keys = {"writing_spec", "sermon_outline", "detailed_points"}
+        other_step2 = {k: v for k, v in step2_result.items() if k not in excluded_keys}
+        if other_step2:
+            prompt += "▶ Step2 기타 자료\n"
+            prompt += json.dumps(other_step2, ensure_ascii=False, indent=2)
+            prompt += "\n\n"
+    else:
+        prompt += "(Step2 결과 없음)\n\n"
+
+    # ═══════════════════════════════════════════════════════
+    # 4. Step1 참고 활용: 분석 자료
+    # ═══════════════════════════════════════════════════════
+    prompt += "=" * 60 + "\n"
+    prompt += "【 3순위: Step1 분석 자료 (참고 활용) 】\n"
+    prompt += "=" * 60 + "\n\n"
+
+    if step1_result and isinstance(step1_result, dict):
+        # 핵심 필드 강조
+        key_terms = step1_result.get("key_terms")
+        if key_terms:
+            prompt += "▶ 핵심 단어 (원어 의미를 설교에 녹여내세요)\n"
+            prompt += json.dumps(key_terms, ensure_ascii=False, indent=2)
+            prompt += "\n\n"
+
+        cross_references = step1_result.get("cross_references")
+        if cross_references:
+            prompt += "▶ 보충 성경구절 (적절히 인용하세요)\n"
+            prompt += json.dumps(cross_references, ensure_ascii=False, indent=2)
+            prompt += "\n\n"
+
+        logical_flow = step1_result.get("logical_flow")
+        if logical_flow:
+            prompt += "▶ 논리적 전개 흐름\n"
+            prompt += f"  {logical_flow}\n\n"
+
+        # 나머지 Step1 필드
+        excluded_keys = {"key_terms", "cross_references", "logical_flow"}
+        other_step1 = {k: v for k, v in step1_result.items() if k not in excluded_keys}
+        if other_step1:
+            prompt += "▶ Step1 기타 분석 자료\n"
+            prompt += json.dumps(other_step1, ensure_ascii=False, indent=2)
+            prompt += "\n\n"
+    else:
+        prompt += "(Step1 결과 없음)\n\n"
+
+    # ═══════════════════════════════════════════════════════
+    # 5. 최종 작성 지침
+    # ═══════════════════════════════════════════════════════
+    prompt += "=" * 60 + "\n"
     prompt += "【 최종 작성 지침 】\n"
-    prompt += "위 Step1/Step2 자료를 참고하여 설교문을 작성하세요.\n"
+    prompt += "=" * 60 + "\n"
+    prompt += "위 자료를 활용하여 설교문을 작성하세요.\n\n"
+    prompt += "✅ 필수 체크리스트:\n"
     if duration:
-        prompt += f"⚠️ 단, 반드시 {duration} 분량을 지켜주세요. 이것이 가장 중요합니다.\n"
-    prompt += "=" * 50
+        prompt += f"  □ 분량: {duration} (절대 초과 금지)\n"
+    if step2_result:
+        prompt += "  □ Step2의 설교 구조(대지/소대지)를 그대로 따름\n"
+        prompt += "  □ Step2의 보충 성경구절(supporting_verses)을 인용\n"
+    if step1_result:
+        prompt += "  □ Step1의 핵심 단어(key_terms) 원어 의미 활용\n"
+        prompt += "  □ Step1의 보충 구절(cross_references) 적절히 인용\n"
+    prompt += "  □ 대지 간 연결 문장 포함\n"
+    prompt += "  □ 마크다운 기호 없이 순수 텍스트로 작성\n"
 
     return prompt
 
@@ -1940,6 +2072,7 @@ def api_gpt_pro():
         # JSON 모드 데이터 (새로 추가)
         step1_result = data.get("step1Result")  # Step1 JSON 결과
         step2_result = data.get("step2Result")  # Step2 JSON 결과 (writing_spec 포함)
+        step3_guide = data.get("step3Guide")    # Step3 지침 (스타일별)
         target_audience = data.get("target", "")  # 대상
         worship_type = data.get("worshipType", "")  # 예배 유형
         duration = data.get("duration", "20분")  # 분량 (기본 20분)
@@ -1950,6 +2083,7 @@ def api_gpt_pro():
                        (isinstance(step2_result, dict) and len(step2_result) > 0)
 
         print(f"[GPT-PRO/Step3] JSON 모드: {is_json_mode}, step1_result 타입: {type(step1_result)}, step2_result 타입: {type(step2_result)}")
+        print(f"[GPT-PRO/Step3] step3_guide 타입: {type(step3_guide)}, 존재: {step3_guide is not None}")
 
         print(f"[GPT-PRO/Step3] 처리 시작 - 스타일: {style_name}, 모델: {gpt_pro_model}, 토큰: {max_tokens}")
         print(f"[GPT-PRO/Step3] draft_content 길이: {len(draft_content)}, 완료된 단계: {completed_step_names}")
@@ -2041,7 +2175,7 @@ def api_gpt_pro():
 
                 # JSON 기반 user_content 생성
                 user_content = build_step3_prompt_from_json(
-                    json_guide=None,
+                    json_guide=step3_guide,  # Step3 스타일별 지침 전달
                     meta_data=meta_data,
                     step1_result=step1_result,
                     step2_result=step2_result
