@@ -2448,6 +2448,9 @@
   const videoCategories = ['간증', '드라마', '명언', '마음', '철학', '인간관계'];
   let selectedCategory = localStorage.getItem('_drama-video-category') || '간증';
 
+  // 사용자 지침 (선택사항) - 예: "쇼팬하우어 명언"
+  let customDirective = localStorage.getItem('_drama-custom-directive') || '';
+
   // 기본 설정
   let config = {
     categories: [
@@ -3402,10 +3405,6 @@ S#1. 장소 / 시간
     console.log('[Step3 Debug] global step3Guide:', step3Guide);
     console.log('[Step3 Debug] currentStep3Guide to send:', currentStep3Guide);
 
-    // 로딩 표시
-    showLoadingOverlay('OpenRouter 대본 완성 중', 'AI가 대본을 작성하고 있습니다...');
-    showStatus('🎬 Step1: OpenRouter 대본 완성 중... (약 30-60초 소요)');
-
     // 콘텐츠 유형 가져오기 (간증/드라마)
     const contentType = document.getElementById('content-type')?.value || 'testimony';
     const promptData = contentTypePrompts[contentType] || contentTypePrompts.testimony;
@@ -3415,12 +3414,77 @@ S#1. 장소 / 시간
     const currentJsonGuide = jsonGuideTextarea ? jsonGuideTextarea.value : dramaJsonGuide;
 
     try {
+      // ===== GPT-4o-mini 2단계 기획 먼저 실행 =====
+      let gptPlanResult = '';
+
+      // Step1: GPT-4o-mini 기획 (스토리 컨셉)
+      showLoadingOverlay('GPT 기획 중 (1/3)', 'GPT-4o-mini가 스토리 컨셉을 기획하고 있습니다...');
+      showStatus('🎯 Step 0-1: GPT-4o-mini 스토리 기획 중...');
+
+      const planStep1Response = await fetch('/api/drama/gpt-plan-step1', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          videoCategory: videoCategory,
+          duration: durationLabel,
+          customDirective: customDirective
+        })
+      });
+
+      const planStep1Data = await planStep1Response.json();
+      if (!planStep1Data.ok) {
+        throw new Error('GPT 기획 1단계 실패: ' + (planStep1Data.error || '알 수 없는 오류'));
+      }
+
+      console.log('[GPT-PLAN-1] 완료:', planStep1Data.result.substring(0, 200));
+
+      // Step2: GPT-4o-mini 구조화 (장면 구성)
+      showLoadingOverlay('GPT 구조화 중 (2/3)', 'GPT-4o-mini가 장면 구성을 만들고 있습니다...');
+      showStatus('📐 Step 0-2: GPT-4o-mini 장면 구조화 중...');
+
+      const planStep2Response = await fetch('/api/drama/gpt-plan-step2', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          videoCategory: videoCategory,
+          duration: durationLabel,
+          customDirective: customDirective,
+          step1Result: planStep1Data.result
+        })
+      });
+
+      const planStep2Data = await planStep2Response.json();
+      if (!planStep2Data.ok) {
+        throw new Error('GPT 기획 2단계 실패: ' + (planStep2Data.error || '알 수 없는 오류'));
+      }
+
+      console.log('[GPT-PLAN-2] 완료:', planStep2Data.result.substring(0, 200));
+
+      // GPT 기획 결과 합치기
+      gptPlanResult = `【 GPT-4o-mini 기획 결과 】\n\n`;
+      gptPlanResult += `=== Step1: 스토리 컨셉 ===\n${planStep1Data.result}\n\n`;
+      gptPlanResult += `=== Step2: 장면 구성 ===\n${planStep2Data.result}`;
+
+      // Step2 결과가 없으면 GPT 기획 결과를 draftContent로 사용
+      if (!hasResults) {
+        draftContent = gptPlanResult;
+        hasResults = true;
+      } else {
+        // Step2 결과가 있으면 GPT 기획을 앞에 추가
+        draftContent = gptPlanResult + '\n\n' + draftContent;
+      }
+
+      // Step3: Claude 4.5로 최종 대본 작성
+      showLoadingOverlay('Claude 대본 작성 중 (3/3)', 'Claude Sonnet 4.5가 대본을 작성하고 있습니다...');
+      showStatus('🎬 Step 1: Claude Sonnet 4.5 대본 완성 중... (약 30-60초 소요)');
+
       const response = await fetch('/api/drama/claude-step3', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           category: durationLabel,
           videoCategory: videoCategory,  // 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
+          customDirective: customDirective,  // 사용자 지침 (선택) - 최우선 반영
           draftContent: draftContent,
           mainCharacter: { name: mainCharacter },
           benchmarkScript: benchmarkScript,
@@ -7084,6 +7148,7 @@ S#1. 장소 / 시간
             uploadDate: uploadDate,
             viewCount: viewCount,
             category: currentCategory,
+            videoCategory: selectedCategory || '간증',  // 영상 카테고리 추가
             scriptHash: scriptHash
           })
         });
@@ -7215,8 +7280,21 @@ S#1. 장소 / 시간
               </div>
             </div>
           </div>
-          <div style="font-size: .75rem; color: #9ca3af; margin-top: .5rem; line-height: 1.4;">
-            시간과 카테고리를 선택하면 Claude Sonnet 4.5가 해당 주제에 맞춰 대본을 작성합니다.
+          <!-- 사용자 지침 입력 (선택사항) -->
+          <div style="margin-top: .75rem;">
+            <div style="font-weight: 700; font-size: .85rem; color: #4b5563; margin-bottom: .35rem; display: flex; align-items: center; gap: .3rem;">
+              <span style="font-size: 1rem;">📝</span> 지침 <span style="font-weight: 400; font-size: .75rem; color: #9ca3af;">(선택)</span>
+            </div>
+            <input
+              type="text"
+              id="custom-directive-input"
+              value="${customDirective}"
+              placeholder="예: 쇼팬하우어 명언, 부모님과의 갈등 이야기, 직장 스트레스 주제..."
+              style="width: 100%; padding: .5rem .65rem; font-size: .85rem; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"
+            />
+            <div style="font-size: .7rem; color: #9ca3af; margin-top: .3rem;">
+              구체적인 주제나 방향을 지시하면 해당 내용이 최우선으로 반영됩니다.
+            </div>
           </div>
         </div>
       `;
@@ -7227,6 +7305,16 @@ S#1. 장소 / 시간
           customDurationText = e.target.value.trim();
           localStorage.setItem('_drama-duration-text', customDurationText);
           saveToFirebase('_drama-duration-text', customDurationText);
+        });
+      }
+
+      // 사용자 지침 입력 이벤트
+      const directiveInput = document.getElementById('custom-directive-input');
+      if (directiveInput) {
+        directiveInput.addEventListener('input', (e) => {
+          customDirective = e.target.value.trim();
+          localStorage.setItem('_drama-custom-directive', customDirective);
+          saveToFirebase('_drama-custom-directive', customDirective);
         });
       }
 

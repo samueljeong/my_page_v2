@@ -1372,6 +1372,7 @@ def api_analyze_benchmark():
         upload_date = data.get("uploadDate", "")
         view_count = data.get("viewCount", "")
         category = data.get("category", "")
+        video_category = data.get("videoCategory", "간증")  # 영상 카테고리 (간증, 드라마, 명언 등)
         script_hash = data.get("scriptHash", "")
 
         if not benchmark_script:
@@ -1393,7 +1394,7 @@ def api_analyze_benchmark():
                 is_duplicate = True
                 print(f"[DRAMA-ANALYZE] 중복 대본 감지 (해시: {script_hash}) - 분석만 수행")
 
-        print(f"[DRAMA-ANALYZE] 벤치마킹 대본 분석 시작 - {view_count} 조회수 - 중복: {is_duplicate}")
+        print(f"[DRAMA-ANALYZE] 벤치마킹 대본 분석 시작 - {view_count} 조회수, 카테고리: {video_category} - 중복: {is_duplicate}")
 
         # GPT로 대본 분석
         system_content = """당신은 드라마 대본 분석 전문가입니다.
@@ -1433,7 +1434,7 @@ def api_analyze_benchmark():
 위 대본을 분석하여 핵심 패턴과 성공 요인을 추출해주세요."""
 
         completion = client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o",  # GPT-4o로 분석 (비용 효율적)
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
@@ -1484,23 +1485,23 @@ def api_analyze_benchmark():
                 if USE_POSTGRES:
                     cursor.execute('''
                         INSERT INTO benchmark_analyses
-                        (script_text, script_hash, upload_date, view_count, category,
+                        (script_text, script_hash, upload_date, view_count, category, video_category,
                          analysis_result, story_structure, character_elements,
                          dialogue_style, success_factors, ai_model, analysis_tokens)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ''', (benchmark_script, script_hash, upload_date, view_count_num, category,
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ''', (benchmark_script, script_hash, upload_date, view_count_num, category, video_category,
                           analysis, story_structure, character_elements,
-                          dialogue_style, success_factors, 'gpt-5', total_tokens))
+                          dialogue_style, success_factors, 'gpt-4o', total_tokens))
                 else:
                     cursor.execute('''
                         INSERT INTO benchmark_analyses
-                        (script_text, script_hash, upload_date, view_count, category,
+                        (script_text, script_hash, upload_date, view_count, category, video_category,
                          analysis_result, story_structure, character_elements,
                          dialogue_style, success_factors, ai_model, analysis_tokens)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (benchmark_script, script_hash, upload_date, view_count_num, category,
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (benchmark_script, script_hash, upload_date, view_count_num, category, video_category,
                           analysis, story_structure, character_elements,
-                          dialogue_style, success_factors, 'gpt-5', total_tokens))
+                          dialogue_style, success_factors, 'gpt-4o', total_tokens))
 
                 conn.commit()
                 conn.close()
@@ -1508,7 +1509,7 @@ def api_analyze_benchmark():
             except Exception as e:
                 print(f"[DRAMA-ANALYZE] DB 저장 실패: {str(e)}")
 
-        print(f"[DRAMA-ANALYZE] 분석 완료 - 저장 여부: {not is_duplicate}, 모델: gpt-5")
+        print(f"[DRAMA-ANALYZE] 분석 완료 - 저장 여부: {not is_duplicate}, 모델: gpt-4o, 카테고리: {video_category}")
 
         return jsonify({"ok": True, "analysis": analysis, "isDuplicate": is_duplicate})
 
@@ -2022,6 +2023,7 @@ def api_drama_claude_step3():
 
         category = data.get("category", "")
         video_category = data.get("videoCategory", "간증")  # 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
+        custom_directive = data.get("customDirective", "")  # 사용자 지침 (선택) - 최우선 반영
         style_name = data.get("styleName", "")
         style_description = data.get("styleDescription", "")
         draft_content = data.get("draftContent", "")
@@ -2049,7 +2051,7 @@ def api_drama_claude_step3():
         if effective_category:
             category = effective_category
 
-        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 시간: {category}, 영상카테고리: {video_category}, 모델: {selected_model}, 콘텐츠유형: {content_type}")
+        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 시간: {category}, 영상카테고리: {video_category}, 지침: {custom_directive or '(없음)'}, 모델: {selected_model}")
         print(f"[DRAMA-STEP3-DEBUG] step3_guide 길이: {len(step3_guide)}, 내용: {step3_guide[:100] if step3_guide else '(없음)'}...")
         print(f"[DRAMA-STEP3-DEBUG] draft_content 길이: {len(draft_content)}, 내용: {draft_content[:300] if draft_content else '(없음)'}...")
 
@@ -2189,6 +2191,12 @@ def api_drama_claude_step3():
 
         # 사용자 메시지 구성
         user_content = ""
+
+        # 🔥 사용자 지침 (최우선 적용)
+        if custom_directive:
+            user_content += "【 🔥 사용자 지침 (최우선 적용) 】\n"
+            user_content += f"{custom_directive}\n"
+            user_content += "→ 이 지침을 가장 우선적으로 반영하여 대본을 작성하세요.\n\n"
 
         # 메타 정보 추가
         meta_lines = []
@@ -5321,6 +5329,312 @@ def api_thumbnail_overlay():
         import traceback
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 200
+
+
+# ===== 카테고리별 벤치마킹 대본 조회 API =====
+@app.route('/api/drama/benchmarks', methods=['GET'])
+def api_get_benchmarks():
+    """카테고리별 벤치마킹 대본 목록 조회"""
+    try:
+        video_category = request.args.get('videoCategory', '')
+        limit = int(request.args.get('limit', 20))
+        offset = int(request.args.get('offset', 0))
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if video_category:
+            if USE_POSTGRES:
+                cursor.execute('''
+                    SELECT id, script_text, upload_date, view_count, category, video_category,
+                           analysis_result, created_at
+                    FROM benchmark_analyses
+                    WHERE video_category = %s
+                    ORDER BY view_count DESC, created_at DESC
+                    LIMIT %s OFFSET %s
+                ''', (video_category, limit, offset))
+            else:
+                cursor.execute('''
+                    SELECT id, script_text, upload_date, view_count, category, video_category,
+                           analysis_result, created_at
+                    FROM benchmark_analyses
+                    WHERE video_category = ?
+                    ORDER BY view_count DESC, created_at DESC
+                    LIMIT ? OFFSET ?
+                ''', (video_category, limit, offset))
+        else:
+            if USE_POSTGRES:
+                cursor.execute('''
+                    SELECT id, script_text, upload_date, view_count, category, video_category,
+                           analysis_result, created_at
+                    FROM benchmark_analyses
+                    ORDER BY view_count DESC, created_at DESC
+                    LIMIT %s OFFSET %s
+                ''', (limit, offset))
+            else:
+                cursor.execute('''
+                    SELECT id, script_text, upload_date, view_count, category, video_category,
+                           analysis_result, created_at
+                    FROM benchmark_analyses
+                    ORDER BY view_count DESC, created_at DESC
+                    LIMIT ? OFFSET ?
+                ''', (limit, offset))
+
+        rows = cursor.fetchall()
+
+        # 카테고리별 개수 조회
+        if USE_POSTGRES:
+            cursor.execute('''
+                SELECT video_category, COUNT(*) as cnt
+                FROM benchmark_analyses
+                GROUP BY video_category
+            ''')
+        else:
+            cursor.execute('''
+                SELECT video_category, COUNT(*) as cnt
+                FROM benchmark_analyses
+                GROUP BY video_category
+            ''')
+        category_counts = {row[0] or '미분류': row[1] for row in cursor.fetchall()}
+
+        conn.close()
+
+        benchmarks = []
+        for row in rows:
+            benchmarks.append({
+                'id': row[0],
+                'scriptPreview': row[1][:200] + '...' if len(row[1]) > 200 else row[1],
+                'uploadDate': row[2],
+                'viewCount': row[3],
+                'category': row[4],
+                'videoCategory': row[5] or '미분류',
+                'analysisPreview': row[6][:300] + '...' if row[6] and len(row[6]) > 300 else row[6],
+                'createdAt': str(row[7]) if row[7] else ''
+            })
+
+        return jsonify({
+            'ok': True,
+            'benchmarks': benchmarks,
+            'categoryCounts': category_counts,
+            'total': sum(category_counts.values())
+        })
+
+    except Exception as e:
+        print(f"[BENCHMARKS][ERROR] {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 200
+
+
+@app.route('/api/drama/benchmark/<int:benchmark_id>', methods=['GET'])
+def api_get_benchmark_detail(benchmark_id):
+    """벤치마킹 대본 상세 조회"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('SELECT * FROM benchmark_analyses WHERE id = %s', (benchmark_id,))
+        else:
+            cursor.execute('SELECT * FROM benchmark_analyses WHERE id = ?', (benchmark_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({'ok': False, 'error': '벤치마킹 대본을 찾을 수 없습니다.'}), 404
+
+        return jsonify({
+            'ok': True,
+            'benchmark': {
+                'id': row[0],
+                'scriptText': row[1],
+                'uploadDate': row[3],
+                'viewCount': row[4],
+                'category': row[5],
+                'videoCategory': row[6] if len(row) > 6 else '미분류',
+                'analysisResult': row[7] if len(row) > 7 else row[6],
+                'storyStructure': row[8] if len(row) > 8 else '',
+                'characterElements': row[9] if len(row) > 9 else '',
+                'dialogueStyle': row[10] if len(row) > 10 else '',
+                'successFactors': row[11] if len(row) > 11 else ''
+            }
+        })
+
+    except Exception as e:
+        print(f"[BENCHMARK-DETAIL][ERROR] {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 200
+
+
+# ===== GPT-4o-mini 2단계 기획 API =====
+@app.route('/api/drama/gpt-plan-step1', methods=['POST'])
+def api_gpt_plan_step1():
+    """GPT-4o-mini 기획 1단계: 스토리 컨셉 생성"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'ok': False, 'error': 'No data received'}), 400
+
+        video_category = data.get('videoCategory', '간증')
+        duration = data.get('duration', '2분')
+        custom_directive = data.get('customDirective', '')
+
+        print(f"[GPT-PLAN-1] 기획 시작 - 카테고리: {video_category}, 시간: {duration}, 지침: {custom_directive or '(없음)'}")
+
+        system_prompt = """당신은 영상 콘텐츠 기획 전문가입니다.
+
+【 역할 】
+주어진 카테고리와 시간에 맞는 스토리 컨셉을 기획합니다.
+
+【 출력 형식 】
+1. 주인공 설정
+   - 이름, 나이, 직업
+   - 성격 특징 (2-3가지)
+   - 현재 상황/고민
+
+2. 스토리 컨셉
+   - 한 줄 요약
+   - 핵심 메시지
+   - 감정 흐름 (시작 → 전환점 → 결말)
+
+3. 배경
+   - 시대/장소
+   - 분위기
+
+【 주의사항 】
+- 구체적인 이름, 숫자, 장소 사용
+- 공감할 수 있는 보편적 상황 선택
+- 간결하게 작성 (500자 이내)"""
+
+        user_prompt = f"""【 영상 정보 】
+- 카테고리: {video_category}
+- 영상 길이: {duration}
+"""
+        if custom_directive:
+            user_prompt += f"""
+【 🔥 사용자 지침 (최우선) 】
+{custom_directive}
+→ 이 지침을 반드시 반영하여 기획하세요.
+"""
+
+        user_prompt += "\n위 정보를 바탕으로 스토리 컨셉을 기획해주세요."
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=1000
+        )
+
+        result = completion.choices[0].message.content.strip()
+        tokens = completion.usage.total_tokens if hasattr(completion, 'usage') else 0
+
+        print(f"[GPT-PLAN-1] 기획 완료 - 토큰: {tokens}")
+
+        return jsonify({
+            'ok': True,
+            'result': result,
+            'tokens': tokens,
+            'step': 1
+        })
+
+    except Exception as e:
+        print(f"[GPT-PLAN-1][ERROR] {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 200
+
+
+@app.route('/api/drama/gpt-plan-step2', methods=['POST'])
+def api_gpt_plan_step2():
+    """GPT-4o-mini 기획 2단계: 장면 구조화"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'ok': False, 'error': 'No data received'}), 400
+
+        video_category = data.get('videoCategory', '간증')
+        duration = data.get('duration', '2분')
+        custom_directive = data.get('customDirective', '')
+        step1_result = data.get('step1Result', '')
+
+        if not step1_result:
+            return jsonify({'ok': False, 'error': 'Step1 결과가 필요합니다.'}), 400
+
+        print(f"[GPT-PLAN-2] 구조화 시작 - 카테고리: {video_category}")
+
+        system_prompt = """당신은 스토리 구조화 전문가입니다.
+
+【 역할 】
+기획된 컨셉을 바탕으로 상세한 장면 구성을 만듭니다.
+
+【 출력 형식 】
+## 장면 구성
+
+### 장면 1: 도입부 (약 20%)
+- 상황 설명
+- 등장인물 소개
+- 핵심 대사 1-2개
+
+### 장면 2: 전개 (약 30%)
+- 갈등/문제 발생
+- 감정 고조
+- 핵심 대사 2-3개
+
+### 장면 3: 전환점 (약 20%)
+- 깨달음/변화의 계기
+- 핵심 대사 1-2개
+
+### 장면 4: 절정 (약 20%)
+- 감정 폭발/결정적 순간
+- 핵심 대사 2-3개
+
+### 장면 5: 결말 (약 10%)
+- 메시지 전달
+- 여운 남기기
+
+【 주의사항 】
+- 각 장면의 목적 명확히
+- 대사는 실제 사용할 수 있는 형태로
+- 감정 흐름이 자연스럽게 연결되도록"""
+
+        user_prompt = f"""【 영상 정보 】
+- 카테고리: {video_category}
+- 영상 길이: {duration}
+
+【 Step1 기획 결과 】
+{step1_result}
+"""
+        if custom_directive:
+            user_prompt += f"""
+【 🔥 사용자 지침 (최우선) 】
+{custom_directive}
+"""
+
+        user_prompt += "\n위 기획을 바탕으로 상세한 장면 구성을 만들어주세요."
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=1500
+        )
+
+        result = completion.choices[0].message.content.strip()
+        tokens = completion.usage.total_tokens if hasattr(completion, 'usage') else 0
+
+        print(f"[GPT-PLAN-2] 구조화 완료 - 토큰: {tokens}")
+
+        return jsonify({
+            'ok': True,
+            'result': result,
+            'tokens': tokens,
+            'step': 2
+        })
+
+    except Exception as e:
+        print(f"[GPT-PLAN-2][ERROR] {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 200
 
 
 # ===== Render 배포를 위한 설정 =====
