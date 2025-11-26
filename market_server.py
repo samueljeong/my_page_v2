@@ -5,6 +5,7 @@ import os
 import json
 import hmac
 import hashlib
+import base64
 import time
 import requests
 from datetime import datetime
@@ -302,21 +303,24 @@ def get_naver_access_token():
         return None
 
     timestamp = str(int(time.time() * 1000))
+    # 서명 생성: client_id + "_" + timestamp를 client_secret으로 HMAC-SHA256 후 Base64 인코딩
     password = f"{NAVER_CLIENT_ID}_{timestamp}"
     signature = hmac.new(
         NAVER_CLIENT_SECRET.encode('utf-8'),
         password.encode('utf-8'),
         hashlib.sha256
-    ).hexdigest()
+    ).digest()
+    signature_base64 = base64.b64encode(signature).decode('utf-8')
 
     try:
         print(f"[Naver API] 토큰 요청 URL: {NAVER_API_BASE}/v1/oauth2/token")
+        print(f"[Naver API] timestamp: {timestamp}")
         response = requests.post(
             f"{NAVER_API_BASE}/v1/oauth2/token",
             data={
                 "client_id": NAVER_CLIENT_ID,
                 "timestamp": timestamp,
-                "client_secret_sign": signature,
+                "client_secret_sign": signature_base64,
                 "grant_type": "client_credentials",
                 "type": "SELF"
             }
@@ -325,11 +329,13 @@ def get_naver_access_token():
         print(f"[Naver API] 토큰 응답 내용: {response.text[:500]}")
 
         if response.status_code == 200:
-            token = response.json().get('access_token')
+            data = response.json()
+            token = data.get('access_token')
             print(f"[Naver API] 토큰 발급 성공: {token[:20] if token else 'None'}...")
             return token
         else:
             print(f"[Naver API] 토큰 발급 실패: {response.status_code}")
+            print(f"[Naver API] 에러 내용: {response.text}")
     except Exception as e:
         print(f"[Naver API] Token error: {e}")
     return None
@@ -476,19 +482,39 @@ def get_products():
 
     if platform in ['all', 'smartstore']:
         if api_status['smartstore']['connected']:
-            # 실제 네이버 API 호출
-            result = call_naver_api('/v2/products')
+            # 실제 네이버 API 호출 - 상품 검색 API 사용
+            search_data = {
+                "searchKeywordType": "TITLE",
+                "searchKeyword": search if search else None,
+                "page": 1,
+                "size": 100
+            }
+            # None 값 제거
+            search_data = {k: v for k, v in search_data.items() if v is not None}
+
+            result = call_naver_api('/v1/products/search', method='POST', data=search_data)
+            print(f"[Naver API] 상품 검색 결과: {result}")
+
             if result and 'contents' in result:
                 for item in result['contents']:
                     products.append({
-                        "id": item.get('originProductNo'),
+                        "id": str(item.get('originProductNo', '')),
                         "platform": "smartstore",
-                        "name": item.get('name'),
-                        "price": item.get('salePrice'),
+                        "name": item.get('name', ''),
+                        "category": item.get('wholeCategoryName', '').split('>')[-1].strip() if item.get('wholeCategoryName') else '기타',
+                        "price": item.get('salePrice', 0),
+                        "salePrice": item.get('discountedPrice', item.get('salePrice', 0)),
                         "stock": item.get('stockQuantity', 0),
-                        # ... 추가 필드 매핑
+                        "status": "OUTOFSTOCK" if item.get('stockQuantity', 0) == 0 else "SALE",
+                        "imageUrl": item.get('representativeImage', {}).get('url', ''),
+                        "salesCount": item.get('saleCount', 0),
+                        "reviewCount": item.get('reviewCount', 0),
+                        "rating": item.get('reviewScore', 0),
+                        "lastModified": item.get('modifiedDate', '')
                     })
+                print(f"[Naver API] {len(products)}개 상품 로드 완료")
             else:
+                print("[Naver API] 상품 데이터 없음, Mock 데이터 사용")
                 products.extend(MOCK_SMARTSTORE_PRODUCTS)
         else:
             products.extend(MOCK_SMARTSTORE_PRODUCTS)
