@@ -3458,9 +3458,17 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
       // 성경 배경지식
       if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'block';
     } else if (category === 'design_helper' || label.includes('디자인')) {
-      // 디자인 도우미
-      if (designHelperContent) designHelperContent.style.display = 'block';
-      initDesignHelper();
+      // 디자인 도우미 - 비밀번호 필요
+      const password = prompt('디자인 도우미는 테스트 중입니다.\n접근 비밀번호를 입력하세요:');
+      if (password === '6039') {
+        if (designHelperContent) designHelperContent.style.display = 'block';
+        initDesignHelper();
+      } else {
+        alert('비밀번호가 틀렸습니다.');
+        // 이전 카테고리로 돌아가기 또는 빈 페이지 표시
+        if (emptyContent) emptyContent.style.display = 'block';
+        return;
+      }
     } else if (label.includes('설교') || category.startsWith('step_') ||
                ['general', 'series', 'education', 'lecture'].includes(category)) {
       // 설교 관련 카테고리
