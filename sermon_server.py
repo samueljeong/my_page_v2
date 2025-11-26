@@ -2884,38 +2884,318 @@ def generate_with_dalle3(prompt, size="1792x1024"):
 
 
 def generate_with_flux_pro(prompt, aspect_ratio="16:9"):
-    """Flux Pro (Replicate)로 이미지 생성"""
+    """Flux Pro (fal.ai)로 이미지 생성"""
     try:
-        import replicate
+        import fal_client
 
-        # Replicate API 토큰 확인
-        replicate_token = os.getenv("REPLICATE_API_TOKEN")
-        if not replicate_token:
-            raise RuntimeError("REPLICATE_API_TOKEN이 설정되지 않았습니다.")
+        # fal.ai API 키 확인
+        fal_key = os.getenv("FAL_KEY")
+        if not fal_key:
+            raise RuntimeError("FAL_KEY가 설정되지 않았습니다. fal.ai에서 API 키를 발급받아 환경변수에 설정해주세요.")
 
-        print(f"[FLUX_PRO] 이미지 생성 시작 - 비율: {aspect_ratio}")
+        print(f"[FLUX_PRO] fal.ai 이미지 생성 시작 - 비율: {aspect_ratio}")
 
-        # Flux 1.1 Pro 모델 호출
-        output = replicate.run(
-            "black-forest-labs/flux-1.1-pro",
-            input={
+        # aspect_ratio를 fal.ai 형식으로 변환
+        size_map = {
+            "16:9": "landscape_16_9",
+            "9:16": "portrait_16_9",
+            "1:1": "square",
+            "4:3": "landscape_4_3",
+            "3:4": "portrait_4_3"
+        }
+        image_size = size_map.get(aspect_ratio, "landscape_16_9")
+
+        # fal.ai Flux Dev 모델 호출
+        result = fal_client.subscribe(
+            "fal-ai/flux/dev",
+            arguments={
                 "prompt": prompt,
-                "aspect_ratio": aspect_ratio,
-                "output_format": "webp",
-                "output_quality": 80,
-                "safety_tolerance": 2,
-                "prompt_upsampling": True
+                "image_size": image_size,
+                "num_inference_steps": 28,
+                "guidance_scale": 3.5,
+                "num_images": 1,
+                "enable_safety_checker": True
             }
         )
 
-        # output은 URL 문자열
-        image_url = str(output)
-        print(f"[FLUX_PRO] 이미지 생성 완료")
-        return image_url
+        # 결과에서 이미지 URL 추출
+        if result and 'images' in result and len(result['images']) > 0:
+            image_url = result['images'][0]['url']
+            print(f"[FLUX_PRO] fal.ai 이미지 생성 완료")
+            return image_url
+        else:
+            raise RuntimeError("이미지 생성 결과가 없습니다.")
 
     except Exception as e:
         print(f"[FLUX_PRO][ERROR] {str(e)}")
         raise e
+
+
+# ===== 한글 텍스트 오버레이 기능 =====
+
+# 사용 가능한 폰트 목록
+AVAILABLE_FONTS = {
+    "nanum_gothic": {"name": "나눔고딕", "file": "NanumGothic.ttf", "bold": "NanumGothicBold.ttf"},
+    "nanum_barun": {"name": "나눔바른고딕", "file": "NanumBarunGothic.ttf", "bold": "NanumBarunGothicBold.ttf"},
+    "nanum_myeongjo": {"name": "나눔명조", "file": "NanumMyeongjo.ttf", "bold": "NanumMyeongjoBold.ttf"},
+    "nanum_square": {"name": "나눔스퀘어", "file": "NanumSquareR.ttf", "bold": "NanumSquareB.ttf"},
+    "nanum_square_round": {"name": "나눔스퀘어라운드", "file": "NanumSquareRoundR.ttf", "bold": "NanumSquareRoundB.ttf"}
+}
+
+def get_font_path(font_id, bold=False):
+    """폰트 파일 경로 반환"""
+    font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+    font_info = AVAILABLE_FONTS.get(font_id, AVAILABLE_FONTS['nanum_gothic'])
+    font_file = font_info['bold'] if bold else font_info['file']
+    return os.path.join(font_dir, font_file)
+
+def add_text_overlay(image_url, texts, font_id="nanum_gothic"):
+    """이미지에 한글 텍스트 오버레이 추가"""
+    from PIL import Image, ImageDraw, ImageFont
+    import requests
+    from io import BytesIO
+    import base64
+
+    try:
+        print(f"[TEXT_OVERLAY] 텍스트 오버레이 시작 - 폰트: {font_id}")
+
+        # 이미지 다운로드
+        response = requests.get(image_url, timeout=30)
+        response.raise_for_status()
+        img = Image.open(BytesIO(response.content)).convert('RGBA')
+
+        # 오버레이용 투명 레이어 생성
+        overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        img_width, img_height = img.size
+
+        # 텍스트 렌더링
+        for text_item in texts:
+            if not text_item.get('text'):
+                continue
+
+            text = text_item['text']
+            position = text_item.get('position', 'center')  # top, center, bottom
+            font_size = text_item.get('font_size', 60)
+            color = text_item.get('color', '#FFFFFF')
+            shadow = text_item.get('shadow', True)
+            bold = text_item.get('bold', False)
+            y_offset = text_item.get('y_offset', 0)  # 추가 Y 오프셋
+
+            # 폰트 로드
+            font_path = get_font_path(font_id, bold)
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except Exception as e:
+                print(f"[TEXT_OVERLAY] 폰트 로드 실패, 기본 폰트 사용: {e}")
+                font = ImageFont.load_default()
+
+            # 텍스트 크기 계산
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+
+            # X 위치 (가운데 정렬)
+            x = (img_width - text_width) // 2
+
+            # Y 위치 계산
+            if position == 'top':
+                y = int(img_height * 0.1) + y_offset
+            elif position == 'bottom':
+                y = int(img_height * 0.75) + y_offset
+            else:  # center
+                y = (img_height - text_height) // 2 + y_offset
+
+            # 색상 파싱
+            if color.startswith('#'):
+                r = int(color[1:3], 16)
+                g = int(color[3:5], 16)
+                b = int(color[5:7], 16)
+                text_color = (r, g, b, 255)
+            else:
+                text_color = (255, 255, 255, 255)
+
+            # 그림자 효과
+            if shadow:
+                shadow_offset = max(2, font_size // 20)
+                shadow_color = (0, 0, 0, 180)
+                draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=shadow_color)
+
+            # 텍스트 그리기
+            draw.text((x, y), text, font=font, fill=text_color)
+
+        # 이미지 합성
+        result = Image.alpha_composite(img, overlay)
+        result = result.convert('RGB')
+
+        # Base64로 인코딩
+        buffer = BytesIO()
+        result.save(buffer, format='PNG', quality=95)
+        buffer.seek(0)
+        img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        data_url = f"data:image/png;base64,{img_base64}"
+
+        print(f"[TEXT_OVERLAY] 텍스트 오버레이 완료")
+        return data_url
+
+    except Exception as e:
+        print(f"[TEXT_OVERLAY][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # 오버레이 실패 시 원본 이미지 URL 반환
+        return image_url
+
+
+@app.route('/api/banner/fonts')
+def get_available_fonts():
+    """사용 가능한 폰트 목록 반환"""
+    fonts = [{"id": k, "name": v["name"]} for k, v in AVAILABLE_FONTS.items()]
+    return jsonify({"ok": True, "fonts": fonts})
+
+
+@app.route('/api/banner/generate-with-text', methods=['POST'])
+def generate_banner_with_text():
+    """현수막/배너 이미지 생성 + 한글 텍스트 오버레이"""
+    try:
+        data = request.json
+        model = data.get('model', 'dalle3')
+        template_type = data.get('template', 'general')
+        layout = data.get('layout', 'horizontal')
+        custom_prompt = data.get('custom_prompt', '')
+
+        # 텍스트 오버레이 설정
+        add_text = data.get('add_text', False)
+        font_id = data.get('font_id', 'nanum_gothic')
+        event_name = data.get('event_name', '')
+        church_name = data.get('church_name', '')
+        schedule = data.get('schedule', '')
+        speaker = data.get('speaker', '')
+        theme = data.get('theme', '')
+
+        # 템플릿 로드
+        templates = load_banner_templates()
+        if not templates:
+            return jsonify({"ok": False, "error": "템플릿 로드 실패"}), 500
+
+        template_info = templates['templates'].get(template_type, templates['templates']['general'])
+        layout_info = templates['layouts'].get(layout, templates['layouts']['horizontal'])
+        model_info = templates['models'].get(model, templates['models']['dalle3'])
+
+        # 이미지 생성 프롬프트 구성
+        if custom_prompt:
+            base_prompt = custom_prompt
+        else:
+            base_prompt = f"Create a beautiful church banner background for {template_info['name_en']}."
+            if event_name:
+                base_prompt += f" Event theme: {event_name}."
+            if theme:
+                base_prompt += f" Message: {theme}."
+
+        full_prompt = f"{base_prompt} Style: {template_info['prompt_style']}. "
+        full_prompt += "The image should be atmospheric and suitable for text overlay. "
+        full_prompt += "No text, letters, or words in the image. High quality, professional design, "
+        full_prompt += "beautiful lighting, church-appropriate aesthetic. Leave space in center for text overlay."
+
+        print(f"[BANNER] 생성 요청 - 모델: {model}, 텍스트 오버레이: {add_text}")
+
+        # 이미지 생성
+        image_url = None
+        if model == 'dalle3':
+            image_url = generate_with_dalle3(full_prompt, layout_info['dalle_size'])
+        elif model == 'flux_pro':
+            image_url = generate_with_flux_pro(full_prompt, layout_info['flux_aspect'])
+        else:
+            return jsonify({"ok": False, "error": f"지원하지 않는 모델: {model}"}), 400
+
+        if not image_url:
+            return jsonify({"ok": False, "error": "이미지 생성 실패"}), 500
+
+        # 텍스트 오버레이 적용
+        final_image_url = image_url
+        if add_text:
+            texts = []
+
+            # 행사명 (상단)
+            if event_name:
+                texts.append({
+                    "text": event_name,
+                    "position": "top",
+                    "font_size": 80,
+                    "color": "#FFFFFF",
+                    "bold": True,
+                    "shadow": True,
+                    "y_offset": 20
+                })
+
+            # 주제/말씀 (중앙)
+            if theme:
+                texts.append({
+                    "text": theme,
+                    "position": "center",
+                    "font_size": 60,
+                    "color": "#FFD700",
+                    "bold": True,
+                    "shadow": True,
+                    "y_offset": 0
+                })
+
+            # 일정 (중앙 아래)
+            if schedule:
+                texts.append({
+                    "text": schedule,
+                    "position": "center",
+                    "font_size": 45,
+                    "color": "#FFFFFF",
+                    "bold": False,
+                    "shadow": True,
+                    "y_offset": 80
+                })
+
+            # 강사 (하단)
+            if speaker:
+                texts.append({
+                    "text": speaker,
+                    "position": "bottom",
+                    "font_size": 50,
+                    "color": "#FFFFFF",
+                    "bold": False,
+                    "shadow": True,
+                    "y_offset": -60
+                })
+
+            # 교회명 (하단)
+            if church_name:
+                texts.append({
+                    "text": church_name,
+                    "position": "bottom",
+                    "font_size": 55,
+                    "color": "#FFFFFF",
+                    "bold": True,
+                    "shadow": True,
+                    "y_offset": 20
+                })
+
+            if texts:
+                final_image_url = add_text_overlay(image_url, texts, font_id)
+
+        print(f"[BANNER] 이미지 생성 완료")
+        return jsonify({
+            "ok": True,
+            "image_url": final_image_url,
+            "original_url": image_url,
+            "model": model_info['name'],
+            "template": template_info['name'],
+            "layout": layout_info['name'],
+            "text_added": add_text,
+            "font": AVAILABLE_FONTS.get(font_id, {}).get('name', '나눔고딕')
+        })
+
+    except Exception as e:
+        print(f"[BANNER][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route('/api/banner/generate-prompt', methods=['POST'])

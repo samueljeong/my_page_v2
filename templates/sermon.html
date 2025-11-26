@@ -1216,9 +1216,9 @@
                   <label style="display: flex; align-items: center; padding: .75rem; background: #f8f9fa; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" id="model-flux-label">
                     <input type="radio" name="banner-model" value="flux_pro" style="margin-right: .5rem;">
                     <div>
-                      <div style="font-weight: 600; font-size: .9rem;">Flux Pro</div>
-                      <div style="font-size: .75rem; color: #666;">$0.05~0.06/장</div>
-                      <div style="font-size: .7rem; color: #888;">최고 포토리얼리즘</div>
+                      <div style="font-weight: 600; font-size: .9rem;">Flux Pro (fal.ai)</div>
+                      <div style="font-size: .75rem; color: #666;">~$0.025/megapixel</div>
+                      <div style="font-size: .7rem; color: #888;">포토리얼리즘, 저렴</div>
                     </div>
                   </label>
                 </div>
@@ -1276,6 +1276,30 @@
                 </div>
               </div>
 
+              <!-- 텍스트 오버레이 옵션 -->
+              <div class="box" style="margin-bottom: 1rem; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem;">
+                  <div class="label" style="margin: 0; color: #15803d;">✨ 한글 텍스트 자동 삽입</div>
+                  <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="banner-add-text" checked style="width: 18px; height: 18px; margin-right: .5rem;">
+                    <span style="font-size: .85rem; color: #166534; font-weight: 600;">활성화</span>
+                  </label>
+                </div>
+                <div id="text-overlay-options">
+                  <div style="font-size: .8rem; color: #166534; margin-bottom: .5rem;">위에 입력한 행사 정보가 이미지에 자동으로 추가됩니다.</div>
+                  <div style="display: flex; gap: .5rem; align-items: center;">
+                    <label style="font-size: .85rem; color: #15803d; font-weight: 500;">폰트:</label>
+                    <select id="banner-font" style="flex: 1; padding: .4rem; border-radius: 6px; border: 1px solid #86efac; background: white;">
+                      <option value="nanum_gothic">나눔고딕</option>
+                      <option value="nanum_barun">나눔바른고딕</option>
+                      <option value="nanum_myeongjo">나눔명조</option>
+                      <option value="nanum_square">나눔스퀘어</option>
+                      <option value="nanum_square_round">나눔스퀘어라운드</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <!-- 고급 옵션 -->
               <div class="box" style="margin-bottom: 1rem;">
                 <div class="toggle-header" style="cursor: pointer;" onclick="toggleAdvancedOptions()">
@@ -1319,6 +1343,8 @@
                       <div><strong>모델:</strong> <span id="banner-info-model">-</span></div>
                       <div><strong>템플릿:</strong> <span id="banner-info-template">-</span></div>
                       <div><strong>레이아웃:</strong> <span id="banner-info-layout">-</span></div>
+                      <div><strong>텍스트:</strong> <span id="banner-info-text">-</span></div>
+                      <div><strong>폰트:</strong> <span id="banner-info-font">-</span></div>
                     </div>
                   </div>
                 </div>
@@ -1330,10 +1356,10 @@
           <div class="box" style="margin-top: 1rem; background: #fffbeb; border: 1px solid #f59e0b;">
             <div style="font-weight: 600; color: #b45309; margin-bottom: .5rem;">💡 사용 팁</div>
             <ul style="margin: 0; padding-left: 1.2rem; font-size: .85rem; color: #78350f; line-height: 1.6;">
-              <li>생성된 이미지는 <strong>배경용</strong>입니다. 텍스트는 Canva, 포토샵 등에서 추가하세요.</li>
-              <li><strong>DALL-E 3</strong>은 텍스트 렌더링에 강하고, <strong>Flux Pro</strong>는 사실적인 이미지에 강합니다.</li>
+              <li><strong>한글 텍스트 자동 삽입</strong>을 활성화하면 행사 정보가 이미지에 자동으로 추가됩니다.</li>
+              <li><strong>DALL-E 3</strong>은 $0.04~0.08/장, <strong>Flux Pro</strong>는 $0.025/megapixel (fal.ai)입니다.</li>
               <li>원하는 결과가 나오지 않으면 "다시 생성"을 눌러 새로운 이미지를 받아보세요.</li>
-              <li>Flux Pro 사용 시 <strong>REPLICATE_API_TOKEN</strong> 환경변수 설정이 필요합니다.</li>
+              <li>Flux Pro 사용 시 <strong>FAL_KEY</strong> 환경변수 설정이 필요합니다. (<a href="https://fal.ai" target="_blank" style="color: #b45309;">fal.ai</a>에서 발급)</li>
             </ul>
           </div>
         </div>
@@ -5747,6 +5773,8 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const speaker = document.getElementById('banner-speaker').value;
     const theme = document.getElementById('banner-theme').value;
     const customPrompt = document.getElementById('banner-custom-prompt').value;
+    const addText = document.getElementById('banner-add-text').checked;
+    const fontId = document.getElementById('banner-font').value;
 
     // UI 업데이트
     const btnGenerate = document.getElementById('btn-generate-banner');
@@ -5761,7 +5789,8 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     resultDiv.style.display = 'none';
 
     try {
-      const response = await fetch('/api/banner/generate', {
+      // 텍스트 오버레이 포함 API 사용
+      const response = await fetch('/api/banner/generate-with-text', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -5773,7 +5802,9 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
           schedule: schedule,
           speaker: speaker,
           theme: theme,
-          custom_prompt: customPrompt
+          custom_prompt: customPrompt,
+          add_text: addText,
+          font_id: fontId
         })
       });
 
@@ -5785,12 +5816,20 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         const downloadLink = document.getElementById('banner-download-link');
 
         bannerImage.src = data.image_url;
-        downloadLink.href = data.image_url;
+
+        // Base64 이미지인 경우 다운로드 링크 처리
+        if (data.image_url.startsWith('data:')) {
+          downloadLink.href = data.image_url;
+        } else {
+          downloadLink.href = data.image_url;
+        }
 
         // 정보 업데이트
         document.getElementById('banner-info-model').textContent = data.model;
         document.getElementById('banner-info-template').textContent = data.template;
         document.getElementById('banner-info-layout').textContent = data.layout;
+        document.getElementById('banner-info-text').textContent = data.text_added ? '추가됨' : '없음';
+        document.getElementById('banner-info-font').textContent = data.font || '-';
 
         resultDiv.style.display = 'block';
       } else {
