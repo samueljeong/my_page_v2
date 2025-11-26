@@ -2444,6 +2444,10 @@
   let step2Collapsed = false;
   let customDurationText = localStorage.getItem('_drama-duration-text') || '';
 
+  // 영상 카테고리 설정
+  const videoCategories = ['간증', '드라마', '명언', '마음', '철학', '인간관계'];
+  let selectedCategory = localStorage.getItem('_drama-video-category') || '간증';
+
   // 기본 설정
   let config = {
     categories: [
@@ -3381,7 +3385,8 @@ S#1. 장소 / 시간
 
     // 기본 정보 수집
     const categorySelect = document.getElementById('drama-category');
-    const categoryLabel = (customDurationText || '').trim() || (categorySelect ? categorySelect.options[categorySelect.selectedIndex].text : '');
+    const durationLabel = (customDurationText || '').trim() || (categorySelect ? categorySelect.options[categorySelect.selectedIndex].text : '');
+    const videoCategory = selectedCategory || '간증';  // 영상 카테고리 (간증, 드라마, 명언 등)
     const mainCharacterInput = document.getElementById('main-character');
     const mainCharacter = mainCharacterInput ? mainCharacterInput.value : '';
     const benchmarkScript = document.getElementById('benchmark-script')?.value || '';
@@ -3414,7 +3419,8 @@ S#1. 장소 / 시간
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          category: categoryLabel,
+          category: durationLabel,
+          videoCategory: videoCategory,  // 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
           draftContent: draftContent,
           mainCharacter: { name: mainCharacter },
           benchmarkScript: benchmarkScript,
@@ -7179,18 +7185,38 @@ S#1. 장소 / 시간
     if (workflowBoxes.length === 0) {
       container.innerHTML = `
         <div class="box" style="padding: .75rem;">
-          <div style="font-weight: 700; font-size: .95rem; color: #4b5563; margin-bottom: .35rem; display: flex; align-items: center; gap: .4rem;">
-            <span style="font-size: 1.1rem;">⏱️</span> 대본 작성 시간 지정
+          <div style="display: flex; gap: 1rem; align-items: flex-start;">
+            <!-- 왼쪽: 시간 지정 -->
+            <div style="flex: 0 0 140px;">
+              <div style="font-weight: 700; font-size: .85rem; color: #4b5563; margin-bottom: .35rem; display: flex; align-items: center; gap: .3rem;">
+                <span style="font-size: 1rem;">⏱️</span> 시간
+              </div>
+              <input
+                type="text"
+                id="custom-duration-input"
+                value="${customDurationText}"
+                placeholder="예: 2분"
+                style="width: 100%; padding: .5rem .55rem; font-size: .85rem; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"
+              />
+            </div>
+            <!-- 오른쪽: 카테고리 선택 -->
+            <div style="flex: 1;">
+              <div style="font-weight: 700; font-size: .85rem; color: #4b5563; margin-bottom: .35rem; display: flex; align-items: center; gap: .3rem;">
+                <span style="font-size: 1rem;">🎬</span> 카테고리
+              </div>
+              <div id="category-toggle-container" style="display: flex; flex-wrap: wrap; gap: .4rem;">
+                ${videoCategories.map(cat => `
+                  <button
+                    class="category-toggle-btn ${selectedCategory === cat ? 'active' : ''}"
+                    data-category="${cat}"
+                    style="padding: .45rem .7rem; font-size: .8rem; border-radius: 20px; border: 2px solid ${selectedCategory === cat ? '#6366f1' : '#e5e7eb'}; background: ${selectedCategory === cat ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#fff'}; color: ${selectedCategory === cat ? '#fff' : '#6b7280'}; cursor: pointer; font-weight: ${selectedCategory === cat ? '600' : '500'}; transition: all 0.2s ease; box-shadow: ${selectedCategory === cat ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none'};"
+                  >${cat}</button>
+                `).join('')}
+              </div>
+            </div>
           </div>
-          <input
-            type="text"
-            id="custom-duration-input"
-            value="${customDurationText}"
-            placeholder="예: 10분, 15분 30초, 1시간 20분"
-            style="width: 100%; padding: .55rem .65rem; font-size: .9rem; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb;"
-          />
-          <div style="font-size: .8rem; color: #6b7280; margin-top: .4rem; line-height: 1.5;">
-            시간을 입력하면 Step2 없이도 Claude Sonnet 4.5가 주인공·배경을 랜덤으로 설정해 해당 길이에 맞춰 대본을 작성합니다.
+          <div style="font-size: .75rem; color: #9ca3af; margin-top: .5rem; line-height: 1.4;">
+            시간과 카테고리를 선택하면 Claude Sonnet 4.5가 해당 주제에 맞춰 대본을 작성합니다.
           </div>
         </div>
       `;
@@ -7203,6 +7229,18 @@ S#1. 장소 / 시간
           saveToFirebase('_drama-duration-text', customDurationText);
         });
       }
+
+      // 카테고리 토글 버튼 이벤트
+      const categoryButtons = document.querySelectorAll('.category-toggle-btn');
+      categoryButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const cat = e.target.dataset.category;
+          selectedCategory = cat;
+          localStorage.setItem('_drama-video-category', cat);
+          saveToFirebase('_drama-video-category', cat);
+          renderWorkflowBoxes(); // UI 갱신
+        });
+      });
       return;
     }
 
