@@ -3121,10 +3121,19 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
 
   // 카테고리별 콘텐츠 UI 전환 함수
   function switchCategoryContent(category) {
+    console.log('[switchCategoryContent] 호출됨, category:', category);
+
     const sermonContent = document.getElementById('sermon-content');
     const meditationContent = document.getElementById('meditation-content');
     const bibleKnowledgeContent = document.getElementById('bible-knowledge-content');
     const emptyContent = document.getElementById('empty-content');
+
+    console.log('[switchCategoryContent] elements:', {
+      sermonContent: !!sermonContent,
+      meditationContent: !!meditationContent,
+      bibleKnowledgeContent: !!bibleKnowledgeContent,
+      emptyContent: !!emptyContent
+    });
 
     // 모든 콘텐츠 숨기기
     if (sermonContent) sermonContent.style.display = 'none';
@@ -3136,22 +3145,28 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const catConfig = config.categories.find(c => c.value === category);
     const label = catConfig ? catConfig.label : '';
 
+    console.log('[switchCategoryContent] catConfig:', catConfig, 'label:', label);
+
     // 카테고리에 따라 해당 콘텐츠만 표시
     if (category === 'category1' || label.includes('묵상')) {
       // 묵상메시지
+      console.log('[switchCategoryContent] → 묵상메시지 UI 표시');
       if (meditationContent) meditationContent.style.display = 'block';
       if (typeof initMeditationDate === 'function') {
         initMeditationDate();
       }
     } else if (label.includes('배경지식')) {
       // 성경 배경지식
+      console.log('[switchCategoryContent] → 배경지식 UI 표시');
       if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'block';
     } else if (label.includes('설교') || category.startsWith('step_') ||
                ['general', 'series', 'education', 'lecture'].includes(category)) {
       // 설교 관련 카테고리
+      console.log('[switchCategoryContent] → 설교 UI 표시');
       if (sermonContent) sermonContent.style.display = 'block';
     } else {
       // 새로 추가된 카테고리 (category2, category3, ...) → 빈 페이지
+      console.log('[switchCategoryContent] → 빈 페이지 표시');
       if (emptyContent) emptyContent.style.display = 'block';
     }
   }
