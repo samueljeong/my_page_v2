@@ -2022,6 +2022,7 @@ def api_drama_claude_step3():
 
         category = data.get("category", "")
         video_category = data.get("videoCategory", "간증")  # 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
+        custom_directive = data.get("customDirective", "")  # 사용자 지침 (선택) - 최우선 반영
         style_name = data.get("styleName", "")
         style_description = data.get("styleDescription", "")
         draft_content = data.get("draftContent", "")
@@ -2049,7 +2050,7 @@ def api_drama_claude_step3():
         if effective_category:
             category = effective_category
 
-        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 시간: {category}, 영상카테고리: {video_category}, 모델: {selected_model}, 콘텐츠유형: {content_type}")
+        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 시간: {category}, 영상카테고리: {video_category}, 지침: {custom_directive or '(없음)'}, 모델: {selected_model}")
         print(f"[DRAMA-STEP3-DEBUG] step3_guide 길이: {len(step3_guide)}, 내용: {step3_guide[:100] if step3_guide else '(없음)'}...")
         print(f"[DRAMA-STEP3-DEBUG] draft_content 길이: {len(draft_content)}, 내용: {draft_content[:300] if draft_content else '(없음)'}...")
 
@@ -2189,6 +2190,12 @@ def api_drama_claude_step3():
 
         # 사용자 메시지 구성
         user_content = ""
+
+        # 🔥 사용자 지침 (최우선 적용)
+        if custom_directive:
+            user_content += "【 🔥 사용자 지침 (최우선 적용) 】\n"
+            user_content += f"{custom_directive}\n"
+            user_content += "→ 이 지침을 가장 우선적으로 반영하여 대본을 작성하세요.\n\n"
 
         # 메타 정보 추가
         meta_lines = []

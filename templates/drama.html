@@ -2448,6 +2448,9 @@
   const videoCategories = ['간증', '드라마', '명언', '마음', '철학', '인간관계'];
   let selectedCategory = localStorage.getItem('_drama-video-category') || '간증';
 
+  // 사용자 지침 (선택사항) - 예: "쇼팬하우어 명언"
+  let customDirective = localStorage.getItem('_drama-custom-directive') || '';
+
   // 기본 설정
   let config = {
     categories: [
@@ -3421,6 +3424,7 @@ S#1. 장소 / 시간
         body: JSON.stringify({
           category: durationLabel,
           videoCategory: videoCategory,  // 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
+          customDirective: customDirective,  // 사용자 지침 (선택) - 최우선 반영
           draftContent: draftContent,
           mainCharacter: { name: mainCharacter },
           benchmarkScript: benchmarkScript,
@@ -7215,8 +7219,21 @@ S#1. 장소 / 시간
               </div>
             </div>
           </div>
-          <div style="font-size: .75rem; color: #9ca3af; margin-top: .5rem; line-height: 1.4;">
-            시간과 카테고리를 선택하면 Claude Sonnet 4.5가 해당 주제에 맞춰 대본을 작성합니다.
+          <!-- 사용자 지침 입력 (선택사항) -->
+          <div style="margin-top: .75rem;">
+            <div style="font-weight: 700; font-size: .85rem; color: #4b5563; margin-bottom: .35rem; display: flex; align-items: center; gap: .3rem;">
+              <span style="font-size: 1rem;">📝</span> 지침 <span style="font-weight: 400; font-size: .75rem; color: #9ca3af;">(선택)</span>
+            </div>
+            <input
+              type="text"
+              id="custom-directive-input"
+              value="${customDirective}"
+              placeholder="예: 쇼팬하우어 명언, 부모님과의 갈등 이야기, 직장 스트레스 주제..."
+              style="width: 100%; padding: .5rem .65rem; font-size: .85rem; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"
+            />
+            <div style="font-size: .7rem; color: #9ca3af; margin-top: .3rem;">
+              구체적인 주제나 방향을 지시하면 해당 내용이 최우선으로 반영됩니다.
+            </div>
           </div>
         </div>
       `;
@@ -7227,6 +7244,16 @@ S#1. 장소 / 시간
           customDurationText = e.target.value.trim();
           localStorage.setItem('_drama-duration-text', customDurationText);
           saveToFirebase('_drama-duration-text', customDurationText);
+        });
+      }
+
+      // 사용자 지침 입력 이벤트
+      const directiveInput = document.getElementById('custom-directive-input');
+      if (directiveInput) {
+        directiveInput.addEventListener('input', (e) => {
+          customDirective = e.target.value.trim();
+          localStorage.setItem('_drama-custom-directive', customDirective);
+          saveToFirebase('_drama-custom-directive', customDirective);
         });
       }
 
