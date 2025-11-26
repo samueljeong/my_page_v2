@@ -17,7 +17,7 @@
     .header {
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
-      padding: 1rem 2rem;
+      padding: 0.75rem 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -25,34 +25,33 @@
     }
     .header h1 {
       margin: 0;
-      font-size: 1.4rem;
+      font-size: 1.2rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
     .header-actions {
       display: flex;
-      gap: 1rem;
+      gap: 0.75rem;
       align-items: center;
     }
     .api-status {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.5rem;
     }
     .api-badge {
-      padding: 0.35rem 0.75rem;
+      padding: 0.3rem 0.6rem;
       border-radius: 20px;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.3rem;
+      background: rgba(255,255,255,0.2);
     }
-    .api-badge.connected { background: rgba(255,255,255,0.25); }
-    .api-badge.disconnected { background: rgba(0,0,0,0.2); }
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
     }
     .status-dot.green { background: #86efac; }
@@ -61,41 +60,50 @@
       color: white;
       text-decoration: none;
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
+      font-size: 1.2rem;
     }
 
-    /* 컨테이너 */
-    .container {
+    /* 메인 레이아웃 */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 1rem;
+      padding: 1rem;
       max-width: 1800px;
       margin: 0 auto;
-      padding: 1.5rem;
+      min-height: calc(100vh - 60px);
     }
 
-    /* 탭 네비게이션 */
+    .content-area {
+      min-width: 0;
+    }
+
+    /* 탭 네비게이션 - 왼쪽 정렬 */
     .tab-nav {
       display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
+      gap: 0.25rem;
+      margin-bottom: 1rem;
       background: white;
-      padding: 0.5rem;
-      border-radius: 12px;
+      padding: 0.4rem;
+      border-radius: 10px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      flex-wrap: wrap;
+      justify-content: flex-start;
     }
     .tab-btn {
-      padding: 0.75rem 1.5rem;
+      padding: 0.5rem 1rem;
       border: none;
       background: transparent;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: #64748b;
       transition: all 0.2s;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
+      white-space: nowrap;
     }
     .tab-btn:hover { background: #f1f5f9; }
     .tab-btn.active {
@@ -103,9 +111,9 @@
       color: white;
     }
     .tab-btn .badge {
-      padding: 0.15rem 0.5rem;
-      border-radius: 10px;
-      font-size: 0.75rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 8px;
+      font-size: 0.7rem;
       background: rgba(0,0,0,0.1);
     }
     .tab-btn.active .badge { background: rgba(255,255,255,0.3); }
@@ -117,14 +125,14 @@
     /* 통계 카드 */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
     }
     .stat-card {
       background: white;
-      border-radius: 12px;
-      padding: 1.25rem;
+      border-radius: 10px;
+      padding: 1rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       border: 1px solid #e2e8f0;
     }
@@ -134,20 +142,20 @@
       border: none;
     }
     .stat-label {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       color: #64748b;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
     .stat-card.highlight .stat-label { color: rgba(255,255,255,0.8); }
     .stat-value {
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 700;
     }
     .stat-card.highlight .stat-value { color: white; }
     .stat-sub {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       color: #94a3b8;
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
     }
     .stat-card.highlight .stat-sub { color: rgba(255,255,255,0.7); }
     .stat-value.success { color: #10b981; }
@@ -159,34 +167,34 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
+      margin-bottom: 0.75rem;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 0.5rem;
     }
     .filter-group {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.4rem;
       align-items: center;
       flex-wrap: wrap;
     }
     .filter-group select,
     .filter-group input {
-      padding: 0.5rem 0.75rem;
+      padding: 0.4rem 0.6rem;
       border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 0.9rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
       background: white;
     }
-    .filter-group input[type="text"] { min-width: 200px; }
+    .filter-group input[type="text"] { min-width: 150px; }
 
     /* 버튼 */
     button {
-      padding: 0.6rem 1rem;
+      padding: 0.5rem 0.75rem;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       transition: all 0.2s;
     }
     .btn-primary {
@@ -204,14 +212,14 @@
       color: #475569;
     }
     .btn-outline:hover { background: #f8fafc; }
-    .btn-small { padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+    .btn-small { padding: 0.3rem 0.5rem; font-size: 0.75rem; }
     .btn-naver { background: #03c75a; color: white; }
     .btn-coupang { background: #e1002a; color: white; }
 
     /* 테이블 */
     .table-container {
       background: white;
-      border-radius: 12px;
+      border-radius: 10px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       border: 1px solid #e2e8f0;
       overflow-x: auto;
@@ -219,10 +227,10 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
     }
     th, td {
-      padding: 0.75rem 0.5rem;
+      padding: 0.6rem 0.4rem;
       text-align: left;
       border-bottom: 1px solid #e2e8f0;
     }
@@ -233,38 +241,39 @@
       position: sticky;
       top: 0;
       white-space: nowrap;
+      font-size: 0.75rem;
     }
-    th.checkbox-col { width: 40px; }
+    th.checkbox-col { width: 30px; }
     tbody tr:hover { background: #f8fafc; }
     .product-image {
-      width: 50px;
-      height: 50px;
+      width: 40px;
+      height: 40px;
       object-fit: cover;
-      border-radius: 6px;
+      border-radius: 4px;
       border: 1px solid #e2e8f0;
     }
     .product-name {
       font-weight: 600;
       color: #1e293b;
-      max-width: 200px;
+      max-width: 150px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .platform-badge {
       display: inline-block;
-      padding: 0.2rem 0.5rem;
+      padding: 0.15rem 0.4rem;
       border-radius: 4px;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       font-weight: 600;
     }
     .platform-smartstore { background: #dcfce7; color: #166534; }
     .platform-coupang { background: #fee2e2; color: #991b1b; }
     .status-badge {
       display: inline-block;
-      padding: 0.25rem 0.6rem;
+      padding: 0.2rem 0.5rem;
       border-radius: 9999px;
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       font-weight: 600;
     }
     .status-SALE { background: #d1fae5; color: #065f46; }
@@ -272,29 +281,164 @@
     .status-PREPARING { background: #fef3c7; color: #92400e; }
     .status-SHIPPING { background: #dbeafe; color: #1e40af; }
     .status-DELIVERED { background: #d1fae5; color: #065f46; }
-    .price-cell {
-      font-weight: 600;
-      color: #1e293b;
-    }
+    .price-cell { font-weight: 600; }
     .original-price {
       text-decoration: line-through;
       color: #94a3b8;
-      font-size: 0.8rem;
+      font-size: 0.7rem;
     }
     .stock-low { color: #f59e0b; font-weight: 600; }
     .stock-out { color: #ef4444; font-weight: 600; }
-    .rocket-badge {
-      background: #3b82f6;
-      color: white;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      font-size: 0.65rem;
-      font-weight: 600;
-    }
-    .action-buttons {
+    .action-buttons { display: flex; gap: 0.2rem; }
+
+    /* AI 채팅 패널 */
+    .ai-chat-panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
       display: flex;
-      gap: 0.25rem;
+      flex-direction: column;
+      height: calc(100vh - 80px);
+      position: sticky;
+      top: 1rem;
     }
+    .ai-chat-header {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      color: white;
+      padding: 1rem;
+      border-radius: 12px 12px 0 0;
+    }
+    .ai-chat-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .ai-chat-header p {
+      margin: 0.25rem 0 0 0;
+      font-size: 0.75rem;
+      opacity: 0.9;
+    }
+    .ai-chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .ai-message {
+      padding: 0.75rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      max-width: 90%;
+    }
+    .ai-message.user {
+      background: #e0f2fe;
+      color: #0c4a6e;
+      align-self: flex-end;
+    }
+    .ai-message.assistant {
+      background: #f1f5f9;
+      color: #334155;
+      align-self: flex-start;
+    }
+    .ai-message.assistant pre {
+      background: #e2e8f0;
+      padding: 0.5rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.75rem;
+    }
+    .ai-quick-actions {
+      padding: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .quick-btn {
+      padding: 0.4rem 0.6rem;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 15px;
+      font-size: 0.7rem;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .quick-btn:hover { background: #e2e8f0; }
+    .ai-chat-input {
+      padding: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .ai-chat-input input {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .ai-chat-input input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .ai-chat-input button {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      color: white;
+      padding: 0.6rem 1rem;
+    }
+
+    /* 차트 영역 */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .chart-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+    .chart-card h3 {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+    .bestseller-list { list-style: none; padding: 0; margin: 0; }
+    .bestseller-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.8rem;
+    }
+    .bestseller-item:last-child { border-bottom: none; }
+    .bestseller-rank {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.7rem;
+      margin-right: 0.5rem;
+    }
+    .bestseller-info { flex: 1; }
+    .bestseller-name { font-weight: 600; font-size: 0.8rem; }
+    .bestseller-platform { font-size: 0.65rem; color: #64748b; }
+    .bestseller-sales { font-weight: 700; color: #10b981; font-size: 0.8rem; }
 
     /* 모달 */
     .modal-overlay {
@@ -313,9 +457,9 @@
     .modal-overlay.active { display: flex; }
     .modal {
       background: white;
-      border-radius: 16px;
+      border-radius: 12px;
       width: 100%;
-      max-width: 700px;
+      max-width: 500px;
       max-height: 90vh;
       overflow-y: auto;
     }
@@ -323,13 +467,10 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1.25rem 1.5rem;
+      padding: 1rem;
       border-bottom: 1px solid #e2e8f0;
     }
-    .modal-header h2 {
-      margin: 0;
-      font-size: 1.25rem;
-    }
+    .modal-header h2 { margin: 0; font-size: 1.1rem; }
     .modal-close {
       background: none;
       border: none;
@@ -338,12 +479,12 @@
       color: #64748b;
       padding: 0;
     }
-    .modal-body { padding: 1.5rem; }
+    .modal-body { padding: 1rem; }
     .modal-footer {
       display: flex;
       justify-content: flex-end;
       gap: 0.5rem;
-      padding: 1rem 1.5rem;
+      padding: 1rem;
       border-top: 1px solid #e2e8f0;
     }
 
@@ -351,100 +492,39 @@
     .form-row {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 1rem;
-      margin-bottom: 1rem;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
     }
     .form-row.full { grid-template-columns: 1fr; }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-    }
+    .form-group { display: flex; flex-direction: column; }
     .form-group label {
       font-weight: 600;
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.3rem;
       color: #334155;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
     }
     .form-group input,
     .form-group select,
     .form-group textarea {
-      padding: 0.6rem;
+      padding: 0.5rem;
       border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 0.9rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
       background: #f8fafc;
     }
     .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
+    .form-group select:focus {
       outline: none;
       border-color: #10b981;
       background: white;
     }
     .form-group .hint {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: #94a3b8;
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
     }
 
-    /* 가격 비교 테이블 */
-    .compare-table th, .compare-table td {
-      text-align: center;
-    }
-    .price-diff.positive { color: #ef4444; }
-    .price-diff.negative { color: #10b981; }
-
-    /* 차트 영역 */
-    .chart-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-      gap: 1.5rem;
-      margin-top: 1.5rem;
-    }
-    .chart-card {
-      background: white;
-      border-radius: 12px;
-      padding: 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      border: 1px solid #e2e8f0;
-    }
-    .chart-card h3 {
-      margin: 0 0 1rem 0;
-      font-size: 1rem;
-      color: #334155;
-    }
-    .bestseller-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .bestseller-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 0;
-      border-bottom: 1px solid #f1f5f9;
-    }
-    .bestseller-item:last-child { border-bottom: none; }
-    .bestseller-rank {
-      width: 28px;
-      height: 28px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 0.8rem;
-      margin-right: 0.75rem;
-    }
-    .bestseller-info { flex: 1; }
-    .bestseller-name { font-weight: 600; font-size: 0.9rem; }
-    .bestseller-platform { font-size: 0.75rem; color: #64748b; }
-    .bestseller-sales { font-weight: 700; color: #10b981; }
-
-    /* 로딩 */
+    /* 로딩 & 토스트 */
     .loading-overlay {
       display: none;
       position: fixed;
@@ -459,40 +539,26 @@
     }
     .loading-overlay.active { display: flex; }
     .spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid #e2e8f0;
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e2e8f0;
       border-top-color: #10b981;
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* 빈 상태 */
-    .empty-state {
-      text-align: center;
-      padding: 3rem;
-      color: #94a3b8;
-    }
-    .empty-state h3 {
-      margin-bottom: 0.5rem;
-      color: #64748b;
-    }
-
-    /* 알림 토스트 */
+    @keyframes spin { to { transform: rotate(360deg); } }
     .toast {
       position: fixed;
-      bottom: 2rem;
-      right: 2rem;
+      bottom: 1.5rem;
+      right: 1.5rem;
       background: #1e293b;
       color: white;
-      padding: 1rem 1.5rem;
-      border-radius: 10px;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.2);
       z-index: 3000;
       display: none;
+      font-size: 0.85rem;
     }
     .toast.active { display: block; animation: slideIn 0.3s ease; }
     .toast.success { background: #10b981; }
@@ -502,12 +568,42 @@
       to { transform: translateY(0); opacity: 1; }
     }
 
-    /* 반응형 */
+    /* 모바일 반응형 */
+    @media (max-width: 1024px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+      .ai-chat-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60vh;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(calc(100% - 50px));
+        transition: transform 0.3s ease;
+        z-index: 100;
+      }
+      .ai-chat-panel.expanded {
+        transform: translateY(0);
+      }
+      .ai-chat-header {
+        border-radius: 20px 20px 0 0;
+        cursor: pointer;
+      }
+      .content-area {
+        padding-bottom: 60px;
+      }
+    }
     @media (max-width: 768px) {
-      .header { flex-direction: column; gap: 1rem; text-align: center; }
-      .form-row { grid-template-columns: 1fr; }
-      .tab-nav { flex-wrap: wrap; }
+      .header { padding: 0.5rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
+      .header h1 { font-size: 1rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .chart-grid { grid-template-columns: 1fr; }
       .action-bar { flex-direction: column; align-items: stretch; }
+      .filter-group { width: 100%; }
+      .form-row { grid-template-columns: 1fr; }
+      .tab-btn { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
     }
   </style>
 </head>
@@ -526,84 +622,75 @@
           쿠팡
         </div>
       </div>
-      <a href="/" class="home-link">🏠 홈</a>
+      <a href="/" class="home-link">🏠</a>
     </div>
   </div>
 
-  <div class="container">
-    <!-- 탭 네비게이션 -->
-    <div class="tab-nav">
-      <button class="tab-btn active" data-tab="dashboard">
-        📊 대시보드
-      </button>
-      <button class="tab-btn" data-tab="products">
-        📦 상품 관리 <span class="badge" id="productCount">0</span>
-      </button>
-      <button class="tab-btn" data-tab="orders">
-        🧾 주문 현황 <span class="badge" id="orderCount">0</span>
-      </button>
-      <button class="tab-btn" data-tab="compare">
-        ⚖️ 가격 비교
-      </button>
-      <button class="tab-btn" data-tab="analytics">
-        📈 분석
-      </button>
-    </div>
-
-    <!-- 대시보드 탭 -->
-    <div class="tab-content active" id="tab-dashboard">
-      <div class="stats-grid">
-        <div class="stat-card highlight">
-          <div class="stat-label">오늘 매출</div>
-          <div class="stat-value" id="todaySales">₩0</div>
-          <div class="stat-sub">전일 대비 <span id="salesChange">-</span></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">전체 상품</div>
-          <div class="stat-value" id="totalProducts">0</div>
-          <div class="stat-sub">스마트스토어 <span id="ssCount">0</span> / 쿠팡 <span id="cpCount">0</span></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">품절 상품</div>
-          <div class="stat-value danger" id="outOfStock">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">재고 부족</div>
-          <div class="stat-value warning" id="lowStock">0</div>
-          <div class="stat-sub">10개 이하</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">처리 대기 주문</div>
-          <div class="stat-value" id="pendingOrders">0</div>
-        </div>
+  <div class="main-layout">
+    <!-- 왼쪽: 메인 컨텐츠 -->
+    <div class="content-area">
+      <!-- 탭 네비게이션 -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="dashboard">📊 대시보드</button>
+        <button class="tab-btn" data-tab="products">📦 상품 관리 <span class="badge" id="productCount">0</span></button>
+        <button class="tab-btn" data-tab="orders">🧾 주문 <span class="badge" id="orderCount">0</span></button>
+        <button class="tab-btn" data-tab="compare">⚖️ 가격비교</button>
+        <button class="tab-btn" data-tab="analytics">📈 분석</button>
       </div>
 
-      <div class="chart-grid">
-        <div class="chart-card">
-          <h3>🏆 베스트셀러 TOP 5</h3>
-          <ul class="bestseller-list" id="bestsellerList">
-            <li class="empty-state">로딩 중...</li>
-          </ul>
+      <!-- 대시보드 탭 -->
+      <div class="tab-content active" id="tab-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card highlight">
+            <div class="stat-label">오늘 매출</div>
+            <div class="stat-value" id="todaySales">₩0</div>
+            <div class="stat-sub">전일 대비 <span id="salesChange">-</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">전체 상품</div>
+            <div class="stat-value" id="totalProducts">0</div>
+            <div class="stat-sub">SS <span id="ssCount">0</span> / CP <span id="cpCount">0</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">품절</div>
+            <div class="stat-value danger" id="outOfStock">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">재고부족</div>
+            <div class="stat-value warning" id="lowStock">0</div>
+            <div class="stat-sub">10개 이하</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">대기 주문</div>
+            <div class="stat-value" id="pendingOrders">0</div>
+          </div>
         </div>
-        <div class="chart-card">
-          <h3>📊 플랫폼별 매출</h3>
-          <div id="platformSalesChart" style="height: 200px; display: flex; align-items: center; justify-content: center;">
-            <div style="width: 100%;">
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>🏆 베스트셀러 TOP 5</h3>
+            <ul class="bestseller-list" id="bestsellerList">
+              <li class="bestseller-item">로딩 중...</li>
+            </ul>
+          </div>
+          <div class="chart-card">
+            <h3>📊 플랫폼별 매출</h3>
+            <div style="padding: 0.5rem 0;">
               <div style="margin-bottom: 1rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.8rem;">
                   <span>스마트스토어</span>
                   <span id="ssRevenue">₩0</span>
                 </div>
-                <div style="background: #e2e8f0; height: 24px; border-radius: 12px; overflow: hidden;">
+                <div style="background: #e2e8f0; height: 20px; border-radius: 10px; overflow: hidden;">
                   <div id="ssBar" style="background: #03c75a; height: 100%; width: 0%; transition: width 0.5s;"></div>
                 </div>
               </div>
               <div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.8rem;">
                   <span>쿠팡</span>
                   <span id="cpRevenue">₩0</span>
                 </div>
-                <div style="background: #e2e8f0; height: 24px; border-radius: 12px; overflow: hidden;">
+                <div style="background: #e2e8f0; height: 20px; border-radius: 10px; overflow: hidden;">
                   <div id="cpBar" style="background: #e1002a; height: 100%; width: 0%; transition: width 0.5s;"></div>
                 </div>
               </div>
@@ -611,155 +698,177 @@
           </div>
         </div>
       </div>
+
+      <!-- 상품 관리 탭 -->
+      <div class="tab-content" id="tab-products">
+        <div class="action-bar">
+          <div class="filter-group">
+            <select id="filterPlatform">
+              <option value="all">전체</option>
+              <option value="smartstore">스마트스토어</option>
+              <option value="coupang">쿠팡</option>
+            </select>
+            <select id="filterCategory"><option value="">카테고리</option></select>
+            <select id="filterStatus">
+              <option value="">상태</option>
+              <option value="SALE">판매중</option>
+              <option value="OUTOFSTOCK">품절</option>
+            </select>
+            <input type="text" id="searchProduct" placeholder="🔍 검색...">
+          </div>
+          <div class="filter-group">
+            <button class="btn-primary" onclick="openAddProductModal()">+ 등록</button>
+            <button class="btn-secondary" onclick="openBulkEditModal()">일괄수정</button>
+            <button class="btn-outline" onclick="refreshProducts()">🔄</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>플랫폼</th>
+                <th>이미지</th>
+                <th>상품명</th>
+                <th>카테고리</th>
+                <th>판매가</th>
+                <th>재고</th>
+                <th>판매량</th>
+                <th>평점</th>
+                <th>상태</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="productTableBody"></tbody>
+          </table>
+          <div class="empty-state" id="productEmptyState" style="display: none; text-align: center; padding: 2rem; color: #94a3b8;">
+            <p>등록된 상품이 없습니다</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 주문 현황 탭 -->
+      <div class="tab-content" id="tab-orders">
+        <div class="action-bar">
+          <div class="filter-group">
+            <select id="orderPlatform">
+              <option value="all">전체</option>
+              <option value="smartstore">스마트스토어</option>
+              <option value="coupang">쿠팡</option>
+            </select>
+            <select id="orderStatus">
+              <option value="">전체 상태</option>
+              <option value="PREPARING">준비중</option>
+              <option value="SHIPPING">배송중</option>
+              <option value="DELIVERED">완료</option>
+            </select>
+          </div>
+          <button class="btn-outline" onclick="refreshOrders()">🔄</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>주문번호</th>
+                <th>플랫폼</th>
+                <th>상품명</th>
+                <th>수량</th>
+                <th>금액</th>
+                <th>구매자</th>
+                <th>주문일</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody id="orderTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 가격 비교 탭 -->
+      <div class="tab-content" id="tab-compare">
+        <div class="action-bar">
+          <h3 style="margin: 0; font-size: 1rem;">스마트스토어 vs 쿠팡</h3>
+          <div class="filter-group">
+            <button class="btn-naver btn-small" onclick="syncPrices('smartstore')">SS 기준 동기화</button>
+            <button class="btn-coupang btn-small" onclick="syncPrices('coupang')">CP 기준 동기화</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>상품명</th>
+                <th style="background: #dcfce7;">SS 가격</th>
+                <th style="background: #dcfce7;">SS 재고</th>
+                <th style="background: #fee2e2;">CP 가격</th>
+                <th style="background: #fee2e2;">CP 재고</th>
+                <th>차이</th>
+              </tr>
+            </thead>
+            <tbody id="compareTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 분석 탭 -->
+      <div class="tab-content" id="tab-analytics">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">총 판매량</div>
+            <div class="stat-value success" id="totalSalesCount">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">총 매출</div>
+            <div class="stat-value" id="totalRevenue">₩0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">평균 평점</div>
+            <div class="stat-value" id="avgRating">0.0</div>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>📂 카테고리별 매출</h3>
+            <div id="categorySalesChart"></div>
+          </div>
+          <div class="chart-card">
+            <h3>🏆 베스트셀러 상세</h3>
+            <div id="bestsellerDetailChart"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 상품 관리 탭 -->
-    <div class="tab-content" id="tab-products">
-      <div class="action-bar">
-        <div class="filter-group">
-          <select id="filterPlatform">
-            <option value="all">전체 플랫폼</option>
-            <option value="smartstore">스마트스토어</option>
-            <option value="coupang">쿠팡</option>
-          </select>
-          <select id="filterCategory">
-            <option value="">전체 카테고리</option>
-          </select>
-          <select id="filterStatus">
-            <option value="">전체 상태</option>
-            <option value="SALE">판매중</option>
-            <option value="OUTOFSTOCK">품절</option>
-          </select>
-          <input type="text" id="searchProduct" placeholder="🔍 상품명 검색...">
-        </div>
-        <div class="filter-group">
-          <button class="btn-primary" onclick="openAddProductModal()">+ 상품 등록</button>
-          <button class="btn-secondary" onclick="openBulkEditModal()">일괄 수정</button>
-          <button class="btn-outline" onclick="refreshProducts()">🔄 새로고침</button>
+    <!-- 오른쪽: AI 채팅 패널 -->
+    <div class="ai-chat-panel" id="aiChatPanel">
+      <div class="ai-chat-header" onclick="toggleAiPanel()">
+        <h3>🤖 마켓 AI 어시스턴트</h3>
+        <p>HS코드, 마진계산, 상품분석 등 질문하세요</p>
+      </div>
+      <div class="ai-chat-messages" id="aiChatMessages">
+        <div class="ai-message assistant">
+          안녕하세요! 마켓 관리를 도와드릴게요.
+          <br><br>
+          💡 이런 것들을 물어보세요:
+          <br>• HS 코드 조회
+          <br>• 마진/수익률 계산
+          <br>• 상품 가격 전략
+          <br>• 경쟁사 분석 팁
         </div>
       </div>
-
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-              <th>플랫폼</th>
-              <th>이미지</th>
-              <th>상품명</th>
-              <th>카테고리</th>
-              <th>판매가</th>
-              <th>재고</th>
-              <th>판매량</th>
-              <th>평점</th>
-              <th>상태</th>
-              <th>관리</th>
-            </tr>
-          </thead>
-          <tbody id="productTableBody">
-          </tbody>
-        </table>
-        <div class="empty-state" id="productEmptyState" style="display: none;">
-          <h3>등록된 상품이 없습니다</h3>
-          <p>상품 등록 버튼을 눌러 첫 상품을 등록하세요.</p>
-        </div>
+      <div class="ai-quick-actions">
+        <button class="quick-btn" onclick="askQuick('블루투스 이어폰의 HS 코드는?')">HS코드 조회</button>
+        <button class="quick-btn" onclick="askQuick('원가 15000원, 판매가 29000원일 때 마진율은?')">마진 계산</button>
+        <button class="quick-btn" onclick="askQuick('스마트스토어 상위노출 전략')">노출 전략</button>
+        <button class="quick-btn" onclick="askQuick('쿠팡 로켓배송 입점 조건')">로켓배송</button>
       </div>
-    </div>
-
-    <!-- 주문 현황 탭 -->
-    <div class="tab-content" id="tab-orders">
-      <div class="action-bar">
-        <div class="filter-group">
-          <select id="orderPlatform">
-            <option value="all">전체 플랫폼</option>
-            <option value="smartstore">스마트스토어</option>
-            <option value="coupang">쿠팡</option>
-          </select>
-          <select id="orderStatus">
-            <option value="">전체 상태</option>
-            <option value="PREPARING">상품준비중</option>
-            <option value="SHIPPING">배송중</option>
-            <option value="DELIVERED">배송완료</option>
-          </select>
-        </div>
-        <button class="btn-outline" onclick="refreshOrders()">🔄 새로고침</button>
-      </div>
-
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>주문번호</th>
-              <th>플랫폼</th>
-              <th>상품명</th>
-              <th>수량</th>
-              <th>금액</th>
-              <th>구매자</th>
-              <th>주문일시</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody id="orderTableBody">
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 가격 비교 탭 -->
-    <div class="tab-content" id="tab-compare">
-      <div class="action-bar">
-        <h3 style="margin: 0;">스마트스토어 vs 쿠팡 가격 비교</h3>
-        <div class="filter-group">
-          <button class="btn-naver" onclick="syncPrices('smartstore')">스마트스토어 기준 동기화</button>
-          <button class="btn-coupang" onclick="syncPrices('coupang')">쿠팡 기준 동기화</button>
-        </div>
-      </div>
-
-      <div class="table-container">
-        <table class="compare-table">
-          <thead>
-            <tr>
-              <th>상품명</th>
-              <th style="background: #dcfce7;">스마트스토어 가격</th>
-              <th style="background: #dcfce7;">스마트스토어 재고</th>
-              <th style="background: #fee2e2;">쿠팡 가격</th>
-              <th style="background: #fee2e2;">쿠팡 재고</th>
-              <th>가격 차이</th>
-              <th>로켓배송</th>
-            </tr>
-          </thead>
-          <tbody id="compareTableBody">
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 분석 탭 -->
-    <div class="tab-content" id="tab-analytics">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">총 판매량</div>
-          <div class="stat-value success" id="totalSalesCount">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">총 매출</div>
-          <div class="stat-value" id="totalRevenue">₩0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">평균 평점</div>
-          <div class="stat-value" id="avgRating">0.0</div>
-        </div>
-      </div>
-
-      <div class="chart-grid">
-        <div class="chart-card">
-          <h3>📂 카테고리별 매출</h3>
-          <div id="categorySalesChart"></div>
-        </div>
-        <div class="chart-card">
-          <h3>🏆 베스트셀러 상세</h3>
-          <div id="bestsellerDetailChart"></div>
-        </div>
+      <div class="ai-chat-input">
+        <input type="text" id="aiInput" placeholder="질문을 입력하세요..." onkeypress="if(event.key==='Enter')sendAiMessage()">
+        <button onclick="sendAiMessage()">전송</button>
       </div>
     </div>
   </div>
@@ -774,7 +883,6 @@
       <div class="modal-body">
         <form id="productForm">
           <input type="hidden" id="editProductId">
-
           <div class="form-row">
             <div class="form-group">
               <label>플랫폼 *</label>
@@ -785,24 +893,21 @@
             </div>
             <div class="form-group">
               <label>카테고리 *</label>
-              <input type="text" id="formCategory" required placeholder="예: 전자제품, 패션잡화">
+              <input type="text" id="formCategory" required placeholder="예: 전자제품">
             </div>
           </div>
-
           <div class="form-row full">
             <div class="form-group">
               <label>상품명 *</label>
-              <input type="text" id="formName" required placeholder="상품명 입력">
+              <input type="text" id="formName" required placeholder="상품명">
             </div>
           </div>
-
           <div class="form-row full">
             <div class="form-group">
               <label>이미지 URL</label>
               <input type="text" id="formImageUrl" placeholder="https://...">
             </div>
           </div>
-
           <div class="form-row">
             <div class="form-group">
               <label>정가 *</label>
@@ -813,14 +918,13 @@
               <input type="number" id="formSalePrice" required placeholder="0">
             </div>
           </div>
-
           <div class="form-row">
             <div class="form-group">
-              <label>재고 수량 *</label>
+              <label>재고 *</label>
               <input type="number" id="formStock" required placeholder="0">
             </div>
-            <div class="form-group" id="rocketDeliveryGroup">
-              <label>로켓배송 (쿠팡)</label>
+            <div class="form-group" id="rocketDeliveryGroup" style="display:none;">
+              <label>로켓배송</label>
               <select id="formRocketDelivery">
                 <option value="false">아니오</option>
                 <option value="true">예</option>
@@ -844,32 +948,28 @@
         <button class="modal-close" onclick="closeBulkEditModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom: 1rem;">선택한 <strong id="selectedCount">0</strong>개 상품의 정보를 일괄 수정합니다.</p>
-
+        <p style="margin-bottom: 1rem; font-size: 0.9rem;">선택한 <strong id="selectedCount">0</strong>개 상품</p>
         <div class="form-row">
           <div class="form-group">
             <label>가격 조정</label>
             <select id="bulkPriceType">
               <option value="">변경 안함</option>
-              <option value="percent">퍼센트 변경</option>
-              <option value="fixed">고정 금액 변경</option>
+              <option value="percent">퍼센트</option>
+              <option value="fixed">고정금액</option>
             </select>
           </div>
           <div class="form-group">
             <label>조정값</label>
-            <input type="number" id="bulkPriceValue" placeholder="예: 10 또는 -5">
-            <div class="hint">퍼센트: 10 = +10%, -5 = -5%</div>
+            <input type="number" id="bulkPriceValue" placeholder="10 또는 -5">
           </div>
         </div>
-
         <div class="form-row">
           <div class="form-group">
             <label>재고 조정</label>
-            <input type="number" id="bulkStockChange" placeholder="예: 10 또는 -5">
-            <div class="hint">양수: 증가, 음수: 감소</div>
+            <input type="number" id="bulkStockChange" placeholder="증감 수량">
           </div>
           <div class="form-group">
-            <label>상태 변경</label>
+            <label>상태</label>
             <select id="bulkStatus">
               <option value="">변경 안함</option>
               <option value="SALE">판매중</option>
@@ -885,12 +985,8 @@
     </div>
   </div>
 
-  <!-- 로딩 오버레이 -->
-  <div class="loading-overlay" id="loadingOverlay">
-    <div class="spinner"></div>
-  </div>
-
-  <!-- 토스트 알림 -->
+  <!-- 로딩 & 토스트 -->
+  <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
   <div class="toast" id="toast"></div>
 
   <script>
@@ -916,11 +1012,13 @@
   // ===== 탭 관리 =====
   function initTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
-        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        const tabId = 'tab-' + btn.dataset.tab;
+        document.getElementById(tabId).classList.add('active');
       });
     });
   }
@@ -936,7 +1034,7 @@
     document.getElementById('formPlatform').addEventListener('change', toggleRocketDelivery);
   }
 
-  // ===== API 호출 함수들 =====
+  // ===== API 호출 =====
   async function loadStatus() {
     try {
       const res = await fetch('/api/market/status');
@@ -945,21 +1043,16 @@
         updateApiStatus(data.apiStatus);
         updateSummary(data.summary);
       }
-    } catch (e) {
-      console.error('Status load error:', e);
-    }
+    } catch (e) { console.error('Status error:', e); }
   }
 
   function updateApiStatus(status) {
     const naverEl = document.getElementById('naverStatus');
     const coupangEl = document.getElementById('coupangStatus');
-
     if (status.smartstore.connected) {
-      naverEl.classList.add('connected');
       naverEl.querySelector('.status-dot').classList.replace('gray', 'green');
     }
     if (status.coupang.connected) {
-      coupangEl.classList.add('connected');
       coupangEl.querySelector('.status-dot').classList.replace('gray', 'green');
     }
   }
@@ -985,10 +1078,7 @@
         products = data.products;
         renderProducts(products);
       }
-    } catch (e) {
-      console.error('Products load error:', e);
-      showToast('상품 로드 실패', 'error');
-    }
+    } catch (e) { console.error('Products error:', e); showToast('상품 로드 실패', 'error'); }
     hideLoading();
   }
 
@@ -996,13 +1086,8 @@
     try {
       const res = await fetch('/api/market/orders');
       const data = await res.json();
-      if (data.ok) {
-        orders = data.orders;
-        renderOrders(orders);
-      }
-    } catch (e) {
-      console.error('Orders load error:', e);
-    }
+      if (data.ok) { orders = data.orders; renderOrders(orders); }
+    } catch (e) { console.error('Orders error:', e); }
   }
 
   async function loadCategories() {
@@ -1012,50 +1097,33 @@
       if (data.ok) {
         categories = data.categories;
         const select = document.getElementById('filterCategory');
-        select.innerHTML = '<option value="">전체 카테고리</option>';
-        categories.forEach(cat => {
-          select.innerHTML += `<option value="${cat}">${cat}</option>`;
-        });
+        select.innerHTML = '<option value="">카테고리</option>';
+        categories.forEach(cat => { select.innerHTML += `<option value="${cat}">${cat}</option>`; });
       }
-    } catch (e) {
-      console.error('Categories load error:', e);
-    }
+    } catch (e) { console.error('Categories error:', e); }
   }
 
   async function loadCompare() {
     try {
       const res = await fetch('/api/market/price-compare');
       const data = await res.json();
-      if (data.ok) {
-        renderCompare(data.comparisons);
-      }
-    } catch (e) {
-      console.error('Compare load error:', e);
-    }
+      if (data.ok) { renderCompare(data.comparisons); }
+    } catch (e) { console.error('Compare error:', e); }
   }
 
   async function loadAnalytics() {
     try {
       const res = await fetch('/api/market/analytics');
       const data = await res.json();
-      if (data.ok) {
-        renderAnalytics(data.analytics);
-      }
-    } catch (e) {
-      console.error('Analytics load error:', e);
-    }
+      if (data.ok) { renderAnalytics(data.analytics); }
+    } catch (e) { console.error('Analytics error:', e); }
   }
 
-  // ===== 렌더링 함수들 =====
+  // ===== 렌더링 =====
   function renderProducts(list) {
     const tbody = document.getElementById('productTableBody');
     const emptyState = document.getElementById('productEmptyState');
-
-    if (list.length === 0) {
-      tbody.innerHTML = '';
-      emptyState.style.display = 'block';
-      return;
-    }
+    if (list.length === 0) { tbody.innerHTML = ''; emptyState.style.display = 'block'; return; }
     emptyState.style.display = 'none';
 
     tbody.innerHTML = list.map(p => {
@@ -1063,71 +1131,53 @@
       return `
         <tr>
           <td><input type="checkbox" value="${p.id}" onchange="toggleSelect('${p.id}')"></td>
-          <td><span class="platform-badge platform-${p.platform}">${p.platform === 'smartstore' ? '스마트스토어' : '쿠팡'}</span></td>
-          <td>
-            ${p.imageUrl
-              ? `<img src="${p.imageUrl}" class="product-image" onerror="this.src='https://via.placeholder.com/50/e2e8f0/94a3b8?text=No'">`
-              : '<div style="width:50px;height:50px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:0.7rem;">없음</div>'
-            }
-          </td>
+          <td><span class="platform-badge platform-${p.platform}">${p.platform === 'smartstore' ? 'SS' : 'CP'}</span></td>
+          <td>${p.imageUrl ? `<img src="${p.imageUrl}" class="product-image" onerror="this.src='https://via.placeholder.com/40'">` : '-'}</td>
           <td><div class="product-name">${p.name}</div></td>
           <td>${p.category}</td>
-          <td class="price-cell">
-            ${p.price !== p.salePrice ? `<div class="original-price">₩${p.price.toLocaleString()}</div>` : ''}
-            ₩${p.salePrice.toLocaleString()}
-          </td>
-          <td class="${stockClass}">${p.stock.toLocaleString()}</td>
-          <td>${p.salesCount.toLocaleString()}</td>
-          <td>⭐ ${p.rating}</td>
+          <td class="price-cell">${p.price !== p.salePrice ? `<div class="original-price">₩${p.price.toLocaleString()}</div>` : ''}₩${p.salePrice.toLocaleString()}</td>
+          <td class="${stockClass}">${p.stock}</td>
+          <td>${p.salesCount}</td>
+          <td>⭐${p.rating}</td>
           <td><span class="status-badge status-${p.status}">${p.status === 'SALE' ? '판매중' : '품절'}</span></td>
-          <td>
-            <div class="action-buttons">
-              <button class="btn-small btn-outline" onclick="editProduct('${p.id}')">수정</button>
-              <button class="btn-small btn-danger" onclick="deleteProduct('${p.id}')">삭제</button>
-            </div>
-          </td>
-        </tr>
-      `;
+          <td><div class="action-buttons">
+            <button class="btn-small btn-outline" onclick="editProduct('${p.id}')">수정</button>
+            <button class="btn-small btn-danger" onclick="deleteProduct('${p.id}')">삭제</button>
+          </div></td>
+        </tr>`;
     }).join('');
   }
 
   function renderOrders(list) {
     const tbody = document.getElementById('orderTableBody');
-    tbody.innerHTML = list.map(o => {
-      const statusText = { PREPARING: '상품준비중', SHIPPING: '배송중', DELIVERED: '배송완료' };
-      return `
-        <tr>
-          <td><strong>${o.id}</strong></td>
-          <td><span class="platform-badge platform-${o.platform}">${o.platform === 'smartstore' ? '스마트스토어' : '쿠팡'}</span></td>
-          <td>${o.productName}</td>
-          <td>${o.quantity}개</td>
-          <td class="price-cell">₩${o.price.toLocaleString()}</td>
-          <td>${o.buyerName}</td>
-          <td>${new Date(o.orderedAt).toLocaleString('ko-KR')}</td>
-          <td><span class="status-badge status-${o.status}">${statusText[o.status] || o.status}</span></td>
-        </tr>
-      `;
-    }).join('');
+    const statusText = { PREPARING: '준비중', SHIPPING: '배송중', DELIVERED: '완료' };
+    tbody.innerHTML = list.map(o => `
+      <tr>
+        <td><strong>${o.id}</strong></td>
+        <td><span class="platform-badge platform-${o.platform}">${o.platform === 'smartstore' ? 'SS' : 'CP'}</span></td>
+        <td>${o.productName}</td>
+        <td>${o.quantity}개</td>
+        <td class="price-cell">₩${o.price.toLocaleString()}</td>
+        <td>${o.buyerName}</td>
+        <td>${new Date(o.orderedAt).toLocaleDateString('ko-KR')}</td>
+        <td><span class="status-badge status-${o.status}">${statusText[o.status] || o.status}</span></td>
+      </tr>`).join('');
   }
 
   function renderCompare(list) {
     const tbody = document.getElementById('compareTableBody');
     tbody.innerHTML = list.map(c => {
-      const diffClass = c.priceDiff > 0 ? 'positive' : c.priceDiff < 0 ? 'negative' : '';
+      const diffClass = c.priceDiff > 0 ? 'color:#ef4444' : c.priceDiff < 0 ? 'color:#10b981' : '';
       const diffSign = c.priceDiff > 0 ? '+' : '';
       return `
         <tr>
-          <td style="text-align: left;"><strong>${c.name}</strong></td>
+          <td style="text-align:left;"><strong>${c.name}</strong></td>
           <td>₩${c.smartstore.price.toLocaleString()}</td>
           <td>${c.smartstore.stock}</td>
           <td>₩${c.coupang.price.toLocaleString()}</td>
           <td>${c.coupang.stock}</td>
-          <td class="price-diff ${diffClass}">
-            ${diffSign}₩${c.priceDiff.toLocaleString()} (${diffSign}${c.priceDiffPercent}%)
-          </td>
-          <td>${c.coupang.rocketDelivery ? '<span class="rocket-badge">🚀 로켓</span>' : '-'}</td>
-        </tr>
-      `;
+          <td style="${diffClass};font-weight:600">${diffSign}₩${c.priceDiff.toLocaleString()}</td>
+        </tr>`;
     }).join('');
   }
 
@@ -1136,7 +1186,6 @@
     document.getElementById('totalRevenue').textContent = `₩${data.totalRevenue.toLocaleString()}`;
     document.getElementById('avgRating').textContent = data.averageRating;
 
-    // 베스트셀러 대시보드
     const bestsellerList = document.getElementById('bestsellerList');
     bestsellerList.innerHTML = data.bestsellers.map((b, i) => `
       <li class="bestseller-item">
@@ -1145,37 +1194,28 @@
           <div class="bestseller-name">${b.name}</div>
           <div class="bestseller-platform">${b.platform === 'smartstore' ? '스마트스토어' : '쿠팡'}</div>
         </div>
-        <div class="bestseller-sales">${b.sales}개 판매</div>
-      </li>
-    `).join('');
+        <div class="bestseller-sales">${b.sales}개</div>
+      </li>`).join('');
 
-    // 플랫폼별 매출 바 차트
     const ssRevenue = data.platformSales.smartstore.revenue;
     const cpRevenue = data.platformSales.coupang.revenue;
-    const maxRevenue = Math.max(ssRevenue, cpRevenue);
-
+    const maxRevenue = Math.max(ssRevenue, cpRevenue) || 1;
     document.getElementById('ssRevenue').textContent = `₩${ssRevenue.toLocaleString()}`;
     document.getElementById('cpRevenue').textContent = `₩${cpRevenue.toLocaleString()}`;
     document.getElementById('ssBar').style.width = `${(ssRevenue / maxRevenue) * 100}%`;
     document.getElementById('cpBar').style.width = `${(cpRevenue / maxRevenue) * 100}%`;
 
-    // 카테고리별 매출
     const categoryChart = document.getElementById('categorySalesChart');
     categoryChart.innerHTML = Object.entries(data.categorySales).map(([cat, info]) => `
-      <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;">
-        <span>${cat}</span>
-        <span style="font-weight: 600;">₩${info.revenue.toLocaleString()}</span>
-      </div>
-    `).join('');
+      <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid #f1f5f9;font-size:0.8rem;">
+        <span>${cat}</span><span style="font-weight:600;">₩${info.revenue.toLocaleString()}</span>
+      </div>`).join('');
 
-    // 베스트셀러 상세
     const detailChart = document.getElementById('bestsellerDetailChart');
     detailChart.innerHTML = data.bestsellers.map(b => `
-      <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;">
-        <span>${b.name}</span>
-        <span style="font-weight: 600; color: #10b981;">₩${b.revenue.toLocaleString()}</span>
-      </div>
-    `).join('');
+      <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid #f1f5f9;font-size:0.8rem;">
+        <span>${b.name}</span><span style="font-weight:600;color:#10b981;">₩${b.revenue.toLocaleString()}</span>
+      </div>`).join('');
   }
 
   // ===== 필터링 =====
@@ -1186,36 +1226,19 @@
     const search = document.getElementById('searchProduct').value.toLowerCase();
 
     let filtered = products;
-
-    if (platform !== 'all') {
-      filtered = filtered.filter(p => p.platform === platform);
-    }
-    if (category) {
-      filtered = filtered.filter(p => p.category === category);
-    }
-    if (status) {
-      filtered = filtered.filter(p => p.status === status);
-    }
-    if (search) {
-      filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
-    }
-
+    if (platform !== 'all') filtered = filtered.filter(p => p.platform === platform);
+    if (category) filtered = filtered.filter(p => p.category === category);
+    if (status) filtered = filtered.filter(p => p.status === status);
+    if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
     renderProducts(filtered);
   }
 
   function filterOrders() {
     const platform = document.getElementById('orderPlatform').value;
     const status = document.getElementById('orderStatus').value;
-
     let filtered = orders;
-
-    if (platform !== 'all') {
-      filtered = filtered.filter(o => o.platform === platform);
-    }
-    if (status) {
-      filtered = filtered.filter(o => o.status === status);
-    }
-
+    if (platform !== 'all') filtered = filtered.filter(o => o.platform === platform);
+    if (status) filtered = filtered.filter(o => o.status === status);
     renderOrders(filtered);
   }
 
@@ -1224,7 +1247,6 @@
     editingProductId = null;
     document.getElementById('productModalTitle').textContent = '상품 등록';
     document.getElementById('productForm').reset();
-    document.getElementById('editProductId').value = '';
     toggleRocketDelivery();
     document.getElementById('productModal').classList.add('active');
   }
@@ -1232,10 +1254,8 @@
   function editProduct(id) {
     const product = products.find(p => p.id === id);
     if (!product) return;
-
     editingProductId = id;
     document.getElementById('productModalTitle').textContent = '상품 수정';
-    document.getElementById('editProductId').value = id;
     document.getElementById('formPlatform').value = product.platform;
     document.getElementById('formCategory').value = product.category;
     document.getElementById('formName').value = product.name;
@@ -1244,15 +1264,11 @@
     document.getElementById('formSalePrice').value = product.salePrice;
     document.getElementById('formStock').value = product.stock;
     document.getElementById('formRocketDelivery').value = product.rocketDelivery ? 'true' : 'false';
-
     toggleRocketDelivery();
     document.getElementById('productModal').classList.add('active');
   }
 
-  function closeProductModal() {
-    document.getElementById('productModal').classList.remove('active');
-    editingProductId = null;
-  }
+  function closeProductModal() { document.getElementById('productModal').classList.remove('active'); }
 
   async function saveProduct() {
     const data = {
@@ -1265,207 +1281,148 @@
       stock: parseInt(document.getElementById('formStock').value),
       rocketDelivery: document.getElementById('formRocketDelivery').value === 'true'
     };
-
     showLoading();
     try {
-      let res;
-      if (editingProductId) {
-        res = await fetch(`/api/market/products/${editingProductId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-      } else {
-        res = await fetch('/api/market/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-      }
-
+      const url = editingProductId ? `/api/market/products/${editingProductId}` : '/api/market/products';
+      const method = editingProductId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       const result = await res.json();
-      if (result.ok) {
-        showToast(result.message, 'success');
-        closeProductModal();
-        loadProducts();
-        loadStatus();
-        loadCategories();
-      } else {
-        showToast(result.error, 'error');
-      }
-    } catch (e) {
-      showToast('저장 실패', 'error');
-    }
+      if (result.ok) { showToast(result.message, 'success'); closeProductModal(); loadProducts(); loadStatus(); loadCategories(); }
+      else { showToast(result.error, 'error'); }
+    } catch (e) { showToast('저장 실패', 'error'); }
     hideLoading();
   }
 
   async function deleteProduct(id) {
-    if (!confirm('정말 삭제하시겠습니까?')) return;
-
+    if (!confirm('삭제하시겠습니까?')) return;
     showLoading();
     try {
       const res = await fetch(`/api/market/products/${id}`, { method: 'DELETE' });
       const result = await res.json();
-      if (result.ok) {
-        showToast('상품이 삭제되었습니다.', 'success');
-        loadProducts();
-        loadStatus();
-      }
-    } catch (e) {
-      showToast('삭제 실패', 'error');
-    }
+      if (result.ok) { showToast('삭제됨', 'success'); loadProducts(); loadStatus(); }
+    } catch (e) { showToast('삭제 실패', 'error'); }
     hideLoading();
   }
 
   function toggleRocketDelivery() {
     const platform = document.getElementById('formPlatform').value;
-    const group = document.getElementById('rocketDeliveryGroup');
-    group.style.display = platform === 'coupang' ? 'flex' : 'none';
+    document.getElementById('rocketDeliveryGroup').style.display = platform === 'coupang' ? 'flex' : 'none';
   }
 
-  // ===== 선택 & 일괄 수정 =====
+  // ===== 선택 & 일괄수정 =====
   function toggleSelectAll() {
     const checked = document.getElementById('selectAll').checked;
-    document.querySelectorAll('#productTableBody input[type="checkbox"]').forEach(cb => {
-      cb.checked = checked;
-    });
+    document.querySelectorAll('#productTableBody input[type="checkbox"]').forEach(cb => cb.checked = checked);
     updateSelectedIds();
   }
 
-  function toggleSelect(id) {
-    updateSelectedIds();
-  }
+  function toggleSelect(id) { updateSelectedIds(); }
 
   function updateSelectedIds() {
     selectedProductIds = [];
-    document.querySelectorAll('#productTableBody input[type="checkbox"]:checked').forEach(cb => {
-      selectedProductIds.push(cb.value);
-    });
+    document.querySelectorAll('#productTableBody input[type="checkbox"]:checked').forEach(cb => selectedProductIds.push(cb.value));
     document.getElementById('selectedCount').textContent = selectedProductIds.length;
   }
 
   function openBulkEditModal() {
     updateSelectedIds();
-    if (selectedProductIds.length === 0) {
-      showToast('수정할 상품을 선택해주세요.', 'error');
-      return;
-    }
+    if (selectedProductIds.length === 0) { showToast('상품을 선택해주세요', 'error'); return; }
     document.getElementById('bulkEditModal').classList.add('active');
   }
 
-  function closeBulkEditModal() {
-    document.getElementById('bulkEditModal').classList.remove('active');
-  }
+  function closeBulkEditModal() { document.getElementById('bulkEditModal').classList.remove('active'); }
 
   async function applyBulkEdit() {
     const priceType = document.getElementById('bulkPriceType').value;
     const priceValue = parseInt(document.getElementById('bulkPriceValue').value) || 0;
-    const stockChange = parseInt(document.getElementById('bulkStockChange').value) || 0;
     const status = document.getElementById('bulkStatus').value;
-
     const updates = {};
-
-    if (priceType === 'percent' && priceValue !== 0) {
-      updates.salePrice = `${priceValue}%`;
-    } else if (priceType === 'fixed' && priceValue !== 0) {
-      // 개별 처리 필요 - 일단 스킵
-    }
-
-    if (status) {
-      updates.status = status;
-    }
-
-    if (Object.keys(updates).length === 0 && stockChange === 0) {
-      showToast('변경할 내용을 입력해주세요.', 'error');
-      return;
-    }
-
+    if (priceType === 'percent' && priceValue !== 0) updates.salePrice = `${priceValue}%`;
+    if (status) updates.status = status;
+    if (Object.keys(updates).length === 0) { showToast('변경할 내용을 입력하세요', 'error'); return; }
     showLoading();
     try {
       const res = await fetch('/api/market/products/bulk-update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productIds: selectedProductIds,
-          updates: updates
-        })
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ productIds: selectedProductIds, updates })
       });
       const result = await res.json();
-      if (result.ok) {
-        showToast(result.message, 'success');
-        closeBulkEditModal();
-        loadProducts();
-      }
-    } catch (e) {
-      showToast('일괄 수정 실패', 'error');
-    }
+      if (result.ok) { showToast(result.message, 'success'); closeBulkEditModal(); loadProducts(); }
+    } catch (e) { showToast('일괄수정 실패', 'error'); }
     hideLoading();
   }
 
   // ===== 가격 동기화 =====
   async function syncPrices(source) {
-    if (!confirm(`${source === 'smartstore' ? '스마트스토어' : '쿠팡'} 가격을 기준으로 동기화하시겠습니까?`)) return;
-
+    if (!confirm(`${source === 'smartstore' ? '스마트스토어' : '쿠팡'} 기준으로 동기화하시겠습니까?`)) return;
     showLoading();
     try {
       const res = await fetch('/api/market/sync-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: source,
-          target: source === 'smartstore' ? 'coupang' : 'smartstore',
-          adjustment: 0
-        })
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ source, target: source === 'smartstore' ? 'coupang' : 'smartstore', adjustment: 0 })
       });
       const result = await res.json();
-      if (result.ok) {
-        showToast(result.message, 'success');
-        loadProducts();
-        loadCompare();
-      }
-    } catch (e) {
-      showToast('동기화 실패', 'error');
-    }
+      if (result.ok) { showToast(result.message, 'success'); loadProducts(); loadCompare(); }
+    } catch (e) { showToast('동기화 실패', 'error'); }
     hideLoading();
   }
 
-  // ===== 새로고침 =====
-  function refreshProducts() {
-    loadProducts();
-    loadStatus();
-    loadCategories();
-    showToast('상품 목록을 새로고침했습니다.', 'success');
+  function refreshProducts() { loadProducts(); loadStatus(); loadCategories(); showToast('새로고침 완료', 'success'); }
+  function refreshOrders() { loadOrders(); showToast('새로고침 완료', 'success'); }
+
+  // ===== AI 채팅 =====
+  function toggleAiPanel() {
+    if (window.innerWidth <= 1024) {
+      document.getElementById('aiChatPanel').classList.toggle('expanded');
+    }
   }
 
-  function refreshOrders() {
-    loadOrders();
-    showToast('주문 목록을 새로고침했습니다.', 'success');
+  function askQuick(question) {
+    document.getElementById('aiInput').value = question;
+    sendAiMessage();
+  }
+
+  async function sendAiMessage() {
+    const input = document.getElementById('aiInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const messagesEl = document.getElementById('aiChatMessages');
+    messagesEl.innerHTML += `<div class="ai-message user">${message}</div>`;
+    input.value = '';
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    // AI 응답 요청
+    try {
+      const res = await fetch('/api/market/ai-chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ message, products: products.slice(0, 5) })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        messagesEl.innerHTML += `<div class="ai-message assistant">${data.response}</div>`;
+      } else {
+        messagesEl.innerHTML += `<div class="ai-message assistant">죄송합니다, 오류가 발생했습니다.</div>`;
+      }
+    } catch (e) {
+      messagesEl.innerHTML += `<div class="ai-message assistant">네트워크 오류가 발생했습니다.</div>`;
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   // ===== 유틸리티 =====
-  function showLoading() {
-    document.getElementById('loadingOverlay').classList.add('active');
-  }
-
-  function hideLoading() {
-    document.getElementById('loadingOverlay').classList.remove('active');
-  }
-
+  function showLoading() { document.getElementById('loadingOverlay').classList.add('active'); }
+  function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
   function showToast(message, type = '') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = 'toast active ' + type;
-    setTimeout(() => {
-      toast.classList.remove('active');
-    }, 3000);
+    setTimeout(() => toast.classList.remove('active'), 3000);
   }
 
-  // ESC 키로 모달 닫기
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeProductModal();
-      closeBulkEditModal();
-    }
+    if (e.key === 'Escape') { closeProductModal(); closeBulkEditModal(); }
   });
   </script>
 </body>
