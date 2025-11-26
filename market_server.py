@@ -387,6 +387,11 @@ def call_naver_api(endpoint, method='GET', data=None):
             response = requests.post(url, headers=headers, json=data)
         elif method == 'PUT':
             response = requests.put(url, headers=headers, json=data)
+        elif method == 'PATCH':
+            response = requests.patch(url, headers=headers, json=data)
+        else:
+            print(f"[Naver API] 지원하지 않는 메서드: {method}")
+            return None
 
         print(f"[Naver API] 응답 상태: {response.status_code}")
         print(f"[Naver API] 응답 내용: {response.text[:500]}")
@@ -659,7 +664,44 @@ def get_products():
 
 @market_bp.route('/api/market/products/<product_id>', methods=['GET'])
 def get_product_detail(product_id):
-    """상품 상세 정보"""
+    """상품 상세 정보 (옵션 포함)"""
+    api_status = check_api_status()
+
+    # 네이버 API에서 상품 상세 정보 가져오기
+    if api_status['smartstore']['connected']:
+        # 상품 상세 API 호출
+        result = call_naver_api(f'/v2/products/origin-products/{product_id}', method='GET')
+        if result:
+            print(f"[Naver API] 상품 상세: {json.dumps(result, ensure_ascii=False, default=str)[:1000]}")
+
+            # 옵션 정보 추출
+            options = []
+            option_combinations = result.get('optionCombinations', [])
+            for opt in option_combinations:
+                options.append({
+                    "id": opt.get('id', ''),
+                    "optionName": opt.get('optionName1', '') + (' / ' + opt.get('optionName2', '') if opt.get('optionName2') else ''),
+                    "price": opt.get('price', 0),
+                    "stockQuantity": opt.get('stockQuantity', 0),
+                    "usable": opt.get('usable', True)
+                })
+
+            product = {
+                "id": str(product_id),
+                "platform": "smartstore",
+                "name": result.get('name', ''),
+                "category": result.get('wholeCategoryName', '기타'),
+                "price": result.get('salePrice', 0),
+                "salePrice": result.get('discountedPrice') or result.get('salePrice', 0),
+                "stock": result.get('stockQuantity', 0),
+                "status": result.get('statusType', 'SALE'),
+                "imageUrl": result.get('representativeImage', {}).get('url', '') if isinstance(result.get('representativeImage'), dict) else '',
+                "options": options,
+                "hasOptions": len(options) > 0
+            }
+            return jsonify({"ok": True, "product": product})
+
+    # Mock 데이터에서 찾기 (API 미연동 시)
     all_products = MOCK_SMARTSTORE_PRODUCTS + MOCK_COUPANG_PRODUCTS
     product = next((p for p in all_products if p['id'] == product_id), None)
 
@@ -668,46 +710,134 @@ def get_product_detail(product_id):
 
     return jsonify({"ok": True, "product": product})
 
+@market_bp.route('/api/market/products/<product_id>/statistics', methods=['GET'])
+def get_product_statistics(product_id):
+    """상품 판매 통계 (최근 30일)"""
+    api_status = check_api_status()
+
+    if not api_status['smartstore']['connected']:
+        return jsonify({"ok": False, "error": "API 미연동"}), 400
+
+    # 네이버 통계 API 호출
+    # 주문/판매 통계 조회
+    from datetime import datetime, timedelta
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30)
+
+    stats_data = {
+        "startDate": start_date.strftime("%Y-%m-%d"),
+        "endDate": end_date.strftime("%Y-%m-%d")
+    }
+
+    result = call_naver_api(f'/v1/products/origin-products/{product_id}/statistics', method='GET')
+    print(f"[Naver API] 통계 응답: {result}")
+
+    if result:
+        return jsonify({
+            "ok": True,
+            "statistics": {
+                "productId": product_id,
+                "period": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+                "salesCount": result.get('cumulativeSaleCount', 0),
+                "reviewCount": result.get('reviewCount', 0),
+                "reviewScore": result.get('reviewScore', 0),
+                "wishCount": result.get('wishCount', 0),
+                "recentSalesCount": result.get('recentSaleCount', 0)
+            }
+        })
+
+    return jsonify({
+        "ok": True,
+        "statistics": {
+            "productId": product_id,
+            "salesCount": 0,
+            "reviewCount": 0,
+            "reviewScore": 0,
+            "message": "통계 데이터를 가져올 수 없습니다"
+        }
+    })
+
 @market_bp.route('/api/market/products/<product_id>', methods=['PUT'])
 def update_product(product_id):
-    """상품 정보 수정"""
+    """상품 정보 수정 (가격, 재고 등)"""
     data = request.get_json()
-
-    # Mock 데이터에서 상품 찾기
-    all_products = MOCK_SMARTSTORE_PRODUCTS + MOCK_COUPANG_PRODUCTS
-    product = next((p for p in all_products if p['id'] == product_id), None)
-
-    if not product:
-        return jsonify({"ok": False, "error": "상품을 찾을 수 없습니다."}), 404
+    platform = data.get('platform', 'smartstore')
 
     # API 연동 상태 확인
     api_status = check_api_status()
 
-    # 실제 API로 업데이트
-    if product['platform'] == 'smartstore' and api_status['smartstore']['connected']:
-        result = call_naver_api(f'/v2/products/{product_id}', method='PUT', data={
-            "salePrice": data.get('salePrice'),
-            "stockQuantity": data.get('stock')
-        })
-        if not result:
-            return jsonify({"ok": False, "error": "스마트스토어 API 오류"}), 500
+    # 실제 네이버 API로 업데이트
+    if platform == 'smartstore' and api_status['smartstore']['connected']:
+        # 먼저 현재 상품 정보 가져오기
+        current_product = call_naver_api(f'/v2/products/origin-products/{product_id}', method='GET')
+        if not current_product:
+            return jsonify({"ok": False, "error": "상품을 찾을 수 없습니다."}), 404
 
-    elif product['platform'] == 'coupang' and api_status['coupang']['connected']:
-        result = call_coupang_api(f'/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/{product_id}',
-                                   method='PUT', data=data)
+        # 업데이트할 데이터 구성
+        update_data = {}
+
+        # 가격 업데이트
+        if 'salePrice' in data:
+            update_data['salePrice'] = int(data['salePrice'])
+
+        # 재고 업데이트
+        if 'stock' in data:
+            update_data['stockQuantity'] = int(data['stock'])
+
+        # 옵션별 가격 업데이트
+        if 'options' in data:
+            update_data['optionCombinations'] = data['options']
+
+        print(f"[Naver API] 상품 수정 요청: {product_id}, 데이터: {update_data}")
+
+        # 네이버 상품 수정 API 호출
+        result = call_naver_api(f'/v2/products/origin-products/{product_id}', method='PUT', data=update_data)
+
+        if result is None:
+            # API 호출 실패 시 PATCH 시도
+            result = call_naver_api(f'/v2/products/origin-products/{product_id}', method='PATCH', data=update_data)
+
+        if result is not None:
+            return jsonify({
+                "ok": True,
+                "message": "상품이 수정되었습니다.",
+                "product": {
+                    "id": product_id,
+                    **data
+                }
+            })
+        else:
+            return jsonify({"ok": False, "error": "네이버 API 수정 실패. 로그를 확인하세요."}), 500
+
+    elif platform == 'coupang' and api_status['coupang']['connected']:
+        result = call_coupang_api(
+            f'/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/{product_id}',
+            method='PUT',
+            data=data
+        )
         if not result:
             return jsonify({"ok": False, "error": "쿠팡 API 오류"}), 500
 
-    # Mock 데이터 업데이트 (시뮬레이션)
-    for key, value in data.items():
-        if key in product:
-            product[key] = value
-    product['lastModified'] = datetime.now().isoformat()
+        return jsonify({
+            "ok": True,
+            "message": "상품이 수정되었습니다.",
+            "product": {"id": product_id, **data}
+        })
+
+    # API 미연동 시 Mock 데이터 업데이트
+    all_products = MOCK_SMARTSTORE_PRODUCTS + MOCK_COUPANG_PRODUCTS
+    product = next((p for p in all_products if p['id'] == product_id), None)
+
+    if product:
+        for key, value in data.items():
+            if key in product:
+                product[key] = value
+        product['lastModified'] = datetime.now().isoformat()
 
     return jsonify({
         "ok": True,
-        "message": "상품이 수정되었습니다.",
-        "product": product
+        "message": "상품이 수정되었습니다. (Mock)",
+        "product": product or {"id": product_id, **data}
     })
 
 @market_bp.route('/api/market/products', methods=['POST'])

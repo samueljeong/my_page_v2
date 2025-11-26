@@ -964,6 +964,20 @@
               </select>
             </div>
           </div>
+          <!-- 옵션 상품 섹션 -->
+          <div id="optionsSection" style="display:none; margin-top:16px;">
+            <h4 style="margin-bottom:8px; color:#334155;">📦 옵션 상품</h4>
+            <div id="optionsList" style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; padding:8px;"></div>
+          </div>
+          <!-- 판매 통계 -->
+          <div id="statsSection" style="display:none; margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px;">
+            <h4 style="margin-bottom:8px; color:#334155;">📊 판매 통계 (최근 30일)</h4>
+            <div id="statsContent" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:0.85rem;">
+              <div><span style="color:#64748b;">판매량:</span> <strong id="statsSales">-</strong></div>
+              <div><span style="color:#64748b;">리뷰:</span> <strong id="statsReviews">-</strong></div>
+              <div><span style="color:#64748b;">평점:</span> <strong id="statsRating">-</strong></div>
+            </div>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -1040,7 +1054,28 @@
     loadCompare();
     loadAnalytics();
     setupEventListeners();
+
+    // 대시보드 자동 새로고침 (5분마다)
+    setInterval(() => {
+      console.log('[Auto Refresh] 대시보드 데이터 갱신 중...');
+      loadStatus();
+      loadProducts();
+    }, 5 * 60 * 1000);
   });
+
+  // 수동 새로고침 함수
+  function refreshDashboard() {
+    showLoading();
+    Promise.all([loadStatus(), loadProducts(), loadAnalytics()])
+      .then(() => {
+        showToast('데이터가 새로고침되었습니다');
+        hideLoading();
+      })
+      .catch(() => {
+        showToast('새로고침 실패', 'error');
+        hideLoading();
+      });
+  }
 
   // ===== 탭 관리 =====
   function initTabs() {
@@ -1329,7 +1364,7 @@
     document.getElementById('productModal').classList.add('active');
   }
 
-  function editProduct(id) {
+  async function editProduct(id) {
     const product = products.find(p => p.id === id);
     if (!product) return;
     editingProductId = id;
@@ -1344,6 +1379,41 @@
     document.getElementById('formRocketDelivery').value = product.rocketDelivery ? 'true' : 'false';
     toggleRocketDelivery();
     document.getElementById('productModal').classList.add('active');
+
+    // 옵션 섹션 초기화
+    document.getElementById('optionsSection').style.display = 'none';
+    document.getElementById('optionsList').innerHTML = '';
+    document.getElementById('statsSection').style.display = 'none';
+
+    // 상품 상세 정보 (옵션 포함) 로드
+    try {
+      const detailRes = await fetch(`/api/market/products/${id}`);
+      const detailData = await detailRes.json();
+      if (detailData.ok && detailData.product.options && detailData.product.options.length > 0) {
+        document.getElementById('optionsSection').style.display = 'block';
+        document.getElementById('optionsList').innerHTML = detailData.product.options.map(opt => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f5f9;">
+            <span style="font-size:0.85rem;">${opt.optionName || '옵션'}</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="number" value="${opt.price}" data-option-id="${opt.id}" class="option-price-input" style="width:80px; padding:4px; font-size:0.8rem; border:1px solid #e2e8f0; border-radius:4px;">
+              <span style="font-size:0.75rem; color:#64748b;">재고: ${opt.stockQuantity}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 판매 통계 로드
+      const statsRes = await fetch(`/api/market/products/${id}/statistics`);
+      const statsData = await statsRes.json();
+      if (statsData.ok) {
+        document.getElementById('statsSection').style.display = 'block';
+        document.getElementById('statsSales').textContent = (statsData.statistics.salesCount || 0).toLocaleString() + '개';
+        document.getElementById('statsReviews').textContent = (statsData.statistics.reviewCount || 0).toLocaleString() + '개';
+        document.getElementById('statsRating').textContent = statsData.statistics.reviewScore ? '⭐' + statsData.statistics.reviewScore : '-';
+      }
+    } catch (e) {
+      console.log('상세 정보 로드 실패:', e);
+    }
   }
 
   function closeProductModal() { document.getElementById('productModal').classList.remove('active'); }
@@ -1359,6 +1429,19 @@
       stock: parseInt(document.getElementById('formStock').value),
       rocketDelivery: document.getElementById('formRocketDelivery').value === 'true'
     };
+
+    // 옵션 가격 수집
+    const optionInputs = document.querySelectorAll('.option-price-input');
+    if (optionInputs.length > 0) {
+      data.options = [];
+      optionInputs.forEach(input => {
+        data.options.push({
+          id: input.dataset.optionId,
+          price: parseInt(input.value)
+        });
+      });
+    }
+
     showLoading();
     try {
       const url = editingProductId ? `/api/market/products/${editingProductId}` : '/api/market/products';
