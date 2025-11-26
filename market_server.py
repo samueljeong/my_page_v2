@@ -987,6 +987,71 @@ def get_analytics():
         }
     })
 
+# ===== 내부 헬퍼: 실제 상품 데이터 가져오기 =====
+def fetch_products_for_ai():
+    """AI 채팅용 실제 상품 데이터 가져오기"""
+    api_status = check_api_status()
+    products = []
+    smartstore_count = 0
+    coupang_count = 0
+
+    # 스마트스토어 상품 가져오기
+    if api_status['smartstore']['connected']:
+        search_data = {"page": 1, "size": 100}
+        result = call_naver_api('/v1/products/search', method='POST', data=search_data)
+        if result and 'contents' in result:
+            for item in result['contents']:
+                channel_product = item.get('channelProducts', [{}])[0] if item.get('channelProducts') else item
+                product_name = channel_product.get('name') or item.get('name') or '-'
+                sale_price = channel_product.get('salePrice') or 0
+                discounted_price = channel_product.get('discountedPrice') or sale_price
+                stock = channel_product.get('stockQuantity') or 0
+                category = channel_product.get('wholeCategoryName') or ''
+                status_type = channel_product.get('statusType') or 'SALE'
+
+                products.append({
+                    "id": str(item.get('originProductNo', '')),
+                    "platform": "smartstore",
+                    "name": product_name,
+                    "category": category.split('>')[-1].strip() if category else '기타',
+                    "price": sale_price,
+                    "salePrice": discounted_price,
+                    "stock": stock,
+                    "status": "OUTOFSTOCK" if stock == 0 or status_type == 'OUTOFSTOCK' else "SALE",
+                    "salesCount": channel_product.get('saleCount', 0) or 0,
+                    "reviewCount": channel_product.get('reviewCount', 0) or 0,
+                    "rating": channel_product.get('reviewScore', 0) or 0
+                })
+                smartstore_count += 1
+    else:
+        products.extend(MOCK_SMARTSTORE_PRODUCTS)
+        smartstore_count = len(MOCK_SMARTSTORE_PRODUCTS)
+
+    # 쿠팡 상품 가져오기
+    if api_status['coupang']['connected']:
+        result = call_coupang_api(f'/v2/providers/seller_api/apis/api/v1/marketplace/seller-products')
+        if result and 'data' in result:
+            for item in result['data']:
+                products.append({
+                    "id": str(item.get('sellerProductId', '')),
+                    "platform": "coupang",
+                    "name": item.get('sellerProductName', ''),
+                    "category": item.get('displayCategoryName', '기타'),
+                    "price": item.get('salePrice', 0),
+                    "salePrice": item.get('salePrice', 0),
+                    "stock": item.get('maximumBuyCount', 0),
+                    "status": "SALE",
+                    "salesCount": 0,
+                    "reviewCount": 0,
+                    "rating": 0
+                })
+                coupang_count += 1
+    else:
+        products.extend(MOCK_COUPANG_PRODUCTS)
+        coupang_count = len(MOCK_COUPANG_PRODUCTS)
+
+    return products, smartstore_count, coupang_count
+
 # ===== AI 채팅 =====
 @market_bp.route('/api/market/ai-chat', methods=['POST'])
 def market_ai_chat():
@@ -997,31 +1062,73 @@ def market_ai_chat():
     if not user_message:
         return jsonify({"ok": False, "error": "메시지가 필요합니다."}), 400
 
-    # 현재 상품 데이터 컨텍스트 생성
-    all_products = MOCK_SMARTSTORE_PRODUCTS + MOCK_COUPANG_PRODUCTS
+    # 실제 상품 데이터 가져오기
+    all_products, smartstore_count, coupang_count = fetch_products_for_ai()
+
+    # 품절 상품
+    out_of_stock = [p for p in all_products if p.get('stock', 0) == 0 or p.get('status') == 'OUTOFSTOCK']
+    # 저재고 상품 (10개 이하)
+    low_stock = [p for p in all_products if 0 < p.get('stock', 0) <= 10]
+    # 베스트셀러 (판매량 기준 상위 5개)
+    bestsellers = sorted(all_products, key=lambda x: x.get('salesCount', 0), reverse=True)[:5]
+    # 평균 가격
+    avg_price = sum(p.get('salePrice', 0) for p in all_products) / len(all_products) if all_products else 0
+
     product_summary = f"""
 현재 등록된 상품 요약:
-- 스마트스토어: {len(MOCK_SMARTSTORE_PRODUCTS)}개
-- 쿠팡: {len(MOCK_COUPANG_PRODUCTS)}개
-- 품절 상품: {len([p for p in all_products if p.get('stock', 0) == 0])}개
+- 스마트스토어: {smartstore_count}개
+- 쿠팡: {coupang_count}개
+- 총 상품 수: {len(all_products)}개
+- 품절 상품: {len(out_of_stock)}개
+- 저재고 상품 (10개 이하): {len(low_stock)}개
+- 평균 판매가: {avg_price:,.0f}원
 
-상품 목록:
+베스트셀러 상품 (판매량 기준):
 """
-    for p in all_products[:10]:  # 상위 10개만
-        product_summary += f"- {p['name']} ({p['platform']}): {p.get('salePrice', 0):,}원, 재고 {p.get('stock', 0)}개\n"
+    for i, p in enumerate(bestsellers, 1):
+        product_summary += f"{i}. {p['name']}: {p.get('salePrice', 0):,}원, 판매 {p.get('salesCount', 0)}개\n"
+
+    product_summary += "\n전체 상품 목록 (상위 20개):\n"
+    for p in all_products[:20]:
+        stock_status = "품절" if p.get('stock', 0) == 0 else f"재고 {p.get('stock', 0)}개"
+        product_summary += f"- {p['name']} ({p['platform']}): {p.get('salePrice', 0):,}원, {stock_status}\n"
 
     system_prompt = f"""당신은 온라인 쇼핑몰 판매자를 돕는 전문 AI 어시스턴트입니다.
 
-다음과 같은 질문에 도움을 줄 수 있습니다:
-1. HS 코드 조회: 상품의 관세 분류 코드를 알려줍니다
-2. 마진 계산: 원가, 판매가, 수수료를 고려한 마진을 계산합니다
-3. 상품 분석: 등록된 상품의 가격, 재고, 판매 현황 분석
-4. 가격 전략: 경쟁력 있는 가격 책정 조언
-5. 쿠팡/스마트스토어 판매 팁
+## 제공 가능한 서비스:
+
+### 1. 상품 분석 및 최적화
+- 현재 등록된 상품 분석 (가격, 재고, 판매량)
+- 품절/저재고 상품 알림 및 재입고 우선순위 추천
+- 베스트셀러 분석 및 성공 요인 파악
+- 카테고리별 상품 분포 분석
+
+### 2. 마진 계산
+- 원가, 판매가, 수수료를 고려한 순마진 계산
+- 스마트스토어 수수료: 약 5-10% (카테고리별 상이)
+- 쿠팡 수수료: 약 10-15% (로켓/직배송 상이)
+- 목표 마진율에 따른 적정 판매가 역산
+
+### 3. 가격 전략 추천
+- 경쟁 가격 분석 (같은 카테고리 평균가 비교)
+- 가격 인상/인하 제안
+- 번들/패키지 가격 전략
+
+### 4. HS 코드 조회
+- 상품의 관세 분류 코드 안내
+- 수입 상품의 관세율 정보
+
+### 5. 판매 팁
+- 스마트스토어/쿠팡 알고리즘 최적화 방법
+- 상품명/키워드 최적화 제안
+- 리뷰 관리 및 고객 응대 팁
 
 {product_summary}
 
-답변은 간결하고 실용적으로 해주세요. 한국어로 답변하세요."""
+## 응답 가이드:
+- 구체적인 숫자와 데이터를 활용해서 분석해주세요
+- 실행 가능한 액션 아이템을 제안해주세요
+- 한국어로 답변하세요"""
 
     try:
         response = openai_client.chat.completions.create(
@@ -1048,3 +1155,182 @@ def market_ai_chat():
             "error": "AI 응답 생성 중 오류가 발생했습니다.",
             "detail": str(e)
         }), 500
+
+# ===== 상품 분석 API =====
+@market_bp.route('/api/market/analysis', methods=['GET'])
+def get_product_analysis():
+    """상품 데이터 종합 분석"""
+    all_products, smartstore_count, coupang_count = fetch_products_for_ai()
+
+    if not all_products:
+        return jsonify({
+            "ok": True,
+            "analysis": {
+                "summary": "등록된 상품이 없습니다.",
+                "recommendations": []
+            }
+        })
+
+    # 기본 통계
+    total_products = len(all_products)
+    out_of_stock = [p for p in all_products if p.get('stock', 0) == 0 or p.get('status') == 'OUTOFSTOCK']
+    low_stock = [p for p in all_products if 0 < p.get('stock', 0) <= 10]
+
+    # 가격 분석
+    prices = [p.get('salePrice', 0) for p in all_products if p.get('salePrice', 0) > 0]
+    avg_price = sum(prices) / len(prices) if prices else 0
+    min_price = min(prices) if prices else 0
+    max_price = max(prices) if prices else 0
+
+    # 판매량 분석
+    sales = [p.get('salesCount', 0) for p in all_products]
+    total_sales = sum(sales)
+    avg_sales = total_sales / len(sales) if sales else 0
+
+    # 베스트셀러
+    bestsellers = sorted(all_products, key=lambda x: x.get('salesCount', 0), reverse=True)[:5]
+
+    # 카테고리별 분석
+    category_stats = {}
+    for p in all_products:
+        cat = p.get('category', '기타')
+        if cat not in category_stats:
+            category_stats[cat] = {'count': 0, 'totalSales': 0, 'totalPrice': 0}
+        category_stats[cat]['count'] += 1
+        category_stats[cat]['totalSales'] += p.get('salesCount', 0)
+        category_stats[cat]['totalPrice'] += p.get('salePrice', 0)
+
+    category_analysis = []
+    for cat, stats in category_stats.items():
+        category_analysis.append({
+            'category': cat,
+            'productCount': stats['count'],
+            'totalSales': stats['totalSales'],
+            'avgPrice': stats['totalPrice'] / stats['count'] if stats['count'] > 0 else 0
+        })
+    category_analysis.sort(key=lambda x: x['totalSales'], reverse=True)
+
+    # 추천 생성
+    recommendations = []
+
+    # 품절 상품 추천
+    if out_of_stock:
+        recommendations.append({
+            'type': 'warning',
+            'title': '품절 상품 재입고 필요',
+            'message': f'{len(out_of_stock)}개 상품이 품절 상태입니다. 빠른 재입고가 필요합니다.',
+            'products': [{'id': p['id'], 'name': p['name']} for p in out_of_stock[:5]]
+        })
+
+    # 저재고 상품 추천
+    if low_stock:
+        recommendations.append({
+            'type': 'info',
+            'title': '저재고 상품 주의',
+            'message': f'{len(low_stock)}개 상품의 재고가 10개 이하입니다.',
+            'products': [{'id': p['id'], 'name': p['name'], 'stock': p['stock']} for p in low_stock[:5]]
+        })
+
+    # 가격 이상치 추천
+    if avg_price > 0:
+        high_price_products = [p for p in all_products if p.get('salePrice', 0) > avg_price * 2]
+        low_price_products = [p for p in all_products if 0 < p.get('salePrice', 0) < avg_price * 0.3]
+
+        if high_price_products:
+            recommendations.append({
+                'type': 'tip',
+                'title': '고가 상품 마케팅 강화',
+                'message': f'평균 가격의 2배 이상인 {len(high_price_products)}개 상품은 프리미엄 마케팅이 필요합니다.',
+                'products': [{'id': p['id'], 'name': p['name'], 'price': p['salePrice']} for p in high_price_products[:3]]
+            })
+
+        if low_price_products:
+            recommendations.append({
+                'type': 'tip',
+                'title': '저가 상품 가격 검토',
+                'message': f'평균 가격의 30% 미만인 {len(low_price_products)}개 상품의 마진을 점검하세요.',
+                'products': [{'id': p['id'], 'name': p['name'], 'price': p['salePrice']} for p in low_price_products[:3]]
+            })
+
+    # 베스트셀러 분석 추천
+    if bestsellers and bestsellers[0].get('salesCount', 0) > 0:
+        recommendations.append({
+            'type': 'success',
+            'title': '베스트셀러 확장 기회',
+            'message': f'"{bestsellers[0]["name"]}"이(가) 가장 많이 팔리고 있습니다. 유사 상품 추가를 고려하세요.',
+            'products': [{'id': p['id'], 'name': p['name'], 'sales': p.get('salesCount', 0)} for p in bestsellers[:3]]
+        })
+
+    return jsonify({
+        "ok": True,
+        "analysis": {
+            "summary": {
+                "totalProducts": total_products,
+                "smartstoreCount": smartstore_count,
+                "coupangCount": coupang_count,
+                "outOfStock": len(out_of_stock),
+                "lowStock": len(low_stock),
+                "totalSales": total_sales
+            },
+            "priceAnalysis": {
+                "average": round(avg_price),
+                "min": min_price,
+                "max": max_price
+            },
+            "salesAnalysis": {
+                "totalSales": total_sales,
+                "averageSales": round(avg_sales, 1)
+            },
+            "bestsellers": [{
+                "id": p['id'],
+                "name": p['name'],
+                "platform": p['platform'],
+                "price": p.get('salePrice', 0),
+                "sales": p.get('salesCount', 0)
+            } for p in bestsellers],
+            "categoryAnalysis": category_analysis[:10],
+            "recommendations": recommendations
+        }
+    })
+
+# ===== 마진 계산기 API =====
+@market_bp.route('/api/market/calculate-margin', methods=['POST'])
+def calculate_margin():
+    """마진 계산기"""
+    data = request.get_json()
+
+    cost_price = data.get('costPrice', 0)  # 원가
+    sale_price = data.get('salePrice', 0)  # 판매가
+    platform = data.get('platform', 'smartstore')  # 플랫폼
+    shipping_cost = data.get('shippingCost', 0)  # 배송비 (판매자 부담)
+
+    # 플랫폼별 수수료율
+    commission_rates = {
+        'smartstore': 0.055,  # 네이버 기본 5.5%
+        'coupang': 0.108,     # 쿠팡 기본 10.8%
+        'coupang_rocket': 0.15  # 로켓배송 15%
+    }
+
+    commission_rate = commission_rates.get(platform, 0.1)
+
+    # 계산
+    commission = sale_price * commission_rate
+    total_cost = cost_price + shipping_cost + commission
+    profit = sale_price - total_cost
+    margin_rate = (profit / sale_price * 100) if sale_price > 0 else 0
+
+    return jsonify({
+        "ok": True,
+        "calculation": {
+            "costPrice": cost_price,
+            "salePrice": sale_price,
+            "platform": platform,
+            "commissionRate": f"{commission_rate * 100:.1f}%",
+            "commission": round(commission),
+            "shippingCost": shipping_cost,
+            "totalCost": round(total_cost),
+            "profit": round(profit),
+            "marginRate": f"{margin_rate:.1f}%",
+            "profitable": profit > 0
+        }
+    })
