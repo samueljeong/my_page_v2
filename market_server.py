@@ -9,6 +9,10 @@ import time
 import requests
 from datetime import datetime
 from flask import Blueprint, request, jsonify
+from openai import OpenAI
+
+# OpenAI 클라이언트
+openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY', ''))
 
 market_bp = Blueprint('market', __name__)
 
@@ -846,3 +850,65 @@ def get_analytics():
             } for p in bestsellers]
         }
     })
+
+# ===== AI 채팅 =====
+@market_bp.route('/api/market/ai-chat', methods=['POST'])
+def market_ai_chat():
+    """마켓 관련 AI 채팅 (HS 코드, 마진 계산, 상품 질문 등)"""
+    data = request.get_json()
+    user_message = data.get('message', '')
+
+    if not user_message:
+        return jsonify({"ok": False, "error": "메시지가 필요합니다."}), 400
+
+    # 현재 상품 데이터 컨텍스트 생성
+    all_products = MOCK_SMARTSTORE_PRODUCTS + MOCK_COUPANG_PRODUCTS
+    product_summary = f"""
+현재 등록된 상품 요약:
+- 스마트스토어: {len(MOCK_SMARTSTORE_PRODUCTS)}개
+- 쿠팡: {len(MOCK_COUPANG_PRODUCTS)}개
+- 품절 상품: {len([p for p in all_products if p.get('stock', 0) == 0])}개
+
+상품 목록:
+"""
+    for p in all_products[:10]:  # 상위 10개만
+        product_summary += f"- {p['name']} ({p['platform']}): {p.get('salePrice', 0):,}원, 재고 {p.get('stock', 0)}개\n"
+
+    system_prompt = f"""당신은 온라인 쇼핑몰 판매자를 돕는 전문 AI 어시스턴트입니다.
+
+다음과 같은 질문에 도움을 줄 수 있습니다:
+1. HS 코드 조회: 상품의 관세 분류 코드를 알려줍니다
+2. 마진 계산: 원가, 판매가, 수수료를 고려한 마진을 계산합니다
+3. 상품 분석: 등록된 상품의 가격, 재고, 판매 현황 분석
+4. 가격 전략: 경쟁력 있는 가격 책정 조언
+5. 쿠팡/스마트스토어 판매 팁
+
+{product_summary}
+
+답변은 간결하고 실용적으로 해주세요. 한국어로 답변하세요."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content
+
+        return jsonify({
+            "ok": True,
+            "response": ai_response
+        })
+
+    except Exception as e:
+        print(f"[AI Chat Error] {e}")
+        return jsonify({
+            "ok": False,
+            "error": "AI 응답 생성 중 오류가 발생했습니다.",
+            "detail": str(e)
+        }), 500
