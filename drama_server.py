@@ -2021,6 +2021,7 @@ def api_drama_claude_step3():
             return jsonify({"ok": False, "error": "No data received"}), 200
 
         category = data.get("category", "")
+        video_category = data.get("videoCategory", "간증")  # 영상 카테고리 (간증, 드라마, 명언, 마음, 철학, 인간관계)
         style_name = data.get("styleName", "")
         style_description = data.get("styleDescription", "")
         draft_content = data.get("draftContent", "")
@@ -2048,15 +2049,79 @@ def api_drama_claude_step3():
         if effective_category:
             category = effective_category
 
-        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 카테고리: {category}, 모델: {selected_model}, 콘텐츠유형: {content_type}")
+        print(f"[DRAMA-STEP3-OPENROUTER] 처리 시작 - 시간: {category}, 영상카테고리: {video_category}, 모델: {selected_model}, 콘텐츠유형: {content_type}")
         print(f"[DRAMA-STEP3-DEBUG] step3_guide 길이: {len(step3_guide)}, 내용: {step3_guide[:100] if step3_guide else '(없음)'}...")
         print(f"[DRAMA-STEP3-DEBUG] draft_content 길이: {len(draft_content)}, 내용: {draft_content[:300] if draft_content else '(없음)'}...")
 
         # 콘텐츠 유형별 시스템 프롬프트 결정
-        # 간증 콘텐츠는 JSON 스타일 가이드 기반 프롬프트 사용
+        # video_category에 따라 다른 프롬프트 사용
         user_prompt_suffix = ""
 
-        if content_type == "testimony":
+        # 영상 카테고리별 기본 프롬프트 매핑
+        video_category_prompts = {
+            "명언": """당신은 깊은 울림을 주는 명언 콘텐츠 전문 작가입니다.
+
+【 명언 콘텐츠의 핵심 】
+삶의 지혜와 통찰을 담은 명언을 중심으로, 시청자에게 생각할 거리와 영감을 주는 콘텐츠입니다.
+
+【 필수 요소 】
+1. 명언의 의미를 실생활 사례로 풀어서 설명
+2. 1인칭 서술로 개인적 경험과 연결
+3. 짧은 문장과 강렬한 메시지
+4. 시청자가 공감할 수 있는 보편적 주제
+
+【 금지 사항 】
+- 추상적이고 모호한 표현
+- 마크다운 기호(#, *, -, **) 사용 금지""",
+            "마음": """당신은 마음 치유 콘텐츠 전문 작가입니다.
+
+【 마음 콘텐츠의 핵심 】
+지친 마음을 위로하고 치유하는 감성적인 이야기입니다. 시청자가 "나도 그랬어"라고 공감하며 위안을 받을 수 있어야 합니다.
+
+【 필수 요소 】
+1. 부드럽고 따뜻한 어조
+2. 감정의 구체적 묘사
+3. 희망과 치유의 메시지
+4. 공감을 이끌어내는 일상 소재
+
+【 금지 사항 】
+- 설교하거나 가르치려는 톤
+- 마크다운 기호(#, *, -, **) 사용 금지""",
+            "철학": """당신은 철학적 사유 콘텐츠 전문 작가입니다.
+
+【 철학 콘텐츠의 핵심 】
+인생, 존재, 의미에 대한 깊은 성찰을 담은 콘텐츠입니다. 시청자가 생각에 잠기게 만드는 질문을 던집니다.
+
+【 필수 요소 】
+1. 깊이 있는 질문 제시
+2. 일상에서 철학적 의미 발견
+3. 다양한 관점 제시
+4. 열린 결말로 사유 유도
+
+【 금지 사항 】
+- 너무 어려운 철학 용어
+- 마크다운 기호(#, *, -, **) 사용 금지""",
+            "인간관계": """당신은 인간관계 콘텐츠 전문 작가입니다.
+
+【 인간관계 콘텐츠의 핵심 】
+가족, 친구, 연인, 동료 등 다양한 관계에서 일어나는 이야기입니다. 관계의 소중함과 어려움을 함께 다룹니다.
+
+【 필수 요소 】
+1. 구체적인 관계 상황 묘사
+2. 갈등과 화해의 과정
+3. 대화를 통한 감정 전달
+4. 관계 속 성장 이야기
+
+【 금지 사항 】
+- 일방적인 조언이나 훈계
+- 마크다운 기호(#, *, -, **) 사용 금지"""
+        }
+
+        # video_category가 특별한 카테고리면 해당 프롬프트 사용
+        if video_category in video_category_prompts:
+            system_content = video_category_prompts[video_category]
+            print(f"[DRAMA-STEP3] 영상카테고리 '{video_category}' 전용 프롬프트 사용")
+        elif video_category == "간증" or content_type == "testimony":
             # category에서 duration_minutes 추출 (예: "10min" -> 10, "20min" -> 20)
             duration_minutes = 20  # 기본값
             if category:
