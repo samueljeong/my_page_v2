@@ -525,13 +525,19 @@ def get_products():
                     print(f"[Naver API] 첫 번째 상품 구조: {json.dumps(result['contents'][0], ensure_ascii=False, default=str)[:1000]}")
 
                 for item in result['contents']:
-                    # 다양한 필드명 시도
-                    product_name = item.get('name') or item.get('productName') or item.get('channelProductName') or '-'
-                    product_id = item.get('originProductNo') or item.get('productNo') or item.get('channelProductNo') or ''
-                    sale_price = item.get('salePrice') or item.get('price') or item.get('discountedPrice') or 0
-                    stock = item.get('stockQuantity') or item.get('quantity') or 0
-                    category = item.get('wholeCategoryName') or item.get('categoryName') or ''
-                    image = item.get('representativeImage', {})
+                    # channelProducts 배열에서 첫 번째 상품 정보 가져오기
+                    channel_product = item.get('channelProducts', [{}])[0] if item.get('channelProducts') else item
+
+                    product_name = channel_product.get('name') or item.get('name') or '-'
+                    product_id = item.get('originProductNo') or channel_product.get('originProductNo') or ''
+                    sale_price = channel_product.get('salePrice') or 0
+                    discounted_price = channel_product.get('discountedPrice') or sale_price
+                    stock = channel_product.get('stockQuantity') or 0
+                    category = channel_product.get('wholeCategoryName') or ''
+                    status_type = channel_product.get('statusType') or 'SALE'
+
+                    # 이미지 URL
+                    image = channel_product.get('representativeImage', {})
                     if isinstance(image, dict):
                         image_url = image.get('url', '')
                     else:
@@ -543,14 +549,14 @@ def get_products():
                         "name": product_name,
                         "category": category.split('>')[-1].strip() if category else '기타',
                         "price": sale_price,
-                        "salePrice": item.get('discountedPrice') or sale_price,
+                        "salePrice": discounted_price,
                         "stock": stock,
-                        "status": "OUTOFSTOCK" if stock == 0 else "SALE",
+                        "status": "OUTOFSTOCK" if stock == 0 or status_type == 'OUTOFSTOCK' else "SALE",
                         "imageUrl": image_url,
-                        "salesCount": item.get('saleCount', 0) or item.get('totalSaleCount', 0) or 0,
-                        "reviewCount": item.get('reviewCount', 0) or 0,
-                        "rating": item.get('reviewScore', 0) or item.get('averageReviewScore', 0) or 0,
-                        "lastModified": item.get('modifiedDate', '') or item.get('lastModifiedDate', '') or ''
+                        "salesCount": channel_product.get('saleCount', 0) or 0,
+                        "reviewCount": channel_product.get('reviewCount', 0) or 0,
+                        "rating": channel_product.get('reviewScore', 0) or 0,
+                        "lastModified": channel_product.get('modifiedDate', '') or ''
                     })
                 print(f"[Naver API] {len(products)}개 상품 로드 완료")
             else:
