@@ -449,6 +449,24 @@
     .bestseller-platform { font-size: 0.65rem; color: #64748b; }
     .bestseller-sales { font-weight: 700; color: #10b981; font-size: 0.8rem; }
 
+    /* 추천 카드 */
+    .recommendations-list { display: grid; gap: 12px; }
+    .recommendation-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1rem;
+      border-left: 4px solid #3b82f6;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .recommendation-card.warning { border-left-color: #f59e0b; background: #fffbeb; }
+    .recommendation-card.info { border-left-color: #3b82f6; background: #eff6ff; }
+    .recommendation-card.success { border-left-color: #10b981; background: #ecfdf5; }
+    .recommendation-card.tip { border-left-color: #8b5cf6; background: #f5f3ff; }
+    .recommendation-title { font-weight: 700; margin-bottom: 4px; font-size: 0.9rem; }
+    .recommendation-message { font-size: 0.8rem; color: #475569; margin-bottom: 8px; }
+    .recommendation-products { font-size: 0.75rem; color: #64748b; }
+    .recommendation-products span { display: inline-block; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 4px; margin: 2px; }
+
     /* 모달 */
     .modal-overlay {
       display: none;
@@ -849,6 +867,12 @@
             <div id="bestsellerDetailChart"></div>
           </div>
         </div>
+
+        <!-- AI 분석 추천 섹션 -->
+        <div class="recommendations-section" id="recommendationsSection" style="margin-top:24px;">
+          <h3 style="margin-bottom:16px;">💡 AI 분석 추천</h3>
+          <div id="recommendationsList" class="recommendations-list"></div>
+        </div>
       </div>
     </div>
 
@@ -870,10 +894,10 @@
         </div>
       </div>
       <div class="ai-quick-actions">
-        <button class="quick-btn" onclick="askQuick('블루투스 이어폰의 HS 코드는?')">HS코드 조회</button>
-        <button class="quick-btn" onclick="askQuick('원가 15000원, 판매가 29000원일 때 마진율은?')">마진 계산</button>
-        <button class="quick-btn" onclick="askQuick('스마트스토어 상위노출 전략')">노출 전략</button>
-        <button class="quick-btn" onclick="askQuick('쿠팡 로켓배송 입점 조건')">로켓배송</button>
+        <button class="quick-btn" onclick="askQuick('내 상품들을 분석해줘. 어떤 상품이 잘 팔리고, 어떤 상품을 개선해야 할지 알려줘')">내 상품 분석</button>
+        <button class="quick-btn" onclick="askQuick('원가 15000원, 판매가 29000원일 때 스마트스토어 마진율은?')">마진 계산</button>
+        <button class="quick-btn" onclick="askQuick('재고가 부족한 상품은 어떤게 있어?')">재고 확인</button>
+        <button class="quick-btn" onclick="askQuick('가격 전략 추천해줘. 내 상품들의 가격이 적정한지 분석해줘')">가격 전략</button>
       </div>
       <div class="ai-chat-input">
         <input type="text" id="aiInput" placeholder="질문을 입력하세요..." onkeypress="if(event.key==='Enter')sendAiMessage()">
@@ -1125,10 +1149,46 @@
 
   async function loadAnalytics() {
     try {
+      // 기존 통계 API 호출
       const res = await fetch('/api/market/analytics');
       const data = await res.json();
       if (data.ok) { renderAnalytics(data.analytics); }
+
+      // 새 분석 API 호출 (추천 포함)
+      const analysisRes = await fetch('/api/market/analysis');
+      const analysisData = await analysisRes.json();
+      if (analysisData.ok && analysisData.analysis.recommendations) {
+        renderRecommendations(analysisData.analysis.recommendations);
+      }
     } catch (e) { console.error('Analytics error:', e); }
+  }
+
+  function renderRecommendations(recommendations) {
+    const container = document.getElementById('recommendationsList');
+    if (!recommendations || recommendations.length === 0) {
+      container.innerHTML = '<p style="color:#64748b;font-size:0.85rem;">현재 특별한 추천 사항이 없습니다. 상품을 더 등록해보세요!</p>';
+      return;
+    }
+
+    container.innerHTML = recommendations.map(rec => {
+      const typeIcons = {
+        warning: '⚠️',
+        info: 'ℹ️',
+        success: '✅',
+        tip: '💡'
+      };
+      const products = rec.products ? rec.products.map(p =>
+        `<span>${p.name}${p.stock !== undefined ? ` (재고: ${p.stock})` : ''}${p.sales !== undefined ? ` (판매: ${p.sales})` : ''}</span>`
+      ).join('') : '';
+
+      return `
+        <div class="recommendation-card ${rec.type}">
+          <div class="recommendation-title">${typeIcons[rec.type] || '💡'} ${rec.title}</div>
+          <div class="recommendation-message">${rec.message}</div>
+          ${products ? `<div class="recommendation-products">${products}</div>` : ''}
+        </div>
+      `;
+    }).join('');
   }
 
   // ===== 렌더링 =====
