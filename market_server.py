@@ -599,10 +599,10 @@ def get_products():
                     })
                 print(f"[Naver API] {len(products)}개 상품 로드 완료")
             else:
-                print("[Naver API] 상품 데이터 없음 (Mock 데이터 미사용)")
-            # API 연동 시 Mock 데이터 사용 안함
+                print("[Naver API] 상품 데이터 없음 - Mock 데이터로 폴백")
+                products.extend(MOCK_SMARTSTORE_PRODUCTS)
         else:
-            # API 미연동 시에만 Mock 데이터 사용
+            # API 미연동 시 Mock 데이터 사용
             products.extend(MOCK_SMARTSTORE_PRODUCTS)
 
     if platform in ['all', 'coupang']:
@@ -630,10 +630,10 @@ def get_products():
                         "lastModified": ""
                     })
             else:
-                print("[Coupang API] 상품 데이터 없음 (Mock 데이터 미사용)")
-            # API 연동 시 Mock 데이터 사용 안함
+                print("[Coupang API] 상품 데이터 없음 - Mock 데이터로 폴백")
+                products.extend(MOCK_COUPANG_PRODUCTS)
         else:
-            # API 미연동 시에만 Mock 데이터 사용
+            # API 미연동 시 Mock 데이터 사용
             products.extend(MOCK_COUPANG_PRODUCTS)
 
     # 필터링
