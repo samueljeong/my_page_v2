@@ -820,9 +820,9 @@ textarea.autosize { overflow: hidden; }
   border-radius: 6px;
 }
 
-/* Step7 유튜브 업로드 박스 스타일 */
+/* Step7 유튜브 업로드 박스 스타일 - 비활성화됨 */
 .step7-container {
-  display: block !important;
+  display: none !important;
   background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
   border: none;
   padding: 1rem;
@@ -919,6 +919,9 @@ textarea.autosize { overflow: hidden; }
   border-radius: 10px;
   background: inherit;
   backdrop-filter: blur(10px);
+}
+.step3-result-box .step-header {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
 }
 .step4-container .step-header {
   background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
