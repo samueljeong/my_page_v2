@@ -3726,16 +3726,30 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
       return;
     }
 
+    // Step1 완료 여부 확인 (Step2 활성화 조건)
+    const step1Steps = steps.filter(s => (s.stepType || 'step1') === 'step1');
+    const step1Completed = step1Steps.length > 0 && step1Steps.every(s => stepResults[s.id]);
+
     // 가로 배치를 위한 flex 컨테이너 스타일
     container.style.display = 'flex';
     container.style.flexWrap = 'wrap';
     container.style.gap = '.4rem';
 
-    container.innerHTML = steps.map(step =>
-      `<button class="step-btn primary" data-step="${step.id}" style="flex: 1 1 auto; min-width: 70px; font-size: .8rem; padding: .4rem .6rem;">${step.name}</button>`
-    ).join('');
+    container.innerHTML = steps.map(step => {
+      const stepType = step.stepType || 'step1';
+      const isStep2 = stepType === 'step2';
+      const isDisabled = isStep2 && !step1Completed;
 
-    container.querySelectorAll('.step-btn').forEach(btn => {
+      if (isDisabled) {
+        return `<button class="step-btn" data-step="${step.id}" disabled
+          style="flex: 1 1 auto; min-width: 70px; font-size: .8rem; padding: .4rem .6rem; background: #ccc; color: #888; cursor: not-allowed;"
+          title="Step1을 먼저 완료해주세요">${step.name} 🔒</button>`;
+      }
+      return `<button class="step-btn primary" data-step="${step.id}"
+        style="flex: 1 1 auto; min-width: 70px; font-size: .8rem; padding: .4rem .6rem;">${step.name}</button>`;
+    }).join('');
+
+    container.querySelectorAll('.step-btn:not([disabled])').forEach(btn => {
       btn.addEventListener('click', () => executeStep(btn.dataset.step));
     });
   }
@@ -4096,6 +4110,9 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
 
         // 자동 저장
         autoSaveStepResults();
+
+        // Step1 완료 시 Step2 버튼 활성화를 위해 다시 렌더링
+        renderProcessingSteps();
 
         showStatus('✅ 완료!');
       } else {
