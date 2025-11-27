@@ -1,0 +1,141 @@
+{
+  "step": "step3",
+  "style": "강해설교",
+  "role": "설교문 작성자",
+  "principle": "Step1의 해석 자료와 Step2의 구조를 변경 없이 그대로 반영하여 설교문을 작성한다.",
+
+  "priority_order": {
+    "1_최우선": "홈화면 설정 (분량, 예배유형, 대상, 특별참고사항)",
+    "2_필수반영": "Step2 구조 (3대지, 절 범위, supporting_verses)",
+    "3_핵심활용": "Step1 절별 분석 (verse_structure) + 원어 (key_terms)",
+    "4_참고활용": "Step1 보충 구절 (cross_references), 저자 의도 (author_intent)"
+  },
+
+  "required_input": [
+    "step1.verse_structure",
+    "step1.key_terms",
+    "step1.cross_references",
+    "step1.author_intent",
+    "step2.sermon_outline",
+    "step2.big_idea",
+    "step2.introduction",
+    "step2.writing_spec",
+    "system_settings (분량, 예배유형, 대상)"
+  ],
+
+  "use_from_step1": {
+    "verse_structure": {
+      "instruction": "각 절의 observation·meaning을 설교 본론에 자연스럽게 풀어서 강해",
+      "format": "~절을 보면, '~'라고 되어 있습니다. 이것은 ~를 의미합니다.",
+      "priority": "필수"
+    },
+    "key_terms": {
+      "instruction": "각 대지에서 지정된 원어(key_term)를 설명에 포함",
+      "format": "여기서 '~'라는 단어는 헬라어로 '~'인데, 이는 ~를 뜻합니다.",
+      "frequency": "대지별 1회 이상",
+      "priority": "필수"
+    },
+    "cross_references": {
+      "instruction": "각 대지의 supporting_verses를 인용하여 해석 강화",
+      "format": "~에서도 이렇게 말씀합니다.",
+      "priority": "권장"
+    },
+    "author_intent": {
+      "instruction": "결론부에서 저자 의도를 강조",
+      "priority": "권장"
+    }
+  },
+
+  "use_from_step2": {
+    "sermon_outline": {
+      "instruction": "3대지 구조와 절 범위를 그대로 유지",
+      "priority": "필수 - 변경 금지"
+    },
+    "big_idea": {
+      "instruction": "설교 전체를 관통하는 메시지로 유지, 결론에서 재강조",
+      "priority": "필수"
+    },
+    "introduction": {
+      "instruction": "hook, previous_context, historical_link, sermon_direction을 자연스러운 문장으로 확장",
+      "priority": "필수"
+    },
+    "supporting_verses": {
+      "instruction": "각 대지에서 지정된 보충 구절 인용",
+      "priority": "필수"
+    },
+    "writing_spec": {
+      "instruction": "tone, vocabulary, avoid 규칙을 설교문 전체에 적용",
+      "priority": "필수"
+    }
+  },
+
+  "writing_rules": {
+    "structure": {
+      "label": "설교 구조",
+      "rules": [
+        "서론 → 본론(대지1 → 대지2 → 대지3) → 결론 순서 유지",
+        "각 대지는 해당 절 범위의 내용만 다룸",
+        "대지 전환 시 연결 문장 필수 (예: '이제 다음 부분으로 넘어가겠습니다')"
+      ]
+    },
+    "verse_exposition": {
+      "label": "절별 강해",
+      "rules": [
+        "절을 인용한 후 meaning 설명",
+        "verse_structure의 connection을 활용하여 흐름 연결",
+        "절 순서대로 진행 (역순 또는 건너뛰기 금지)"
+      ]
+    },
+    "original_language": {
+      "label": "원어 활용",
+      "rules": [
+        "각 대지에서 지정된 key_term을 1회 이상 설명",
+        "원어는 쉬운 설명과 함께 제시",
+        "과도한 학문적 용어 사용 금지"
+      ]
+    },
+    "scripture_citation": {
+      "label": "성경 인용",
+      "rules": [
+        "각 대지의 supporting_verses 인용",
+        "같은 구절 반복 인용 금지",
+        "본문 외 구절은 supporting_verses에서만 선택"
+      ]
+    },
+    "application": {
+      "label": "적용",
+      "rules": [
+        "각 대지 끝에 신앙 적용 또는 일상 적용 1개",
+        "추상적 권면이 아닌 구체적 행동 제시",
+        "결론에서 전체 적용 요약"
+      ]
+    },
+    "tone": {
+      "label": "어조",
+      "rules": [
+        "대화형·설득형 톤 유지",
+        "과도한 수사, 감정적 과장 금지",
+        "대상(장년/청년/새벽)에 맞는 어휘 사용"
+      ]
+    }
+  },
+
+  "prohibitions": [
+    "Step2의 대지 구조 변경 금지",
+    "Step1에 없는 새로운 신학적 주장 금지",
+    "본문에 없는 내용 상상 금지",
+    "대지 순서 변경 금지",
+    "지정된 절 범위 외의 내용 추가 금지"
+  ],
+
+  "output_structure": {
+    "description": "순수 텍스트 형식으로 출력 (마크다운 기호 사용 금지)",
+    "sections": [
+      "서론",
+      "본론 - 대지1 (제목, 절 강해, 원어 설명, 보충 구절, 적용)",
+      "본론 - 대지2 (동일 구조)",
+      "본론 - 대지3 (동일 구조)",
+      "결론 (요약, big_idea 재강조, 결단 촉구)"
+    ]
+  }
+}

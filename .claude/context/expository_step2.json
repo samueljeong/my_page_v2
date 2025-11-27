@@ -1,0 +1,113 @@
+{
+  "step": "step2",
+  "style": "강해설교",
+  "role": "설교 구조 설계자",
+  "principle": "Step1의 분석 자료를 바탕으로 설교 구조만을 설계한다. 새로운 해석이나 신학적 주장을 추가하지 않는다.",
+
+  "required_input": [
+    "step1.section_grouping",
+    "step1.literary_structure",
+    "step1.theological_summary",
+    "step1.key_terms",
+    "step1.cross_references"
+  ],
+
+  "output_format": {
+    "title": {
+      "label": "설교 제목",
+      "description": "본문 전체 내용을 압축한 제목"
+    },
+
+    "scripture_text": {
+      "label": "본문",
+      "description": "장과 절 범위 (예: 디모데후서 1:3-8)"
+    },
+
+    "introduction": {
+      "label": "서론 구성",
+      "components": {
+        "hook": {
+          "label": "도입",
+          "description": "청중의 관심을 끄는 질문이나 상황 1-2문장"
+        },
+        "previous_context": {
+          "label": "이전 본문 요약",
+          "description": "직전 본문과의 연결 3-4문장"
+        },
+        "historical_link": {
+          "label": "역사적 배경",
+          "description": "본문 이해에 필요한 최소한의 배경 2-3문장",
+          "source": "step1.historical_background에서 발췌"
+        },
+        "sermon_direction": {
+          "label": "설교 방향",
+          "description": "이 설교가 다루는 핵심 질문 또는 메시지 1문장"
+        }
+      }
+    },
+
+    "big_idea": {
+      "label": "핵심 주제 (Big Idea)",
+      "description": "설교 전체를 관통하는 단 하나의 메시지",
+      "example": "하나님은 두려움에 빠진 자녀에게 담대함의 영을 주신다"
+    },
+
+    "sermon_outline": {
+      "label": "3대지 구조",
+      "description": "본문을 3개의 대지로 나눔. Step1의 section_grouping을 기반으로 구성",
+      "format": {
+        "point1": {
+          "title": "대지1 제목",
+          "verses": "절 범위 (예: 3-5절)",
+          "summary": "핵심 내용 3-4문장",
+          "key_term": "이 대지에서 강조할 원어 단어 (step1.key_terms에서 선택)",
+          "supporting_verses": ["보충 구절1", "보충 구절2"]
+        },
+        "point2": {
+          "title": "대지2 제목",
+          "verses": "절 범위",
+          "summary": "핵심 내용 3-4문장",
+          "key_term": "원어 단어",
+          "supporting_verses": ["보충 구절1", "보충 구절2"]
+        },
+        "point3": {
+          "title": "대지3 제목",
+          "verses": "절 범위",
+          "summary": "핵심 내용 3-4문장",
+          "key_term": "원어 단어",
+          "supporting_verses": ["보충 구절1", "보충 구절2"]
+        }
+      }
+    },
+
+    "flow_connection": {
+      "label": "대지 연결 흐름",
+      "description": "대지1 → 대지2 → 대지3이 어떤 논리로 연결되는지 2-3문장"
+    },
+
+    "application_direction": {
+      "label": "적용 방향",
+      "description": "Step3에서 적용을 작성할 때 참고할 방향 2-3문장",
+      "note": "구체적 적용은 Step3에서 작성"
+    },
+
+    "conclusion_direction": {
+      "label": "결론 방향",
+      "description": "설교 결론에서 강조할 핵심 메시지 방향 1-2문장"
+    }
+  },
+
+  "writing_spec": {
+    "style": "강해설교",
+    "tone": "자연스러운 문장 흐름, 대화형",
+    "interpretation": "본문에 충실한 해석",
+    "vocabulary": "60-80대 성도도 이해 가능한 어휘",
+    "avoid": ["과도한 수사", "감정적 과장", "본문에 없는 상상"]
+  },
+
+  "constraints": {
+    "no_new_interpretation": "Step1에 없는 새로운 신학·해석 추가 금지",
+    "balanced_points": "세 대지는 분량과 논리 비중이 균형 있게",
+    "verse_coverage": "본문의 모든 절이 대지 안에 포함되어야 함"
+  }
+}

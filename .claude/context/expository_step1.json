@@ -1,0 +1,95 @@
+{
+  "step": "step1",
+  "style": "강해설교",
+  "role": "성경 본문 분석가",
+  "principle": "강해설교는 본문이 말하는 그대로 해석하는 데 초점을 둔다. Step1은 설교를 위한 해석 원자료만 제공하며, 적용이나 설교적 언어는 포함하지 않는다.",
+
+  "output_format": {
+    "historical_background": {
+      "label": "역사·정황 배경",
+      "description": "본문의 시대·저자·수신자·정치·사회·지리·신앙적 상황을 6-10문장으로 정리",
+      "required_items": [
+        "기록 시기",
+        "저자와 수신자",
+        "문맥(앞뒤 단락과의 연결)",
+        "당시 공동체가 직면한 문제",
+        "지리적·문화적 배경",
+        "작성 목적"
+      ]
+    },
+
+    "literary_structure": {
+      "label": "문학 구조",
+      "description": "본문의 자연스러운 단락 구분과 흐름",
+      "required_items": [
+        "단락 구분 (절 범위 명시)",
+        "각 단락의 핵심 내용",
+        "단락 간 논리적 연결"
+      ],
+      "example": "1-3절: 감사 → 4-6절: 권면 → 7-10절: 결론"
+    },
+
+    "verse_structure": {
+      "label": "절별 분석",
+      "description": "각 절의 관찰(Observation) 중심 분석",
+      "per_verse": {
+        "observation": "문법·주어·동사·핵심 표현 분석",
+        "meaning": "문장이 말하는 객관적 의미",
+        "connection": "앞뒤 절과 연결되는 논리적 흐름"
+      },
+      "purpose": "강해설교의 핵심인 절-by-절 해석의 기초 자료"
+    },
+
+    "section_grouping": {
+      "label": "대지 단위 절 그룹핑",
+      "description": "Step2의 3대지 구성을 위해 절을 3개 섹션으로 사전 그룹핑",
+      "format": {
+        "section1": { "verses": "절 범위", "theme": "섹션 주제 한 문장" },
+        "section2": { "verses": "절 범위", "theme": "섹션 주제 한 문장" },
+        "section3": { "verses": "절 범위", "theme": "섹션 주제 한 문장" }
+      },
+      "note": "이 그룹핑은 본문의 자연스러운 흐름을 따르며, Step2에서 조정 가능"
+    },
+
+    "key_terms": {
+      "label": "핵심 단어·원어 분석",
+      "description": "본문의 주요 단어 5-8개에 대한 원어 분석",
+      "per_term": {
+        "word": "본문에 나온 단어",
+        "original": "원어 (헬라어/히브리어)",
+        "basic_meaning": "기본 사전적 의미",
+        "contextual_meaning": "본문 안에서의 뉘앙스",
+        "theological_significance": "신학적 의미 (있는 경우)"
+      }
+    },
+
+    "cross_references": {
+      "label": "보충 성경구절",
+      "description": "본문 해석을 강화하는 직접 연결 구절 4-6개",
+      "format": {
+        "reference": "성경구절 (예: 롬 8:15)",
+        "connection_reason": "본문과 연결되는 이유 한 문장"
+      },
+      "purpose": "성경이 성경을 해석하게 하는 원칙 적용"
+    },
+
+    "author_intent": {
+      "label": "저자 의도",
+      "description": "저자가 이 본문을 기록한 목적을 3-5문장으로 정리",
+      "focus": "수신자에게 전달하고자 한 핵심 메시지"
+    },
+
+    "theological_summary": {
+      "label": "신학적 요약",
+      "description": "본문이 말하는 하나님·인간·구원·순종에 관한 신학적 핵심 3-5문장",
+      "exclude": ["적용", "권면", "감성적 표현"],
+      "focus": "오직 '이 본문이 신학적으로 무엇을 말하는가'"
+    },
+
+    "logical_flow": {
+      "label": "본문 논리 흐름",
+      "description": "본문 전체의 논리적 흐름을 한 줄로 정리",
+      "example": "상황 제시 → 문제 인식 → 해결 방향 → 결론"
+    }
+  }
+}
