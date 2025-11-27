@@ -3811,31 +3811,52 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     }
   }
 
-  // 진행 상태 표시 업데이트 (안내문구에 표시)
+  // 진행 상태 표시 업데이트 (각 단계별 상세 표시)
   function updateProgressStatus(statuses) {
     const guideDiv = document.getElementById('start-analysis-guide');
     if (!guideDiv) return;
 
-    // 현재 진행 중인 단계 찾기
-    const runningSteps = statuses.filter(s => s.status === 'running');
-    const doneCount = statuses.filter(s => s.status === 'done').length;
-    const totalCount = statuses.length;
+    const statusIcons = {
+      pending: '⏸️',
+      running: '⏳',
+      done: '✅',
+      error: '❌'
+    };
 
-    let message = '';
-    if (runningSteps.length > 0) {
-      const stepNames = runningSteps.map(s => s.name).join(', ');
-      message = `${stepNames} 처리 중... (${doneCount}/${totalCount})`;
-    } else if (doneCount === totalCount) {
-      message = '✅ 분석 완료!';
-    } else {
-      message = '분석 준비 중...';
-    }
-
-    // 안내문구에 진행상황 표시
+    // 진행상황 상세 표시
     guideDiv.style.display = 'block';
     guideDiv.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
     guideDiv.style.border = 'none';
-    guideDiv.innerHTML = `<span style="font-size: .95rem; font-weight: 700; color: white;">⏳ ${message}</span>`;
+    guideDiv.style.padding = '.8rem';
+    guideDiv.style.textAlign = 'left';
+
+    let html = '<div style="color: white; font-weight: 700; font-size: .85rem; margin-bottom: .5rem; text-align: center;">BIBLE LAB을 이용해 주셔서 감사합니다.</div>';
+    html += '<div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: .5rem;">';
+
+    statuses.forEach(s => {
+      const icon = statusIcons[s.status] || '⏸️';
+      let statusText = '';
+      let opacity = '0.6';
+
+      if (s.status === 'done') {
+        statusText = '완료';
+        opacity = '1';
+      } else if (s.status === 'running') {
+        statusText = '처리 중...';
+        opacity = '1';
+      } else if (s.status === 'pending') {
+        statusText = '대기';
+        opacity = '0.6';
+      } else if (s.status === 'error') {
+        statusText = '오류';
+        opacity = '1';
+      }
+
+      html += `<div style="font-size: .8rem; color: white; padding: .2rem 0; opacity: ${opacity};">${icon} ${s.name} ${statusText}</div>`;
+    });
+
+    html += '</div>';
+    guideDiv.innerHTML = html;
   }
 
   // 자동 분석 실행 (Step1 병렬 → Step2 순차)
