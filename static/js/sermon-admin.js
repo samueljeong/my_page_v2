@@ -109,6 +109,9 @@ async function saveGuide() {
 
 // ===== 지침 탭 렌더링 =====
 function renderGuideTabs() {
+  // 스타일 선택 드롭다운 업데이트
+  updateAdminStyleSelect();
+
   const container = document.getElementById('guide-tabs');
   if (!container) return;
 
@@ -281,6 +284,36 @@ async function deleteStyle(styleId) {
   syncStyleTokens();
 }
 
+// ===== 관리자 공간 - 스타일 선택 =====
+function updateAdminStyleSelect() {
+  const select = document.getElementById('admin-style-select');
+  if (!select) return;
+
+  const catSettings = window.config.categorySettings[window.currentCategory];
+  const styles = catSettings?.styles || [];
+
+  let html = '<option value="">-- 스타일을 선택하세요 --</option>';
+  styles.forEach(style => {
+    const selected = style.id === window.currentStyleId ? 'selected' : '';
+    html += `<option value="${style.id}" ${selected}>${style.name}</option>`;
+  });
+
+  select.innerHTML = html;
+}
+
+function bindAdminStyleSelect() {
+  const select = document.getElementById('admin-style-select');
+  if (!select) return;
+
+  select.addEventListener('change', (e) => {
+    window.currentStyleId = e.target.value;
+    renderGuideTabs();
+    if (window.currentStyleId && window.currentGuideStep) {
+      loadGuide(window.currentCategory, window.currentGuideStep);
+    }
+  });
+}
+
 // 전역 노출
 window.loadMasterGuide = loadMasterGuide;
 window.saveMasterGuide = saveMasterGuide;
@@ -293,3 +326,5 @@ window.addCategory = addCategory;
 window.renderStylesManageList = renderStylesManageList;
 window.addStyle = addStyle;
 window.deleteStyle = deleteStyle;
+window.updateAdminStyleSelect = updateAdminStyleSelect;
+window.bindAdminStyleSelect = bindAdminStyleSelect;
