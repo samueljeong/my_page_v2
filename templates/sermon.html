@@ -1681,25 +1681,17 @@
           </div>
         </div>
 
-        <!-- Step3 지침 (통합) -->
-        <div style="margin-bottom: 1.5rem;">
-          <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: .6rem 1rem; border-radius: 8px 8px 0 0; font-weight: 700; font-size: 1rem;">📝 Step3 지침</div>
-          <div style="background: #fff5f8; padding: 1rem; border-radius: 0 0 8px 8px; border: 2px solid #f5576c; border-top: none;">
-            <div style="font-size: .85rem; color: #666; margin-bottom: .75rem;">
-              설교문 작성 시 AI에게 전달되는 지침입니다. AI의 역할, 설교 구조, 포함할 내용, 형식 등을 지정합니다.
-            </div>
-            <textarea id="step3-prompt" style="width: 100%; min-height: 350px; padding: .75rem; border-radius: 6px; border: 1px solid #ddd; font-size: .85rem; line-height: 1.5; resize: vertical;" placeholder="Step3 지침..."></textarea>
-            <div class="btn-row" style="margin-top: .75rem; gap: .5rem;">
-              <button id="btn-save-step3-prompt" class="primary" style="flex: 1;">지침 저장</button>
-              <button id="btn-reset-step3-prompt" style="flex: 1;">기본값 복원</button>
-            </div>
-          </div>
-        </div>
-
         <!-- 처리 단계 지침 -->
         <div style="margin-bottom: 1.5rem;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: .6rem 1rem; border-radius: 8px 8px 0 0; font-weight: 700; font-size: 1rem;">📋 처리 단계 지침</div>
           <div style="background: #f8f5ff; padding: 1rem; border-radius: 0 0 8px 8px; border: 2px solid #667eea; border-top: none;">
+            <!-- 설교 스타일 선택 -->
+            <div style="margin-bottom: .75rem;">
+              <label style="font-size: .85rem; color: #666; font-weight: 600; display: block; margin-bottom: .3rem;">설교 스타일 선택</label>
+              <select id="admin-style-select" style="width: 100%; padding: .5rem; border-radius: 6px; border: 1px solid #ddd; font-size: .9rem; background: white;">
+                <option value="">-- 스타일을 선택하세요 --</option>
+              </select>
+            </div>
             <div class="btn-row" style="margin-bottom: .5rem;">
               <button id="save-guide" class="primary">지침 저장</button>
             </div>
@@ -2207,13 +2199,11 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     const step2Select = document.getElementById('model-step2');
     const gptProSelect = document.getElementById('model-gpt-pro');
     const step3MaxTokensInput = document.getElementById('step3-max-tokens');
-    const step3PromptTextarea = document.getElementById('step3-prompt');
 
     if (step1Select) step1Select.value = modelSettings.step1;
     if (step2Select) step2Select.value = modelSettings.step2;
     if (gptProSelect) gptProSelect.value = modelSettings.gptPro;
     if (step3MaxTokensInput) step3MaxTokensInput.value = modelSettings.step3MaxTokens;
-    if (step3PromptTextarea) step3PromptTextarea.value = modelSettings.step3Prompt;
   }
 
   async function saveModelSettings() {
@@ -2229,24 +2219,6 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     modelSettings.step3MaxTokens = step3MaxTokensInput ? parseInt(step3MaxTokensInput.value) || 16000 : 16000;
 
     await saveConfig();
-  }
-
-  async function saveStep3Prompt() {
-    const step3PromptTextarea = document.getElementById('step3-prompt');
-    if (!step3PromptTextarea) return;
-
-    const modelSettings = getModelSettings(currentCategory);
-    modelSettings.step3Prompt = step3PromptTextarea.value;
-    await saveConfig();
-    showStatus('✅ Step3 지침 저장됨');
-    setTimeout(hideStatus, 2000);
-  }
-
-  function resetStep3Prompt() {
-    const step3PromptTextarea = document.getElementById('step3-prompt');
-    if (step3PromptTextarea) {
-      step3PromptTextarea.value = DEFAULT_STEP3_PROMPT;
-    }
   }
 
   // ===== 스타일별 토큰 설정 =====
@@ -3878,11 +3850,56 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
     });
   }
 
+  // 관리자 공간 - 스타일 선택 드롭다운 업데이트
+  function updateAdminStyleSelect() {
+    const select = document.getElementById('admin-style-select');
+    if (!select) return;
+
+    const catSettings = config.categorySettings[currentCategory];
+    const styles = catSettings?.styles || [];
+
+    let html = '<option value="">-- 스타일을 선택하세요 --</option>';
+    styles.forEach(style => {
+      const selected = style.id === currentStyleId ? 'selected' : '';
+      html += `<option value="${style.id}" ${selected}>${style.name}</option>`;
+    });
+
+    select.innerHTML = html;
+  }
+
+  // 관리자 공간 - 스타일 선택 이벤트 바인딩
+  function bindAdminStyleSelect() {
+    const select = document.getElementById('admin-style-select');
+    if (!select) return;
+
+    select.addEventListener('change', (e) => {
+      currentStyleId = e.target.value;
+      renderGuideTabs();
+      if (currentStyleId && currentGuideStep) {
+        loadGuide(currentCategory, currentGuideStep);
+      }
+    });
+  }
+
   function renderGuideTabs() {
     const steps = getCurrentSteps();
     const container = document.getElementById('guide-tabs');
 
+    // 스타일 선택 드롭다운 업데이트
+    updateAdminStyleSelect();
+
     if (!container) return;
+
+    // 스타일이 선택되지 않았으면 탭 숨기기
+    if (!currentStyleId) {
+      container.innerHTML = '<div style="color: #999; font-size: .85rem; padding: .5rem;">⬆️ 먼저 설교 스타일을 선택하세요</div>';
+      document.getElementById('current-guide-info').textContent = '';
+      document.getElementById('guide-text').value = '';
+      document.getElementById('guide-text').disabled = true;
+      return;
+    }
+
+    document.getElementById('guide-text').disabled = false;
 
     // Step3를 고정으로 추가 (모든 스타일에 공통)
     const allSteps = [
@@ -3931,6 +3948,11 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         loadGuide(currentCategory, currentGuideStep);
       });
     });
+
+    // 첫 번째 탭 자동 로드
+    if (currentGuideStep && currentStyleId) {
+      loadGuide(currentCategory, currentGuideStep);
+    }
   }
 
   // ===== 처리 단계 실행 =====
@@ -5914,6 +5936,7 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
 
     renderStyles();
     renderProcessingSteps();
+    bindAdminStyleSelect(); // 관리자 스타일 선택 이벤트 바인딩
 
     // 모델 선택 이벤트 리스너
     const step1Select = document.getElementById('model-step1');
@@ -5949,21 +5972,6 @@ Step2의 설교 구조를 반드시 따라 작성하세요:
         await saveModelSettings();
         showStatus('✅ 토큰 설정 저장됨');
         setTimeout(hideStatus, 1500);
-      });
-    }
-
-    // Step3 지침 버튼 이벤트 리스너
-    const btnSaveStep3Prompt = document.getElementById('btn-save-step3-prompt');
-    if (btnSaveStep3Prompt) {
-      btnSaveStep3Prompt.addEventListener('click', saveStep3Prompt);
-    }
-
-    const btnResetStep3Prompt = document.getElementById('btn-reset-step3-prompt');
-    if (btnResetStep3Prompt) {
-      btnResetStep3Prompt.addEventListener('click', () => {
-        resetStep3Prompt();
-        showStatus('✅ 기본값 복원됨 (저장하려면 저장 버튼 클릭)');
-        setTimeout(hideStatus, 2000);
       });
     }
 
