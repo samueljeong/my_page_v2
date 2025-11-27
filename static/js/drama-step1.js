@@ -55,8 +55,12 @@ async function analyzePromptsWithGPT(script, videoCategory) {
     if (data.ok && data.parsed) {
       gptAnalyzedPrompts = data.result;
 
-      // localStorage에 저장
-      localStorage.setItem('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
+      // localStorage에 안전하게 저장
+      if (typeof window.safeLocalStorageSet === 'function') {
+        window.safeLocalStorageSet('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
+      } else {
+        localStorage.setItem('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
+      }
       if (typeof saveToFirebase === 'function') {
         saveToFirebase('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
       }
@@ -64,10 +68,25 @@ async function analyzePromptsWithGPT(script, videoCategory) {
       console.log('[GPT-Analyze] 프롬프트 분석 완료:', {
         visualStyle: gptAnalyzedPrompts.visualStyle,
         characters: gptAnalyzedPrompts.characters?.length || 0,
-        scenes: gptAnalyzedPrompts.scenes?.length || 0
+        scenes: gptAnalyzedPrompts.scenes?.length || 0,
+        thumbnail: gptAnalyzedPrompts.thumbnail ? '생성됨' : '없음'
       });
 
-      showStatus(`✅ Step 1.5 완료: ${gptAnalyzedPrompts.characters?.length || 0}명의 인물, ${gptAnalyzedPrompts.scenes?.length || 0}개의 씬 프롬프트 생성`);
+      // 썸네일 프롬프트 별도 저장
+      if (gptAnalyzedPrompts.thumbnail) {
+        if (typeof window.safeLocalStorageSet === 'function') {
+          window.safeLocalStorageSet('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
+        } else {
+          localStorage.setItem('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
+        }
+        if (typeof saveToFirebase === 'function') {
+          saveToFirebase('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
+        }
+        console.log('[GPT-Analyze] 썸네일 프롬프트 저장됨:', gptAnalyzedPrompts.thumbnail.concept);
+      }
+
+      const thumbnailInfo = gptAnalyzedPrompts.thumbnail ? ', 썸네일 프롬프트 생성' : '';
+      showStatus(`✅ Step 1.5 완료: ${gptAnalyzedPrompts.characters?.length || 0}명의 인물, ${gptAnalyzedPrompts.scenes?.length || 0}개의 씬 프롬프트${thumbnailInfo}`);
 
       // 완료 상태 표시
       if (typeof updateStepStatus === 'function') {
@@ -218,7 +237,11 @@ async function executeStep1() {
     if (data.ok) {
       // 결과 저장 및 표시
       step1Result = data.result;
-      localStorage.setItem('_drama-step1-result', step1Result);
+      if (typeof window.safeLocalStorageSet === 'function') {
+        window.safeLocalStorageSet('_drama-step1-result', step1Result);
+      } else {
+        localStorage.setItem('_drama-step1-result', step1Result);
+      }
 
       // ⭐ Firebase에도 저장 (새로고침 후에도 유지)
       if (typeof saveToFirebase === 'function') {
