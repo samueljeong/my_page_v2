@@ -1075,14 +1075,14 @@
             <div id="analysis-status" style="display: none;"></div>
             <div id="processing-steps" style="display: none;"></div>
           </div>
-          <!-- 보라색/분홍색 박스 (세로 배치) -->
-          <div style="display: flex; flex-direction: column; gap: .5rem;">
-            <div class="box copy-all-box" id="step4-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: .75rem; opacity: 0.5; pointer-events: none;">
+          <!-- 보라색/분홍색 박스 (가로 배치) -->
+          <div style="display: flex; flex-direction: row; gap: .5rem;">
+            <div class="box copy-all-box" id="step4-box" style="flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: .75rem; opacity: 0.5; pointer-events: none;">
               <div class="box-title" style="font-size: .85rem; margin-bottom: .3rem; color: white; font-weight: 700;">🟣 내 GPT에 붙여넣기</div>
               <div class="box-desc" style="font-size: .75rem; margin-bottom: .5rem; color: rgba(255,255,255,0.95);">분석 내용을 복사해서 개인 ChatGPT에 사용하세요.</div>
               <button id="btn-copy-all" style="width: 100%; padding: .5rem; font-size: .8rem; background: white; color: #667eea; font-weight: 700; border: none; border-radius: 6px; cursor: pointer;">전체 복사</button>
             </div>
-            <div class="box gpt-pro-box" id="step3-box" style="background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%); border: none; padding: .75rem; opacity: 0.5; pointer-events: none;">
+            <div class="box gpt-pro-box" id="step3-box" style="flex: 1; background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%); border: none; padding: .75rem; opacity: 0.5; pointer-events: none;">
               <div class="box-title" style="font-size: .85rem; margin-bottom: .3rem; color: white; font-weight: 700;">🔴 AI 설교문 완성</div>
               <div class="box-desc" style="font-size: .75rem; margin-bottom: .5rem; color: rgba(255,255,255,0.95);">PRO 기능 · BIBLE LAB이 설교문을 작성합니다 (크레딧 1회 차감)</div>
               <button id="btn-gpt-pro" style="width: 100%; padding: .5rem; font-size: .8rem; background: white; color: #f5576c; font-weight: 700; border: none; border-radius: 6px; cursor: pointer;">설교문 작성</button>
