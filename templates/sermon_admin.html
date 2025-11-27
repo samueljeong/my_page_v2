@@ -921,13 +921,20 @@
         }
 
         function renderCodeList() {
+            console.log('[Admin] renderCodeList 호출');
             const tbody = document.getElementById('code-list-body');
-            if (!tbody) return;
+            console.log('[Admin] code-list-body:', tbody);
+            if (!tbody) {
+                console.error('[Admin] code-list-body 요소를 찾을 수 없음!');
+                return;
+            }
 
             const codeNames = Object.keys(step3Codes);
+            console.log('[Admin] 코드 개수:', codeNames.length);
 
             if (codeNames.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #999;">생성된 코드가 없습니다.</td></tr>';
+                console.log('[Admin] 코드 없음 메시지 표시');
                 return;
             }
 
@@ -1209,41 +1216,53 @@
 
         // ===== 이벤트 리스너 =====
         function initPage() {
-            // Config 로드 (가장 먼저)
-            loadConfig();
+            console.log('[Admin] initPage 시작, readyState:', document.readyState);
+            try {
+                // Config 로드 (가장 먼저)
+                loadConfig();
+                console.log('[Admin] loadConfig 완료');
 
-            // 코드 관리
-            loadStep3Codes();
-            const btnCreateCode = document.getElementById('btn-create-code');
-            if (btnCreateCode) btnCreateCode.addEventListener('click', createNewCode);
+                // 코드 관리 - 먼저 실행하여 빠르게 UI 업데이트
+                console.log('[Admin] loadStep3Codes 시작');
+                loadStep3Codes();
+                console.log('[Admin] loadStep3Codes 완료');
 
-            // 모델 설정
-            loadModelSettingsUI();
-            const btnSaveModel = document.getElementById('btn-save-model-settings');
-            if (btnSaveModel) btnSaveModel.addEventListener('click', saveModelSettingsUI);
+                const btnCreateCode = document.getElementById('btn-create-code');
+                if (btnCreateCode) btnCreateCode.addEventListener('click', createNewCode);
 
-            // Step3 지침
-            loadStep3Prompt();
-            const btnSaveStep3 = document.getElementById('btn-save-step3-prompt');
-            if (btnSaveStep3) btnSaveStep3.addEventListener('click', saveStep3Prompt);
-            const btnResetStep3 = document.getElementById('btn-reset-step3-prompt');
-            if (btnResetStep3) btnResetStep3.addEventListener('click', resetStep3Prompt);
+                // 모델 설정
+                loadModelSettingsUI();
+                const btnSaveModel = document.getElementById('btn-save-model-settings');
+                if (btnSaveModel) btnSaveModel.addEventListener('click', saveModelSettingsUI);
 
-            // 처리 단계 지침
-            renderGuideTabs();
-            const btnSaveGuide = document.getElementById('save-guide');
-            if (btnSaveGuide) btnSaveGuide.addEventListener('click', saveGuide);
+                // Step3 지침
+                loadStep3Prompt();
+                const btnSaveStep3 = document.getElementById('btn-save-step3-prompt');
+                if (btnSaveStep3) btnSaveStep3.addEventListener('click', saveStep3Prompt);
+                const btnResetStep3 = document.getElementById('btn-reset-step3-prompt');
+                if (btnResetStep3) btnResetStep3.addEventListener('click', resetStep3Prompt);
 
-            // 백업/복원
-            const btnExport = document.getElementById('btn-export-backup');
-            if (btnExport) btnExport.addEventListener('click', exportBackup);
-            const btnImport = document.getElementById('btn-import-backup');
-            if (btnImport) btnImport.addEventListener('click', importBackup);
-            const backupInput = document.getElementById('backup-file-input');
-            if (backupInput) backupInput.addEventListener('change', handleBackupFile);
+                // 처리 단계 지침
+                renderGuideTabs();
+                const btnSaveGuide = document.getElementById('save-guide');
+                if (btnSaveGuide) btnSaveGuide.addEventListener('click', saveGuide);
+
+                // 백업/복원
+                const btnExport = document.getElementById('btn-export-backup');
+                if (btnExport) btnExport.addEventListener('click', exportBackup);
+                const btnImport = document.getElementById('btn-import-backup');
+                if (btnImport) btnImport.addEventListener('click', importBackup);
+                const backupInput = document.getElementById('backup-file-input');
+                if (backupInput) backupInput.addEventListener('change', handleBackupFile);
+
+                console.log('[Admin] initPage 완료');
+            } catch (err) {
+                console.error('[Admin] initPage 에러:', err);
+            }
         }
 
         // DOM이 이미 로드된 경우 즉시 실행, 아니면 이벤트 리스너 등록
+        console.log('[Admin] 스크립트 실행, readyState:', document.readyState);
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initPage);
         } else {
