@@ -10,6 +10,17 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from werkzeug.security import generate_password_hash, check_password_hash
 from openai import OpenAI
 
+# ===== 모듈화된 함수 (sermon_modules) =====
+# 다음 함수들은 sermon_modules에서 import하여 사용 가능합니다:
+# - from sermon_modules.db import get_db_connection, init_db, get_setting, set_setting, USE_POSTGRES
+# - from sermon_modules.utils import calculate_cost, format_json_result, remove_markdown
+# - from sermon_modules.auth import login_required, admin_required, api_login_required
+# - from sermon_modules.auth import get_user_credits, use_credit, add_credits, set_credits
+# - from sermon_modules.prompt import get_system_prompt_for_step, build_prompt_from_json
+#
+# 현재는 기존 코드와의 호환성을 위해 인라인 함수를 유지합니다.
+# 점진적 마이그레이션 시 위 import로 교체하세요.
+
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 
