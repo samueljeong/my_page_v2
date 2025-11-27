@@ -195,7 +195,12 @@ function updateAnalysisUI() {
   const step4Box = document.getElementById('step4-box');
   const ref = document.getElementById('sermon-ref')?.value;
 
-  if (!startBtn) return;
+  console.log('[updateAnalysisUI] ref:', ref, 'currentStyleId:', window.currentStyleId, 'analysisInProgress:', analysisInProgress);
+
+  if (!startBtn) {
+    console.log('[updateAnalysisUI] startBtn not found!');
+    return;
+  }
 
   const steps = getCurrentSteps();
   const step1Steps = steps.filter(s => (s.stepType || 'step1') === 'step1');
@@ -204,22 +209,28 @@ function updateAnalysisUI() {
   const step2Completed = step2Steps.length > 0 && step2Steps.every(s => window.stepResults[s.id]);
   const allCompleted = step1Completed && step2Completed;
 
+  console.log('[updateAnalysisUI] allCompleted:', allCompleted, 'step1Completed:', step1Completed, 'step2Completed:', step2Completed);
+
   if (allCompleted) {
+    console.log('[updateAnalysisUI] -> allCompleted branch');
     if (step3Box) { step3Box.style.opacity = '1'; step3Box.style.pointerEvents = 'auto'; }
     if (step4Box) { step4Box.style.opacity = '1'; step4Box.style.pointerEvents = 'auto'; }
     startBtn.style.display = 'none';
     if (guideDiv) guideDiv.style.display = 'none';
   } else if (!ref) {
+    console.log('[updateAnalysisUI] -> no ref branch');
     startBtn.style.display = 'none';
     if (guideDiv) guideDiv.style.display = 'block';
     if (step3Box) { step3Box.style.opacity = '0.5'; step3Box.style.pointerEvents = 'none'; }
     if (step4Box) { step4Box.style.opacity = '0.5'; step4Box.style.pointerEvents = 'none'; }
   } else if (window.currentStyleId && !analysisInProgress) {
+    console.log('[updateAnalysisUI] -> show button branch');
     startBtn.style.display = 'block';
     if (guideDiv) guideDiv.style.display = 'none';
     if (step3Box) { step3Box.style.opacity = '0.5'; step3Box.style.pointerEvents = 'none'; }
     if (step4Box) { step4Box.style.opacity = '0.5'; step4Box.style.pointerEvents = 'none'; }
   } else {
+    console.log('[updateAnalysisUI] -> else branch (hide button)');
     startBtn.style.display = 'none';
     if (guideDiv) guideDiv.style.display = 'none';
     if (step3Box) { step3Box.style.opacity = '0.5'; step3Box.style.pointerEvents = 'none'; }
