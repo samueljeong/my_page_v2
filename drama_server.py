@@ -363,7 +363,7 @@ def build_testimony_prompt_from_guide(custom_guide=None, duration_minutes=20):
     duration_key = f"{duration_minutes}min"
     duration_settings = step1_guidelines.get('duration_settings', {}).get(duration_key, {
         'target_length': 6000,
-        'max_characters': 3,
+        'max_characters': 4,  # 최대 4명으로 제한
         'max_scenes': 6,
         'highlight_scenes': 3
     })
@@ -390,7 +390,7 @@ def build_testimony_prompt_from_guide(custom_guide=None, duration_minutes=20):
 ═══════════════════════════════════════════════════
 - 영상 길이: {duration_minutes}분
 - 목표 글자수: {duration_settings.get('target_length', 6000)}자
-- 최대 인물 수: {duration_settings.get('max_characters', 3)}명 (최소 1명 ~ 최대 4명, 억지로 늘리지 말 것)
+- 최대 인물 수: {duration_settings.get('max_characters', 4)}명 ⚠️ 절대 4명 초과 금지! (주인공 1명 + 조연 최대 3명)
 - 최대 씬 개수: {duration_settings.get('max_scenes', 6)}개
 - 씬당 이미지: 1-2개
 
@@ -5895,10 +5895,13 @@ def api_gpt_analyze_prompts():
     }
   ],
   "thumbnail": {
-    "concept": "썸네일 콘셉트 설명 (한국어)",
-    "imagePrompt": "영문 썸네일 이미지 프롬프트 - 주인공 클로즈업, 드라마틱 조명, 감정 표현",
-    "textLines": ["1줄: 훅 문구", "2줄: 핵심 사건", "3줄: 감정 강조", "4줄: 여운"],
-    "highlightLine": 3
+    "concept": "썸네일 콘셉트 요약 (한국어, 1문장)",
+    "mainCharacter": "주인공 정보 (나이, 성별, 상황)",
+    "emotion": "표현할 핵심 감정 (예: 눈물, 절망, 희망, 분노 등)",
+    "imagePrompt": "영문 썸네일 이미지 프롬프트 (상세 작성 필수)",
+    "textLines": ["1줄: 숫자/시간 + 충격적 상황", "2줄: 구체적 인물/사건", "3줄: 감정적 핵심 (강조색)", "4줄: 결말 암시/여운"],
+    "highlightLine": 3,
+    "colorScheme": "추천 색상 조합 (예: 따뜻한 금색 vs 차가운 파랑)"
   }
 }
 ```
@@ -5921,13 +5924,29 @@ def api_gpt_analyze_prompts():
    - 전체적인 색감과 분위기 통일
    - 한 영상 내에서 스타일 일관성
 
-4. 🎯 유튜브 썸네일 (thumbnail):
-   - 시청자의 클릭을 유도하는 강렬한 이미지
-   - 주인공의 감정이 드러나는 클로즈업 또는 미디엄 샷
-   - 드라마틱한 조명 (역광, 림라이트, 명암 대비)
-   - 예: "Dramatic close-up portrait of Korean elderly man, 70 years old, tears in eyes, warm golden rim lighting, emotional expression of hope mixed with pain, cinematic depth of field, YouTube thumbnail style"
-   - textLines: 클릭을 유도하는 4줄 문구 (훅 → 사건 → 감정 → 여운)
-   - highlightLine: 가장 강조할 줄 번호 (1-4)
+4. 🎯 유튜브 썸네일 (thumbnail) - 매우 중요!:
+
+   📸 이미지 프롬프트 필수 요소:
+   - 구도: 클로즈업(얼굴 위주) 또는 미디엄 샷(상반신)
+   - 주인공: 대본의 주인공 나이/성별/외모 정확히 반영
+   - 표정: 극적인 감정 표현 (눈물, 절규, 눈을 감고 기도, 놀람 등)
+   - 조명: 드라마틱한 조명 (림라이트, 역광, 황금빛, 명암 대비)
+   - 배경: 블러 처리된 관련 장소 (교회, 병실, 집 등)
+   - 품질: "cinematic, high quality, 4K, YouTube thumbnail style" 필수 포함
+
+   📝 imagePrompt 작성 예시:
+   "Dramatic close-up portrait of 72-year-old Korean elderly woman, gray hair in a neat bun, tears streaming down wrinkled cheeks, eyes looking up with desperate hope, wearing simple hanbok, warm golden rim lighting from behind, blurred church interior background, emotional cinematic lighting, high quality, 4K, YouTube thumbnail style, hyperrealistic"
+
+   ✏️ textLines 작성 규칙 (4줄 필수):
+   - 1줄: 숫자/시간 훅 (예: "53년간", "새벽 3시", "월급 200만원")
+   - 2줄: 구체적 상황 (예: "믿음 없는 남편이", "암 선고를 받은 날")
+   - 3줄: 감정 강조 ★이 줄이 강조색! (예: "무릎 꿇고 울었습니다", "기적이 일어났습니다")
+   - 4줄: 결말 암시 (예: "그날 이후...", "하나님은 응답하셨습니다")
+
+   🎨 colorScheme: 감정에 맞는 색상
+   - 희망/감사: 따뜻한 금색, 주황
+   - 슬픔/절망: 차가운 파랑, 회색
+   - 기적/변화: 보라색, 핑크 → 금색 그라데이션
 
 【 주의사항 】
 - 모든 이미지 프롬프트는 반드시 영어로 작성
