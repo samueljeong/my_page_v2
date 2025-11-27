@@ -425,6 +425,7 @@ const completedSteps = new Set();
 // 내부 step name을 사이드바 step으로 매핑
 const stepMap = {
   'step1': 'step1', 'step3': 'step1',  // 대본 생성
+  'step1_5': 'step1_5',  // GPT 프롬프트 분석
   'step4': 'step2',  // 이미지 생성
   'step5': 'step3',  // TTS
   'step6': 'step4',  // 영상 제작
