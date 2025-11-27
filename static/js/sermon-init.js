@@ -537,7 +537,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   localStorage.setItem(`${AUTO_SAVE_KEY}_timestamp`, futureTimestamp);
 
   // Q&A 히스토리 초기화
-  sessionStorage.removeItem(QA_STORAGE_KEY);
+  if (window.QA_STORAGE_KEY) {
+    sessionStorage.removeItem(window.QA_STORAGE_KEY);
+  }
 
   // GPT PRO 결과 초기화
   const gptProContainer = document.getElementById('gpt-pro-result-container');
