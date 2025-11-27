@@ -8,6 +8,59 @@
 // ===== 데이터 버전 관리 =====
 const CONFIG_VERSION = 2; // 버전 업데이트 시 증가
 
+// ===== 안전한 localStorage 저장 함수 (용량 초과 방지) =====
+window.safeLocalStorageSet = function(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      console.warn(`[localStorage] 용량 초과 - ${key} 저장 실패, 오래된 데이터 정리 중...`);
+      // 오래된 drama 데이터 정리
+      window.cleanupOldDramaData();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e2) {
+        console.error(`[localStorage] 정리 후에도 저장 실패 - ${key}`);
+        showStatus('⚠️ 저장 공간 부족 - 이전 데이터를 정리해주세요');
+        return false;
+      }
+    }
+    console.error(`[localStorage] 저장 오류 - ${key}:`, e);
+    return false;
+  }
+};
+
+// ===== 오래된 drama 데이터 정리 =====
+window.cleanupOldDramaData = function() {
+  const keysToClean = [
+    '_drama-step3-audio-url',
+    '_drama-step3-subtitle',
+    '_drama-step3-script-text',
+    '_drama-step4-images',
+    '_drama-step4-character-images',
+    '_drama-gpt-prompts',
+    '_drama-step1-result'
+  ];
+
+  let totalCleaned = 0;
+  keysToClean.forEach(key => {
+    try {
+      const data = localStorage.getItem(key);
+      if (data && data.length > 100000) {  // 100KB 이상은 삭제
+        localStorage.removeItem(key);
+        totalCleaned += data.length;
+        console.log(`[localStorage] 대용량 데이터 삭제: ${key} (${Math.round(data.length / 1024)}KB)`);
+      }
+    } catch (e) {}
+  });
+
+  if (totalCleaned > 0) {
+    console.log(`[localStorage] 총 ${Math.round(totalCleaned / 1024)}KB 정리됨`);
+  }
+};
+
 // ===== Firebase 초기화 =====
 const firebaseConfig = {
   apiKey: "AIzaSyBacmJDk-PG5FaoqnXV8Rg3P__AKOS2vu4",

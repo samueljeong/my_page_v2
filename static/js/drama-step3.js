@@ -6,10 +6,63 @@
 // ===== TTS 관련 변수 =====
 let step3TtsProvider = 'google';  // 기본: Google Cloud TTS
 let step3SelectedVoice = 'ko-KR-Wavenet-A';  // Google 기본 음성
-let step3AudioUrl = localStorage.getItem('_drama-step3-audio-url') || null;
-let step3SubtitleData = JSON.parse(localStorage.getItem('_drama-step3-subtitle') || 'null');
-let step3ScriptText = localStorage.getItem('_drama-step3-script-text') || '';
+let step3AudioUrl = null;
+let step3SubtitleData = null;
+let step3ScriptText = '';
 let step3PreviewAudio = null;  // 미리듣기용 오디오
+
+// ===== 안전한 localStorage 저장 함수 (용량 초과 방지) =====
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      console.warn(`[localStorage] 용량 초과 - ${key} 저장 실패, 오래된 데이터 정리 중...`);
+      // 오래된 drama 데이터 정리
+      cleanupOldDramaData();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e2) {
+        console.error(`[localStorage] 정리 후에도 저장 실패 - ${key}`);
+        return false;
+      }
+    }
+    console.error(`[localStorage] 저장 오류 - ${key}:`, e);
+    return false;
+  }
+}
+
+// ===== 오래된 drama 데이터 정리 =====
+function cleanupOldDramaData() {
+  const keysToClean = [
+    '_drama-step3-audio-url',
+    '_drama-step3-subtitle',
+    '_drama-step3-script-text',
+    '_drama-step4-images',
+    '_drama-gpt-prompts'
+  ];
+
+  keysToClean.forEach(key => {
+    try {
+      const data = localStorage.getItem(key);
+      if (data && data.length > 50000) {  // 50KB 이상은 삭제
+        localStorage.removeItem(key);
+        console.log(`[localStorage] 대용량 데이터 삭제: ${key} (${Math.round(data.length / 1024)}KB)`);
+      }
+    } catch (e) {}
+  });
+}
+
+// ===== localStorage에서 안전하게 데이터 로드 =====
+try {
+  step3AudioUrl = localStorage.getItem('_drama-step3-audio-url') || null;
+  step3SubtitleData = JSON.parse(localStorage.getItem('_drama-step3-subtitle') || 'null');
+  step3ScriptText = localStorage.getItem('_drama-step3-script-text') || '';
+} catch (e) {
+  console.warn('[localStorage] 데이터 로드 오류, 초기화:', e);
+}
 
 // ===== Step3 컨테이너 표시 =====
 function updateStep3Visibility() {
@@ -270,9 +323,9 @@ async function generateTTS() {
         audioPlayer.src = data.audioUrl;
         audioSection.style.display = 'block';
 
-        // ⭐ localStorage에 저장 (새로고침 후에도 유지)
-        localStorage.setItem('_drama-step3-audio-url', step3AudioUrl);
-        localStorage.setItem('_drama-step3-script-text', scriptText);
+        // ⭐ localStorage에 안전하게 저장 (용량 초과 방지)
+        safeLocalStorageSet('_drama-step3-audio-url', step3AudioUrl);
+        safeLocalStorageSet('_drama-step3-script-text', scriptText);
         if (typeof saveToFirebase === 'function') {
           saveToFirebase('_drama-step3-audio-url', step3AudioUrl);
           saveToFirebase('_drama-step3-script-text', scriptText);
@@ -373,8 +426,8 @@ async function generateSubtitleAuto(audioDuration = 0) {
         subtitlePreview.textContent = data.srt;
         subtitleSection.style.display = 'block';
 
-        // ⭐ localStorage에 저장 (새로고침 후에도 유지)
-        localStorage.setItem('_drama-step3-subtitle', JSON.stringify(data));
+        // ⭐ localStorage에 안전하게 저장 (용량 초과 방지)
+        safeLocalStorageSet('_drama-step3-subtitle', JSON.stringify(data));
         if (typeof saveToFirebase === 'function') {
           saveToFirebase('_drama-step3-subtitle', JSON.stringify(data));
         }

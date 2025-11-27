@@ -5893,7 +5893,13 @@ def api_gpt_analyze_prompts():
       "backgroundPrompt": "영문 배경 프롬프트 - 장소, 조명, 분위기, 시간대 등",
       "characterAction": "이 장면에서 캐릭터의 동작/표정"
     }
-  ]
+  ],
+  "thumbnail": {
+    "concept": "썸네일 콘셉트 설명 (한국어)",
+    "imagePrompt": "영문 썸네일 이미지 프롬프트 - 주인공 클로즈업, 드라마틱 조명, 감정 표현",
+    "textLines": ["1줄: 훅 문구", "2줄: 핵심 사건", "3줄: 감정 강조", "4줄: 여운"],
+    "highlightLine": 3
+  }
 }
 ```
 
@@ -5915,11 +5921,20 @@ def api_gpt_analyze_prompts():
    - 전체적인 색감과 분위기 통일
    - 한 영상 내에서 스타일 일관성
 
+4. 🎯 유튜브 썸네일 (thumbnail):
+   - 시청자의 클릭을 유도하는 강렬한 이미지
+   - 주인공의 감정이 드러나는 클로즈업 또는 미디엄 샷
+   - 드라마틱한 조명 (역광, 림라이트, 명암 대비)
+   - 예: "Dramatic close-up portrait of Korean elderly man, 70 years old, tears in eyes, warm golden rim lighting, emotional expression of hope mixed with pain, cinematic depth of field, YouTube thumbnail style"
+   - textLines: 클릭을 유도하는 4줄 문구 (훅 → 사건 → 감정 → 여운)
+   - highlightLine: 가장 강조할 줄 번호 (1-4)
+
 【 주의사항 】
 - 모든 이미지 프롬프트는 반드시 영어로 작성
 - 설명(description)은 한국어로 작성
 - JSON 형식만 출력 (다른 텍스트 없이)
-- 장면 수는 대본에 맞게 조절"""
+- 장면 수는 대본에 맞게 조절
+- 썸네일은 반드시 포함"""
 
         user_prompt = f"""【 영상 카테고리 】
 {video_category}
