@@ -190,7 +190,7 @@ async function executeGptPro() {
     const step3Guide = localStorage.getItem(step3GuideKey) || '';
 
     const requestBody = {
-      ref: ref,
+      reference: ref,
       title: getSelectedTitle(),
       target: document.getElementById('sermon-target')?.value || '',
       worshipType: document.getElementById('sermon-worship-type')?.value || '',
