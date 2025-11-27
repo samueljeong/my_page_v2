@@ -113,6 +113,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadFromFirebase();
   hideStatus();
 
+  // ===== 스타일 자동 선택 (중요: UI 렌더링 전에 실행) =====
+  ensureStyleSelected();
+
   // ===== UI 렌더링 =====
   renderCategories();
   loadMasterGuide(window.currentCategory);
