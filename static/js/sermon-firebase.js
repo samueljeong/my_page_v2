@@ -3,6 +3,9 @@
  * Firebase 초기화, 저장/로드, 동기화, 백업/복원
  */
 
+// ===== 데이터 버전 관리 =====
+const CONFIG_VERSION = 2; // 버전 업데이트 시 증가
+
 // ===== Firebase 초기화 =====
 const firebaseConfig = {
   apiKey: "AIzaSyBacmJDk-PG5FaoqnXV8Rg3P__AKOS2vu4",
@@ -22,6 +25,102 @@ const PAGE_NAME = 'sermon';
 const CONFIG_KEY = '_sermon-config';
 const AUTO_SAVE_KEY = '_sermon-autosave';
 
+// ===== Config 검증 및 마이그레이션 =====
+function validateAndMigrateConfig(config) {
+  console.log('[Config] 검증 시작, 현재 버전:', config?._version || '없음');
+
+  // config가 없거나 유효하지 않으면 기본값 반환
+  if (!config || typeof config !== 'object') {
+    console.log('[Config] config가 없음 - 기본값 사용');
+    return null; // 기본값 사용
+  }
+
+  // 필수 필드 검증
+  if (!config.categories || !Array.isArray(config.categories) || config.categories.length === 0) {
+    console.log('[Config] categories 없음 - 기본값 사용');
+    return null;
+  }
+
+  if (!config.categorySettings || typeof config.categorySettings !== 'object') {
+    console.log('[Config] categorySettings 없음 - 기본값 사용');
+    return null;
+  }
+
+  // 버전별 마이그레이션
+  let needsSave = false;
+
+  // 버전 1 -> 2: styles에 stepType 필드 추가
+  if (!config._version || config._version < 2) {
+    console.log('[Config] 버전 마이그레이션: 1 -> 2');
+    Object.values(config.categorySettings).forEach(catSettings => {
+      if (catSettings?.styles) {
+        catSettings.styles.forEach(style => {
+          if (style.steps) {
+            style.steps.forEach((step, idx) => {
+              // stepType이 없으면 추가
+              if (!step.stepType) {
+                step.stepType = idx < 2 ? 'step1' : 'step2';
+              }
+            });
+          }
+        });
+      }
+    });
+    config._version = 2;
+    needsSave = true;
+  }
+
+  // 각 카테고리 설정 검증 및 복구
+  config.categories.forEach(cat => {
+    if (!config.categorySettings[cat.value]) {
+      console.log('[Config] 카테고리 설정 생성:', cat.value);
+      config.categorySettings[cat.value] = {
+        masterGuide: '',
+        styles: []
+      };
+      needsSave = true;
+    }
+  });
+
+  if (needsSave) {
+    console.log('[Config] 마이그레이션 완료 - 저장 필요');
+    // 비동기로 저장 (나중에 호출됨)
+    setTimeout(() => {
+      if (typeof saveConfig === 'function') {
+        saveConfig();
+        console.log('[Config] 마이그레이션된 설정 저장됨');
+      }
+    }, 1000);
+  }
+
+  return config;
+}
+
+// ===== 스타일 자동 선택 =====
+function ensureStyleSelected() {
+  // currentCategory의 첫 번째 스타일 자동 선택
+  const catSettings = window.config?.categorySettings?.[window.currentCategory];
+  const styles = catSettings?.styles || [];
+
+  if (styles.length > 0 && !window.currentStyleId) {
+    window.currentStyleId = styles[0].id;
+    console.log('[Config] 스타일 자동 선택:', window.currentStyleId);
+    return true;
+  }
+
+  // 선택된 스타일이 존재하는지 확인
+  if (window.currentStyleId && styles.length > 0) {
+    const exists = styles.some(s => s.id === window.currentStyleId);
+    if (!exists) {
+      window.currentStyleId = styles[0].id;
+      console.log('[Config] 스타일 재선택 (기존 스타일 없음):', window.currentStyleId);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // ===== Firebase 로드 =====
 async function loadFromFirebase() {
   try {
@@ -34,8 +133,22 @@ async function loadFromFirebase() {
 
       const configData = localStorage.getItem(CONFIG_KEY);
       if (configData) {
-        window.config = JSON.parse(configData);
+        try {
+          const parsed = JSON.parse(configData);
+          const validated = validateAndMigrateConfig(parsed);
+          if (validated) {
+            window.config = validated;
+          }
+          // validated가 null이면 기본 config 유지
+        } catch (parseErr) {
+          console.error('[Config] JSON 파싱 실패:', parseErr);
+          // 파싱 실패시 기본 config 유지
+        }
       }
+
+      // 스타일 자동 선택
+      ensureStyleSelected();
+
       console.log('✅ Firebase 동기화 완료');
       return true;
     }
@@ -77,6 +190,11 @@ async function saveToFirebase(key, value, retries = 0) {
 
 // ===== Config 저장 =====
 async function saveConfig() {
+  // 버전 정보 추가
+  if (!window.config._version) {
+    window.config._version = CONFIG_VERSION;
+  }
+
   const configStr = JSON.stringify(window.config);
   localStorage.setItem(CONFIG_KEY, configStr);
   const success = await saveToFirebase(CONFIG_KEY, configStr);
@@ -326,6 +444,9 @@ window.USER_CODE = USER_CODE;
 window.PAGE_NAME = PAGE_NAME;
 window.CONFIG_KEY = CONFIG_KEY;
 window.AUTO_SAVE_KEY = AUTO_SAVE_KEY;
+window.CONFIG_VERSION = CONFIG_VERSION;
+window.validateAndMigrateConfig = validateAndMigrateConfig;
+window.ensureStyleSelected = ensureStyleSelected;
 window.loadFromFirebase = loadFromFirebase;
 window.saveToFirebase = saveToFirebase;
 window.saveConfig = saveConfig;
