@@ -7,12 +7,20 @@ Flask Blueprint를 사용한 Sermon 앱 모듈화
 - utils.py: 유틸리티 함수들
 - auth.py: 인증, 크레딧 관리, 데코레이터
 - prompt.py: 프롬프트 빌더 함수들
+- api_sermon.py: 설교 처리 API Blueprint (준비됨)
+- api_banner.py: 배너 API Blueprint (준비됨)
+- api_admin.py: 관리자 API Blueprint (준비됨)
 
 사용법:
     from sermon_modules.db import get_db_connection, init_db
     from sermon_modules.utils import calculate_cost, format_json_result
     from sermon_modules.auth import auth_bp, login_required
     from sermon_modules.prompt import build_prompt_from_json
+
+    # API Blueprints (아직 마이그레이션 전)
+    from sermon_modules.api_sermon import api_sermon_bp
+    from sermon_modules.api_banner import api_banner_bp
+    from sermon_modules.api_admin import api_admin_bp
 """
 
 from .db import (

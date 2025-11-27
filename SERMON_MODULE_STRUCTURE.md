@@ -94,16 +94,36 @@ from sermon_modules.auth import login_required
 from sermon_modules.prompt import build_step3_prompt_from_json
 ```
 
-### API 라우트 분리 (예정)
+### API 라우트 분리 ✅ 구조 생성 완료
 ```
 sermon_modules/
-├── api_sermon.py        📋 설교 처리 API (/api/sermon/*)
-├── api_banner.py        📋 배너 API (/api/banner/*)
-└── api_admin.py         📋 관리자 API (/admin/*)
+├── api_sermon.py        ✅ 설교 처리 API (/api/sermon/*)
+├── api_banner.py        ✅ 배너 API (/api/banner/*)
+└── api_admin.py         ✅ 관리자 API (/admin/*)
 ```
 
-> 전체 API 라우트 분리는 별도 작업으로 진행 예정
-> 현재 sermon_server.py는 모듈을 import하여 점진적 교체 가능
+#### api_sermon.py 라우트
+- `POST /api/sermon/process` - Step 처리
+- `POST /api/sermon/meditation` - 묵상메시지 생성
+- `POST /api/sermon/gpt-pro` - GPT PRO (Step3)
+- `POST /api/sermon/qa` - Q&A
+- `POST /api/sermon/recommend-scripture` - 본문 추천
+- `POST /api/sermon/chat` - 설교 챗봇
+
+#### api_banner.py 라우트
+- `GET/POST /api/banner/templates` - 템플릿
+- `POST /api/banner/generate*` - 배너 생성
+- `GET/POST/DELETE /api/banner/references*` - 참조 이미지
+- `POST /api/banner/crawl` - 이미지 크롤링
+
+#### api_admin.py 라우트
+- `GET /admin` - 관리자 대시보드
+- `POST /admin/toggle-admin|delete-user|set-credits|add-credits`
+- `GET/POST /admin/settings` - 설정 관리
+- `GET /api/admin/usage-stats` - 사용량 통계
+
+> Blueprint 파일은 생성됨, 실제 라우트 마이그레이션은 별도 진행
+> 현재 sermon_server.py에서 모듈 import 주석 추가됨
 
 ---
 
@@ -131,7 +151,10 @@ my_page_v2/
 │   ├── db.py                       ✅
 │   ├── utils.py                    ✅
 │   ├── auth.py                     ✅
-│   └── prompt.py                   ✅
+│   ├── prompt.py                   ✅
+│   ├── api_sermon.py              ✅ (라우트 마이그레이션 대기)
+│   ├── api_banner.py              ✅ (라우트 마이그레이션 대기)
+│   └── api_admin.py               ✅ (라우트 마이그레이션 대기)
 ├── templates/
 │   └── sermon.html                 ✅ (1,063줄)
 ├── sermon_server.py                (원본 유지, 모듈 import 가능)
@@ -152,18 +175,22 @@ my_page_v2/
 | 파일 | 줄 수 |
 |------|-------|
 | sermon.css | 916줄 |
-| sermon-*.js (11개) | ~2,500줄 |
-| sermon_modules/*.py (4개) | ~860줄 |
+| sermon-*.js (11개) | ~2,900줄 |
+| sermon_modules/*.py (7개) | ~1,100줄 |
 
 ---
 
 ## 다음 단계
 
-1. **sermon_server.py 점진적 교체**
-   - 기존 함수를 모듈 import로 교체
-   - API Blueprint 분리
+1. ✅ **sermon_server.py 점진적 교체 준비**
+   - 모듈 import 주석 추가 완료
+   - API Blueprint 구조 생성 완료
 
-2. **테스트**
+2. 📋 **API Blueprint 실제 마이그레이션**
+   - sermon_server.py에서 라우트 코드 이동
+   - Blueprint 등록 및 테스트
+
+3. 📋 **테스트**
    - 모듈 import 확인
    - 기능 동작 테스트
 
