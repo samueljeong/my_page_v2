@@ -30,6 +30,73 @@ let contentTypePrompts = {
   }
 };
 
+// ===== GPT 분석 프롬프트 저장 변수 =====
+let gptAnalyzedPrompts = JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
+
+// ===== GPT 이미지 프롬프트 분석 함수 (Step 1.5) =====
+async function analyzePromptsWithGPT(script, videoCategory) {
+  try {
+    showStatus('🔍 Step 1.5: GPT 대본 분석 및 이미지 프롬프트 생성 중...');
+    if (typeof updateStepStatus === 'function') {
+      updateStepStatus('step1_5', 'working', 'GPT 분석 중...');
+    }
+
+    const response = await fetch('/api/drama/gpt-analyze-prompts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        script: script,
+        videoCategory: videoCategory
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.ok && data.parsed) {
+      gptAnalyzedPrompts = data.result;
+
+      // localStorage에 저장
+      localStorage.setItem('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
+      if (typeof saveToFirebase === 'function') {
+        saveToFirebase('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
+      }
+
+      console.log('[GPT-Analyze] 프롬프트 분석 완료:', {
+        visualStyle: gptAnalyzedPrompts.visualStyle,
+        characters: gptAnalyzedPrompts.characters?.length || 0,
+        scenes: gptAnalyzedPrompts.scenes?.length || 0
+      });
+
+      showStatus(`✅ Step 1.5 완료: ${gptAnalyzedPrompts.characters?.length || 0}명의 인물, ${gptAnalyzedPrompts.scenes?.length || 0}개의 씬 프롬프트 생성`);
+
+      // 완료 상태 표시
+      if (typeof updateStepStatus === 'function') {
+        updateStepStatus('step1_5', 'completed', '프롬프트 생성 완료');
+      }
+
+      return gptAnalyzedPrompts;
+    } else {
+      console.warn('[GPT-Analyze] 분석 실패 또는 JSON 파싱 실패:', data);
+      showStatus('⚠️ Step 1.5 실패 - 기본 분석 사용');
+      if (typeof updateStepStatus === 'function') {
+        updateStepStatus('step1_5', 'error', '분석 실패');
+      }
+      return null;
+    }
+  } catch (err) {
+    console.error('[GPT-Analyze] 오류:', err);
+    showStatus('⚠️ Step 1.5 오류 - 기본 분석 사용');
+    if (typeof updateStepStatus === 'function') {
+      updateStepStatus('step1_5', 'error', err.message.substring(0, 20));
+    }
+    return null;
+  }
+}
+
+// 전역 노출
+window.gptAnalyzedPrompts = gptAnalyzedPrompts;
+window.analyzePromptsWithGPT = analyzePromptsWithGPT;
+
 // ===== 대본 생성 메인 함수 =====
 async function executeStep1() {
   // 화면에서 Step1 버튼을 누르면 실행되는 함수
@@ -183,6 +250,10 @@ async function executeStep1() {
       if (typeof updateProgressIndicator === 'function') {
         updateProgressIndicator('step1');
       }
+
+      // ⭐ GPT 이미지 프롬프트 분석 실행 (Step2 전에)
+      console.log('[Step1] GPT 이미지 프롬프트 분석 시작...');
+      await analyzePromptsWithGPT(step1Result, videoCategory);
 
       // 자동화 모드면 Step2(이미지)와 Step3(TTS) 병렬 실행
       if (window.isFullAutoMode) {
