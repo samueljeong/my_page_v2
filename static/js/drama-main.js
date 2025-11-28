@@ -143,6 +143,13 @@ window.resetCosts = function() {
   window.updateCostDisplay();
 };
 
+// 비용 포맷팅 함수 (소수점 1자리)
+function formatCost(amount) {
+  if (amount === 0) return '₩0';
+  if (amount < 0.1) return '₩' + amount.toFixed(2);  // 0.01 이하는 2자리
+  return '₩' + amount.toFixed(1);
+}
+
 // UI 업데이트
 window.updateCostDisplay = function() {
   const totalEl = document.getElementById('total-cost-display');
@@ -152,12 +159,12 @@ window.updateCostDisplay = function() {
   const step3El = document.getElementById('cost-step3');
   const step4El = document.getElementById('cost-step4');
 
-  if (totalEl) totalEl.textContent = '₩' + window.getTotalCost().toLocaleString();
-  if (step1El) step1El.textContent = '₩' + window.dramaCosts.step1.toLocaleString();
-  if (step1_5El) step1_5El.textContent = '₩' + window.dramaCosts.step1_5.toLocaleString();
-  if (step2El) step2El.textContent = '₩' + window.dramaCosts.step2.toLocaleString();
-  if (step3El) step3El.textContent = '₩' + window.dramaCosts.step3.toLocaleString();
-  if (step4El) step4El.textContent = '₩' + window.dramaCosts.step4.toLocaleString();
+  if (totalEl) totalEl.textContent = formatCost(window.getTotalCost());
+  if (step1El) step1El.textContent = formatCost(window.dramaCosts.step1);
+  if (step1_5El) step1_5El.textContent = formatCost(window.dramaCosts.step1_5);
+  if (step2El) step2El.textContent = formatCost(window.dramaCosts.step2);
+  if (step3El) step3El.textContent = formatCost(window.dramaCosts.step3);
+  if (step4El) step4El.textContent = formatCost(window.dramaCosts.step4);
 };
 
 // 설정 객체

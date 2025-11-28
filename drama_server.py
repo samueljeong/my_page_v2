@@ -2640,7 +2640,7 @@ def api_drama_claude_step3():
         # Claude Sonnet 4.5 비용 계산 (원화): input $3/1M, output $15/1M → 환율 1400원
         # input: 3 * 1400 / 1000000 = 0.0042원/token
         # output: 15 * 1400 / 1000000 = 0.021원/token
-        cost = max(1, round(input_tokens * 0.0042 + output_tokens * 0.021))
+        cost = round(input_tokens * 0.0042 + output_tokens * 0.021, 2)
 
         print(f"[DRAMA-STEP3-OPENROUTER] 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -5848,7 +5848,7 @@ def api_gpt_plan_step1():
         # GPT-4o-mini 비용 계산 (원화): input $0.15/1M, output $0.6/1M → 환율 1400원
         # input: 0.15 * 1400 / 1000000 = 0.00021원/token
         # output: 0.6 * 1400 / 1000000 = 0.00084원/token
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         print(f"[GPT-PLAN-1] 기획 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -5953,7 +5953,7 @@ def api_gpt_plan_step2():
         output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
         # GPT-4o-mini 비용 계산 (원화)
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         print(f"[GPT-PLAN-2] 구조화 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -6104,7 +6104,7 @@ def api_gpt_analyze_prompts():
         output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
         # GPT-4o-mini 비용 계산 (원화)
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         # JSON 파싱 시도
         import re
