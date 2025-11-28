@@ -1596,7 +1596,7 @@ def api_get_suggestions():
 위 초안을 분석하고, 시청자 반응을 극대화할 수 있는 구체적인 개선 제안을 해주세요."""
 
         completion = client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
@@ -1605,7 +1605,7 @@ def api_get_suggestions():
 
         suggestions = completion.choices[0].message.content.strip()
 
-        print(f"[DRAMA-SUGGEST] 제안 생성 완료 (모델: gpt-5)")
+        print(f"[DRAMA-SUGGEST] 제안 생성 완료 (모델: gpt-4o-mini)")
 
         return jsonify({"ok": True, "suggestions": suggestions})
 
@@ -1638,7 +1638,7 @@ def api_workflow_execute():
             model_name = selected_model
             use_temperature = True  # 사용자가 모델을 선택한 경우 temperature 사용
         elif step_type == "step1":
-            model_name = "gpt-5"
+            model_name = "gpt-4o-mini"
             use_temperature = False
         else:  # step2
             model_name = "gpt-4o-mini"
@@ -1871,7 +1871,7 @@ def api_get_accumulated_guide():
             user_content += f"\n\n특히 '{category}' 길이의 드라마에 적합한 가이드를 포함해주세요."
 
         completion = client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
@@ -1880,7 +1880,7 @@ def api_get_accumulated_guide():
 
         guide = completion.choices[0].message.content.strip()
 
-        print(f"[DRAMA-GUIDE] GPT 일반 가이드 생성 완료 (모델: gpt-5)")
+        print(f"[DRAMA-GUIDE] GPT 가이드 생성 완료 (모델: gpt-4o-mini)")
 
         return jsonify({"ok": True, "guide": guide, "source": "gpt"})
 
@@ -2575,12 +2575,12 @@ def api_drama_claude_step3():
 {user_prompt_suffix}"""
 
         # OpenRouter API 호출 (OpenAI 호환)
-        # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 1.5토큰, JSON 오버헤드 고려)
+        # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 2~3토큰, JSON 오버헤드 고려)
         if test_mode:
-            max_output_tokens = 2000  # 테스트 모드: 500자 + JSON 오버헤드
+            max_output_tokens = 4000  # 테스트 모드: 넉넉하게
         else:
-            # 목표 글자수 * 2 (JSON 메타데이터 포함) + 여유분
-            max_output_tokens = min(16000, max(2000, int(target_chars * 2.5)))
+            # 목표 글자수 * 4 (JSON 메타데이터 + 한글 토큰 오버헤드) + 여유분
+            max_output_tokens = min(32000, max(8000, int(target_chars * 4)))
 
         print(f"[DRAMA-STEP3] max_output_tokens: {max_output_tokens}")
         response = openrouter_client.chat.completions.create(
@@ -2615,7 +2615,17 @@ def api_drama_claude_step3():
             raise RuntimeError("OpenRouter 콘텐츠 필터에 의해 차단되었습니다. 주제를 변경해보세요.")
 
         result = response.choices[0].message.content if response.choices else ""
+        print(f"[DRAMA-STEP3] 응답 길이: {len(result) if result else 0}자")
         result = result.strip() if result else ""
+
+        # finish_reason: length인 경우 - 응답이 잘렸지만 부분 응답이라도 사용
+        if finish_reason == "length" and result:
+            print(f"[DRAMA-STEP3] ⚠️ 응답이 max_tokens에서 잘림, 부분 응답 사용 ({len(result)}자)")
+            # JSON이 불완전할 수 있으므로 복구 시도
+            if result.startswith('{') and not result.endswith('}'):
+                # 불완전한 JSON 복구 시도
+                result = result + '"}]}'
+                print(f"[DRAMA-STEP3] JSON 복구 시도")
 
         if not result:
             print(f"[DRAMA-STEP3] 빈 응답, finish_reason: {finish_reason}")
@@ -2640,7 +2650,7 @@ def api_drama_claude_step3():
         # Claude Sonnet 4.5 비용 계산 (원화): input $3/1M, output $15/1M → 환율 1400원
         # input: 3 * 1400 / 1000000 = 0.0042원/token
         # output: 15 * 1400 / 1000000 = 0.021원/token
-        cost = max(1, round(input_tokens * 0.0042 + output_tokens * 0.021))
+        cost = round(input_tokens * 0.0042 + output_tokens * 0.021, 2)
 
         print(f"[DRAMA-STEP3-OPENROUTER] 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -2673,8 +2683,8 @@ def api_drama_chat():
         context = data.get("context", {})  # 현재 작업 상태
         selected_model = data.get("model", "gpt-4o-mini")  # 선택된 모델
 
-        # 허용된 모델 목록
-        allowed_models = ["gpt-4o-mini", "gpt-4o", "gpt-5"]
+        # 허용된 모델 목록 (비용 절감을 위해 gpt-4o-mini 권장)
+        allowed_models = ["gpt-4o-mini", "gpt-4o"]
         if selected_model not in allowed_models:
             selected_model = "gpt-4o-mini"
 
@@ -5848,7 +5858,7 @@ def api_gpt_plan_step1():
         # GPT-4o-mini 비용 계산 (원화): input $0.15/1M, output $0.6/1M → 환율 1400원
         # input: 0.15 * 1400 / 1000000 = 0.00021원/token
         # output: 0.6 * 1400 / 1000000 = 0.00084원/token
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         print(f"[GPT-PLAN-1] 기획 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -5953,7 +5963,7 @@ def api_gpt_plan_step2():
         output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
         # GPT-4o-mini 비용 계산 (원화)
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         print(f"[GPT-PLAN-2] 구조화 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
@@ -6104,7 +6114,7 @@ def api_gpt_analyze_prompts():
         output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
         # GPT-4o-mini 비용 계산 (원화)
-        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+        cost = round(input_tokens * 0.00021 + output_tokens * 0.00084, 2)
 
         # JSON 파싱 시도
         import re
