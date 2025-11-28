@@ -247,9 +247,10 @@ function restoreThumbnail() {
     if (thumbnailImage && thumbnailData.url) {
       generatedThumbnailUrl = thumbnailData.url;
       thumbnailImage.src = thumbnailData.url;
-      // \n을 <br>로 변환하여 줄바꿈 렌더링
-      const textWithBreaks = (thumbnailData.text || '드라마').replace(/\\n/g, '\n').replace(/\n/g, '<br>');
-      thumbnailTextOverlay.innerHTML = textWithBreaks;
+      // ⭐ 서버에서 이미지에 직접 텍스트를 렌더링하므로 HTML 오버레이는 숨김
+      if (thumbnailTextOverlay) {
+        thumbnailTextOverlay.style.display = 'none';
+      }
       thumbnailPrompt.textContent = thumbnailData.prompt || '-';
       thumbnailPreview.style.display = 'block';
       console.log('[THUMBNAIL] 저장된 썸네일 복원:', thumbnailData.url);
