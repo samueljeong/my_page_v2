@@ -2639,7 +2639,10 @@ def api_drama_claude_step3():
 
         if not result:
             print(f"[DRAMA-STEP3] 빈 응답, finish_reason: {finish_reason}")
-            raise RuntimeError(f"OpenRouter API로부터 빈 응답. finish_reason: {finish_reason}")
+            if finish_reason == "length":
+                raise RuntimeError(f"응답이 토큰 제한으로 잘렸습니다. 대본 길이를 줄이거나 다시 시도해주세요.")
+            else:
+                raise RuntimeError(f"OpenRouter API로부터 빈 응답. finish_reason: {finish_reason}")
 
         # JSON 응답에서 불필요한 마크다운 코드블록 제거 (```json ... ``` 형식)
         import re as re_temp
