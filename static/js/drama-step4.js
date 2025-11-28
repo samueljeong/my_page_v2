@@ -5,116 +5,14 @@
 
 // ===== 영상 제작 관련 변수 =====
 let step4SelectedImages = [];
-let step4VideoUrl = localStorage.getItem('_drama-step4-video-url') || null;
-let step4VideoFileUrl = localStorage.getItem('_drama-step4-video-file-url') || null;
+let step4VideoUrl = null;
+let step4VideoFileUrl = null; // 파일 URL (다운로드용)
 let generatedThumbnailUrl = null;
-
-// ===== 실패한 이미지 URL 추적 (무한 루프 방지) =====
-const failedImageUrls = new Set();
-
-// ===== 실패한 이미지인지 확인 =====
-function isFailedImage(url) {
-  return failedImageUrls.has(url);
-}
-
-// ===== 이미지 로드 에러 처리 (404 이미지 자동 제거) =====
-function handleImageLoadError(imgElement, failedUrl) {
-  // 이미 처리된 URL이면 무시 (중복 로그 방지)
-  if (failedImageUrls.has(failedUrl)) {
-    if (imgElement && imgElement.parentElement) {
-      imgElement.parentElement.style.display = 'none';
-    }
-    return;
-  }
-
-  console.warn('[Step4] 이미지 로드 실패, localStorage에서 제거:', failedUrl);
-
-  // 실패 목록에 추가
-  failedImageUrls.add(failedUrl);
-
-  // UI에서 숨김
-  if (imgElement && imgElement.parentElement) {
-    imgElement.parentElement.style.display = 'none';
-  }
-
-  // localStorage에서 해당 이미지 제거
-  try {
-    const savedImages = localStorage.getItem('_drama-step4-images');
-    if (savedImages) {
-      const images = JSON.parse(savedImages);
-      const filtered = images.filter(img => img && img.url !== failedUrl);
-      if (filtered.length !== images.length) {
-        localStorage.setItem('_drama-step4-images', JSON.stringify(filtered));
-        console.log('[Step4] localStorage에서 무효한 이미지 제거됨');
-      }
-    }
-  } catch (e) {
-    console.warn('[Step4] localStorage 정리 실패:', e);
-  }
-
-  // 전역 변수에서도 제거
-  if (window.DramaStep2 && window.DramaStep2.generatedImages) {
-    window.DramaStep2.generatedImages = window.DramaStep2.generatedImages.filter(img => img && img.url !== failedUrl);
-  }
-  if (window.step4GeneratedImages) {
-    window.step4GeneratedImages = window.step4GeneratedImages.filter(img => img && img.url !== failedUrl);
-  }
-}
-window.handleImageLoadError = handleImageLoadError;
-window.isFailedImage = isFailedImage;
 
 // ===== Step4 컨테이너 업데이트 =====
 function updateStep4Visibility() {
-  updateStep4ContainerVisibility();
   updateStep4ImageGrid();
   updateStep4AudioStatus();
-  updateStep5ContainerVisibility();
-}
-
-// ===== Step4 컨테이너 표시/숨김 (Step2 이미지 또는 Step3 오디오 있을 때만 표시) =====
-function updateStep4ContainerVisibility() {
-  const step6Container = document.getElementById('step6-container');
-  if (!step6Container) return;
-
-  // Step2 이미지 확인 (실패한 이미지 제외)
-  let hasImages = false;
-  const step2Images = window.DramaStep2?.generatedImages || window.step4GeneratedImages || [];
-  if (step2Images.length > 0) {
-    hasImages = step2Images.some(img => img && img.url && img.url.trim() !== '' && !failedImageUrls.has(img.url));
-  }
-  if (!hasImages) {
-    try {
-      const savedImages = localStorage.getItem('_drama-step4-images');
-      if (savedImages) {
-        const parsed = JSON.parse(savedImages);
-        hasImages = parsed.length > 0 && parsed.some(img => img && img.url && !failedImageUrls.has(img.url));
-      }
-    } catch (e) {}
-  }
-
-  // Step3 오디오 확인
-  let hasAudio = false;
-  if (window.DramaStep3?.audioUrl || window.step5AudioUrl) {
-    hasAudio = true;
-  } else {
-    const step5AudioPlayer = document.getElementById('step5-audio-player');
-    if (step5AudioPlayer && step5AudioPlayer.src && step5AudioPlayer.src !== window.location.href) {
-      hasAudio = true;
-    }
-  }
-
-  // Step2 이미지가 있거나 Step3 오디오가 있으면 Step4 표시
-  if (hasImages || hasAudio) {
-    step6Container.style.display = 'block';
-  } else {
-    step6Container.style.display = 'none';
-  }
-}
-
-// ===== Step5 컨테이너 - 항상 표시 =====
-function updateStep5ContainerVisibility() {
-  // Step5는 항상 표시되므로 별도 처리 불필요
-  // 이 함수는 호환성을 위해 유지
 }
 
 // ===== 이미지 그리드 업데이트 =====
@@ -122,47 +20,17 @@ function updateStep4ImageGrid() {
   const grid = document.getElementById('step6-image-grid');
   if (!grid) return;
 
-  // Step2에서 생성된 이미지 가져오기 (여러 소스에서 시도)
-  let step2Images = [];
-
-  // 1. DramaStep2 모듈에서 가져오기
-  if (window.DramaStep2 && typeof window.DramaStep2.generatedImages !== 'undefined') {
-    step2Images = window.DramaStep2.generatedImages;
-  }
-  // 2. 전역 변수에서 가져오기
-  else if (window.step4GeneratedImages && window.step4GeneratedImages.length > 0) {
-    step2Images = window.step4GeneratedImages;
-  }
-  // 3. localStorage에서 가져오기
-  else {
-    try {
-      const savedImages = localStorage.getItem('_drama-step4-images');
-      if (savedImages) {
-        step2Images = JSON.parse(savedImages);
-      }
-    } catch (e) {
-      console.warn('[Step4] localStorage 이미지 로드 실패:', e);
-    }
-  }
+  // Step2에서 생성된 이미지 가져오기
+  const step2Images = window.DramaStep2?.generatedImages || window.step4GeneratedImages || [];
 
   if (!step2Images || step2Images.length === 0) {
     grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step2에서 이미지를 생성하면 여기에 표시됩니다</div>';
     return;
   }
 
-  // 유효한 이미지만 필터링 (실패한 이미지 제외)
-  const validImages = step2Images.filter(img =>
-    img && img.url && img.url.trim() !== '' && !failedImageUrls.has(img.url)
-  );
-
-  if (validImages.length === 0) {
-    grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step2에서 이미지를 생성하면 여기에 표시됩니다</div>';
-    return;
-  }
-
-  grid.innerHTML = validImages.map((img, idx) => `
+  grid.innerHTML = step2Images.map((img, idx) => `
     <div class="step6-preview-item ${step4SelectedImages.includes(img.url) ? 'selected' : ''}" data-url="${img.url}" onclick="toggleStep4Image('${img.url}')">
-      <img src="${img.url}" alt="Scene ${idx + 1}" onerror="handleImageLoadError(this, '${img.url}')">
+      <img src="${img.url}" alt="Scene ${idx + 1}">
     </div>
   `).join('');
 }
@@ -183,40 +51,18 @@ function updateStep4AudioStatus() {
   const statusDiv = document.getElementById('step6-audio-status');
   const audioPreview = document.getElementById('step6-audio-preview');
 
-  if (!statusDiv) return;
-
-  // Step3에서 생성된 오디오 가져오기 (여러 소스에서 시도)
-  let audioUrl = null;
-
-  // 1. DramaStep3 모듈에서 가져오기
-  if (window.DramaStep3 && window.DramaStep3.audioUrl) {
-    audioUrl = window.DramaStep3.audioUrl;
-  }
-  // 2. 전역 변수에서 가져오기
-  else if (window.step5AudioUrl) {
-    audioUrl = window.step5AudioUrl;
-  }
-  // 3. 오디오 플레이어에서 직접 가져오기
-  else {
-    const step5AudioPlayer = document.getElementById('step5-audio-player');
-    if (step5AudioPlayer && step5AudioPlayer.src && step5AudioPlayer.src !== window.location.href) {
-      audioUrl = step5AudioPlayer.src;
-    }
-  }
+  // Step3에서 생성된 오디오 가져오기
+  const audioUrl = window.DramaStep3?.audioUrl || window.step5AudioUrl;
 
   if (audioUrl) {
     statusDiv.innerHTML = '✅ 음성이 연결되었습니다';
     statusDiv.style.color = '#27ae60';
-    if (audioPreview) {
-      audioPreview.src = audioUrl;
-      audioPreview.style.display = 'block';
-    }
+    audioPreview.src = audioUrl;
+    audioPreview.style.display = 'block';
   } else {
     statusDiv.innerHTML = 'Step3에서 음성을 생성하면 자동으로 연결됩니다';
     statusDiv.style.color = '#666';
-    if (audioPreview) {
-      audioPreview.style.display = 'none';
-    }
+    audioPreview.style.display = 'none';
   }
 }
 
@@ -235,10 +81,7 @@ function restoreThumbnail() {
     if (thumbnailImage && thumbnailData.url) {
       generatedThumbnailUrl = thumbnailData.url;
       thumbnailImage.src = thumbnailData.url;
-      // ⭐ 서버에서 이미지에 직접 텍스트를 렌더링하므로 HTML 오버레이는 숨김
-      if (thumbnailTextOverlay) {
-        thumbnailTextOverlay.style.display = 'none';
-      }
+      thumbnailTextOverlay.textContent = thumbnailData.text || '드라마';
       thumbnailPrompt.textContent = thumbnailData.prompt || '-';
       thumbnailPreview.style.display = 'block';
       console.log('[THUMBNAIL] 저장된 썸네일 복원:', thumbnailData.url);
@@ -298,10 +141,7 @@ async function generateYouTubeThumbnail() {
     if (data.ok && data.thumbnailUrl) {
       generatedThumbnailUrl = data.thumbnailUrl;
       thumbnailImage.src = data.thumbnailUrl;
-      // ⭐ 서버에서 이미지에 직접 텍스트를 렌더링하므로 HTML 오버레이는 숨김
-      if (thumbnailTextOverlay) {
-        thumbnailTextOverlay.style.display = 'none';
-      }
+      thumbnailTextOverlay.textContent = data.thumbnailText || title || '드라마';
       thumbnailPrompt.textContent = data.imagePrompt || '-';
       thumbnailPreview.style.display = 'block';
 
@@ -572,33 +412,13 @@ async function generateVideo() {
             step4VideoFileUrl = result.videoFileUrl || result.videoUrl;
             videoPlayer.src = result.videoUrl;
             videoSection.style.display = 'block';
-
-            // ⭐ localStorage에 저장 (새로고침 후에도 유지)
-            localStorage.setItem('_drama-step4-video-url', step4VideoUrl);
-            localStorage.setItem('_drama-step4-video-file-url', step4VideoFileUrl);
-            if (typeof saveToFirebase === 'function') {
-              saveToFirebase('_drama-step4-video-url', step4VideoUrl);
-              saveToFirebase('_drama-step4-video-file-url', step4VideoFileUrl);
-            }
           }
 
           showStatus('✅ 영상 생성 완료! Step5에서 YouTube 업로드가 가능합니다.');
           if (typeof updateProgressIndicator === 'function') {
             updateProgressIndicator('step6');
           }
-          // ⭐ 사이드바 Step 4 상태를 '완료'로 업데이트
-          if (typeof updateSidebarStepProgress === 'function') {
-            updateSidebarStepProgress('step6', 'completed');
-          }
-          // ⭐ Step 5 (유튜브 업로드) 컨테이너 표시
-          updateStep5ContainerVisibility();
           updateStep5Status();
-
-          // 💰 Step4 영상 생성 비용 추가 (Creatomate: ~₩50-100/영상)
-          if (typeof window.addCost === 'function') {
-            const videoCost = statusData.cost || 70;  // 기본 ₩70
-            window.addCost('step4', videoCost);
-          }
 
           // 브라우저 알림
           if (Notification.permission === 'granted') {
@@ -655,23 +475,23 @@ async function generateVideo() {
 async function autoSelectImagesForVideo() {
   step4SelectedImages = [];
 
-  // Step2에서 생성된 이미지들 가져오기 (실패한 이미지 제외)
+  // Step2에서 생성된 이미지들 가져오기
   const step2Images = window.DramaStep2?.generatedImages || window.step4GeneratedImages || [];
 
   if (step2Images.length > 0) {
     step2Images.forEach(img => {
-      if (img.url && !failedImageUrls.has(img.url)) {
+      if (img.url) {
         step4SelectedImages.push(img.url);
       }
     });
     console.log(`[AUTO] ${step4SelectedImages.length}개 씬 이미지 선택됨`);
   }
 
-  // 씬 이미지가 없으면 인물 이미지 사용 (실패한 이미지 제외)
+  // 씬 이미지가 없으면 인물 이미지 사용
   const characterImages = window.DramaStep2?.characterImages || window.step4CharacterImages || {};
   if (step4SelectedImages.length === 0 && Object.keys(characterImages).length > 0) {
     Object.values(characterImages).forEach(img => {
-      if (img.url && !failedImageUrls.has(img.url)) {
+      if (img.url) {
         step4SelectedImages.push(img.url);
       }
     });
@@ -817,14 +637,6 @@ async function generateVideoAuto() {
             step4VideoFileUrl = result.videoFileUrl || result.videoUrl;
             videoPlayer.src = result.videoUrl;
             videoSection.style.display = 'block';
-
-            // ⭐ localStorage에 저장 (새로고침 후에도 유지)
-            localStorage.setItem('_drama-step4-video-url', step4VideoUrl);
-            localStorage.setItem('_drama-step4-video-file-url', step4VideoFileUrl);
-            if (typeof saveToFirebase === 'function') {
-              saveToFirebase('_drama-step4-video-url', step4VideoUrl);
-              saveToFirebase('_drama-step4-video-file-url', step4VideoFileUrl);
-            }
           }
 
           showStatus('🎉 자동화 완료! 영상이 생성되었습니다. YouTube 업로드를 진행하세요.');
@@ -905,9 +717,6 @@ function clearStep4() {
   step4VideoUrl = null;
   step4VideoFileUrl = null;
 
-  // 실패한 이미지 목록도 초기화
-  failedImageUrls.clear();
-
   document.getElementById('step6-video-section').style.display = 'none';
   document.getElementById('step6-progress').style.display = 'none';
 
@@ -920,50 +729,13 @@ function clearStep4() {
   setTimeout(hideStatus, 2000);
 }
 
-// ===== 저장된 영상 데이터 복원 =====
-function restoreStep4Data() {
-  let restored = false;
-
-  // 영상 URL 복원
-  if (step4VideoUrl && step4VideoUrl.trim()) {
-    const videoSection = document.getElementById('step6-video-section');
-    const videoPlayer = document.getElementById('step6-video-player');
-
-    if (videoPlayer) {
-      videoPlayer.src = step4VideoUrl;
-      if (videoSection) videoSection.style.display = 'block';
-      console.log('[DramaStep4] 영상 URL 복원 완료');
-      restored = true;
-
-      // Step 완료 표시
-      if (typeof updateProgressIndicator === 'function') {
-        updateProgressIndicator('step6');
-      }
-      if (typeof updateStepNavCompleted === 'function') {
-        updateStepNavCompleted('step4', true);
-      }
-    }
-  }
-
-  return restored;
-}
-
 // ===== 이벤트 리스너 설정 =====
 document.addEventListener('DOMContentLoaded', () => {
-  // Step4/Step5 가시성 체크 (즉시 + 주기적)
-  updateStep4Visibility();
+  // Step4 가시성 체크 (주기적)
   setInterval(updateStep4Visibility, 2000);
 
   // 썸네일 복원
   setTimeout(restoreThumbnail, 500);
-
-  // ⭐ 저장된 영상 데이터 복원
-  setTimeout(() => {
-    const restored = restoreStep4Data();
-    if (restored) {
-      console.log('[DramaStep4] 이전 세션 영상 데이터 복원됨');
-    }
-  }, 600);
 
   // 버튼 이벤트 바인딩
   document.getElementById('btn-generate-thumbnail')?.addEventListener('click', generateYouTubeThumbnail);
@@ -986,12 +758,10 @@ window.DramaStep4 = {
   autoSelectImages: autoSelectImagesForVideo,
   updateVisibility: updateStep4Visibility,
   updateThumbnailPreview,
-  clearFailedImages: () => failedImageUrls.clear(),
   get selectedImages() { return step4SelectedImages; },
   get videoUrl() { return step4VideoUrl; },
   get videoFileUrl() { return step4VideoFileUrl; },
-  get thumbnailUrl() { return generatedThumbnailUrl; },
-  get failedImages() { return [...failedImageUrls]; }
+  get thumbnailUrl() { return generatedThumbnailUrl; }
 };
 
 // 기존 코드 호환

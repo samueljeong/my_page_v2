@@ -190,8 +190,8 @@ async function generateCharacterImage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: characterPrompt + ', medium shot, upper body portrait, high quality, detailed face, professional lighting, 16:9 aspect ratio',
-        size: '1792x1024',  // YouTube 16:9 비율
+        prompt: characterPrompt + ', portrait style, high quality, detailed face, professional lighting',
+        size: '1024x1024',
         imageProvider: step2ImageProvider
       })
     });
@@ -219,11 +219,6 @@ async function generateCharacterImage() {
 
       renderCharacterImages();
       renderCharactersList();
-
-      // 💰 Step2 캐릭터 이미지 비용 추가
-      if (data.cost && typeof window.addCost === 'function') {
-        window.addCost('step2', data.cost);
-      }
 
       showStatus(`✅ ${step2Characters[idx].name} 이미지 생성 완료!`);
     } else {
@@ -528,11 +523,6 @@ async function generateStep2Image() {
         updateProgressIndicator('step4');
       }
 
-      // 💰 Step2 이미지 비용 추가
-      if (data.cost && typeof window.addCost === 'function') {
-        window.addCost('step2', data.cost);
-      }
-
       // 썸네일 자동 생성
       setTimeout(() => {
         if (typeof generateYouTubeThumbnail === 'function') {
@@ -633,22 +623,11 @@ async function generateAllAuto(skipConfirm = false) {
   }
 
   isAutoGenerating = true;
-
-  // 🤖 모델 상태 업데이트 - 시작
-  if (typeof window.updateModelStatus === 'function') {
-    window.updateModelStatus('step2', null, 'running');
-  }
-
   const progressContainer = document.getElementById('auto-generate-progress');
   const progressBar = document.getElementById('auto-generate-progress-bar');
   const statusText = document.getElementById('auto-generate-status');
   const detailsText = document.getElementById('auto-generate-details');
   const btnGenerateAll = document.getElementById('btn-generate-all-auto');
-
-  // Step2 상태 업데이트 - 시작
-  if (typeof updateStepStatus === 'function') {
-    updateStepStatus('step2', 'working', '대본 분석 중...');
-  }
 
   if (progressContainer) progressContainer.style.display = 'block';
   if (btnGenerateAll) {
@@ -660,10 +639,6 @@ async function generateAllAuto(skipConfirm = false) {
     if (progressBar) progressBar.style.width = `${percent}%`;
     if (statusText) statusText.textContent = status;
     if (detailsText) detailsText.textContent = details;
-    // 사이드바 상태도 업데이트
-    if (typeof updateStepStatus === 'function' && percent < 100) {
-      updateStepStatus('step2', 'working', status.substring(0, 25));
-    }
   };
 
   try {
@@ -682,59 +657,6 @@ async function generateAllAuto(skipConfirm = false) {
 
     step2Characters = analyzeData.characters || [];
     step2Scenes = analyzeData.scenes || [];
-
-    // ⭐ GPT 분석 프롬프트가 있으면 병합
-    const gptPrompts = window.gptAnalyzedPrompts || JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
-    if (gptPrompts) {
-      console.log('[Step2] GPT 분석 프롬프트 적용 중...');
-
-      // 캐릭터 프롬프트 병합
-      if (gptPrompts.characters && gptPrompts.characters.length > 0) {
-        step2Characters = step2Characters.map(char => {
-          const gptChar = gptPrompts.characters.find(gc =>
-            gc.name === char.name ||
-            gc.name.includes(char.name) ||
-            char.name.includes(gc.name)
-          );
-          if (gptChar && gptChar.imagePrompt) {
-            console.log(`[Step2] 캐릭터 "${char.name}" GPT 프롬프트 적용`);
-            return {
-              ...char,
-              imagePrompt: gptChar.imagePrompt,
-              gptDescription: gptChar.description
-            };
-          }
-          return char;
-        });
-      }
-
-      // 씬 프롬프트 병합
-      if (gptPrompts.scenes && gptPrompts.scenes.length > 0) {
-        step2Scenes = step2Scenes.map((scene, idx) => {
-          const gptScene = gptPrompts.scenes[idx] || gptPrompts.scenes.find(gs =>
-            gs.sceneNumber === (idx + 1)
-          );
-          if (gptScene && gptScene.backgroundPrompt) {
-            console.log(`[Step2] 씬 ${idx + 1} GPT 배경 프롬프트 적용`);
-            return {
-              ...scene,
-              backgroundPrompt: gptScene.backgroundPrompt,
-              characterAction: gptScene.characterAction,
-              gptDescription: gptScene.description
-            };
-          }
-          return scene;
-        });
-      }
-
-      // 시각적 스타일 저장
-      if (gptPrompts.visualStyle) {
-        window.gptVisualStyle = gptPrompts.visualStyle;
-      }
-
-      showStatus('✅ GPT 프롬프트가 적용되었습니다.');
-    }
-
     localStorage.setItem('_drama-step4-characters', JSON.stringify(step2Characters));
     localStorage.setItem('_drama-step4-scenes', JSON.stringify(step2Scenes));
 
@@ -743,25 +665,15 @@ async function generateAllAuto(skipConfirm = false) {
     updateSceneSelect();
     updateSceneCharacterCheckboxes();
 
-    const gptStatus = gptPrompts ? ' (GPT 프롬프트 적용)' : '';
-    updateProgress(15, `✅ 분석 완료: ${step2Characters.length}명의 인물, ${step2Scenes.length}개의 씬${gptStatus}`, '인물 이미지 생성을 시작합니다');
-
-    // ⭐ 테스트 모드 확인 (이미지 1개만 생성) - window.testMode 사용
-    const isTestMode = window.testMode || false;
-    if (isTestMode) {
-      console.log('[TEST MODE] 테스트 모드 활성화 - 이미지 1개씩만 생성');
-      showStatus('⚠️ 테스트 모드: 인물 1명, 씬 1개만 생성합니다');
-    }
+    updateProgress(15, `✅ 분석 완료: ${step2Characters.length}명의 인물, ${step2Scenes.length}개의 씬`, '인물 이미지 생성을 시작합니다');
 
     // 2단계: 인물 이미지 생성
-    const maxCharacters = isTestMode ? 1 : step2Characters.length;
-    const maxScenes = isTestMode ? 1 : step2Scenes.length;
-    const totalCharacters = maxCharacters;
-    const totalScenes = maxScenes;
+    const totalCharacters = step2Characters.length;
+    const totalScenes = step2Scenes.length;
     const totalSteps = totalCharacters + totalScenes;
     let completedSteps = 0;
 
-    for (let i = 0; i < maxCharacters; i++) {
+    for (let i = 0; i < step2Characters.length; i++) {
       const char = step2Characters[i];
       completedSteps++;
       const percent = 15 + (completedSteps / totalSteps) * 80;
@@ -769,18 +681,12 @@ async function generateAllAuto(skipConfirm = false) {
       showStatus(`👤 ${char.name} 이미지 생성 중... (${i + 1}/${totalCharacters})`);
 
       try {
-        // GPT 스타일이 있으면 프롬프트에 추가
-        let charPrompt = char.imagePrompt || `Portrait of ${char.name}, ${char.description}, Korean drama style, professional photography, soft lighting`;
-        if (window.gptVisualStyle && char.imagePrompt) {
-          charPrompt = `${char.imagePrompt}, ${window.gptVisualStyle}`;
-        }
-
         const imageResponse = await fetch('/api/drama/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt: charPrompt + ', medium shot, upper body portrait, 16:9 aspect ratio',
-            size: '1792x1024',  // YouTube 16:9 비율
+            prompt: char.imagePrompt || `Portrait of ${char.name}, ${char.description}, Korean drama style, professional photography, soft lighting`,
+            size: '1024x1024',
             imageProvider: step2ImageProvider
           })
         });
@@ -794,11 +700,6 @@ async function generateAllAuto(skipConfirm = false) {
           };
           localStorage.setItem('_drama-step4-character-images', JSON.stringify(step2CharacterImages));
           renderCharacterImages();
-
-          // 💰 Step2 인물 이미지 비용 추가
-          if (imageData.cost && typeof window.addCost === 'function') {
-            window.addCost('step2', imageData.cost);
-          }
         }
       } catch (imgErr) {
         console.error(`인물 이미지 생성 실패 (${char.name}):`, imgErr);
@@ -809,7 +710,7 @@ async function generateAllAuto(skipConfirm = false) {
     }
 
     // 3단계: 씬 배경 이미지 생성
-    for (let i = 0; i < maxScenes; i++) {
+    for (let i = 0; i < step2Scenes.length; i++) {
       const scene = step2Scenes[i];
       completedSteps++;
       const percent = 15 + (completedSteps / totalSteps) * 80;
@@ -830,26 +731,18 @@ async function generateAllAuto(skipConfirm = false) {
               name: c.name,
               prompt: c.imagePrompt || c.description
             })),
-            backgroundPrompt: scene.backgroundPrompt || '',
-            visualStyle: window.gptVisualStyle || '',
-            characterAction: scene.characterAction || ''
+            backgroundPrompt: scene.backgroundPrompt || ''
           })
         });
 
         const promptData = await promptResponse.json();
         if (!promptData.ok) throw new Error(promptData.error || '프롬프트 생성 실패');
 
-        // GPT 스타일이 있으면 최종 프롬프트에 추가
-        let finalPrompt = promptData.combinedPrompt;
-        if (window.gptVisualStyle && !finalPrompt.includes(window.gptVisualStyle)) {
-          finalPrompt = `${finalPrompt}, ${window.gptVisualStyle}`;
-        }
-
         const imageResponse = await fetch('/api/drama/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt: finalPrompt,
+            prompt: promptData.combinedPrompt,
             size: '1792x1024',
             imageProvider: step2ImageProvider
           })
@@ -862,11 +755,6 @@ async function generateAllAuto(skipConfirm = false) {
           // 첫 번째 씬 이미지를 썸네일로 표시
           if (i === 0 && typeof updateThumbnailPreview === 'function') {
             updateThumbnailPreview(imageData.imageUrl);
-          }
-
-          // 💰 Step2 씬 이미지 비용 추가
-          if (imageData.cost && typeof window.addCost === 'function') {
-            window.addCost('step2', imageData.cost);
           }
         }
       } catch (sceneErr) {
@@ -895,26 +783,17 @@ async function generateAllAuto(skipConfirm = false) {
       await generateYouTubeThumbnail();
     }
 
-    // 참고: 병렬 실행 모드에서는 TTS가 별도로 처리되므로 여기서 호출하지 않음
-    // runAutoTTSAndVideo는 runStep2AndStep3InParallel에서 별도로 처리됨
-    console.log('[AUTO] Step2 이미지 생성 완료 (TTS는 병렬로 처리 중)');
-
-    // 🤖 모델 상태 업데이트 - 완료
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step2', null, 'completed');
+    // 전체 자동화 모드: TTS 및 영상 자동 생성
+    if (isFullAutoMode && typeof runAutoTTSAndVideo === 'function') {
+      console.log('[AUTO] 이미지 생성 완료, TTS 자동 시작...');
+      showStatus('🎙️ 자동화: TTS 음성 생성 시작...');
+      await runAutoTTSAndVideo();
     }
 
   } catch (err) {
     console.error('전체 자동 생성 오류:', err);
     updateProgress(0, `❌ 오류 발생: ${err.message}`, '다시 시도해주세요');
     showStatus(`❌ 자동 생성 오류: ${err.message}`);
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step2', 'error', err.message.substring(0, 30));
-    }
-    // 🤖 모델 상태 업데이트 - 에러
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step2', null, 'error');
-    }
   } finally {
     isAutoGenerating = false;
     if (btnGenerateAll) {

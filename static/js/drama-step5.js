@@ -8,11 +8,9 @@ let youtubeAuthenticated = false;
 
 // ===== Step5 업로드 상태 메시지 업데이트 =====
 function updateStep5Status() {
-  const statusEl = document.getElementById('step5-upload-status');
+  const statusEl = document.getElementById('step7-upload-status');
   const uploadBtn = document.getElementById('btn-upload-youtube');
   const videoSrc = getStep4Video();
-  const channelSelect = document.getElementById('step5-channel-select');
-  const selectedChannel = channelSelect?.value;
 
   if (!statusEl) return;
 
@@ -20,11 +18,6 @@ function updateStep5Status() {
     statusEl.style.background = '#fff3cd';
     statusEl.style.color = '#856404';
     statusEl.textContent = 'YouTube 인증을 먼저 진행해주세요';
-    if (uploadBtn) uploadBtn.disabled = true;
-  } else if (!selectedChannel) {
-    statusEl.style.background = '#fff3cd';
-    statusEl.style.color = '#856404';
-    statusEl.textContent = '업로드할 채널을 선택해주세요';
     if (uploadBtn) uploadBtn.disabled = true;
   } else if (!videoSrc) {
     statusEl.style.background = '#fff3cd';
@@ -34,14 +27,14 @@ function updateStep5Status() {
   } else {
     statusEl.style.background = '#d4edda';
     statusEl.style.color = '#155724';
-    statusEl.textContent = '✅ 모든 준비 완료! 업로드할 수 있습니다!';
+    statusEl.textContent = '영상이 준비되었습니다. 업로드할 수 있습니다!';
     if (uploadBtn) uploadBtn.disabled = false;
   }
 }
 
 // ===== Step4 비디오 가져오기 =====
 function getStep4Video() {
-  const videoPlayer = document.getElementById('step4-video-player');
+  const videoPlayer = document.getElementById('step6-video-player');
   if (videoPlayer && videoPlayer.src && videoPlayer.src !== window.location.href) {
     return videoPlayer.src;
   }
@@ -50,7 +43,7 @@ function getStep4Video() {
 
 // ===== 개인정보 옵션 선택 =====
 function selectStep5Privacy(value) {
-  document.querySelectorAll('.step5-privacy-option').forEach(opt => {
+  document.querySelectorAll('.step7-privacy-option').forEach(opt => {
     opt.classList.remove('selected');
     const input = opt.querySelector('input[type="radio"]');
     if (input) input.checked = false;
@@ -73,26 +66,9 @@ async function generateAutoMetadata() {
 
   btn.disabled = true;
   btn.textContent = '생성 중...';
+  showStatus('대본을 분석하여 제목, 설명, 태그를 생성 중...');
 
   try {
-    // 1. Step1.5에서 이미 생성된 youtubeMetadata가 있는지 확인
-    const gptPrompts = window.gptAnalyzedPrompts || JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
-
-    if (gptPrompts && gptPrompts.youtubeMetadata) {
-      const metadata = gptPrompts.youtubeMetadata;
-      document.getElementById('step5-title').value = metadata.title || '';
-      document.getElementById('step5-description').value = metadata.description || '';
-      document.getElementById('step5-tags').value = metadata.tags || '';
-      showStatus('✅ Step1.5에서 생성된 메타데이터를 적용했습니다!');
-      console.log('[YouTube-Metadata] Step1.5 메타데이터 사용:', metadata);
-      btn.disabled = false;
-      btn.textContent = '대본 기반 자동 입력';
-      return;
-    }
-
-    // 2. 없으면 API 호출하여 새로 생성
-    showStatus('대본을 분석하여 제목, 설명, 태그를 생성 중...');
-
     const response = await fetch('/api/drama/generate-metadata', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -102,9 +78,9 @@ async function generateAutoMetadata() {
     const data = await response.json();
 
     if (data.ok && data.metadata) {
-      document.getElementById('step5-title').value = data.metadata.title || '';
-      document.getElementById('step5-description').value = data.metadata.description || '';
-      document.getElementById('step5-tags').value = data.metadata.tags || '';
+      document.getElementById('step7-title').value = data.metadata.title || '';
+      document.getElementById('step7-description').value = data.metadata.description || '';
+      document.getElementById('step7-tags').value = data.metadata.tags || '';
       showStatus('메타데이터가 자동으로 입력되었습니다!');
     } else {
       throw new Error(data.error || '메타데이터 생성 실패');
@@ -117,28 +93,6 @@ async function generateAutoMetadata() {
     btn.textContent = '대본 기반 자동 입력';
   }
 }
-
-// ===== Step5 유튜브 메타데이터 자동 로드 (Step1.5 완료 후 호출) =====
-function loadYoutubeMetadataFromStep1_5() {
-  try {
-    const gptPrompts = window.gptAnalyzedPrompts || JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
-
-    if (gptPrompts && gptPrompts.youtubeMetadata) {
-      const metadata = gptPrompts.youtubeMetadata;
-      document.getElementById('step5-title').value = metadata.title || '';
-      document.getElementById('step5-description').value = metadata.description || '';
-      document.getElementById('step5-tags').value = metadata.tags || '';
-      console.log('[YouTube-Metadata] Step1.5에서 자동 로드됨');
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.warn('[YouTube-Metadata] 자동 로드 실패:', e);
-    return false;
-  }
-}
-
-window.loadYoutubeMetadataFromStep1_5 = loadYoutubeMetadataFromStep1_5;
 
 // ===== 유튜브 인증 =====
 async function authenticateYouTube() {
@@ -213,7 +167,7 @@ async function loadYouTubeChannels() {
     const data = await response.json();
 
     if (data.success && data.channels && data.channels.length > 0) {
-      const channelSelect = document.getElementById('step5-channel-select');
+      const channelSelect = document.getElementById('step7-channel-select');
       const channelSection = document.getElementById('youtube-channel-section');
 
       channelSelect.innerHTML = '<option value="">채널을 선택하세요</option>';
@@ -225,16 +179,8 @@ async function loadYouTubeChannels() {
         channelSelect.appendChild(option);
       });
 
-      // 채널 선택 시 업로드 버튼 상태 업데이트
-      channelSelect.addEventListener('change', function() {
-        console.log('[YOUTUBE] 채널 선택됨:', this.value);
-        updateStep5Status();
-      });
-
-      // 채널이 1개면 자동 선택
       if (data.channels.length === 1) {
         channelSelect.value = data.channels[0].id;
-        updateStep5Status();  // 자동 선택 후 상태 업데이트
       }
 
       channelSection.style.display = 'block';
@@ -243,9 +189,6 @@ async function loadYouTubeChannels() {
       setTimeout(() => {
         channelSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 500);
-
-      // 상태 업데이트 (채널 섹션 표시 후)
-      updateStep5Status();
     }
   } catch (error) {
     console.error('채널 목록 로드 실패:', error);
@@ -321,24 +264,24 @@ async function uploadToYouTube() {
     return;
   }
 
-  const title = document.getElementById('step5-title').value.trim();
+  const title = document.getElementById('step7-title').value.trim();
   if (!title) {
     showStatus('❌ 비디오 제목을 입력해주세요.');
     return;
   }
 
   // 선택된 채널 확인
-  const channelSelect = document.getElementById('step5-channel-select');
+  const channelSelect = document.getElementById('step7-channel-select');
   const selectedChannelId = channelSelect.value;
   if (!selectedChannelId) {
     showStatus('❌ 업로드할 채널을 선택해주세요.');
     return;
   }
 
-  const description = document.getElementById('step5-description').value.trim();
-  const tags = document.getElementById('step5-tags').value.trim();
-  const category = document.getElementById('step5-category').value;
-  const privacyOption = document.querySelector('.step5-privacy-option.selected');
+  const description = document.getElementById('step7-description').value.trim();
+  const tags = document.getElementById('step7-tags').value.trim();
+  const category = document.getElementById('step7-category').value;
+  const privacyOption = document.querySelector('.step7-privacy-option.selected');
   const privacyValue = privacyOption ? privacyOption.dataset.privacy : 'scheduled';
 
   // 예약 업로드인 경우 30분 후 공개 시간 계산
@@ -351,10 +294,10 @@ async function uploadToYouTube() {
   }
 
   const uploadBtn = document.getElementById('btn-upload-youtube');
-  const progressContainer = document.getElementById('step5-progress');
-  const progressFill = document.getElementById('step5-progress-bar');
-  const progressText = document.getElementById('step5-progress-text');
-  const resultContainer = document.getElementById('step5-result');
+  const progressContainer = document.getElementById('step7-progress');
+  const progressFill = document.getElementById('step7-progress-bar');
+  const progressText = document.getElementById('step7-progress-text');
+  const resultContainer = document.getElementById('step7-result');
 
   uploadBtn.disabled = true;
   uploadBtn.textContent = '⏳ 업로드 중...';
@@ -397,9 +340,9 @@ async function uploadToYouTube() {
       progressText.textContent = publishAt ? '예약 업로드 완료!' : '업로드 완료!';
 
       resultContainer.style.display = 'block';
-      document.getElementById('step5-video-link').href = data.video_url;
-      document.getElementById('step5-video-link').textContent = data.video_url;
-      document.getElementById('step5-video-id').textContent = data.video_id;
+      document.getElementById('step7-video-link').href = data.video_url;
+      document.getElementById('step7-video-link').textContent = data.video_url;
+      document.getElementById('step7-video-id').textContent = data.video_id;
 
       const scheduledMsg = publishAt ? ` (${new Date(publishAt).toLocaleString('ko-KR')}에 공개 예정)` : '';
       showStatus(`🎉 YouTube 업로드가 완료되었습니다!${scheduledMsg}`);
@@ -422,16 +365,16 @@ async function uploadToYouTube() {
 
 // ===== Step5 초기화 =====
 function clearStep5() {
-  document.getElementById('step5-title').value = '';
-  document.getElementById('step5-description').value = '';
-  document.getElementById('step5-tags').value = '';
-  document.getElementById('step5-category').value = '22';
+  document.getElementById('step7-title').value = '';
+  document.getElementById('step7-description').value = '';
+  document.getElementById('step7-tags').value = '';
+  document.getElementById('step7-category').value = '22';
   selectStep5Privacy('scheduled');
 
-  document.getElementById('step5-progress').style.display = 'none';
-  document.getElementById('step5-progress-bar').style.width = '0%';
-  document.getElementById('step5-progress-bar').style.background = 'linear-gradient(135deg, #ff0000, #cc0000)';
-  document.getElementById('step5-result').style.display = 'none';
+  document.getElementById('step7-progress').style.display = 'none';
+  document.getElementById('step7-progress-bar').style.width = '0%';
+  document.getElementById('step7-progress-bar').style.background = 'linear-gradient(135deg, #ff0000, #cc0000)';
+  document.getElementById('step7-result').style.display = 'none';
 
   showStatus('Step5이 초기화되었습니다.');
   setTimeout(hideStatus, 2000);
@@ -443,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateStep5Status, 3000);
 
   // 개인정보 옵션 이벤트
-  document.querySelectorAll('.step5-privacy-option').forEach(opt => {
+  document.querySelectorAll('.step7-privacy-option').forEach(opt => {
     opt.addEventListener('click', () => selectStep5Privacy(opt.dataset.privacy));
   });
 
