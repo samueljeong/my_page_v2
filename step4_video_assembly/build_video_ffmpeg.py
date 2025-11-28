@@ -60,14 +60,15 @@ def generate_scene_clip(
     resolution: str = "1080p"
 ) -> Optional[str]:
     """
-    하나의 씬(part 영상)을 제작 - Ken Burns 스타일 줌 + 페이드 효과
+    하나의 씬(part 영상)을 제작 - 애니메이션형 스타일
 
     효과:
-        - 1080p 고정 (1920x1080)
-        - 30fps
-        - 이미지에 느린 줌인 (켄번즈 느낌)
-        - 영상: 1초 페이드 인 + 마지막 1초 페이드 아웃
-        - 오디오: 0.5초 페이드 인 + 마지막 0.5초 페이드 아웃
+        - 1080p 고정 (1920x1080), 30fps
+        - 느린 줌인 + 부드러운 패닝 (sin/cos 곡선)
+        - 영상: 페이드 인/아웃 (duration에 따라 동적 조절)
+        - 오디오: 페이드 인/아웃
+        - 약한 필름 그레인 + 비네트 + 색감 보정
+        - "정지 이미지"가 아닌 "회상 애니메이션" 느낌
 
     Args:
         image_path: 장면 이미지 경로
@@ -94,23 +95,37 @@ def generate_scene_clip(
     fps = 30
     frame_count = int(duration * fps)
 
-    # 페이드 설정
-    fade_in_d = 1.0      # 영상 페이드 인 1초
-    fade_out_d = 1.0     # 영상 페이드 아웃 1초
-    fade_out_start = max(0, duration - fade_out_d)
+    # 페이드 설정 (duration에 따라 동적 조절)
+    fade_in_d = min(1.0, max(duration * 0.2, 0.3))   # 최소 0.3초, 최대 1초
+    fade_out_d = fade_in_d
+    fade_out_start = max(duration - fade_out_d, 0)
 
-    audio_fade_in_d = 0.5   # 오디오 페이드 인 0.5초
-    audio_fade_out_d = 0.5  # 오디오 페이드 아웃 0.5초
-    audio_fade_out_start = max(0, duration - audio_fade_out_d)
+    audio_fade_in_d = min(0.5, max(duration * 0.1, 0.2))
+    audio_fade_out_d = audio_fade_in_d
+    audio_fade_out_start = max(duration - audio_fade_out_d, 0)
 
-    # 비디오 필터: 스케일 → 줌팬(Ken Burns) → 페이드 인/아웃
-    # zoompan: z='1.0+0.001*on' → 프레임마다 0.1% 줌, 느린 줌인 효과
+    # 애니메이션 스타일 비디오 필터
+    # 1) scale: 여유 있게 키워서 패닝해도 검정 테두리 안 생김
+    # 2) zoompan: 천천히 확대 + x/y에 sin/cos로 부드러운 패닝
+    # 3) fade in/out
+    # 4) eq: 색감 보정 (약간 노스텔지어 느낌)
+    # 5) noise: 아주 약한 필름 그레인
+    # 6) vignette: 가장자리 약간 어둡게 (시선 집중)
     vf_filter = (
-        f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,"
-        f"crop=1920:1080,"
-        f"zoompan=z='1.0+0.001*on':d={frame_count}:s=1920x1080:fps={fps},"
+        "[0:v]"
+        "scale=2200:1238,"
+        "zoompan="
+        "z='1.03+0.0008*on':"  # 전체 3% 확대 + 프레임마다 미세 증분
+        "x='(iw-1920)/2 - 40*sin(on/90)':"  # 좌우 부드러운 움직임
+        "y='(ih-1080)/2 + 30*cos(on/110)':"  # 상하 부드러운 움직임
+        f"d={frame_count}:s=1920x1080:fps={fps},"
         f"fade=t=in:st=0:d={fade_in_d},"
-        f"fade=t=out:st={fade_out_start}:d={fade_out_d}[v]"
+        f"fade=t=out:st={fade_out_start}:d={fade_out_d},"
+        "eq=saturation=0.98:contrast=1.03:brightness=0.02,"  # 따뜻한 색감
+        "noise=alls=3:allf=t,"  # 약한 필름 그레인
+        "vignette=PI/7,"  # 가장자리 어둡게
+        "format=yuv420p"
+        "[v]"
     )
 
     # 오디오 필터: 페이드 인/아웃
@@ -128,19 +143,20 @@ def generate_scene_clip(
         "-filter_complex", f"{vf_filter};{af_filter}",
         "-map", "[v]",
         "-map", "[a]",
+        "-t", str(duration),
         "-c:v", "libx264",
         "-preset", "medium",
         "-crf", "23",
-        "-t", str(duration),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-shortest",
         output_path
     ]
 
     try:
         run_ffmpeg(cmd)
-        print(f"[FFMPEG] Created clip with Ken Burns effect: {output_path}")
+        print(f"[FFMPEG] Created animated clip: {output_path}")
         return output_path
     except RuntimeError:
         return None
