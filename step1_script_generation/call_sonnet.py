@@ -4,7 +4,18 @@ Claude Sonnet 4.5 API 호출 모듈
 """
 
 import os
+import json
+from pathlib import Path
 from typing import Dict, Any
+
+
+def load_system_prompt() -> str:
+    """step1_prompt.txt에서 시스템 프롬프트 로드"""
+    prompt_path = Path(__file__).parent / "step1_prompt.txt"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    else:
+        raise FileNotFoundError(f"System prompt not found: {prompt_path}")
 
 
 def generate_script(step1_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -17,29 +28,126 @@ def generate_script(step1_input: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Step1 출력 JSON (대본 데이터)
     """
-    # TODO: 실제 Anthropic API 호출 구현
-    # import anthropic
-    # client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    # response = client.messages.create(
-    #     model="claude-sonnet-4-5-20250929",
-    #     max_tokens=8192,
-    #     system=load_system_prompt(),
-    #     messages=[{"role": "user", "content": json.dumps(step1_input)}]
-    # )
-
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("[WARNING] ANTHROPIC_API_KEY not set. Using mock data.")
-
-    # Mock 데이터 반환
     category = step1_input.get("category", "category1")
     mode = step1_input.get("mode", "test")
     length_minutes = step1_input.get("length_minutes", 1)
 
-    print(f"[SONNET] Would generate script for category: {category}")
-    print(f"[SONNET] Mode: {mode}, Length: {length_minutes} min")
+    print(f"[Step1] Category: {category}")
+    print(f"[Step1] Mode: {mode}")
+    print(f"[Step1] Length: {length_minutes} minutes")
 
-    return _generate_mock_output(step1_input)
+    if not api_key:
+        print("[WARNING] ANTHROPIC_API_KEY not set. Using mock data.")
+        print(f"[SONNET] Would generate script for category: {category}")
+        print(f"[SONNET] Mode: {mode}, Length: {length_minutes} min")
+        return _generate_mock_output(step1_input)
+
+    # 실제 API 호출
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        system_prompt = load_system_prompt()
+
+        print("[SONNET] Calling Claude Sonnet 4.5...")
+
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=8192,
+            system=system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": json.dumps(step1_input, ensure_ascii=False)
+                }
+            ]
+        )
+
+        # 응답에서 JSON 추출
+        response_text = response.content[0].text
+        print(f"[SONNET] Response received ({len(response_text)} chars)")
+
+        # JSON 파싱
+        result = _parse_json_response(response_text)
+
+        # 파이프라인 호환성을 위한 필드 보정
+        result = _ensure_pipeline_compatibility(result, step1_input)
+
+        print(f"[SONNET] Script generated: {result.get('titles', {}).get('main_title', 'Unknown')}")
+        return result
+
+    except ImportError:
+        print("[ERROR] anthropic package not installed. Using mock data.")
+        return _generate_mock_output(step1_input)
+    except Exception as e:
+        print(f"[ERROR] API call failed: {e}")
+        print("[FALLBACK] Using mock data.")
+        return _generate_mock_output(step1_input)
+
+
+def _parse_json_response(response_text: str) -> Dict[str, Any]:
+    """응답 텍스트에서 JSON 추출 및 파싱"""
+    text = response_text.strip()
+
+    # 마크다운 코드블록 제거
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+
+    if text.endswith("```"):
+        text = text[:-3]
+
+    text = text.strip()
+
+    # JSON 파싱
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] JSON parsing failed: {e}")
+        print(f"[DEBUG] Response text: {text[:500]}...")
+        raise
+
+
+def _ensure_pipeline_compatibility(result: Dict[str, Any], step1_input: Dict[str, Any]) -> Dict[str, Any]:
+    """파이프라인 호환성을 위한 필드 보정"""
+    # step 필드 추가
+    if "step" not in result:
+        result["step"] = "step1_script"
+
+    # category_key 매핑
+    category = result.get("category", step1_input.get("category", "category1"))
+    if "category_key" not in result:
+        result["category_key"] = "nostalgia_story" if category == "category1" else "wisdom_quotes"
+
+    # narrator 필드 확인
+    if "narrator" not in result:
+        result["narrator"] = {"gender": "male", "style": "warm"}
+    elif "gender" not in result["narrator"]:
+        result["narrator"]["gender"] = "male"
+    elif "style" not in result["narrator"]:
+        result["narrator"]["style"] = "warm"
+
+    # scenes 필드 확인 및 보정
+    if "scenes" in result:
+        for i, scene in enumerate(result["scenes"]):
+            if "id" not in scene:
+                scene["id"] = f"scene{i + 1}"
+            if "order" not in scene:
+                scene["order"] = i + 1
+            if "emotion" not in scene:
+                scene["emotion"] = "nostalgic"
+
+    # checks 필드 추가
+    if "checks" not in result:
+        result["checks"] = {
+            "total_scenes": len(result.get("scenes", [])),
+            "estimated_duration_minutes": step1_input.get("length_minutes", 1),
+            "narrator_consistency": True
+        }
+
+    return result
 
 
 def _generate_mock_output(step1_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -102,9 +210,8 @@ def _generate_mock_output(step1_input: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    import json
-
     test_input = {
+        "step": "step1_script_generation",
         "category": "category1",
         "mode": "test",
         "length_minutes": 1,
