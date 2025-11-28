@@ -2576,11 +2576,18 @@ def api_drama_claude_step3():
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
 
-        print(f"[DRAMA-STEP3-OPENROUTER] 완료 - 토큰: {input_tokens} / {output_tokens}")
+        # Claude Sonnet 4.5 비용 계산 (원화): input $3/1M, output $15/1M → 환율 1400원
+        # input: 3 * 1400 / 1000000 = 0.0042원/token
+        # output: 15 * 1400 / 1000000 = 0.021원/token
+        cost = max(1, round(input_tokens * 0.0042 + output_tokens * 0.021))
+
+        print(f"[DRAMA-STEP3-OPENROUTER] 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
         return jsonify({
             "ok": True,
             "result": final_result,
+            "cost": cost,
+            "tokens": input_tokens + output_tokens,
             "usage": {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens
@@ -5774,14 +5781,21 @@ def api_gpt_plan_step1():
         )
 
         result = completion.choices[0].message.content.strip()
-        tokens = completion.usage.total_tokens if hasattr(completion, 'usage') else 0
+        input_tokens = completion.usage.prompt_tokens if hasattr(completion, 'usage') and completion.usage else 0
+        output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
-        print(f"[GPT-PLAN-1] 기획 완료 - 토큰: {tokens}")
+        # GPT-4o-mini 비용 계산 (원화): input $0.15/1M, output $0.6/1M → 환율 1400원
+        # input: 0.15 * 1400 / 1000000 = 0.00021원/token
+        # output: 0.6 * 1400 / 1000000 = 0.00084원/token
+        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+
+        print(f"[GPT-PLAN-1] 기획 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
         return jsonify({
             'ok': True,
             'result': result,
-            'tokens': tokens,
+            'tokens': input_tokens + output_tokens,
+            'cost': cost,
             'step': 1
         })
 
@@ -5874,14 +5888,19 @@ def api_gpt_plan_step2():
         )
 
         result = completion.choices[0].message.content.strip()
-        tokens = completion.usage.total_tokens if hasattr(completion, 'usage') else 0
+        input_tokens = completion.usage.prompt_tokens if hasattr(completion, 'usage') and completion.usage else 0
+        output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
 
-        print(f"[GPT-PLAN-2] 구조화 완료 - 토큰: {tokens}")
+        # GPT-4o-mini 비용 계산 (원화)
+        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
+
+        print(f"[GPT-PLAN-2] 구조화 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}")
 
         return jsonify({
             'ok': True,
             'result': result,
-            'tokens': tokens,
+            'tokens': input_tokens + output_tokens,
+            'cost': cost,
             'step': 2
         })
 
@@ -6020,7 +6039,11 @@ def api_gpt_analyze_prompts():
         )
 
         result = completion.choices[0].message.content.strip()
-        tokens = completion.usage.total_tokens if hasattr(completion, 'usage') else 0
+        input_tokens = completion.usage.prompt_tokens if hasattr(completion, 'usage') and completion.usage else 0
+        output_tokens = completion.usage.completion_tokens if hasattr(completion, 'usage') and completion.usage else 0
+
+        # GPT-4o-mini 비용 계산 (원화)
+        cost = max(1, round(input_tokens * 0.00021 + output_tokens * 0.00084))
 
         # JSON 파싱 시도
         import re
@@ -6037,13 +6060,14 @@ def api_gpt_analyze_prompts():
             # JSON 파싱 실패시 원본 반환
             parsed_result = None
 
-        print(f"[GPT-ANALYZE-PROMPTS] 완료 - 토큰: {tokens}, JSON 파싱: {'성공' if parsed_result else '실패'}")
+        print(f"[GPT-ANALYZE-PROMPTS] 완료 - 토큰: {input_tokens}/{output_tokens}, 비용: ₩{cost}, JSON 파싱: {'성공' if parsed_result else '실패'}")
 
         return jsonify({
             'ok': True,
             'result': parsed_result if parsed_result else result,
             'rawResult': result,
-            'tokens': tokens,
+            'tokens': input_tokens + output_tokens,
+            'cost': cost,
             'parsed': parsed_result is not None
         })
 

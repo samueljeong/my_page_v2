@@ -72,10 +72,9 @@ async function analyzePromptsWithGPT(script, videoCategory) {
         thumbnail: gptAnalyzedPrompts.thumbnail ? '생성됨' : '없음'
       });
 
-      // 💰 Step 1.5 비용 추가 (GPT-4o-mini: ~0.15$/1M tokens = ₩200/1M)
-      if (data.tokens && typeof window.addCost === 'function') {
-        const cost = Math.round(data.tokens * 0.0002);  // 토큰당 약 ₩0.0002
-        window.addCost('step1_5', cost);
+      // 💰 Step 1.5 비용 추가
+      if (data.cost && typeof window.addCost === 'function') {
+        window.addCost('step1_5', data.cost);
       }
 
       // 썸네일 프롬프트 별도 저장
@@ -176,9 +175,8 @@ async function executeStep1() {
     }
 
     // 💰 Step1-1 GPT 비용 추가
-    if (planStep1Data.tokens && typeof window.addCost === 'function') {
-      const cost = Math.round(planStep1Data.tokens * 0.0002);
-      window.addCost('step1', cost);
+    if (planStep1Data.cost && typeof window.addCost === 'function') {
+      window.addCost('step1', planStep1Data.cost);
     }
 
     console.log('[Step1-1] GPT 기획 완료');
@@ -210,9 +208,8 @@ async function executeStep1() {
     }
 
     // 💰 Step1-2 GPT 비용 추가
-    if (planStep2Data.tokens && typeof window.addCost === 'function') {
-      const cost = Math.round(planStep2Data.tokens * 0.0002);
-      window.addCost('step1', cost);
+    if (planStep2Data.cost && typeof window.addCost === 'function') {
+      window.addCost('step1', planStep2Data.cost);
     }
 
     console.log('[Step1-2] 장면 구성 완료');
@@ -270,13 +267,9 @@ async function executeStep1() {
         console.log('[Step1] Firebase에 대본 저장됨');
       }
 
-      // 💰 Step1 비용 추가 (Claude Sonnet: ~$3/1M input + $15/1M output)
+      // 💰 Step1 비용 추가 (Claude Sonnet)
       if (data.cost && typeof window.addCost === 'function') {
         window.addCost('step1', data.cost);
-      } else if (data.tokens && typeof window.addCost === 'function') {
-        // 토큰 기반 추정 (평균 약 ₩50~100 per request)
-        const estimatedCost = Math.round(data.tokens * 0.015);  // Claude 기준
-        window.addCost('step1', estimatedCost);
       }
 
       const resultTextarea = document.getElementById('step1-result') || document.getElementById('step3-result');
