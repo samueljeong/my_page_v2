@@ -30,203 +30,10 @@ let contentTypePrompts = {
   }
 };
 
-// ===== GPT 분석 프롬프트 저장 변수 =====
-let gptAnalyzedPrompts = JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
-
-// ===== GPT 이미지 프롬프트 분석 함수 (Step 1.5) =====
-async function analyzePromptsWithGPT(script, videoCategory) {
-  try {
-    showStatus('🔍 Step 1.5: GPT 대본 분석 및 이미지 프롬프트 생성 중...');
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1_5', 'working', 'GPT 분석 중...');
-    }
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1_5', null, 'running');
-    }
-
-    // 대본에서 메타데이터 추출 (narrator_age, era 등)
-    let narratorMetadata = {};
-    try {
-      const scriptData = JSON.parse(script);
-      if (scriptData.metadata) {
-        narratorMetadata = {
-          narrator_name: scriptData.metadata.narrator_name || '',
-          narrator_age: scriptData.metadata.narrator_age || null,
-          era: scriptData.metadata.era || '',
-          region: scriptData.metadata.region || ''
-        };
-        console.log('[Step1.5] 화자 메타데이터 추출:', narratorMetadata);
-      }
-    } catch (parseErr) {
-      console.warn('[Step1.5] 대본 메타데이터 파싱 실패:', parseErr);
-    }
-
-    const response = await fetch('/api/drama/gpt-analyze-prompts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        script: script,
-        videoCategory: videoCategory,
-        narratorMetadata: narratorMetadata
-      })
-    });
-
-    const data = await response.json();
-
-    if (data.ok && data.parsed) {
-      gptAnalyzedPrompts = data.result;
-
-      // localStorage에 안전하게 저장
-      if (typeof window.safeLocalStorageSet === 'function') {
-        window.safeLocalStorageSet('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
-      } else {
-        localStorage.setItem('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
-      }
-      if (typeof saveToFirebase === 'function') {
-        saveToFirebase('_drama-gpt-prompts', JSON.stringify(gptAnalyzedPrompts));
-      }
-
-      console.log('[GPT-Analyze] 프롬프트 분석 완료:', {
-        visualStyle: gptAnalyzedPrompts.visualStyle,
-        characters: gptAnalyzedPrompts.characters?.length || 0,
-        scenes: gptAnalyzedPrompts.scenes?.length || 0,
-        thumbnail: gptAnalyzedPrompts.thumbnail ? '생성됨' : '없음'
-      });
-
-      // 💰 Step 1.5 비용 추가
-      if (data.cost && typeof window.addCost === 'function') {
-        window.addCost('step1_5', data.cost);
-      }
-      if (typeof window.updateModelStatus === 'function') {
-        window.updateModelStatus('step1_5', null, 'completed');
-      }
-
-      // 썸네일 프롬프트 별도 저장
-      if (gptAnalyzedPrompts.thumbnail) {
-        if (typeof window.safeLocalStorageSet === 'function') {
-          window.safeLocalStorageSet('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
-        } else {
-          localStorage.setItem('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
-        }
-        if (typeof saveToFirebase === 'function') {
-          saveToFirebase('_drama-thumbnail-prompt', JSON.stringify(gptAnalyzedPrompts.thumbnail));
-        }
-        console.log('[GPT-Analyze] 썸네일 프롬프트 저장됨:', gptAnalyzedPrompts.thumbnail.concept);
-      }
-
-      const thumbnailInfo = gptAnalyzedPrompts.thumbnail ? ', 썸네일 프롬프트 생성' : '';
-      const youtubeInfo = gptAnalyzedPrompts.youtubeMetadata ? ', 유튜브 메타데이터 생성' : '';
-      showStatus(`✅ Step 1.5 완료: ${gptAnalyzedPrompts.characters?.length || 0}명의 인물, ${gptAnalyzedPrompts.scenes?.length || 0}개의 씬 프롬프트${thumbnailInfo}${youtubeInfo}`);
-
-      // 유튜브 메타데이터 자동 로드
-      if (gptAnalyzedPrompts.youtubeMetadata && typeof loadYoutubeMetadataFromStep1_5 === 'function') {
-        loadYoutubeMetadataFromStep1_5();
-        console.log('[GPT-Analyze] 유튜브 메타데이터 자동 적용:', gptAnalyzedPrompts.youtubeMetadata.title);
-      }
-
-      // 완료 상태 표시
-      if (typeof updateStepStatus === 'function') {
-        updateStepStatus('step1_5', 'completed', '프롬프트 생성 완료');
-      }
-
-      return gptAnalyzedPrompts;
-    } else {
-      console.warn('[GPT-Analyze] 분석 실패 또는 JSON 파싱 실패:', data);
-      showStatus('⚠️ Step 1.5 실패 - 기본 분석 사용');
-      if (typeof updateStepStatus === 'function') {
-        updateStepStatus('step1_5', 'error', '분석 실패');
-      }
-      return null;
-    }
-  } catch (err) {
-    console.error('[GPT-Analyze] 오류:', err);
-    showStatus('⚠️ Step 1.5 오류 - 기본 분석 사용');
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1_5', 'error', err.message.substring(0, 20));
-    }
-    return null;
-  }
-}
-
-// 전역 노출
-window.gptAnalyzedPrompts = gptAnalyzedPrompts;
-window.analyzePromptsWithGPT = analyzePromptsWithGPT;
-
-// ===== 새 대본 생성 시 기존 데이터 초기화 =====
-function clearPreviousSessionData() {
-  console.log('[Step1] 새 대본 생성 - 기존 이미지/데이터 초기화');
-
-  // 이미지 관련 localStorage 삭제
-  const keysToRemove = [
-    '_drama-step4-characters',
-    '_drama-step4-character-images',
-    '_drama-step4-scenes',
-    '_drama-step4-images',
-    '_drama-gpt-prompts',
-    '_drama-thumbnail',
-    '_drama-thumbnail-prompt',
-    '_drama-step3-audio-url',
-    '_drama-step3-subtitle',
-    '_drama-step4-video-url',
-    '_drama-step4-video-file-url'
-  ];
-
-  keysToRemove.forEach(key => {
-    localStorage.removeItem(key);
-  });
-
-  // 전역 변수 초기화
-  if (typeof window.gptAnalyzedPrompts !== 'undefined') {
-    window.gptAnalyzedPrompts = null;
-  }
-
-  // UI 이미지 그리드 초기화
-  const imageGrid = document.getElementById('step4-image-grid');
-  if (imageGrid) {
-    imageGrid.innerHTML = '';
-  }
-
-  // 캐릭터 이미지 컨테이너 초기화
-  const charContainer = document.getElementById('step4-character-container');
-  if (charContainer) {
-    charContainer.innerHTML = '<p style="color: #666; font-size: 0.9rem;">Step1.5 분석 후 인물 목록이 표시됩니다</p>';
-  }
-
-  // 썸네일 미리보기 초기화
-  const thumbnailPreview = document.getElementById('step4-thumbnail-preview');
-  if (thumbnailPreview) {
-    thumbnailPreview.style.display = 'none';
-  }
-  const thumbnailImage = document.getElementById('step4-thumbnail-image');
-  if (thumbnailImage) {
-    thumbnailImage.src = '';
-  }
-
-  // Step2 전역 변수도 초기화 (있다면)
-  if (typeof window.DramaStep2 !== 'undefined') {
-    if (window.DramaStep2.characters) window.DramaStep2.characters = [];
-    if (window.DramaStep2.scenes) window.DramaStep2.scenes = [];
-    if (window.DramaStep2.characterImages) window.DramaStep2.characterImages = {};
-    if (window.DramaStep2.generatedImages) window.DramaStep2.generatedImages = [];
-  }
-
-  // 비용 초기화
-  if (typeof window.resetCosts === 'function') {
-    window.resetCosts();
-  }
-
-  console.log('[Step1] 기존 데이터 초기화 완료');
-}
-
-window.clearPreviousSessionData = clearPreviousSessionData;
-
 // ===== 대본 생성 메인 함수 =====
 async function executeStep1() {
   // 화면에서 Step1 버튼을 누르면 실행되는 함수
   // 실제로는 executeStep3() 함수가 대본 생성을 담당
-
-  // ⭐ 새 대본 생성 시 기존 이미지/데이터 초기화
-  clearPreviousSessionData();
 
   // 기본 정보 수집
   const categorySelect = document.getElementById('drama-category');
@@ -251,17 +58,9 @@ async function executeStep1() {
   try {
     let gptPlanResult = '';
 
-    // Step1 상태 업데이트
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1', 'working', 'GPT 기획 중 (1/3)');
-    }
-
     // 1단계: GPT-4o-mini 스토리 기획
     showLoadingOverlay('GPT 기획 중 (1/3)', 'GPT-4o-mini가 스토리 컨셉을 기획하고 있습니다...');
     showStatus('🎯 Step1-1: GPT-4o-mini 스토리 기획 중...');
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1', 'plan', 'running');
-    }
 
     const planStep1Response = await fetch('/api/drama/gpt-plan-step1', {
       method: 'POST',
@@ -269,8 +68,7 @@ async function executeStep1() {
       body: JSON.stringify({
         videoCategory: videoCategory,
         duration: durationLabel,
-        customDirective: window.customDirective || '',
-        testMode: window.testMode || false
+        customDirective: window.customDirective || ''
       })
     });
 
@@ -279,27 +77,11 @@ async function executeStep1() {
       throw new Error('GPT 기획 1단계 실패: ' + (planStep1Data.error || '알 수 없는 오류'));
     }
 
-    // 💰 Step1-1 GPT 비용 추가
-    if (planStep1Data.cost && typeof window.addCost === 'function') {
-      window.addCost('step1', planStep1Data.cost);
-    }
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1', 'plan', 'completed');
-    }
-
     console.log('[Step1-1] GPT 기획 완료');
-
-    // Step1 상태 업데이트
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1', 'working', 'GPT 구조화 중 (2/3)');
-    }
 
     // 2단계: GPT-4o-mini 장면 구성
     showLoadingOverlay('GPT 구조화 중 (2/3)', 'GPT-4o-mini가 장면 구성을 만들고 있습니다...');
     showStatus('📐 Step1-2: GPT-4o-mini 장면 구조화 중...');
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1', 'struct', 'running');
-    }
 
     const planStep2Response = await fetch('/api/drama/gpt-plan-step2', {
       method: 'POST',
@@ -308,22 +90,13 @@ async function executeStep1() {
         videoCategory: videoCategory,
         duration: durationLabel,
         customDirective: window.customDirective || '',
-        step1Result: planStep1Data.result,
-        testMode: window.testMode || false
+        step1Result: planStep1Data.result
       })
     });
 
     const planStep2Data = await planStep2Response.json();
     if (!planStep2Data.ok) {
       throw new Error('GPT 기획 2단계 실패: ' + (planStep2Data.error || '알 수 없는 오류'));
-    }
-
-    // 💰 Step1-2 GPT 비용 추가
-    if (planStep2Data.cost && typeof window.addCost === 'function') {
-      window.addCost('step1', planStep2Data.cost);
-    }
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1', 'struct', 'completed');
     }
 
     console.log('[Step1-2] 장면 구성 완료');
@@ -333,17 +106,9 @@ async function executeStep1() {
     gptPlanResult += `=== 스토리 컨셉 ===\n${planStep1Data.result}\n\n`;
     gptPlanResult += `=== 장면 구성 ===\n${planStep2Data.result}`;
 
-    // Step1 상태 업데이트
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1', 'working', 'Claude 대본 작성 중 (3/3)');
-    }
-
     // 3단계: Claude로 최종 대본 작성
     showLoadingOverlay('Claude 대본 작성 중 (3/3)', 'Claude Sonnet 4.5가 대본을 작성하고 있습니다...');
     showStatus('🎬 Step1-3: Claude 대본 완성 중... (약 30-60초 소요)');
-    if (typeof window.updateModelStatus === 'function') {
-      window.updateModelStatus('step1', 'write', 'running');
-    }
 
     const response = await fetch('/api/drama/claude-step3', {
       method: 'POST',
@@ -362,8 +127,7 @@ async function executeStep1() {
         contentTypePrompt: promptData,
         durationText: window.customDurationText || '',
         autoStoryMode: true,
-        customJsonGuide: currentJsonGuide,
-        testMode: window.testMode || false
+        customJsonGuide: currentJsonGuide
       })
     });
 
@@ -372,25 +136,7 @@ async function executeStep1() {
     if (data.ok) {
       // 결과 저장 및 표시
       step1Result = data.result;
-      if (typeof window.safeLocalStorageSet === 'function') {
-        window.safeLocalStorageSet('_drama-step1-result', step1Result);
-      } else {
-        localStorage.setItem('_drama-step1-result', step1Result);
-      }
-
-      // ⭐ Firebase에도 저장 (새로고침 후에도 유지)
-      if (typeof saveToFirebase === 'function') {
-        saveToFirebase('_drama-step1-result', step1Result);
-        console.log('[Step1] Firebase에 대본 저장됨');
-      }
-
-      // 💰 Step1 비용 추가 (Claude Sonnet)
-      if (data.cost && typeof window.addCost === 'function') {
-        window.addCost('step1', data.cost);
-      }
-      if (typeof window.updateModelStatus === 'function') {
-        window.updateModelStatus('step1', 'write', 'completed');
-      }
+      localStorage.setItem('_drama-step1-result', step1Result);
 
       const resultTextarea = document.getElementById('step1-result') || document.getElementById('step3-result');
       const resultContainer = document.getElementById('step1-result-container') || document.getElementById('step3-result-container');
@@ -417,15 +163,15 @@ async function executeStep1() {
         updateProgressIndicator('step1');
       }
 
-      // ⭐ GPT 이미지 프롬프트 분석 실행 (Step2 전에)
-      console.log('[Step1] GPT 이미지 프롬프트 분석 시작...');
-      await analyzePromptsWithGPT(step1Result, videoCategory);
-
-      // ⭐ Step1.5 완료 후 항상 Step2(이미지)와 Step3(TTS) 병렬 실행
-      console.log('[Step1] Step1.5 완료 → Step2+Step3 병렬 시작...');
-      setTimeout(() => {
-        runStep2AndStep3InParallel();
-      }, 2000);
+      // 자동화 모드면 다음 Step 실행
+      if (window.isFullAutoMode) {
+        console.log('[Step1] 자동화 모드: Step2(이미지 생성) 시작...');
+        setTimeout(() => {
+          if (typeof generateAllAuto === 'function') {
+            generateAllAuto(true);
+          }
+        }, 2000);
+      }
 
       return data.result;
 
@@ -437,9 +183,6 @@ async function executeStep1() {
     console.error('[Step1] 오류:', err);
     alert(`대본 생성 오류: ${err.message}`);
     showStatus('❌ Step1 실패');
-    if (typeof updateStepStatus === 'function') {
-      updateStepStatus('step1', 'error', err.message.substring(0, 30));
-    }
   } finally {
     hideLoadingOverlay();
   }
@@ -573,240 +316,6 @@ function extractNarrationFromScript(script) {
   }
 }
 
-// ===== 주인공 성별에 따른 TTS 음성 자동 선택 =====
-function autoSelectTTSVoiceByGender() {
-  try {
-    // GPT 분석 결과에서 주인공 정보 가져오기
-    const prompts = window.gptAnalyzedPrompts || JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
-
-    if (!prompts || !prompts.characters || prompts.characters.length === 0) {
-      console.log('[TTS-Voice] 캐릭터 정보 없음 - 기본 음성 유지');
-      return;
-    }
-
-    // 첫 번째 캐릭터(주인공)의 성별 확인
-    const mainCharacter = prompts.characters[0];
-    const gender = (mainCharacter.gender || '').toLowerCase();
-    const name = mainCharacter.name || mainCharacter.nameKo || '';
-    const description = (mainCharacter.description || mainCharacter.imagePrompt || '').toLowerCase();
-
-    // 성별 판단 - 우선순위: gender 필드 > description 분석 > 이름 추측
-    let isFemale = false;
-    let genderSource = 'unknown';
-
-    // 1. gender 필드 확인 (GPT 분석에서 반드시 포함됨)
-    if (gender === 'female' || gender === '여성' || gender === 'woman') {
-      isFemale = true;
-      genderSource = 'gender field';
-    } else if (gender === 'male' || gender === '남성' || gender === 'man') {
-      isFemale = false;
-      genderSource = 'gender field';
-    }
-    // 2. description/imagePrompt에서 추출
-    else if (description.includes('woman') || description.includes('female') || description.includes('girl') ||
-             description.includes('여성') || description.includes('할머니') || description.includes('어머니') ||
-             description.includes('grandmother') || description.includes('mother')) {
-      isFemale = true;
-      genderSource = 'description';
-    } else if (description.includes('man') || description.includes('male') || description.includes('boy') ||
-               description.includes('남성') || description.includes('할아버지') || description.includes('아버지') ||
-               description.includes('grandfather') || description.includes('father')) {
-      isFemale = false;
-      genderSource = 'description';
-    }
-    // 3. 이름에서 추측 (한국 이름) - 마지막 수단
-    else {
-      const femaleNameEndings = ['아', '이', '진', '미', '희', '영', '정', '숙', '자', '선', '은', '현', '연'];
-      const maleNameEndings = ['수', '준', '호', '석', '철', '민', '우', '현', '진', '혁'];
-      const lastName = name.slice(-1);
-
-      if (femaleNameEndings.includes(lastName)) {
-        isFemale = true;
-        genderSource = 'name guess (female)';
-      } else if (maleNameEndings.includes(lastName)) {
-        isFemale = false;
-        genderSource = 'name guess (male)';
-      } else {
-        // 기본값: 남성
-        isFemale = false;
-        genderSource = 'default (male)';
-      }
-    }
-
-    // 음성 선택: 여성 → 여성 음성, 남성 → 남성 음성
-    // Google Cloud TTS 한국어 음성:
-    // - ko-KR-Wavenet-A: 여성 (높은 톤)
-    // - ko-KR-Wavenet-B: 여성 (부드러운 톤)
-    // - ko-KR-Wavenet-C: 남성 (낮은 톤)
-    // - ko-KR-Wavenet-D: 남성 (중간 톤)
-    const selectedVoice = isFemale ? 'ko-KR-Wavenet-B' : 'ko-KR-Wavenet-C';
-
-    console.log(`[TTS-Voice] 주인공: ${name}, 성별: ${isFemale ? '여성' : '남성'} (${genderSource}) → 음성: ${selectedVoice}`);
-
-    // TTS 음성 설정 업데이트 (DramaStep3 모듈)
-    if (typeof window.DramaStep3 !== 'undefined') {
-      // step3SelectedVoice는 모듈 내부 변수이므로 직접 접근 불가
-      // 대신 전역 변수 사용
-    }
-
-    // 전역 변수 업데이트 (drama-step3.js에서 참조)
-    window.step3SelectedVoice = selectedVoice;
-    window.step5SelectedVoice = selectedVoice;
-
-    // UI 업데이트 (음성 선택 버튼)
-    const voiceOptions = document.querySelectorAll('.step5-voice-option[data-provider="google"]');
-    voiceOptions.forEach(opt => {
-      opt.classList.remove('selected');
-      if (opt.dataset.voice === selectedVoice) {
-        opt.classList.add('selected');
-        console.log(`[TTS-Voice] UI 업데이트: ${selectedVoice} 선택됨`);
-      }
-    });
-
-    // localStorage에 저장 (세션 유지)
-    localStorage.setItem('_drama-tts-voice', selectedVoice);
-
-    // 상태 표시
-    showStatus(`🎤 TTS 음성 자동 선택: ${isFemale ? '여성' : '남성'} 음성`);
-    setTimeout(hideStatus, 2000);
-
-  } catch (err) {
-    console.warn('[TTS-Voice] 자동 선택 실패:', err);
-  }
-}
-
-window.autoSelectTTSVoiceByGender = autoSelectTTSVoiceByGender;
-
-// ===== Step2(이미지)와 Step3(TTS) 병렬 실행 =====
-async function runStep2AndStep3InParallel() {
-  console.log('[PARALLEL] Step2(이미지) + Step3(TTS) 병렬 실행 시작...');
-  showStatus('🚀 Step2(이미지) + Step3(TTS) 동시 생성 시작...');
-
-  let step2Completed = false;
-  let step3Completed = false;
-  let step2Error = null;
-  let step3Error = null;
-
-  // Step2: 이미지 생성 (비동기)
-  const step2Promise = (async () => {
-    try {
-      console.log('[PARALLEL] Step2 시작: 이미지 생성');
-      showLoadingOverlay('Step2: 이미지 생성', 'Step3(TTS)와 동시에 진행 중...');
-
-      if (typeof generateAllAuto === 'function') {
-        await generateAllAuto(true);  // skipConfirm = true
-      }
-      step2Completed = true;
-      console.log('[PARALLEL] Step2 완료: 이미지 생성 성공');
-    } catch (err) {
-      step2Error = err;
-      console.error('[PARALLEL] Step2 오류:', err);
-    }
-  })();
-
-  // Step3: TTS 음성 생성 (비동기) - Step2와 동시에 시작
-  const step3Promise = (async () => {
-    try {
-      console.log('[PARALLEL] Step3 시작: TTS 음성 생성');
-
-      // 잠시 대기 (DOM 업데이트 대기)
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // ⭐ 주인공 성별에 따라 TTS 음성 자동 설정
-      autoSelectTTSVoiceByGender();
-
-      // 지문 추출 (TTS용 텍스트만)
-      if (typeof extractNarrationForTTS === 'function') {
-        extractNarrationForTTS();
-      } else if (typeof extractNarration === 'function') {
-        extractNarration();
-      }
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // TTS 생성
-      if (typeof generateTTS === 'function') {
-        await generateTTS();
-      }
-      step3Completed = true;
-      console.log('[PARALLEL] Step3 완료: TTS 생성 성공');
-    } catch (err) {
-      step3Error = err;
-      console.error('[PARALLEL] Step3 오류:', err);
-    }
-  })();
-
-  // 두 작업 모두 완료 대기
-  await Promise.allSettled([step2Promise, step3Promise]);
-
-  hideLoadingOverlay();
-
-  // 결과 확인
-  if (step2Completed && step3Completed) {
-    console.log('[PARALLEL] Step2 + Step3 모두 완료! Step4(영상) 시작...');
-    showStatus('✅ Step2+Step3 완료! Step4(영상 생성) 시작...');
-
-    // Step4: 영상 생성
-    setTimeout(async () => {
-      if (typeof window.DramaStep4 !== 'undefined') {
-        // 이미지 자동 선택
-        if (typeof window.DramaStep4.autoSelectImages === 'function') {
-          await window.DramaStep4.autoSelectImages();
-        }
-        // 영상 생성
-        if (typeof window.DramaStep4.generateVideoAuto === 'function') {
-          await window.DramaStep4.generateVideoAuto();
-        }
-      }
-    }, 2000);
-  } else {
-    const errors = [];
-    if (step2Error) errors.push(`이미지: ${step2Error.message}`);
-    if (step3Error) errors.push(`TTS: ${step3Error.message}`);
-    showStatus(`⚠️ 일부 작업 실패 - ${errors.join(', ')}`);
-  }
-
-  // 자동화 모드 해제
-  window.isFullAutoMode = false;
-  if (typeof window.DramaStep2 !== 'undefined') {
-    window.DramaStep2.isFullAutoMode = false;
-  }
-}
-
-// 전역 노출
-window.runStep2AndStep3InParallel = runStep2AndStep3InParallel;
-
-// ===== 저장된 대본 결과 복원 =====
-function restoreStep1Data() {
-  const savedResult = localStorage.getItem('_drama-step1-result');
-  if (savedResult && savedResult.trim()) {
-    step1Result = savedResult;
-
-    const resultTextarea = document.getElementById('step1-result') || document.getElementById('step3-result');
-    const resultContainer = document.getElementById('step1-result-container') || document.getElementById('step3-result-container');
-
-    if (resultTextarea) {
-      resultTextarea.value = savedResult;
-      if (typeof autoResize === 'function') autoResize(resultTextarea);
-      console.log('[DramaStep1] 대본 결과 복원 완료 (길이: ' + savedResult.length + '자)');
-    }
-
-    if (resultContainer) {
-      resultContainer.style.display = 'block';
-    }
-
-    // Step 완료 표시
-    if (typeof updateProgressIndicator === 'function') {
-      updateProgressIndicator('step1');
-    }
-    if (typeof updateStepNavCompleted === 'function') {
-      updateStepNavCompleted('step1', true);
-    }
-
-    return true;
-  }
-  return false;
-}
-
 // ===== 이벤트 리스너 설정 =====
 document.addEventListener('DOMContentLoaded', () => {
   // Step1 실행 버튼 (화면에서는 "대본 작성" 버튼)
@@ -851,14 +360,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ⭐ 저장된 대본 결과 복원 (중요!)
-  setTimeout(() => {
-    const restored = restoreStep1Data();
-    if (restored) {
-      console.log('[DramaStep1] 이전 세션 대본 복원됨');
-    }
-  }, 300);
-
   console.log('[DramaStep1] 초기화 완료');
 });
 
@@ -878,9 +379,5 @@ window.executeStep3 = executeStep1;  // 이전 코드 호환
 window.formatScriptToText = formatScriptToText;
 window.extractNarrationFromScript = extractNarrationFromScript;
 window.step1Result = step1Result;
-window.step3Result = step1Result;  // 이전 코드 호환 (drama-app.js에서 step3Result로 참조)
 window.aiModelSettings = aiModelSettings;
 window.contentTypePrompts = contentTypePrompts;
-window.step1Guide = step1Guide;
-window.step3Guide = step1Guide;  // 이전 코드 호환
-window.dramaJsonGuide = dramaJsonGuide;
