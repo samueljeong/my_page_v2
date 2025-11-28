@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Step4 Video Assembly Schema",
+  "description": "Step4 Á p½ - Creatomate API ¬©",
+  "version": "1.0.0",
+
+  "input": {
+    "description": "Step2/Step3 °ü| pi\ Á p½ …%",
+    "type": "object",
+    "required": ["step", "title", "cuts", "output_resolution", "fps"],
+    "properties": {
+      "step": {"type": "string", "const": "step4_video"},
+      "title": {"type": "string"},
+      "cuts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "cut_id": {"type": "integer"},
+            "image_path": {"type": "string"},
+            "audio_path": {"type": "string"},
+            "subtitle_path": {"type": "string"},
+            "duration_seconds": {"type": "number"}
+          }
+        }
+      },
+      "output_resolution": {"type": "string", "enum": ["720p", "1080p", "4k"]},
+      "fps": {"type": "integer", "enum": [24, 30, 60]},
+      "background_music_path": {"type": "string"}
+    }
+  },
+
+  "output": {
+    "description": "Á p½ °ü",
+    "type": "object",
+    "required": ["step", "title", "video_filename", "duration_seconds"],
+    "properties": {
+      "step": {"type": "string", "const": "step4_video_result"},
+      "title": {"type": "string"},
+      "video_filename": {"type": "string"},
+      "duration_seconds": {"type": "number"}
+    }
+  }
+}
