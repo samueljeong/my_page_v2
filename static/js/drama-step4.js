@@ -9,9 +9,28 @@ let step4VideoUrl = localStorage.getItem('_drama-step4-video-url') || null;
 let step4VideoFileUrl = localStorage.getItem('_drama-step4-video-file-url') || null;
 let generatedThumbnailUrl = null;
 
+// ===== 실패한 이미지 URL 추적 (무한 루프 방지) =====
+const failedImageUrls = new Set();
+
+// ===== 실패한 이미지인지 확인 =====
+function isFailedImage(url) {
+  return failedImageUrls.has(url);
+}
+
 // ===== 이미지 로드 에러 처리 (404 이미지 자동 제거) =====
 function handleImageLoadError(imgElement, failedUrl) {
+  // 이미 처리된 URL이면 무시 (중복 로그 방지)
+  if (failedImageUrls.has(failedUrl)) {
+    if (imgElement && imgElement.parentElement) {
+      imgElement.parentElement.style.display = 'none';
+    }
+    return;
+  }
+
   console.warn('[Step4] 이미지 로드 실패, localStorage에서 제거:', failedUrl);
+
+  // 실패 목록에 추가
+  failedImageUrls.add(failedUrl);
 
   // UI에서 숨김
   if (imgElement && imgElement.parentElement) {
@@ -42,6 +61,7 @@ function handleImageLoadError(imgElement, failedUrl) {
   }
 }
 window.handleImageLoadError = handleImageLoadError;
+window.isFailedImage = isFailedImage;
 
 // ===== Step4 컨테이너 업데이트 =====
 function updateStep4Visibility() {
@@ -56,18 +76,18 @@ function updateStep4ContainerVisibility() {
   const step6Container = document.getElementById('step6-container');
   if (!step6Container) return;
 
-  // Step2 이미지 확인
+  // Step2 이미지 확인 (실패한 이미지 제외)
   let hasImages = false;
   const step2Images = window.DramaStep2?.generatedImages || window.step4GeneratedImages || [];
   if (step2Images.length > 0) {
-    hasImages = step2Images.some(img => img && img.url && img.url.trim() !== '');
+    hasImages = step2Images.some(img => img && img.url && img.url.trim() !== '' && !failedImageUrls.has(img.url));
   }
   if (!hasImages) {
     try {
       const savedImages = localStorage.getItem('_drama-step4-images');
       if (savedImages) {
         const parsed = JSON.parse(savedImages);
-        hasImages = parsed.length > 0 && parsed.some(img => img && img.url);
+        hasImages = parsed.length > 0 && parsed.some(img => img && img.url && !failedImageUrls.has(img.url));
       }
     } catch (e) {}
   }
@@ -142,8 +162,10 @@ function updateStep4ImageGrid() {
     return;
   }
 
-  // 유효한 이미지만 필터링
-  const validImages = step2Images.filter(img => img && img.url && img.url.trim() !== '');
+  // 유효한 이미지만 필터링 (실패한 이미지 제외)
+  const validImages = step2Images.filter(img =>
+    img && img.url && img.url.trim() !== '' && !failedImageUrls.has(img.url)
+  );
 
   if (validImages.length === 0) {
     grid.innerHTML = '<div style="color: #999; text-align: center; padding: 1rem; grid-column: 1/-1;">Step2에서 이미지를 생성하면 여기에 표시됩니다</div>';
@@ -637,23 +659,23 @@ async function generateVideo() {
 async function autoSelectImagesForVideo() {
   step4SelectedImages = [];
 
-  // Step2에서 생성된 이미지들 가져오기
+  // Step2에서 생성된 이미지들 가져오기 (실패한 이미지 제외)
   const step2Images = window.DramaStep2?.generatedImages || window.step4GeneratedImages || [];
 
   if (step2Images.length > 0) {
     step2Images.forEach(img => {
-      if (img.url) {
+      if (img.url && !failedImageUrls.has(img.url)) {
         step4SelectedImages.push(img.url);
       }
     });
     console.log(`[AUTO] ${step4SelectedImages.length}개 씬 이미지 선택됨`);
   }
 
-  // 씬 이미지가 없으면 인물 이미지 사용
+  // 씬 이미지가 없으면 인물 이미지 사용 (실패한 이미지 제외)
   const characterImages = window.DramaStep2?.characterImages || window.step4CharacterImages || {};
   if (step4SelectedImages.length === 0 && Object.keys(characterImages).length > 0) {
     Object.values(characterImages).forEach(img => {
-      if (img.url) {
+      if (img.url && !failedImageUrls.has(img.url)) {
         step4SelectedImages.push(img.url);
       }
     });
@@ -887,6 +909,9 @@ function clearStep4() {
   step4VideoUrl = null;
   step4VideoFileUrl = null;
 
+  // 실패한 이미지 목록도 초기화
+  failedImageUrls.clear();
+
   document.getElementById('step6-video-section').style.display = 'none';
   document.getElementById('step6-progress').style.display = 'none';
 
@@ -965,10 +990,12 @@ window.DramaStep4 = {
   autoSelectImages: autoSelectImagesForVideo,
   updateVisibility: updateStep4Visibility,
   updateThumbnailPreview,
+  clearFailedImages: () => failedImageUrls.clear(),
   get selectedImages() { return step4SelectedImages; },
   get videoUrl() { return step4VideoUrl; },
   get videoFileUrl() { return step4VideoFileUrl; },
-  get thumbnailUrl() { return generatedThumbnailUrl; }
+  get thumbnailUrl() { return generatedThumbnailUrl; },
+  get failedImages() { return [...failedImageUrls]; }
 };
 
 // 기존 코드 호환
