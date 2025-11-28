@@ -17,10 +17,12 @@ from typing import Dict, Any, Optional
 
 # Step 모듈 import
 from step1_script_generation import run_step1
-from step2_image_generation import image_prompt_builder
-from step3_tts_and_subtitles import tts_script_builder
+from step2_image_generation import image_prompt_builder, call_gpt_mini
+from step3_tts_and_subtitles import tts_script_builder, call_tts_engine
+from step4_thumbnail_generation import call_image_model as thumbnail_generator
 from step4_video_assembly import video_builder
 from step5_youtube_upload import schedule_upload
+from step5_youtube_upload.build_metadata import generate_metadata_with_gpt
 
 
 # 경로 설정
@@ -274,7 +276,7 @@ Examples:
         else:
             step2_output = run_step(
                 "Step 2: Image Prompt Generation",
-                image_prompt_builder.build_image_prompts,
+                call_gpt_mini.generate_image_prompts,
                 step1_output,
                 step2_output_path
             )
@@ -290,14 +292,25 @@ Examples:
             step3_input = tts_script_builder.build_tts_input(step1_output)
             save_json(os.path.join(OUTPUTS_DIR, "step3_input.json"), step3_input)
 
-            # Step3 실행 (TTS + 자막)
-            # TODO: run_step3.run() 구현 필요
+            # Step3 실행 (TTS + 자막) - step1_output을 사용하여 원본 narration 접근
             step3_output = run_step(
                 "Step 3: TTS & Subtitle Generation",
-                lambda x: _mock_step3_run(x),  # 임시 mock
-                step3_input,
+                call_tts_engine.generate_tts_output,
+                step1_output,
                 step3_output_path
             )
+
+        # ============================================================
+        # Step 3.5: Thumbnail Generation
+        # ============================================================
+        thumbnail_output_path = os.path.join(OUTPUTS_DIR, "thumbnail_output.json")
+
+        thumbnail_output = run_step(
+            "Step 3.5: Thumbnail Generation",
+            thumbnail_generator.run_thumbnail_generation,
+            step1_output,
+            thumbnail_output_path
+        )
 
         # ============================================================
         # Step 4: Video Assembly
@@ -323,20 +336,43 @@ Examples:
             )
 
         # ============================================================
-        # Step 5: YouTube Upload
+        # Step 5: YouTube Metadata Generation & Upload
         # ============================================================
+        step5_metadata_path = os.path.join(OUTPUTS_DIR, "step5_metadata.json")
+        step5_output_path = os.path.join(OUTPUTS_DIR, "step5_output.json")
+
+        # Step 5a: GPT 메타데이터 생성
+        print(f"\n{'='*60}")
+        print("🏷️  Generating YouTube Metadata with GPT...")
+        print(f"{'='*60}")
+
+        metadata = generate_metadata_with_gpt(
+            step1_output,
+            thumbnail_data=thumbnail_output
+        )
+        save_json(step5_metadata_path, metadata)
+        print(f"✅ Metadata generated: {metadata.get('title', 'N/A')}")
+
         if args.upload == "skip":
-            print("\n⏭️  Skipping Step 5 (YouTube Upload)")
-            step5_output = {"step": "step5_youtube_upload_result", "status": "skipped"}
+            print("\n⏭️  Skipping YouTube Upload (metadata saved)")
+            step5_output = {
+                "step": "step5_youtube_upload_result",
+                "status": "skipped",
+                "metadata": metadata
+            }
         else:
+            # Step 5b: YouTube 업로드
             step5_input_path = os.path.join(OUTPUTS_DIR, "step5_input.json")
-            step5_output_path = os.path.join(OUTPUTS_DIR, "step5_output.json")
 
             step5_input = create_step5_input(
                 step1_output,
                 step4_output,
                 upload_mode=args.upload
             )
+            # GPT 생성 메타데이터로 덮어쓰기
+            step5_input["title"] = metadata.get("title", step5_input["title"])
+            step5_input["description"] = metadata.get("description", "")
+            step5_input["tags"] = metadata.get("tags", [])
             save_json(step5_input_path, step5_input)
 
             step5_output = run_step(
@@ -345,6 +381,7 @@ Examples:
                 step5_input,
                 step5_output_path
             )
+            step5_output["metadata"] = metadata
 
         # ============================================================
         # 완료
