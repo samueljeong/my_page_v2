@@ -2497,30 +2497,56 @@ def api_drama_claude_step3():
             user_content += step3_guide
             user_content += "\n\n위 지침을 반드시 우선적으로 따라 대본을 작성해주세요.\n\n"
 
-        # 대본 작성 요청 - 콘텐츠 유형 및 카테고리 기반 분량 지시
+        # 대본 작성 요청 - 영상 시간 기반 분량 지시 (모든 콘텐츠 유형에 적용!)
         content_type_name = "간증" if content_type == "testimony" else "드라마"
 
-        # 🧪 테스트 모드: 최소 분량으로 작성
-        if test_mode:
-            length_guide = "약 500자 내외 (테스트용 최소 분량)"
-            print(f"[DRAMA-STEP3] 🧪 테스트 모드: 분량 제한 500자")
-        elif content_type == "testimony":
-            # 간증 콘텐츠는 무조건 15,000자 이상
-            length_guide = "최소 15,000자 이상 (필수!)"
-        else:
-            minutes_match = re.search(r"(\d+)\s*분", category) or re.search(r"(\d+)", category)
-            minutes_value = int(minutes_match.group(1)) if minutes_match else None
+        # 영상 시간(분) 추출 - category에서 숫자 파싱
+        minutes_match = re.search(r"(\d+)\s*분?", category) or re.search(r"(\d+)", category)
+        minutes_value = int(minutes_match.group(1)) if minutes_match else None
 
-            if minutes_value and minutes_value <= 10:
-                length_guide = "약 3000~4000자 분량으로"
+        print(f"[DRAMA-STEP3] 분량 계산 - category: '{category}', 추출된 시간: {minutes_value}분, 테스트모드: {test_mode}")
+
+        # 🧪 테스트 모드: 최소 분량 (모든 콘텐츠 유형에 적용!)
+        if test_mode:
+            length_guide = "약 500자 내외로 (테스트용 최소 분량 - 절대 초과 금지!)"
+            target_chars = 500
+            print(f"[DRAMA-STEP3] 🧪 테스트 모드: 분량 제한 500자")
+        else:
+            # ⚠️ 모든 콘텐츠 유형에 영상 시간 설정 적용! (간증도 예외 없음)
+            if minutes_value and minutes_value <= 2:
+                length_guide = "약 500~800자 분량으로 (2분 영상)"
+                target_chars = 700
+            elif minutes_value and minutes_value <= 5:
+                length_guide = "약 1500~2000자 분량으로 (5분 영상)"
+                target_chars = 1800
+            elif minutes_value and minutes_value <= 10:
+                length_guide = "약 3000~4000자 분량으로 (10분 영상)"
+                target_chars = 3500
+            elif minutes_value and minutes_value <= 15:
+                length_guide = "약 5000~6000자 분량으로 (15분 영상)"
+                target_chars = 5500
             elif minutes_value and minutes_value <= 20:
-                length_guide = "약 6000~8000자 분량으로"
+                length_guide = "약 6000~8000자 분량으로 (20분 영상)"
+                target_chars = 7000
             elif minutes_value and minutes_value <= 30:
-                length_guide = "약 9000~12000자 분량으로"
+                length_guide = "약 9000~12000자 분량으로 (30분 영상)"
+                target_chars = 10000
             elif minutes_value:
-                length_guide = "약 12000자 이상, 입력한 시간에 어울리게 충분히 길고 상세하게"
+                length_guide = f"약 {minutes_value * 400}자 분량으로 ({minutes_value}분 영상)"
+                target_chars = minutes_value * 400
             else:
-                length_guide = "충분히 길고 상세하게"
+                # 시간 설정이 없으면 기본 10분
+                length_guide = "약 3000~4000자 분량으로 (기본 10분 영상)"
+                target_chars = 3500
+                print(f"[DRAMA-STEP3] ⚠️ 영상 시간 설정 없음 → 기본 10분(3500자) 적용")
+
+            print(f"[DRAMA-STEP3] 분량 설정: {length_guide} (목표: {target_chars}자)")
+
+        # 분량 지시 (테스트 모드 여부에 따라 다르게)
+        if test_mode:
+            length_instruction = f"🧪 테스트 모드: {length_guide} - 절대 초과하지 마세요!"
+        else:
+            length_instruction = f"⚠️ 분량: {length_guide} - 이 분량을 정확히 맞춰주세요!"
 
         # 간증 콘텐츠 전용 요청 사항
         if content_type == "testimony":
@@ -2529,20 +2555,16 @@ def api_drama_claude_step3():
 
 🚨 필수 요구사항 (반드시 준수!):
 1. 첫 문장: "안녕하세요. 저는 [장소]에서 [역할]을 하고 있는 [이름]입니다." 형식
-2. 분량: {length_guide} - 절대 짧게 끝내지 마세요!
+2. {length_instruction}
 3. 시점: 반드시 1인칭 (저는, 제가) - 3인칭(그는, 그녀는) 절대 금지!
-4. 구체적 디테일: 이름 5개+, 숫자 10개+, 장소 3개+ 필수
-5. 대화 비율: 직접 대화 30% 포함 (가족, 지인과의 대화)
-6. 가족 반응: 배우자/자녀의 반응과 대화 필수 포함
-7. 7단계 구조: 인사 → 상황설명 → 갈등발생 → 갈등심화 → 절망 → 전환점 → 회복
+4. 마크다운 기호(#, *, -, **) 대신 순수 텍스트로 작성하세요.
 
-마크다운 기호(#, *, -, **) 대신 순수 텍스트로 작성하세요.
 {user_prompt_suffix}"""
         else:
             user_content += f"""【 요청 사항 】
 위 자료를 참고하여 완성된 {content_type_name} 콘텐츠를 작성해주세요.
 
-⚠️ 분량: {length_guide} 작성하세요. 너무 짧게 끝내지 마세요!
+{length_instruction}
 
 작성 시 주의사항:
 1. 자료는 참고만 하고, 콘텐츠는 처음부터 새로 구성하세요.
@@ -2550,17 +2572,17 @@ def api_drama_claude_step3():
 3. 감정선이 점진적으로 발전하도록 구성하세요.
 4. 인트로 → 갈등/전개 → 터닝포인트 → 회복/결말 구조를 따르세요.
 5. 마크다운 기호(#, *, -, **) 대신 순수 텍스트로 작성하세요.
-6. 중복되는 문장이나 설명은 피하세요.
-7. 지정된 분량을 채울 때까지 풍성하게 내용을 전개하세요.
 {user_prompt_suffix}"""
 
         # OpenRouter API 호출 (OpenAI 호환)
-        # 🧪 테스트 모드: max_tokens 1500 (비용 절감)
-        # 간증 콘텐츠는 15,000자 필요 → max_tokens 16000
+        # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 1.5토큰, JSON 오버헤드 고려)
         if test_mode:
-            max_output_tokens = 1500
+            max_output_tokens = 2000  # 테스트 모드: 500자 + JSON 오버헤드
         else:
-            max_output_tokens = 16000 if content_type == "testimony" else 8000
+            # 목표 글자수 * 2 (JSON 메타데이터 포함) + 여유분
+            max_output_tokens = min(16000, max(2000, int(target_chars * 2.5)))
+
+        print(f"[DRAMA-STEP3] max_output_tokens: {max_output_tokens}")
         response = openrouter_client.chat.completions.create(
             model=selected_model,
             max_tokens=max_output_tokens,
