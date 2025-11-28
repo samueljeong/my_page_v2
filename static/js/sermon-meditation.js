@@ -129,26 +129,31 @@ async function createMeditation() {
     if (data.ok) {
       const resultTextarea = document.getElementById('meditation-result');
       if (resultTextarea) {
-        // 최종 메시지 조합
         let finalMessage = '';
 
-        // 날짜 + 오늘의 말씀
-        if (dateStr) {
-          finalMessage += `${dateStr} 오늘의 말씀\n\n`;
-        }
+        if (template) {
+          // 템플릿이 있으면 GPT가 전체 메시지를 생성했으므로 그대로 사용
+          finalMessage = data.result;
+        } else {
+          // 템플릿이 없으면 기본 형식으로 조합
+          // 날짜 + 오늘의 말씀
+          if (dateStr) {
+            finalMessage += `${dateStr} 오늘의 말씀\n\n`;
+          }
 
-        // 성경구절
-        finalMessage += `${ref}\n`;
+          // 성경구절
+          finalMessage += `${ref}\n`;
 
-        // 본문말씀
-        finalMessage += `${verse}\n\n`;
+          // 본문말씀
+          finalMessage += `${verse}\n\n`;
 
-        // 묵상메시지 (GPT 생성 결과)
-        finalMessage += data.result;
+          // 묵상메시지 (GPT 생성 결과)
+          finalMessage += data.result;
 
-        // 보내는 사람
-        if (sender) {
-          finalMessage += `\n\n- ${sender} -`;
+          // 보내는 사람
+          if (sender) {
+            finalMessage += `\n\n- ${sender} -`;
+          }
         }
 
         resultTextarea.value = finalMessage;
