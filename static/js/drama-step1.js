@@ -301,13 +301,11 @@ async function executeStep1() {
       console.log('[Step1] GPT 이미지 프롬프트 분석 시작...');
       await analyzePromptsWithGPT(step1Result, videoCategory);
 
-      // 자동화 모드면 Step2(이미지)와 Step3(TTS) 병렬 실행
-      if (window.isFullAutoMode) {
-        console.log('[Step1] 자동화 모드: Step2+Step3 병렬 시작...');
-        setTimeout(() => {
-          runStep2AndStep3InParallel();
-        }, 2000);
-      }
+      // ⭐ Step1.5 완료 후 항상 Step2(이미지)와 Step3(TTS) 병렬 실행
+      console.log('[Step1] Step1.5 완료 → Step2+Step3 병렬 시작...');
+      setTimeout(() => {
+        runStep2AndStep3InParallel();
+      }, 2000);
 
       return data.result;
 
@@ -455,6 +453,64 @@ function extractNarrationFromScript(script) {
   }
 }
 
+// ===== 주인공 성별에 따른 TTS 음성 자동 선택 =====
+function autoSelectTTSVoiceByGender() {
+  try {
+    // GPT 분석 결과에서 주인공 정보 가져오기
+    const prompts = window.gptAnalyzedPrompts || JSON.parse(localStorage.getItem('_drama-gpt-prompts') || 'null');
+
+    if (!prompts || !prompts.characters || prompts.characters.length === 0) {
+      console.log('[TTS-Voice] 캐릭터 정보 없음 - 기본 음성 유지');
+      return;
+    }
+
+    // 첫 번째 캐릭터(주인공)의 성별 확인
+    const mainCharacter = prompts.characters[0];
+    const gender = (mainCharacter.gender || mainCharacter.sex || '').toLowerCase();
+    const name = mainCharacter.name || mainCharacter.nameKo || '';
+
+    // 성별 판단 (이름이나 설명에서도 추측)
+    let isFemale = false;
+    if (gender.includes('female') || gender.includes('여') || gender.includes('woman') || gender.includes('girl')) {
+      isFemale = true;
+    } else if (gender.includes('male') || gender.includes('남') || gender.includes('man') || gender.includes('boy')) {
+      isFemale = false;
+    } else {
+      // 이름에서 추측 (한국 이름)
+      const femaleNameEndings = ['아', '이', '진', '미', '희', '영', '정', '숙', '자', '선'];
+      const lastName = name.slice(-1);
+      isFemale = femaleNameEndings.includes(lastName);
+    }
+
+    // 음성 선택: 여성 → 여성B (ko-KR-Wavenet-B), 남성 → 남성A (ko-KR-Wavenet-C)
+    const selectedVoice = isFemale ? 'ko-KR-Wavenet-B' : 'ko-KR-Wavenet-C';
+
+    console.log(`[TTS-Voice] 주인공: ${name}, 성별: ${isFemale ? '여성' : '남성'} → 음성: ${selectedVoice}`);
+
+    // TTS 음성 설정 업데이트
+    if (typeof window.step3SelectedVoice !== 'undefined') {
+      window.step3SelectedVoice = selectedVoice;
+    }
+
+    // UI 업데이트 (음성 선택 버튼)
+    const voiceOptions = document.querySelectorAll('.step5-voice-option[data-provider="google"]');
+    voiceOptions.forEach(opt => {
+      opt.classList.remove('selected');
+      if (opt.dataset.voice === selectedVoice) {
+        opt.classList.add('selected');
+      }
+    });
+
+    // 전역 변수 업데이트
+    localStorage.setItem('_drama-tts-voice', selectedVoice);
+
+  } catch (err) {
+    console.warn('[TTS-Voice] 자동 선택 실패:', err);
+  }
+}
+
+window.autoSelectTTSVoiceByGender = autoSelectTTSVoiceByGender;
+
 // ===== Step2(이미지)와 Step3(TTS) 병렬 실행 =====
 async function runStep2AndStep3InParallel() {
   console.log('[PARALLEL] Step2(이미지) + Step3(TTS) 병렬 실행 시작...');
@@ -490,8 +546,13 @@ async function runStep2AndStep3InParallel() {
       // 잠시 대기 (DOM 업데이트 대기)
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 지문 추출
-      if (typeof extractNarration === 'function') {
+      // ⭐ 주인공 성별에 따라 TTS 음성 자동 설정
+      autoSelectTTSVoiceByGender();
+
+      // 지문 추출 (TTS용 텍스트만)
+      if (typeof extractNarrationForTTS === 'function') {
+        extractNarrationForTTS();
+      } else if (typeof extractNarration === 'function') {
         extractNarration();
       }
       await new Promise(resolve => setTimeout(resolve, 500));
