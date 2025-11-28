@@ -2575,12 +2575,12 @@ def api_drama_claude_step3():
 {user_prompt_suffix}"""
 
         # OpenRouter API 호출 (OpenAI 호환)
-        # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 1.5토큰, JSON 오버헤드 고려)
+        # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 2~3토큰, JSON 오버헤드 고려)
         if test_mode:
-            max_output_tokens = 2000  # 테스트 모드: 500자 + JSON 오버헤드
+            max_output_tokens = 4000  # 테스트 모드: 넉넉하게
         else:
-            # 목표 글자수 * 2 (JSON 메타데이터 포함) + 여유분
-            max_output_tokens = min(16000, max(2000, int(target_chars * 2.5)))
+            # 목표 글자수 * 4 (JSON 메타데이터 + 한글 토큰 오버헤드) + 여유분
+            max_output_tokens = min(32000, max(8000, int(target_chars * 4)))
 
         print(f"[DRAMA-STEP3] max_output_tokens: {max_output_tokens}")
         response = openrouter_client.chat.completions.create(
@@ -2615,7 +2615,17 @@ def api_drama_claude_step3():
             raise RuntimeError("OpenRouter 콘텐츠 필터에 의해 차단되었습니다. 주제를 변경해보세요.")
 
         result = response.choices[0].message.content if response.choices else ""
+        print(f"[DRAMA-STEP3] 응답 길이: {len(result) if result else 0}자")
         result = result.strip() if result else ""
+
+        # finish_reason: length인 경우 - 응답이 잘렸지만 부분 응답이라도 사용
+        if finish_reason == "length" and result:
+            print(f"[DRAMA-STEP3] ⚠️ 응답이 max_tokens에서 잘림, 부분 응답 사용 ({len(result)}자)")
+            # JSON이 불완전할 수 있으므로 복구 시도
+            if result.startswith('{') and not result.endswith('}'):
+                # 불완전한 JSON 복구 시도
+                result = result + '"}]}'
+                print(f"[DRAMA-STEP3] JSON 복구 시도")
 
         if not result:
             print(f"[DRAMA-STEP3] 빈 응답, finish_reason: {finish_reason}")
