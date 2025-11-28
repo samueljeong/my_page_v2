@@ -60,26 +60,26 @@ def generate_scene_clip(
     resolution: str = "1080p"
 ) -> Optional[str]:
     """
-    하나의 씬(part 영상)을 제작
+    하나의 씬(part 영상)을 제작 - 애니메이션형 스타일
+
+    효과:
+        - 1080p 고정 (1920x1080), 30fps
+        - 느린 줌인 + 부드러운 패닝 (sin/cos 곡선)
+        - 영상: 페이드 인/아웃 (duration에 따라 동적 조절)
+        - 오디오: 페이드 인/아웃
+        - 약한 필름 그레인 + 비네트 + 색감 보정
+        - "정지 이미지"가 아닌 "회상 애니메이션" 느낌
 
     Args:
         image_path: 장면 이미지 경로
         audio_path: 장면 오디오 경로
         duration: 클립 길이 (초)
         output_path: 출력 파일 경로
-        resolution: 해상도 (720p, 1080p)
+        resolution: 해상도 (현재 무시됨, 1080p 고정)
 
     Returns:
         생성된 파일 경로 또는 None
     """
-    # 해상도 설정
-    scale_map = {
-        "720p": "1280:720",
-        "1080p": "1920:1080",
-        "4k": "3840:2160"
-    }
-    scale = scale_map.get(resolution, "1920:1080")
-
     # 파일 존재 확인
     if not os.path.exists(image_path):
         print(f"[WARNING] Image not found: {image_path}")
@@ -91,16 +91,63 @@ def generate_scene_clip(
     # 출력 디렉토리 생성
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    # 설정값
+    fps = 30
+    frame_count = int(duration * fps)
+
+    # 페이드 설정 (duration에 따라 동적 조절)
+    fade_in_d = min(1.0, max(duration * 0.2, 0.3))   # 최소 0.3초, 최대 1초
+    fade_out_d = fade_in_d
+    fade_out_start = max(duration - fade_out_d, 0)
+
+    audio_fade_in_d = min(0.5, max(duration * 0.1, 0.2))
+    audio_fade_out_d = audio_fade_in_d
+    audio_fade_out_start = max(duration - audio_fade_out_d, 0)
+
+    # 애니메이션 스타일 비디오 필터
+    # 1) scale: 여유 있게 키워서 패닝해도 검정 테두리 안 생김
+    # 2) zoompan: 천천히 확대 + x/y에 sin/cos로 부드러운 패닝
+    # 3) fade in/out
+    # 4) eq: 색감 보정 (약간 노스텔지어 느낌)
+    # 5) noise: 아주 약한 필름 그레인
+    # 6) vignette: 가장자리 약간 어둡게 (시선 집중)
+    vf_filter = (
+        "[0:v]"
+        "scale=2200:1238,"
+        "zoompan="
+        "z='1.03+0.0008*on':"  # 전체 3% 확대 + 프레임마다 미세 증분
+        "x='(iw-1920)/2 - 40*sin(on/90)':"  # 좌우 부드러운 움직임
+        "y='(ih-1080)/2 + 30*cos(on/110)':"  # 상하 부드러운 움직임
+        f"d={frame_count}:s=1920x1080:fps={fps},"
+        f"fade=t=in:st=0:d={fade_in_d},"
+        f"fade=t=out:st={fade_out_start}:d={fade_out_d},"
+        "eq=saturation=0.98:contrast=1.03:brightness=0.02,"  # 따뜻한 색감
+        "noise=alls=3:allf=t,"  # 약한 필름 그레인
+        "vignette=PI/7,"  # 가장자리 어둡게
+        "format=yuv420p"
+        "[v]"
+    )
+
+    # 오디오 필터: 페이드 인/아웃
+    af_filter = (
+        f"[1:a]afade=t=in:st=0:d={audio_fade_in_d},"
+        f"afade=t=out:st={audio_fade_out_start}:d={audio_fade_out_d}[a]"
+    )
+
     cmd = [
         "ffmpeg",
-        "-y",  # 덮어쓰기
-        "-loop", "1",  # 이미지 반복
+        "-y",
+        "-loop", "1",
         "-i", image_path,
         "-i", audio_path,
-        "-c:v", "libx264",
+        "-filter_complex", f"{vf_filter};{af_filter}",
+        "-map", "[v]",
+        "-map", "[a]",
         "-t", str(duration),
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "23",
         "-pix_fmt", "yuv420p",
-        "-vf", f"scale={scale}:force_original_aspect_ratio=decrease,pad={scale}:(ow-iw)/2:(oh-ih)/2",
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
@@ -109,7 +156,94 @@ def generate_scene_clip(
 
     try:
         run_ffmpeg(cmd)
-        print(f"[FFMPEG] Created clip: {output_path}")
+        print(f"[FFMPEG] Created animated clip: {output_path}")
+        return output_path
+    except RuntimeError:
+        return None
+
+
+def create_thumbnail_intro(
+    thumbnail_path: str,
+    output_path: str,
+    duration: float = 1.5,
+    audio_path: Optional[str] = None
+) -> Optional[str]:
+    """
+    썸네일 이미지로 인트로 영상 생성 (영상 맨 앞에 삽입용)
+
+    Args:
+        thumbnail_path: 썸네일 이미지 경로
+        output_path: 출력 영상 경로
+        duration: 인트로 길이 (초, 기본 1.5초 - 시니어용)
+        audio_path: 배경 오디오 경로 (선택, BGM 일부 등)
+
+    Returns:
+        생성된 파일 경로 또는 None
+
+    Note:
+        - 썸네일과 영상 첫 화면 일치 → 시청자 신뢰도 증가
+        - 페이드 인 효과로 부드러운 시작
+        - 시니어 타겟은 1.5~2초 권장
+    """
+    if not os.path.exists(thumbnail_path):
+        print(f"[Thumbnail] Image not found: {thumbnail_path}")
+        return None
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    fps = 30
+
+    # 비디오 필터: 스케일 + 페이드 인 + 약간의 줌
+    vf_filter = (
+        "[0:v]"
+        "scale=1920:1080:force_original_aspect_ratio=increase,"
+        "crop=1920:1080,"
+        "fade=t=in:st=0:d=0.8,"  # 0.8초 페이드 인
+        "format=yuv420p"
+        "[v]"
+    )
+
+    if audio_path and os.path.exists(audio_path):
+        # 오디오가 있으면 함께 포함
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loop", "1",
+            "-i", thumbnail_path,
+            "-i", audio_path,
+            "-filter_complex", vf_filter,
+            "-t", str(duration),
+            "-map", "[v]",
+            "-map", "1:a",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-shortest",
+            output_path
+        ]
+    else:
+        # 무음 인트로 (나중에 BGM이 전체에 깔림)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loop", "1",
+            "-i", thumbnail_path,
+            "-f", "lavfi",
+            "-i", f"anullsrc=r=44100:cl=stereo",  # 무음 오디오
+            "-filter_complex", vf_filter,
+            "-t", str(duration),
+            "-map", "[v]",
+            "-map", "1:a",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-shortest",
+            output_path
+        ]
+
+    try:
+        run_ffmpeg(cmd)
+        print(f"[Thumbnail] Created intro: {output_path} ({duration}s)")
         return output_path
     except RuntimeError:
         return None
@@ -284,23 +418,137 @@ def burn_subtitles(input_video: str, srt_path: str, output_video: str) -> Option
         return input_video
 
 
+# ========== BGM 자동 믹싱 ==========
+
+def select_random_bgm(folder: str) -> Optional[str]:
+    """
+    BGM 폴더에서 랜덤하게 BGM 파일 선택
+
+    Args:
+        folder: BGM 파일들이 있는 폴더 경로
+
+    Returns:
+        선택된 BGM 파일 경로 또는 None
+    """
+    import random
+
+    if not os.path.exists(folder):
+        print(f"[BGM] Folder not found: {folder}")
+        return None
+
+    files = [f for f in os.listdir(folder) if f.lower().endswith((".mp3", ".wav", ".m4a"))]
+    if not files:
+        print(f"[BGM] No audio files in: {folder}")
+        return None
+
+    selected = random.choice(files)
+    bgm_path = os.path.join(folder, selected)
+    print(f"[BGM] Selected: {selected}")
+    return bgm_path
+
+
+def add_bgm_to_video(
+    video_in: str,
+    bgm_path: str,
+    video_out: str,
+    bgm_volume: float = 0.15
+) -> Optional[str]:
+    """
+    영상에 BGM을 자동 믹싱 (나레이션보다 낮은 볼륨으로)
+
+    Args:
+        video_in: 입력 영상 경로 (concat 후 영상)
+        bgm_path: BGM 파일 경로
+        video_out: 출력 영상 경로
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 약 -16dB)
+
+    Returns:
+        생성된 파일 경로 또는 None
+
+    Note:
+        - BGM은 자동으로 영상 길이에 맞춰 루프됨
+        - 나레이션(TTS)이 BGM보다 항상 크게 들리도록 설정
+        - dropout_transition으로 자연스러운 믹싱
+    """
+    if not os.path.exists(video_in):
+        print(f"[BGM] Input video not found: {video_in}")
+        return None
+
+    if not bgm_path or not os.path.exists(bgm_path):
+        print(f"[BGM] BGM file not found: {bgm_path}, skipping BGM")
+        return video_in  # BGM 없이 원본 반환
+
+    # 출력 디렉토리 생성
+    os.makedirs(os.path.dirname(video_out), exist_ok=True)
+
+    print(f"[BGM] Mixing BGM into video...")
+    print(f"[BGM] Volume: {bgm_volume} ({20 * __import__('math').log10(bgm_volume):.1f} dB)")
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", video_in,
+        "-stream_loop", "-1",  # BGM 무한 반복
+        "-i", bgm_path,
+        "-filter_complex",
+        (
+            # BGM 볼륨 조절
+            f"[1:a]volume={bgm_volume}[bga];"
+            # 메인 오디오 + BGM 믹스 (dropout_transition으로 자연스럽게)
+            "[0:a][bga]amix=inputs=2:duration=first:dropout_transition=3[outa]"
+        ),
+        "-map", "0:v",
+        "-map", "[outa]",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        video_out,
+    ]
+
+    try:
+        run_ffmpeg(cmd)
+        print(f"[BGM] Video with BGM: {video_out}")
+        return video_out
+    except RuntimeError:
+        print("[WARNING] BGM mixing failed, returning original video")
+        return video_in
+
+
 # ========== 메인 빌드 함수 ==========
 
 def build_video_ffmpeg(
     step4_input: Dict[str, Any],
     step3_output: Optional[Dict[str, Any]] = None,
-    burn_subs: bool = True
+    burn_subs: bool = True,
+    bgm_path: Optional[str] = None,
+    bgm_folder: Optional[str] = None,
+    bgm_volume: float = 0.15,
+    thumbnail_path: Optional[str] = None,
+    intro_duration: float = 1.5
 ) -> Dict[str, Any]:
     """
-    FFmpeg 기반 영상 제작 + 자막 번인
+    FFmpeg 기반 영상 제작 + 썸네일 인트로 + BGM 믹싱 + 자막 번인
 
     Args:
         step4_input: Step4 입력 JSON (cuts 배열 포함)
         step3_output: Step3 출력 (자막 생성용, 선택적)
         burn_subs: 자막 번인 여부
+        bgm_path: BGM 파일 경로 (직접 지정)
+        bgm_folder: BGM 폴더 경로 (랜덤 선택용)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15)
+        thumbnail_path: 썸네일 이미지 경로 (인트로 생성용)
+        intro_duration: 썸네일 인트로 길이 (초, 기본 1.5초)
 
     Returns:
         Step4 출력 JSON
+
+    Flow:
+        1) 씬별 클립 생성 (애니메이션 스타일)
+        2) 썸네일 인트로 생성 (옵션)
+        3) 클립들 concat (인트로 + 씬들)
+        4) BGM 자동 믹싱 (옵션)
+        5) 자막 번인 (옵션)
+        6) 최종 영상 저장
     """
     # FFmpeg 설치 확인
     if not check_ffmpeg_installed():
@@ -381,24 +629,72 @@ def build_video_ffmpeg(
             "error": "No clips generated - check image/audio files"
         }
 
-    # 2) part들 concat → raw 영상
+    # 2) 썸네일 인트로 생성 (옵션)
+    intro_added = False
+    intro_path = os.path.join(output_dir, f"{sanitized_title}_intro.mp4")
+
+    # 썸네일 경로: 파라미터 > step4_input에서
+    actual_thumbnail = thumbnail_path or step4_input.get("thumbnail_path")
+
+    if actual_thumbnail and os.path.exists(actual_thumbnail):
+        print(f"\n[FFmpeg] Creating thumbnail intro: {actual_thumbnail}")
+        intro_result = create_thumbnail_intro(
+            thumbnail_path=actual_thumbnail,
+            output_path=intro_path,
+            duration=intro_duration
+        )
+        if intro_result:
+            part_files.insert(0, intro_result)  # 맨 앞에 인트로 추가
+            total_duration += intro_duration
+            intro_added = True
+            print(f"[FFmpeg] Thumbnail intro added ({intro_duration}s)")
+    else:
+        print("\n[FFmpeg] No thumbnail specified, skipping intro")
+
+    # 3) part들 concat → raw 영상
     print(f"\n[FFmpeg] Concatenating {len(part_files)} clips...")
     concat_videos(part_files, raw_video_path)
 
-    # 3) 자막 생성 및 번인
-    final_video = raw_video_path
+    # 4) BGM 자동 믹싱
+    current_video = raw_video_path
+    bgm_video_path = os.path.join(output_dir, f"{sanitized_title}_bgm.mp4")
+    bgm_added = False
+
+    # BGM 경로 결정: 직접 지정 > 폴더에서 랜덤 선택 > step4_input에서
+    actual_bgm = bgm_path
+    if not actual_bgm and bgm_folder:
+        actual_bgm = select_random_bgm(bgm_folder)
+    if not actual_bgm:
+        actual_bgm = step4_input.get("background_music_path")
+
+    if actual_bgm and os.path.exists(actual_bgm):
+        print(f"\n[FFmpeg] Adding BGM: {actual_bgm}")
+        bgm_result = add_bgm_to_video(
+            video_in=current_video,
+            bgm_path=actual_bgm,
+            video_out=bgm_video_path,
+            bgm_volume=bgm_volume
+        )
+        if bgm_result and bgm_result != current_video:
+            current_video = bgm_result
+            bgm_added = True
+    else:
+        print("\n[FFmpeg] No BGM specified, skipping BGM mixing")
+
+    # 5) 자막 생성 및 번인
+    final_video = current_video
 
     if burn_subs and step3_output:
         print("\n[FFmpeg] Generating subtitles...")
         generate_srt_from_step3(step3_output, srt_path)
 
         print("[FFmpeg] Burning subtitles into video...")
-        final_video = burn_subtitles(raw_video_path, srt_path, final_video_path)
+        final_video = burn_subtitles(current_video, srt_path, final_video_path)
     else:
-        # 자막 없이 raw를 final로 복사/이동
-        if raw_video_path != final_video_path:
+        # 자막 없이 현재 영상을 final로 복사/이동
+        if current_video != final_video_path:
             import shutil
-            shutil.move(raw_video_path, final_video_path)
+            shutil.copy2(current_video, final_video_path)
             final_video = final_video_path
 
     print(f"\n[FFmpeg] Final video saved: {final_video}")
@@ -410,6 +706,10 @@ def build_video_ffmpeg(
         "duration_seconds": round(total_duration, 1),
         "clips_count": len(part_files),
         "resolution": resolution,
+        "intro_added": intro_added,
+        "thumbnail_path": actual_thumbnail if intro_added else None,
+        "bgm_added": bgm_added,
+        "bgm_path": actual_bgm if bgm_added else None,
         "subtitles_burned": burn_subs and step3_output is not None,
         "srt_path": srt_path if burn_subs else None
     }
