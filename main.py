@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 # Step 모듈 import
 from step1_script_generation import run_step1
 from step2_image_generation import image_prompt_builder, call_gpt_mini
-from step3_tts_and_subtitles import tts_script_builder
+from step3_tts_and_subtitles import tts_script_builder, call_tts_engine
 from step4_video_assembly import video_builder
 from step5_youtube_upload import schedule_upload
 
@@ -290,12 +290,11 @@ Examples:
             step3_input = tts_script_builder.build_tts_input(step1_output)
             save_json(os.path.join(OUTPUTS_DIR, "step3_input.json"), step3_input)
 
-            # Step3 실행 (TTS + 자막)
-            # TODO: run_step3.run() 구현 필요
+            # Step3 실행 (TTS + 자막) - step1_output을 사용하여 원본 narration 접근
             step3_output = run_step(
                 "Step 3: TTS & Subtitle Generation",
-                lambda x: _mock_step3_run(x),  # 임시 mock
-                step3_input,
+                call_tts_engine.generate_tts_output,
+                step1_output,
                 step3_output_path
             )
 
