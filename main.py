@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Step 모듈 import
 from step1_script_generation import run_step1
-from step2_image_generation import image_prompt_builder
+from step2_image_generation import image_prompt_builder, call_gpt_mini
 from step3_tts_and_subtitles import tts_script_builder
 from step4_video_assembly import video_builder
 from step5_youtube_upload import schedule_upload
@@ -274,7 +274,7 @@ Examples:
         else:
             step2_output = run_step(
                 "Step 2: Image Prompt Generation",
-                image_prompt_builder.build_image_prompts,
+                call_gpt_mini.generate_image_prompts,
                 step1_output,
                 step2_output_path
             )
