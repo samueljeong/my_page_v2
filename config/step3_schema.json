@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Step3 TTS and Subtitles Schema",
+  "description": "Step3 TTS 및 자막 생성 결과 JSON 스키마",
+  "type": "object",
+  "required": ["metadata", "audio_segments", "subtitles"],
+
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["script_id", "total_duration_ms", "total_segments"],
+      "properties": {
+        "script_id": {"type": "string"},
+        "total_duration_ms": {"type": "integer"},
+        "total_segments": {"type": "integer"},
+        "tts_provider": {"type": "string", "default": "google"},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+
+    "voice_assignments": {
+      "type": "object",
+      "description": "캐릭터별 TTS 음성 할당",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "voice_id": {"type": "string"},
+          "voice_name": {"type": "string"},
+          "language_code": {"type": "string", "default": "ko-KR"},
+          "gender": {"type": "string", "enum": ["male", "female"]},
+          "pitch": {"type": "number"},
+          "speaking_rate": {"type": "number"}
+        }
+      }
+    },
+
+    "audio_segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment_id", "scene_id", "text", "voice_id", "status"],
+        "properties": {
+          "segment_id": {"type": "string", "pattern": "^seg_\\d{3}$"},
+          "scene_id": {"type": "integer"},
+          "is_highlight": {"type": "boolean", "default": false},
+          "text": {
+            "type": "object",
+            "required": ["tts_text"],
+            "properties": {
+              "tts_text": {"type": "string", "description": "TTS용 한글 숫자 텍스트"},
+              "subtitle_text": {"type": "string", "description": "자막용 아라비아 숫자 텍스트"}
+            }
+          },
+          "voice_id": {"type": "string"},
+          "character_id": {"type": "string"},
+          "ssml_markup": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["pending", "generating", "completed", "failed"]
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "audio_url": {"type": "string"},
+              "local_path": {"type": "string"},
+              "duration_ms": {"type": "integer"},
+              "file_size": {"type": "integer"},
+              "generated_at": {"type": "string", "format": "date-time"}
+            }
+          },
+          "error": {"type": "string"}
+        }
+      }
+    },
+
+    "subtitles": {
+      "type": "object",
+      "required": ["format", "entries"],
+      "properties": {
+        "format": {"type": "string", "enum": ["srt", "vtt", "ass"]},
+        "style": {
+          "type": "object",
+          "properties": {
+            "font_family": {"type": "string"},
+            "font_size": {"type": "integer"},
+            "font_color": {"type": "string"},
+            "background_color": {"type": "string"},
+            "position": {"type": "string"},
+            "senior_friendly": {"type": "boolean", "default": true}
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "start_time", "end_time", "text"],
+            "properties": {
+              "index": {"type": "integer"},
+              "start_time": {"type": "string", "pattern": "^\\d{2}:\\d{2}:\\d{2},\\d{3}$"},
+              "end_time": {"type": "string", "pattern": "^\\d{2}:\\d{2}:\\d{2},\\d{3}$"},
+              "text": {"type": "string"},
+              "segment_id": {"type": "string"}
+            }
+          }
+        },
+        "srt_file_path": {"type": "string"}
+      }
+    },
+
+    "merged_audio": {
+      "type": "object",
+      "properties": {
+        "url": {"type": "string"},
+        "local_path": {"type": "string"},
+        "total_duration_ms": {"type": "integer"},
+        "file_size": {"type": "integer"}
+      }
+    }
+  }
+}

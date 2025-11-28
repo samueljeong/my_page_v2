@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Step1 Script Schema",
+  "description": "Step1 대본 생성 결과 JSON 스키마",
+  "type": "object",
+  "required": ["metadata", "characters", "highlight", "script"],
+
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["title", "duration_minutes", "target_length", "genre", "total_scenes", "total_characters"],
+      "properties": {
+        "title": {"type": "string", "description": "대본 제목"},
+        "duration_minutes": {"type": "integer", "enum": [2, 5, 10, 20, 30]},
+        "target_length": {"type": "integer", "minimum": 600},
+        "genre": {"type": "string", "enum": ["testimony", "drama", "nostalgia"]},
+        "total_scenes": {"type": "integer", "minimum": 1, "maximum": 10},
+        "total_characters": {"type": "integer", "minimum": 1, "maximum": 4}
+      }
+    },
+
+    "characters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "age", "gender", "role", "appearance"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^char_\\d{2}$"},
+          "name": {"type": "string", "minLength": 2, "maxLength": 10},
+          "age": {"type": "string", "description": "나이 (예: 76세)"},
+          "gender": {"type": "string", "enum": ["남성", "여성"]},
+          "role": {"type": "string", "enum": ["주인공", "조연", "단역"]},
+          "occupation": {"type": "string"},
+          "relationship_to_protagonist": {"type": "string"},
+          "appearance": {
+            "type": "object",
+            "required": ["height", "body_type", "face", "hair"],
+            "properties": {
+              "height": {"type": "string"},
+              "body_type": {"type": "string"},
+              "face": {"type": "string"},
+              "hair": {"type": "string"},
+              "skin": {"type": "string"},
+              "distinctive_features": {"type": "string"}
+            }
+          },
+          "clothing_style": {"type": "string"},
+          "personality": {"type": "string"},
+          "speaking_style": {"type": "string"},
+          "voice_characteristics": {"type": "string"}
+        }
+      }
+    },
+
+    "highlight": {
+      "type": "object",
+      "required": ["purpose", "duration_seconds", "type", "scenes"],
+      "properties": {
+        "purpose": {"type": "string"},
+        "duration_seconds": {"type": "integer", "maximum": 60},
+        "type": {"type": "string", "enum": ["climax_preview", "curiosity_hook"]},
+        "scenes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["order", "preview_text", "scene_hint", "emotion"],
+            "properties": {
+              "order": {"type": "integer"},
+              "preview_text": {"type": "string"},
+              "scene_hint": {"type": "string"},
+              "emotion": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "script": {
+      "type": "object",
+      "required": ["scenes"],
+      "properties": {
+        "scenes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scene_meta", "narration"],
+            "properties": {
+              "scene_meta": {
+                "type": "object",
+                "required": ["scene_id", "scene_title", "structure_phase", "location", "time", "atmosphere"],
+                "properties": {
+                  "scene_id": {"type": "integer"},
+                  "scene_title": {"type": "string"},
+                  "structure_phase": {"type": "string"},
+                  "location": {
+                    "type": "object",
+                    "properties": {
+                      "place": {"type": "string"},
+                      "setting": {"type": "string"},
+                      "indoor_outdoor": {"type": "string", "enum": ["실내", "실외", "혼합"]}
+                    }
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "period": {"type": "string"},
+                      "season": {"type": "string"},
+                      "weather": {"type": "string"}
+                    }
+                  },
+                  "atmosphere": {
+                    "type": "object",
+                    "properties": {
+                      "mood": {"type": "string"},
+                      "lighting": {"type": "string"},
+                      "sound_ambience": {"type": "string"}
+                    }
+                  },
+                  "visual_direction": {
+                    "type": "object",
+                    "properties": {
+                      "camera_suggestion": {"type": "string"},
+                      "key_visual": {"type": "string"},
+                      "color_tone": {"type": "string"}
+                    }
+                  },
+                  "characters_in_scene": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "character_states": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "emotion": {"type": "string"},
+                        "expression": {"type": "string"},
+                        "posture": {"type": "string"},
+                        "action": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              },
+              "narration": {"type": "string", "minLength": 50}
+            }
+          }
+        }
+      }
+    }
+  }
+}

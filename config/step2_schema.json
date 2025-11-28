@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Step2 Image Generation Schema",
+  "description": "Step2 이미지 생성 결과 JSON 스키마",
+  "type": "object",
+  "required": ["metadata", "images"],
+
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["script_id", "total_images", "created_at"],
+      "properties": {
+        "script_id": {"type": "string"},
+        "total_images": {"type": "integer", "minimum": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "model_used": {"type": "string"},
+        "style_preset": {"type": "string"}
+      }
+    },
+
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["image_id", "scene_id", "prompt", "status"],
+        "properties": {
+          "image_id": {"type": "string", "pattern": "^img_\\d{3}$"},
+          "scene_id": {"type": "integer"},
+          "is_highlight": {"type": "boolean", "default": false},
+          "prompt": {
+            "type": "object",
+            "required": ["english_prompt", "korean_description"],
+            "properties": {
+              "english_prompt": {"type": "string", "minLength": 50},
+              "korean_description": {"type": "string"},
+              "negative_prompt": {"type": "string"},
+              "style_modifiers": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            }
+          },
+          "characters_depicted": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "visual_elements": {
+            "type": "object",
+            "properties": {
+              "composition": {"type": "string"},
+              "lighting": {"type": "string"},
+              "color_palette": {"type": "string"},
+              "mood": {"type": "string"}
+            }
+          },
+          "generation_params": {
+            "type": "object",
+            "properties": {
+              "width": {"type": "integer"},
+              "height": {"type": "integer"},
+              "aspect_ratio": {"type": "string"},
+              "seed": {"type": "integer"}
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "generating", "completed", "failed"]
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "url": {"type": "string", "format": "uri"},
+              "local_path": {"type": "string"},
+              "file_size": {"type": "integer"},
+              "generated_at": {"type": "string", "format": "date-time"}
+            }
+          },
+          "error": {"type": "string"}
+        }
+      }
+    },
+
+    "style_config": {
+      "type": "object",
+      "properties": {
+        "art_style": {
+          "type": "string",
+          "enum": ["realistic", "semi_realistic", "illustration", "watercolor"]
+        },
+        "target_audience": {"type": "string"},
+        "consistent_elements": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}
