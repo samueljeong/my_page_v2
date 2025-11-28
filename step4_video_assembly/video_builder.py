@@ -1,11 +1,17 @@
 """
 Video Builder for Step 4
 Step3 결과를 받아 Step4 영상 조립 전체 프로세스 실행
+
+지원 엔진:
+    - FFmpeg (기본, 무료)
+    - Creatomate (유료, 고급 기능)
 """
 
+import os
 from typing import Dict, Any, List, Optional
-from .call_creatomate import create_video_clip
-from .timeline_merger import merge_clips, calculate_total_duration
+
+# 엔진 선택: "ffmpeg" (무료) 또는 "creatomate" (유료)
+VIDEO_ENGINE = os.getenv("VIDEO_ENGINE", "ffmpeg")
 
 
 def build_video(step4_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -18,6 +24,24 @@ def build_video(step4_input: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Step4 출력 JSON (step4_video_result 포맷)
     """
+    # 엔진 선택에 따라 분기
+    if VIDEO_ENGINE == "ffmpeg":
+        return _build_video_ffmpeg(step4_input)
+    else:
+        return _build_video_creatomate(step4_input)
+
+
+def _build_video_ffmpeg(step4_input: Dict[str, Any]) -> Dict[str, Any]:
+    """FFmpeg 기반 영상 제작 (무료)"""
+    from .build_video_ffmpeg import build_video_ffmpeg
+    return build_video_ffmpeg(step4_input)
+
+
+def _build_video_creatomate(step4_input: Dict[str, Any]) -> Dict[str, Any]:
+    """Creatomate 기반 영상 제작 (유료)"""
+    from .call_creatomate import create_video_clip
+    from .timeline_merger import merge_clips, calculate_total_duration
+
     # 입력 파싱
     title = step4_input.get("title", "Untitled")
     cuts = step4_input.get("cuts", [])
