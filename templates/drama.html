@@ -3573,7 +3573,7 @@ S#1. 장소 / 시간
           benchmarkScript: benchmarkScript,
           aiAnalysis: analysisResult,
           step3Guide: currentStep3Guide,  // ⭐ 최신 값 사용
-          model: aiModelSettings.step3,  // 선택된 모델 전달
+          model: (window.aiModelSettings || aiModelSettings).step3,  // 선택된 모델 전달
           contentType: contentType,  // 콘텐츠 유형 (testimony/drama)
           contentTypePrompt: promptData,  // 유형별 프롬프트 데이터
           durationText: customDurationText,
@@ -3610,7 +3610,7 @@ S#1. 장소 / 시간
             document.getElementById('step3-input-tokens').textContent = data.usage.input_tokens?.toLocaleString() || '0';
             document.getElementById('step3-output-tokens').textContent = data.usage.output_tokens?.toLocaleString() || '0';
             // 비용 계산
-            const cost = calculateCost(aiModelSettings.step3, data.usage.input_tokens || 0, data.usage.output_tokens || 0);
+            const cost = calculateCost((window.aiModelSettings || aiModelSettings).step3, data.usage.input_tokens || 0, data.usage.output_tokens || 0);
             document.getElementById('step3-cost').textContent = cost ? '₩' + cost.totalCostKRW : '-';
             tokenInfo.style.display = 'block';
           }
@@ -3657,10 +3657,12 @@ S#1. 장소 / 시간
   // Sonnet 4.5 버튼은 항상 해당 모델을 사용하도록 강제 설정
   if (btnExecuteStep3) {
     btnExecuteStep3.addEventListener('click', () => {
-      if (aiModelSettings.step3 !== 'anthropic/claude-sonnet-4.5') {
-        aiModelSettings.step3 = 'anthropic/claude-sonnet-4.5';
-        localStorage.setItem('_drama-ai-models', JSON.stringify(aiModelSettings));
-        saveToFirebase('_drama-ai-models', JSON.stringify(aiModelSettings));
+      // window.aiModelSettings 사용 (drama-step1.js에서 정의됨)
+      const settings = window.aiModelSettings;
+      if (settings && settings.step3 !== 'anthropic/claude-sonnet-4.5') {
+        settings.step3 = 'anthropic/claude-sonnet-4.5';
+        localStorage.setItem('_drama-ai-models', JSON.stringify(settings));
+        saveToFirebase('_drama-ai-models', JSON.stringify(settings));
       }
     }, { capture: true });
   }
