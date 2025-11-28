@@ -2587,7 +2587,7 @@ def api_drama_claude_step3():
         # OpenRouter API 호출 (OpenAI 호환)
         # max_tokens는 목표 글자수 기반으로 계산 (한글 1자 ≈ 2~3토큰, JSON 오버헤드 고려)
         if test_mode:
-            max_output_tokens = 4000  # 테스트 모드: 넉넉하게
+            max_output_tokens = 8000  # 테스트 모드: JSON 대본 생성에 충분하게
         else:
             # 목표 글자수 * 4 (JSON 메타데이터 + 한글 토큰 오버헤드) + 여유분
             max_output_tokens = min(32000, max(8000, int(target_chars * 4)))
@@ -2639,7 +2639,10 @@ def api_drama_claude_step3():
 
         if not result:
             print(f"[DRAMA-STEP3] 빈 응답, finish_reason: {finish_reason}")
-            raise RuntimeError(f"OpenRouter API로부터 빈 응답. finish_reason: {finish_reason}")
+            if finish_reason == "length":
+                raise RuntimeError(f"응답이 토큰 제한으로 잘렸습니다. 대본 길이를 줄이거나 다시 시도해주세요.")
+            else:
+                raise RuntimeError(f"OpenRouter API로부터 빈 응답. finish_reason: {finish_reason}")
 
         # JSON 응답에서 불필요한 마크다운 코드블록 제거 (```json ... ``` 형식)
         import re as re_temp
