@@ -13,6 +13,23 @@ window.DramaStep1 = {
     console.log('[Step1] 대본 생성 모듈 초기화');
   },
 
+  // JSON 응답 안전하게 파싱 (HTML 에러 페이지 방어)
+  async safeJsonParse(response, stepName) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      console.error(`[${stepName}] JSON 파싱 실패:`, parseError);
+      console.error(`[${stepName}] 응답 내용 (처음 500자):`, text.substring(0, 500));
+
+      // HTML 에러 페이지인지 확인
+      if (text.trim().startsWith('<')) {
+        throw new Error(`서버에서 HTML 에러 페이지를 반환했습니다 (status: ${response.status}). 서버 로그를 확인해주세요.`);
+      }
+      throw new Error(`서버 응답을 파싱할 수 없습니다: ${parseError.message}`);
+    }
+  },
+
   // 설정값 가져오기
   getConfig() {
     return {
@@ -71,7 +88,7 @@ window.DramaStep1 = {
         })
       });
 
-      const step1Data = await step1Response.json();
+      const step1Data = await this.safeJsonParse(step1Response, 'Step1-기획');
       console.log('[Step1] 기획 완료:', step1Data);
 
       if (!step1Data.ok) {
@@ -94,7 +111,7 @@ window.DramaStep1 = {
         })
       });
 
-      const step2Data = await step2Response.json();
+      const step2Data = await this.safeJsonParse(step2Response, 'Step1-구조화');
       console.log('[Step1] 구조화 완료:', step2Data);
 
       if (!step2Data.ok) {
@@ -119,7 +136,7 @@ window.DramaStep1 = {
         })
       });
 
-      const step3Data = await step3Response.json();
+      const step3Data = await this.safeJsonParse(step3Response, 'Step1-대본작성');
       console.log('[Step1] 대본 작성 완료:', step3Data);
 
       if (!step3Data.ok) {

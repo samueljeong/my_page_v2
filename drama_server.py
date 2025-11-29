@@ -12,6 +12,27 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
+# ===== 전역 에러 핸들러 (항상 JSON 반환) =====
+@app.errorhandler(500)
+def handle_500_error(e):
+    """500 에러 발생 시 HTML 대신 JSON 반환"""
+    print(f"[FLASK-500] 내부 서버 오류: {str(e)}")
+    return jsonify({
+        "ok": False,
+        "error": f"서버 내부 오류가 발생했습니다: {str(e)}"
+    }), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """모든 예외를 JSON으로 반환"""
+    print(f"[FLASK-ERROR] 예외 발생: {type(e).__name__}: {str(e)}")
+    import traceback
+    traceback.print_exc()
+    return jsonify({
+        "ok": False,
+        "error": f"서버 오류: {type(e).__name__}: {str(e)}"
+    }), 500
+
 # ===== 비동기 영상 생성 작업 큐 시스템 =====
 video_job_queue = queue.Queue()
 video_jobs = {}  # {job_id: {status, progress, result, error, created_at}}
