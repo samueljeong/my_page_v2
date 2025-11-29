@@ -23,37 +23,120 @@ window.DramaStep3 = {
     };
   },
 
-  // Step1 대본에서 씬 텍스트 가져오기
+  // Step1 대본에서 순수 나레이션 텍스트만 가져오기 (설명문 제외)
   getScriptTexts() {
     const step1Data = DramaSession.getStepData('step1');
     if (!step1Data?.content) return null;
 
-    // 대본을 씬 단위로 분할 (간단한 분할)
     const content = step1Data.content;
     const scenes = [];
 
-    // 씬 번호나 구분자로 분할
-    const parts = content.split(/(?=씬\s*\d|Scene\s*\d|#\s*\d|\d+\.\s)/i);
+    // 1. 메타 설명 패턴 필터링 (TTS에서 읽으면 안 되는 부분)
+    const metaPatterns = [
+      /^#+\s*주인공\s*설정.*/gm,
+      /^#+\s*스토리\s*컨셉.*/gm,
+      /^#+\s*배경.*/gm,
+      /^-\s*이름[:：].*/gm,
+      /^-\s*나이[:：].*/gm,
+      /^-\s*직업[:：].*/gm,
+      /^-\s*성격\s*특징.*/gm,
+      /^-\s*현재\s*상황.*/gm,
+      /^-\s*한\s*줄\s*요약.*/gm,
+      /^-\s*핵심\s*메시지.*/gm,
+      /^-\s*감정\s*흐름.*/gm,
+      /^-\s*시대\/장소.*/gm,
+      /^-\s*분위기.*/gm,
+      /^\d+\.\s*주인공\s*설정.*/gm,
+      /^\d+\.\s*스토리\s*컨셉.*/gm,
+      /^\d+\.\s*배경.*/gm,
+      /^【.*】$/gm,
+      /^\[.*\]$/gm,
+    ];
+
+    // 메타 설명 제거
+    let cleanedContent = content;
+    for (const pattern of metaPatterns) {
+      cleanedContent = cleanedContent.replace(pattern, '');
+    }
+
+    // 2. 씬/장면 단위로 분할
+    const scenePatterns = /(?=씬\s*\d|Scene\s*\d|장면\s*\d|###\s*장면)/i;
+    const parts = cleanedContent.split(scenePatterns);
 
     if (parts.length > 1) {
       parts.forEach((part, idx) => {
-        const text = part.trim();
-        if (text && text.length > 20) {
+        // 순수 나레이션만 추출 (대사, 이야기 본문)
+        const narration = this.extractNarrationFromScene(part);
+        if (narration && narration.length > 30) {
           scenes.push({
             id: `scene_${idx + 1}`,
-            text: text
+            text: narration
           });
         }
       });
-    } else {
-      // 분할 불가시 전체를 하나로
-      scenes.push({
-        id: 'scene_1',
-        text: content
+    }
+
+    // 씬 분할 실패 시 전체에서 나레이션 추출
+    if (scenes.length === 0) {
+      const narration = this.extractNarrationFromScene(cleanedContent);
+      if (narration && narration.length > 30) {
+        scenes.push({
+          id: 'scene_1',
+          text: narration
+        });
+      }
+    }
+
+    console.log('[Step3] 추출된 나레이션 씬:', scenes.length, '개');
+    return scenes;
+  },
+
+  // 씬 텍스트에서 순수 나레이션만 추출 (설명, 지시문 제외)
+  extractNarrationFromScene(sceneText) {
+    if (!sceneText) return '';
+
+    let text = sceneText;
+
+    // 제목/헤더 제거 (예: "### 장면 1: 도입부")
+    text = text.replace(/^#+\s*장면\s*\d+.*$/gm, '');
+    text = text.replace(/^씬\s*\d+.*$/gm, '');
+    text = text.replace(/^Scene\s*\d+.*$/gm, '');
+
+    // 메타 설명 제거
+    text = text.replace(/^-\s*(상황|설명|등장인물|핵심|갈등|감정|깨달음|메시지|여운).*$/gm, '');
+    text = text.replace(/^\*\*.*\*\*$/gm, ''); // **볼드** 제목 제거
+    text = text.replace(/^\(약\s*\d+%\)$/gm, ''); // (약 20%) 제거
+
+    // 대사 추출 (큰따옴표 안의 내용)
+    const dialogues = [];
+    const dialogueMatches = text.match(/"([^"]+)"/g);
+    if (dialogueMatches) {
+      dialogueMatches.forEach(match => {
+        dialogues.push(match.replace(/"/g, ''));
       });
     }
 
-    return scenes;
+    // 나레이션 문장 추출 (마침표로 끝나는 완전한 문장)
+    const sentences = text.match(/[^.!?]*[.!?]/g) || [];
+    const narrationSentences = sentences.filter(sentence => {
+      const s = sentence.trim();
+      // 메타 설명이 아닌 문장만 선택
+      if (s.length < 10) return false;
+      if (/^-\s/.test(s)) return false;
+      if (/^#/.test(s)) return false;
+      if (/[:：]$/.test(s)) return false;
+      // 숫자로 시작하는 목록 제외
+      if (/^\d+\.\s*(주인공|스토리|배경|설정|컨셉)/.test(s)) return false;
+      return true;
+    });
+
+    // 대사와 나레이션 결합
+    let result = narrationSentences.join(' ').trim();
+
+    // 연속 공백 정리
+    result = result.replace(/\s+/g, ' ');
+
+    return result;
   },
 
   // 음성 스타일에 따른 음성 선택

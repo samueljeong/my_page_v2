@@ -201,7 +201,7 @@ window.DramaStep2 = {
     }
   },
 
-  // 씬 이미지 생성
+  // 씬 이미지 생성 (main_character 정보 포함)
   async generateSceneImage(idx) {
     if (!this.analysisResult?.scenes?.[idx]) {
       DramaUtils.showStatus('씬 정보가 없습니다.', 'error');
@@ -210,6 +210,20 @@ window.DramaStep2 = {
 
     const scene = this.analysisResult.scenes[idx];
     const config = this.getConfig();
+    const characters = this.analysisResult.characters || [];
+
+    // 주인공(첫 번째 캐릭터) 정보 가져오기
+    const mainCharacter = characters[0];
+
+    // 씬 프롬프트에 주인공 정보를 강제로 결합
+    let enhancedPrompt = scene.backgroundPrompt || '';
+
+    if (mainCharacter) {
+      // 캐릭터 일관성 규칙: 주인공 정보를 프롬프트 맨 앞에 배치
+      const characterConsistencyPrefix = this.buildCharacterConsistencyPrompt(mainCharacter);
+      enhancedPrompt = `${characterConsistencyPrefix} Scene: ${enhancedPrompt}`;
+      console.log('[Step2] 주인공 정보 결합 프롬프트 생성');
+    }
 
     DramaUtils.showStatus(`씬 ${idx + 1} 이미지 생성 중...`, 'info');
 
@@ -218,7 +232,7 @@ window.DramaStep2 = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: scene.backgroundPrompt,
+          prompt: enhancedPrompt,
           size: config.imageRatio === '16:9' ? '1792x1024' : (config.imageRatio === '9:16' ? '1024x1792' : '1024x1024'),
           imageProvider: config.imageModel
         })
@@ -319,6 +333,52 @@ window.DramaStep2 = {
     }
 
     DramaUtils.showStatus(`선택된 ${checkboxes.length}개 씬 재생성 완료!`, 'success');
+  },
+
+  // 캐릭터 일관성 프롬프트 생성
+  buildCharacterConsistencyPrompt(mainCharacter) {
+    // 주인공 정보에서 이름, 나이, 성별, 외모 특징 추출
+    const name = mainCharacter.name || '';
+    const description = mainCharacter.description || '';
+    const imagePrompt = mainCharacter.imagePrompt || '';
+
+    // 한국인 시니어 관련 키워드 감지
+    const descLower = description.toLowerCase();
+    const isElderly = /할머니|할아버지|70|80|노인|시니어|elderly|grandmother|grandfather/i.test(description);
+    const isGrandmother = /할머니|grandmother|halmeoni|여성|woman/i.test(description);
+    const isGrandfather = /할아버지|grandfather|harabeoji|남성|man/i.test(description);
+
+    let consistencyPrompt = '';
+
+    if (isElderly && isGrandmother) {
+      // 한국 할머니 캐릭터 일관성 프롬프트
+      consistencyPrompt = `CRITICAL CHARACTER CONSISTENCY: The same Korean grandmother main character named ${name}. ` +
+        `Authentic Korean halmeoni (grandmother) from South Korea with pure Korean ethnicity, ` +
+        `distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, ` +
+        `flat nose bridge, Korean skin tone (light to medium beige with warm undertones), ` +
+        `natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. ` +
+        `NOT a young woman, clearly elderly. ${imagePrompt ? `Character details: ${imagePrompt}` : ''}`;
+    } else if (isElderly && isGrandfather) {
+      // 한국 할아버지 캐릭터 일관성 프롬프트
+      consistencyPrompt = `CRITICAL CHARACTER CONSISTENCY: The same Korean grandfather main character named ${name}. ` +
+        `Authentic Korean harabeoji (grandfather) from South Korea with pure Korean ethnicity, ` +
+        `distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, ` +
+        `Korean skin tone, weathered kind face with Korean aging characteristics, ` +
+        `balding or short gray hair typical of Korean grandfathers. ` +
+        `NOT a young person, clearly elderly. ${imagePrompt ? `Character details: ${imagePrompt}` : ''}`;
+    } else if (imagePrompt) {
+      // 일반 캐릭터 - 기존 이미지 프롬프트 사용
+      consistencyPrompt = `CRITICAL CHARACTER CONSISTENCY: The same main character named ${name}. ` +
+        `${imagePrompt} Must maintain consistent appearance across all scenes.`;
+    } else {
+      // 기본 프롬프트
+      consistencyPrompt = `Main character: ${name}. ${description}`;
+    }
+
+    // 시대 감성 추가 (1970~80년대 한국)
+    const vintageSuffix = ` Setting: South Korea, 1970s-1980s nostalgic atmosphere, vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture.`;
+
+    return consistencyPrompt + vintageSuffix;
   },
 
   // 세션에서 데이터 복원
