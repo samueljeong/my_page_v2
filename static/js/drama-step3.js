@@ -133,17 +133,27 @@ window.DramaStep3 = {
 
     console.log('[Step3] JSON 파싱 시작, 키들:', Object.keys(jsonData));
 
-    // 1. highlight.opening_hook을 첫 나레이션으로 추가 (후킹 역할)
-    if (jsonData.highlight?.opening_hook) {
-      const hook = jsonData.highlight.opening_hook;
-      console.log('[Step3] opening_hook 발견:', hook.substring(0, 50));
-      narrations.push(hook);
+    // 1. highlight.opening_hook 또는 highlight_preview.narration을 첫 나레이션으로 추가
+    const openingHook = jsonData.highlight?.opening_hook || jsonData.highlight_preview?.narration;
+    if (openingHook) {
+      console.log('[Step3] opening_hook 발견:', openingHook.substring(0, 50));
+      narrations.push(openingHook);
     }
 
-    // 2. scenes 배열에서 tts_text 또는 narration 추출 (최우선!)
-    if (jsonData.scenes && Array.isArray(jsonData.scenes)) {
-      console.log('[Step3] scenes 배열 발견:', jsonData.scenes.length, '개');
-      jsonData.scenes.forEach((scene, idx) => {
+    // 2. scenes 배열 찾기 (여러 경로 지원)
+    // 백엔드 JSON 구조: jsonData.script.scenes 또는 jsonData.scenes
+    let scenesArray = null;
+    if (jsonData.script?.scenes && Array.isArray(jsonData.script.scenes)) {
+      scenesArray = jsonData.script.scenes;
+      console.log('[Step3] script.scenes 배열 발견:', scenesArray.length, '개');
+    } else if (jsonData.scenes && Array.isArray(jsonData.scenes)) {
+      scenesArray = jsonData.scenes;
+      console.log('[Step3] scenes 배열 발견:', scenesArray.length, '개');
+    }
+
+    // 3. scenes 배열에서 tts_text 또는 narration 추출
+    if (scenesArray && scenesArray.length > 0) {
+      scenesArray.forEach((scene, idx) => {
         // tts_text 필드 우선 (백엔드에서 TTS용으로 정제한 텍스트)
         if (scene.tts_text && typeof scene.tts_text === 'string' && scene.tts_text.length > 10) {
           console.log(`[Step3] scene[${idx}] tts_text 사용:`, scene.tts_text.substring(0, 50));
@@ -165,7 +175,7 @@ window.DramaStep3 = {
       });
     }
 
-    // 3. storyline에서 나레이션 추출 (scenes가 비어있을 때)
+    // 4. storyline에서 나레이션 추출 (scenes가 비어있을 때)
     if (narrations.length <= 1 && jsonData.storyline) {
       console.log('[Step3] storyline에서 추출 시도');
       // storyline이 배열인 경우
@@ -288,9 +298,10 @@ window.DramaStep3 = {
       }
     }
 
-    // 4. scenes 배열에서 추출
-    if (jsonData.scenes && Array.isArray(jsonData.scenes)) {
-      const texts = jsonData.scenes.map(s => this.extractTextFromSceneObject(s)).filter(t => t);
+    // 4. scenes 배열에서 추출 (script.scenes 또는 scenes)
+    const scenesArray = jsonData.script?.scenes || jsonData.scenes;
+    if (scenesArray && Array.isArray(scenesArray)) {
+      const texts = scenesArray.map(s => this.extractTextFromSceneObject(s)).filter(t => t);
       if (texts.length > 0) return texts.join('\n\n');
     }
 
