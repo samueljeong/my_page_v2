@@ -151,7 +151,7 @@ async function executeGptPro() {
   }
 
   console.log('[Step3] showGptLoading 호출');
-  showGptLoading('GPT PRO 설교문 생성 중...');
+  showGptLoading('GPT PRO 설교문 생성 중...', true);
 
   try {
     // Step1, Step2 결과 수집
