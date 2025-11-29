@@ -739,7 +739,8 @@ def build_testimony_prompt_from_guide_legacy(custom_guide=None):
 def get_client():
     key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not key:
-        raise RuntimeError("OPENAI_API_KEY가 비어 있습니다.")
+        print("[WARNING] OPENAI_API_KEY가 설정되지 않았습니다. API 호출 시 오류가 발생할 수 있습니다.")
+        return None
     return OpenAI(api_key=key)
 
 client = get_client()
