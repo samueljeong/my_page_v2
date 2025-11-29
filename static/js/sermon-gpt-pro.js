@@ -137,16 +137,20 @@ async function executeGptPro() {
 
   // Step1, Step2 완료 확인
   const steps = getCurrentSteps();
+  console.log('[Step3] steps:', steps);
   const step1Steps = steps.filter(s => (s.stepType || 'step1') === 'step1');
   const step2Steps = steps.filter(s => (s.stepType || 'step1') === 'step2');
+  console.log('[Step3] step1Steps:', step1Steps.length, 'step2Steps:', step2Steps.length);
   const step1Completed = step1Steps.length > 0 && step1Steps.every(s => window.stepResults[s.id]);
   const step2Completed = step2Steps.length > 0 && step2Steps.every(s => window.stepResults[s.id]);
+  console.log('[Step3] step1Completed:', step1Completed, 'step2Completed:', step2Completed);
 
   if (!step1Completed || !step2Completed) {
     alert('Step1, Step2를 먼저 완료해주세요.');
     return;
   }
 
+  console.log('[Step3] showGptLoading 호출');
   showGptLoading('GPT PRO 설교문 생성 중...');
 
   try {
@@ -218,25 +222,30 @@ async function executeGptPro() {
       }
     }
 
+    console.log('[Step3] API 호출 시작');
     const response = await fetch('/api/sermon/gpt-pro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
+    console.log('[Step3] API 응답 status:', response.status);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
+    console.log('[Step3] API 응답 data:', data);
 
     if (data.error) {
       throw new Error(data.error);
     }
 
     // 결과 표시
+    console.log('[Step3] 결과 표시 시작');
     const resultTextarea = document.getElementById('gpt-pro-result');
     const resultContainer = document.getElementById('gpt-pro-result-container');
+    console.log('[Step3] resultTextarea:', !!resultTextarea, 'resultContainer:', !!resultContainer);
 
     if (resultTextarea) {
       resultTextarea.value = data.result;
@@ -244,6 +253,7 @@ async function executeGptPro() {
     }
     if (resultContainer) {
       resultContainer.style.display = 'block';
+      console.log('[Step3] 결과 컨테이너 표시됨');
     }
 
     // 토큰 사용량 표시
