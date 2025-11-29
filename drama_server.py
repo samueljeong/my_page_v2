@@ -3089,14 +3089,19 @@ def api_analyze_characters():
 - 인물 프롬프트는 portrait 스타일에 적합하게 작성
 - 한국 드라마 스타일의 시각적 요소 반영
 
-🚨 매우 중요 - 한국인 외모 필수 요구사항:
-- ⚠️ 모든 인물의 imagePrompt는 반드시 프롬프트 시작 부분에 다음을 포함:
-  "Korean person from South Korea with authentic Korean/East Asian ethnicity, Korean facial bone structure, Korean skin tone"
-- 한국인 할머니: "elderly Korean grandmother from South Korea, Korean ethnicity, aged Korean facial features, Korean skin tone, traditional Korean elderly appearance"
-- 한국인 할아버지: "elderly Korean grandfather from South Korea, Korean ethnicity, aged Korean facial features, Korean skin tone, traditional Korean elderly appearance"
-- 젊은 한국인: "young Korean person from South Korea, Korean ethnicity, Korean facial features, Korean skin tone"
-- ⚠️ 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"을 명시해야 합니다
-- ⚠️ 프롬프트 맨 앞에 한국인 특징을 배치해야 AI 모델이 제대로 인식합니다"""
+🚨 매우 중요 - 한국인 외모 필수 요구사항 (반드시 프롬프트 맨 앞에 배치):
+
+- ⚠️ 한국인 할머니 (halmeoni):
+  "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers"
+
+- ⚠️ 한국인 할아버지 (harabeoji):
+  "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers"
+
+- ⚠️ 1970~80년대 시대 감성 스타일:
+  "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, soft focus edges, nostalgic color grading similar to 1970s-1980s Korean cinema"
+
+- ⚠️ 절대 금지: "Asian" 단독 사용, Western facial features, 현대적 요소
+- ⚠️ 프롬프트 맨 앞에 한국인 특징을 배치해야 AI 모델이 정확히 인식합니다"""
 
         user_content = f"""다음 드라마 대본을 분석해주세요:
 
@@ -3176,13 +3181,16 @@ def api_generate_scene_prompt():
 - 추가할 수 있는 것: 위치, 표정, 행동, 자세 (외모는 변경 금지!)
 
 🚨 한국인 외모 필수 - 프롬프트 맨 앞에 배치:
-- COMBINED_PROMPT의 맨 앞에 반드시 다음을 포함: "Korean person(s) from South Korea with authentic Korean/East Asian ethnicity, Korean facial features, Korean skin tone"
-- 한국인 할머니/할아버지: "elderly Korean grandmother/grandfather from South Korea with Korean ethnicity"
-- 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"을 명시
+- 한국인 할머니: "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids typical of Korean elderly, Korean skin tone, permed short gray/white hair"
+- 한국인 할아버지: "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face, single eyelids or hooded eyes, Korean skin tone, balding or short gray hair"
+- 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"과 구체적인 한국인 특징 명시
+
+🚨 1970~80년대 시대 감성 - 프롬프트 끝에 추가:
+- "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm lighting"
 
 응답 형식:
-BACKGROUND_PROMPT: [배경 프롬프트 - 영어]
-COMBINED_PROMPT: [통합 장면 프롬프트 - 영어, 맨 앞에 한국인 특징 포함, 등장인물 외모는 정확히 유지]"""
+BACKGROUND_PROMPT: [배경 프롬프트 - 영어, 1970~80년대 한국 배경 스타일 포함]
+COMBINED_PROMPT: [통합 장면 프롬프트 - 영어, 맨 앞에 한국인 특징 포함, 마지막에 빈티지 필름 스타일 추가, 등장인물 외모는 정확히 유지]"""
 
         scene_info = f"""
 씬 정보:
@@ -3281,10 +3289,27 @@ def api_generate_image():
 
             # 프롬프트에 스타일 가이드 추가 및 한국 인종 강조
             # 한국인 캐릭터인 경우 인종적 특징을 프롬프트 맨 앞에 배치하여 강조
-            if "Korean" in prompt or "korean" in prompt:
-                # 한국인 외모 특징을 프롬프트 시작 부분에 최우선 배치
-                korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity with Korean facial bone structure, Korean skin tone, natural Korean facial features. This is a Korean person from South Korea."
-                enhanced_prompt = f"{korean_features} {prompt}. {aspect_instruction} Style: cinematic Korean drama photography, professional lighting, 8k resolution, detailed, wide shot composition"
+            prompt_lower = prompt.lower()
+
+            # 한국인 시니어 관련 키워드 감지
+            is_elderly = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old', '70', '80', 'aged', 'senior'])
+            is_korean = "korean" in prompt_lower
+
+            if is_korean:
+                if is_elderly and ('grandmother' in prompt_lower or 'woman' in prompt_lower or 'halmeoni' in prompt_lower):
+                    # 한국 할머니 - 상세한 한국인 특징
+                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandmother (halmeoni) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. NOT Western, NOT mixed ethnicity."
+                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                elif is_elderly and ('grandfather' in prompt_lower or 'man' in prompt_lower or 'harabeoji' in prompt_lower):
+                    # 한국 할아버지 - 상세한 한국인 특징
+                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandfather (harabeoji) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered kind face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers. NOT Western, NOT mixed ethnicity."
+                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                else:
+                    # 일반 한국인
+                    korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity from South Korea with Korean facial bone structure, Korean skin tone, natural Korean facial features. NOT Western features."
+                    style_suffix = "cinematic Korean drama photography, professional lighting, 8k resolution, detailed"
+
+                enhanced_prompt = f"{korean_features} {prompt}. {aspect_instruction} Style: {style_suffix}, wide shot composition"
             else:
                 enhanced_prompt = f"Generate a high quality, photorealistic image: {prompt}. {aspect_instruction} Style: cinematic lighting, professional photography, 8k resolution, detailed, wide shot composition"
 

@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2025-11-29",
+  "description": "한국인 시니어 이미지 생성을 위한 최적화된 프롬프트 가이드",
+
+  "koreanEthnicityPrefix": {
+    "description": "모든 인물 프롬프트 맨 앞에 반드시 포함할 한국인 특징",
+    "critical": true,
+    "note": "프롬프트 시작 부분에 위치해야 AI 모델이 정확히 인식",
+
+    "elderly_grandmother": "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers",
+
+    "elderly_grandfather": "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers",
+
+    "middle_aged_woman": "Authentic Korean woman from South Korea, pure Korean ethnicity, Korean facial features: oval face, Korean eye shape with single or double eyelids, Korean skin tone, neat short permed hair typical of Korean middle-aged women",
+
+    "middle_aged_man": "Authentic Korean man from South Korea, pure Korean ethnicity, Korean facial features: Korean face shape, Korean eye shape, Korean skin tone, neat short black or graying hair"
+  },
+
+  "era_1970s_1980s": {
+    "description": "1970~80년대 한국 시대 감성을 위한 스타일 가이드",
+
+    "visual_style": {
+      "film_look": "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, soft focus edges, nostalgic color grading similar to 1970s-1980s Korean cinema",
+      "lighting": "natural daylight, warm golden hour lighting, soft window light, incandescent bulb warm glow typical of 1970s Korean homes",
+      "color_palette": "muted earth tones, sepia undertones, faded blues and greens, warm yellows and oranges, vintage Korean color photography feel"
+    },
+
+    "clothing_elderly_woman": {
+      "traditional": "hanbok (traditional Korean dress) with muted colors like gray, beige, light purple, or indigo, typical of Korean grandmothers in 1970s-80s",
+      "casual": "simple cotton blouse with small floral patterns, comfortable wide pants, hand-knit cardigan, rubber shoes (gomushin), apron while cooking",
+      "winter": "padded traditional Korean jacket (nubi jeogori), woolen vest, knitted shawl"
+    },
+
+    "clothing_elderly_man": {
+      "traditional": "durumagi (traditional Korean overcoat), hanbok pants, traditional hat (gat or jeongjagwan)",
+      "casual": "simple button-up shirt, suspenders, comfortable slacks, rubber shoes, newsboy cap or fedora",
+      "working": "simple cotton workwear, straw hat for farming, simple vest"
+    },
+
+    "settings_rural": {
+      "home": "traditional Korean thatched-roof house (chogajip) or tile-roof hanok, wooden floor with ondol heating, paper sliding doors, courtyard with large earthen jars (onggi)",
+      "village": "narrow dirt roads, stone walls, persimmon trees, rice paddies, village well, small neighborhood store (gupangga)",
+      "interior": "low wooden table (soban), floor cushions, traditional chest (bandaji), old radio, oil lamp or early fluorescent lights, wall calendar"
+    },
+
+    "settings_urban_1970s_80s": {
+      "home": "small apartment or single-story house, linoleum floor, coal briquette (yeontan) heating, small kitchen with gas stove",
+      "street": "narrow alleyways, corner store (gupangga), street vendors, old buses and taxis, hand-painted shop signs",
+      "market": "traditional market (sijang), vendors selling vegetables on mats, hanging dried fish, crowded narrow aisles"
+    }
+  },
+
+  "composition_guidelines": {
+    "portrait": "medium close-up or bust shot, slight warm tone, natural expression, soft lighting from side or window, shallow depth of field",
+    "scene": "wide establishing shot, include environmental context, cinematic 16:9 aspect ratio, Korean drama cinematography style",
+    "emotional": "focus on hands or facial details for emotional moments, warm color grading, soft vignette"
+  },
+
+  "negative_prompts": {
+    "description": "피해야 할 요소들",
+    "avoid": [
+      "Western facial features",
+      "non-Korean ethnicity",
+      "modern smartphones or technology",
+      "contemporary fashion brands",
+      "bright neon colors",
+      "sharp digital photography look",
+      "anime or cartoon style",
+      "overly saturated colors"
+    ]
+  },
+
+  "example_prompts": {
+    "grandmother_cooking": "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features with round face shape, single eyelids typical of Korean elderly, Korean skin tone with natural aging, permed short gray hair, wearing simple cotton hanbok with apron, cooking in traditional Korean kitchen with earthen jars in background, warm natural lighting, 1970s Korean film photography aesthetic with film grain and muted warm colors, nostalgic atmosphere",
+
+    "grandfather_reading": "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features, weathered kind face with Korean aging characteristics, wearing simple cotton shirt with vest, sitting on wooden floor reading old newspaper, traditional Korean room with paper doors and wooden furniture, warm afternoon light through window, vintage 1970s Korean photography style with soft focus and film grain",
+
+    "elderly_couple_evening": "Authentic elderly Korean couple from South Korea, pure Korean ethnicity, grandmother with permed gray hair and grandfather with balding head, both with distinct Korean elderly facial features, sitting together at low wooden table (soban), small oil lamp creating warm glow, traditional Korean interior, 1980s Korean family photo aesthetic, warm nostalgic atmosphere with film grain texture"
+  }
+}

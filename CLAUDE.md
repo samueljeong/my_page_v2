@@ -49,33 +49,43 @@ Drama Lab - AI 기반 드라마 영상 자동 생성 시스템
 - `guides/drama.json` - 드라마 설정
 - `guides/nostalgia-drama-prompts.json` - 향수 드라마 프롬프트
 - `guides/nostalgia-drama-sample.json` - 샘플 데이터
+- `guides/korean-senior-image-prompts.json` - **한국인 시니어 이미지 프롬프트 가이드 (NEW)**
 
 ## 알려진 이슈 (drama_issue_code.md 참조)
 
-### 1. TTS 음성 생성 오류
-- Google TTS API 5000바이트 제한 초과 문제
-- SSML 태그 추가 시 바이트 제한 초과 가능성
-- `max_bytes = 3500` 설정했으나 여전히 발생
+### 1. ~~TTS 음성 생성 오류~~ ✅ 해결됨 (2024-11-29)
+- ~~Google TTS API 5000바이트 제한 초과 문제~~
+- **해결책**: 새 TTS 파이프라인 구현
+  - `tts_chunking.py`: 문장 단위 분리 + 바이트 제한 청킹
+  - `tts_service.py`: 청크별 TTS + FFmpeg 병합 + SRT 자막 생성
+  - 새 API: `POST /api/drama/step3/tts`
 
-### 2. 한국인 이미지 생성 문제
-- 한국 할머니/할아버지 생성 시 외국인 이미지 출력
-- 프롬프트에 "Korean ethnicity", "East Asian features" 명시해도 불완전
+### 2. ~~한국인 이미지 생성 문제~~ ✅ 개선됨 (2024-11-29)
+- ~~한국 할머니/할아버지 생성 시 외국인 이미지 출력~~
+- **해결책**: 상세한 한국인 시니어 프롬프트 가이드 추가
+  - `guides/korean-senior-image-prompts.json`: 한국인 시니어 이미지 프롬프트 가이드
+  - 할머니(halmeoni)/할아버지(harabeoji) 별도 프롬프트 정의
+  - 한국인 얼굴 특징 상세 명시: 둥근 얼굴, 홑꺼풀/속쌍꺼풀, 한국인 피부톤
+  - 1970~80년대 빈티지 필름 스타일 적용: film grain, faded warm colors
 
 ## 주요 API 엔드포인트 (drama_server.py)
 - `/api/drama/gpt-plan-step1` - 대본 생성
-- `/api/drama/analyze-characters` - 캐릭터/씬 분석 (라인 2368-2452)
-- `/api/drama/generate-image` - 이미지 생성 (라인 2556-2909)
-- `/api/drama/generate-tts` - TTS 음성 생성 (라인 2913-3160)
+- `/api/drama/analyze-characters` - 캐릭터/씬 분석
+- `/api/drama/generate-image` - 이미지 생성
+- `/api/drama/generate-tts` - TTS 음성 생성 (기존)
+- `/api/drama/step3/tts` - **새 TTS 파이프라인 (5000바이트 제한 해결 + SRT 자막)**
 - `/api/drama/generate-video` - 영상 제작
 - `/api/drama/video-status/{jobId}` - 영상 작업 상태 확인
 - `/api/youtube/auth-status` - YouTube 인증 상태
 - `/api/youtube/upload` - YouTube 업로드
 
 ## 다음 세션에서 할 일
-1. ~~drama.html UI 완성 (Step1~5 화면 구현)~~ ✅ 완료
+1. ~~drama.html UI 완성~~ ✅ 완료
 2. ~~각 step별 JS 모듈 구현~~ ✅ 완료
-3. TTS/이미지 생성 이슈 해결 (백엔드)
-4. 실제 동작 테스트 (API 키 설정 필요)
+3. ~~TTS 5000바이트 제한 해결~~ ✅ 완료
+4. ~~이미지 프롬프트 튜닝 - 한국인/70-80년대 감도~~ ✅ 완료
+5. 실제 동작 테스트 (API 키 설정 필요) - 1분 테스트 완주
+6. 전체 파이프라인 통합 테스트
 
 ## 참고 사항
 - 이미지 생성: Gemini (기본) / FLUX.1 Pro / DALL-E 3 지원
