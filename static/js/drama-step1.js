@@ -115,7 +115,7 @@ window.DramaStep1 = {
           videoCategory: this.getVideoCategory(config.contentType),
           customDirective: config.topic,
           draftContent: step1Data.result + '\n\n' + step2Data.result,
-          selectedModel: config.aiModel
+          model: config.aiModel  // 백엔드는 'model' 파라미터를 기대함
         })
       });
 
