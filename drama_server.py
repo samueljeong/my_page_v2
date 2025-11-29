@@ -739,7 +739,8 @@ def build_testimony_prompt_from_guide_legacy(custom_guide=None):
 def get_client():
     key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not key:
-        raise RuntimeError("OPENAI_API_KEY가 비어 있습니다.")
+        print("[WARNING] OPENAI_API_KEY가 설정되지 않았습니다. API 호출 시 오류가 발생할 수 있습니다.")
+        return None
     return OpenAI(api_key=key)
 
 client = get_client()
@@ -3088,14 +3089,19 @@ def api_analyze_characters():
 - 인물 프롬프트는 portrait 스타일에 적합하게 작성
 - 한국 드라마 스타일의 시각적 요소 반영
 
-🚨 매우 중요 - 한국인 외모 필수 요구사항:
-- ⚠️ 모든 인물의 imagePrompt는 반드시 프롬프트 시작 부분에 다음을 포함:
-  "Korean person from South Korea with authentic Korean/East Asian ethnicity, Korean facial bone structure, Korean skin tone"
-- 한국인 할머니: "elderly Korean grandmother from South Korea, Korean ethnicity, aged Korean facial features, Korean skin tone, traditional Korean elderly appearance"
-- 한국인 할아버지: "elderly Korean grandfather from South Korea, Korean ethnicity, aged Korean facial features, Korean skin tone, traditional Korean elderly appearance"
-- 젊은 한국인: "young Korean person from South Korea, Korean ethnicity, Korean facial features, Korean skin tone"
-- ⚠️ 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"을 명시해야 합니다
-- ⚠️ 프롬프트 맨 앞에 한국인 특징을 배치해야 AI 모델이 제대로 인식합니다"""
+🚨 매우 중요 - 한국인 외모 필수 요구사항 (반드시 프롬프트 맨 앞에 배치):
+
+- ⚠️ 한국인 할머니 (halmeoni):
+  "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers"
+
+- ⚠️ 한국인 할아버지 (harabeoji):
+  "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers"
+
+- ⚠️ 1970~80년대 시대 감성 스타일:
+  "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, soft focus edges, nostalgic color grading similar to 1970s-1980s Korean cinema"
+
+- ⚠️ 절대 금지: "Asian" 단독 사용, Western facial features, 현대적 요소
+- ⚠️ 프롬프트 맨 앞에 한국인 특징을 배치해야 AI 모델이 정확히 인식합니다"""
 
         user_content = f"""다음 드라마 대본을 분석해주세요:
 
@@ -3175,13 +3181,16 @@ def api_generate_scene_prompt():
 - 추가할 수 있는 것: 위치, 표정, 행동, 자세 (외모는 변경 금지!)
 
 🚨 한국인 외모 필수 - 프롬프트 맨 앞에 배치:
-- COMBINED_PROMPT의 맨 앞에 반드시 다음을 포함: "Korean person(s) from South Korea with authentic Korean/East Asian ethnicity, Korean facial features, Korean skin tone"
-- 한국인 할머니/할아버지: "elderly Korean grandmother/grandfather from South Korea with Korean ethnicity"
-- 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"을 명시
+- 한국인 할머니: "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids typical of Korean elderly, Korean skin tone, permed short gray/white hair"
+- 한국인 할아버지: "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face, single eyelids or hooded eyes, Korean skin tone, balding or short gray hair"
+- 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"과 구체적인 한국인 특징 명시
+
+🚨 1970~80년대 시대 감성 - 프롬프트 끝에 추가:
+- "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm lighting"
 
 응답 형식:
-BACKGROUND_PROMPT: [배경 프롬프트 - 영어]
-COMBINED_PROMPT: [통합 장면 프롬프트 - 영어, 맨 앞에 한국인 특징 포함, 등장인물 외모는 정확히 유지]"""
+BACKGROUND_PROMPT: [배경 프롬프트 - 영어, 1970~80년대 한국 배경 스타일 포함]
+COMBINED_PROMPT: [통합 장면 프롬프트 - 영어, 맨 앞에 한국인 특징 포함, 마지막에 빈티지 필름 스타일 추가, 등장인물 외모는 정확히 유지]"""
 
         scene_info = f"""
 씬 정보:
@@ -3280,10 +3289,27 @@ def api_generate_image():
 
             # 프롬프트에 스타일 가이드 추가 및 한국 인종 강조
             # 한국인 캐릭터인 경우 인종적 특징을 프롬프트 맨 앞에 배치하여 강조
-            if "Korean" in prompt or "korean" in prompt:
-                # 한국인 외모 특징을 프롬프트 시작 부분에 최우선 배치
-                korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity with Korean facial bone structure, Korean skin tone, natural Korean facial features. This is a Korean person from South Korea."
-                enhanced_prompt = f"{korean_features} {prompt}. {aspect_instruction} Style: cinematic Korean drama photography, professional lighting, 8k resolution, detailed, wide shot composition"
+            prompt_lower = prompt.lower()
+
+            # 한국인 시니어 관련 키워드 감지
+            is_elderly = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old', '70', '80', 'aged', 'senior'])
+            is_korean = "korean" in prompt_lower
+
+            if is_korean:
+                if is_elderly and ('grandmother' in prompt_lower or 'woman' in prompt_lower or 'halmeoni' in prompt_lower):
+                    # 한국 할머니 - 상세한 한국인 특징
+                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandmother (halmeoni) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. NOT Western, NOT mixed ethnicity."
+                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                elif is_elderly and ('grandfather' in prompt_lower or 'man' in prompt_lower or 'harabeoji' in prompt_lower):
+                    # 한국 할아버지 - 상세한 한국인 특징
+                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandfather (harabeoji) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered kind face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers. NOT Western, NOT mixed ethnicity."
+                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                else:
+                    # 일반 한국인
+                    korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity from South Korea with Korean facial bone structure, Korean skin tone, natural Korean facial features. NOT Western features."
+                    style_suffix = "cinematic Korean drama photography, professional lighting, 8k resolution, detailed"
+
+                enhanced_prompt = f"{korean_features} {prompt}. {aspect_instruction} Style: {style_suffix}, wide shot composition"
             else:
                 enhanced_prompt = f"Generate a high quality, photorealistic image: {prompt}. {aspect_instruction} Style: cinematic lighting, professional photography, 8k resolution, detailed, wide shot composition"
 
@@ -3667,6 +3693,74 @@ def api_generate_image():
         return jsonify({"ok": False, "error": error_msg}), 200
 
 
+# ===== MP3 청크 병합 (FFmpeg 기반) =====
+def merge_audio_chunks_ffmpeg(audio_data_list):
+    """여러 MP3 바이트 데이터를 FFmpeg로 병합"""
+    import tempfile
+    import subprocess
+    import shutil
+
+    if not audio_data_list:
+        return b''
+
+    if len(audio_data_list) == 1:
+        return audio_data_list[0]
+
+    ffmpeg_path = shutil.which('ffmpeg')
+    if not ffmpeg_path:
+        # FFmpeg 없으면 단순 결합 (폴백)
+        print("[TTS-MERGE][WARN] FFmpeg 없음, 단순 바이트 결합 사용")
+        return b''.join(audio_data_list)
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 각 청크를 임시 파일로 저장
+            chunk_files = []
+            for i, chunk_data in enumerate(audio_data_list):
+                chunk_path = os.path.join(tmpdir, f"chunk_{i:03d}.mp3")
+                with open(chunk_path, 'wb') as f:
+                    f.write(chunk_data)
+                chunk_files.append(chunk_path)
+
+            # FFmpeg concat 리스트 파일 생성
+            list_path = os.path.join(tmpdir, "concat_list.txt")
+            with open(list_path, 'w') as f:
+                for chunk_path in chunk_files:
+                    f.write(f"file '{chunk_path}'\n")
+
+            # 출력 파일
+            output_path = os.path.join(tmpdir, "merged.mp3")
+
+            # FFmpeg concat 실행
+            cmd = [
+                'ffmpeg', '-y',
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', list_path,
+                '-c', 'copy',  # 재인코딩 없이 병합
+                output_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=60)
+
+            if result.returncode != 0:
+                print(f"[TTS-MERGE][ERROR] FFmpeg 실패: {result.stderr.decode()[:200]}")
+                # 폴백: 단순 바이트 결합
+                return b''.join(audio_data_list)
+
+            # 병합된 파일 읽기
+            with open(output_path, 'rb') as f:
+                merged_audio = f.read()
+
+            print(f"[TTS-MERGE] FFmpeg 병합 완료: {len(audio_data_list)}개 청크 → {len(merged_audio)} bytes")
+            return merged_audio
+
+    except Exception as e:
+        print(f"[TTS-MERGE][ERROR] 병합 실패: {e}")
+        # 폴백: 단순 바이트 결합
+        return b''.join(audio_data_list)
+
+
 # ===== Step5: TTS API (Google Cloud / 네이버 클로바 선택) =====
 @app.route('/api/drama/generate-tts', methods=['POST'])
 def api_generate_tts():
@@ -3920,7 +4014,14 @@ def api_generate_tts():
 
                     return jsonify({"ok": False, "error": f"Google TTS API 오류 ({response.status_code}): {error_text}"}), 200
 
-            combined_audio = b''.join(audio_data_list)
+            # FFmpeg로 MP3 청크 병합 (단순 바이트 결합 대신 - 헤더 중복 방지)
+            if len(audio_data_list) == 1:
+                # 청크가 하나면 그대로 사용
+                combined_audio = audio_data_list[0]
+            else:
+                # 여러 청크면 FFmpeg로 병합
+                combined_audio = merge_audio_chunks_ffmpeg(audio_data_list)
+
             audio_base64 = base64.b64encode(combined_audio).decode('utf-8')
             audio_url = f"data:audio/mp3;base64,{audio_base64}"
 
@@ -4004,7 +4105,12 @@ def api_generate_tts():
 
                     return jsonify({"ok": False, "error": f"네이버 TTS API 오류 ({response.status_code}): {error_text}"}), 200
 
-            combined_audio = b''.join(audio_data_list)
+            # FFmpeg로 MP3 청크 병합 (네이버 TTS)
+            if len(audio_data_list) == 1:
+                combined_audio = audio_data_list[0]
+            else:
+                combined_audio = merge_audio_chunks_ffmpeg(audio_data_list)
+
             audio_base64 = base64.b64encode(combined_audio).decode('utf-8')
             audio_url = f"data:audio/mp3;base64,{audio_base64}"
 
@@ -4022,6 +4128,67 @@ def api_generate_tts():
 
     except Exception as e:
         print(f"[DRAMA-STEP5-TTS][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+# ===== Step3 TTS 새 파이프라인 (5000바이트 제한 해결 + SRT 자막) =====
+@app.route('/api/drama/step3/tts', methods=['POST'])
+def api_step3_tts_pipeline():
+    """
+    새로운 Step3 TTS 파이프라인
+    - 5000바이트 제한 자동 해결 (청킹)
+    - FFmpeg로 오디오 병합
+    - SRT 자막 자동 생성
+
+    Input:
+    {
+        "episode_id": "xxx",
+        "language": "ko-KR",
+        "voice": { "gender": "MALE", "name": "ko-KR-Neural2-B", "speaking_rate": 0.9 },
+        "scenes": [{ "id": "scene1", "narration": "..." }, ...]
+    }
+
+    Output:
+    {
+        "ok": true,
+        "episode_id": "xxx",
+        "audio_file": "outputs/audio/xxx_full.mp3",
+        "audio_url": "/outputs/audio/xxx_full.mp3",
+        "srt_file": "outputs/subtitles/xxx.srt",
+        "timeline": [...],
+        "stats": {...}
+    }
+    """
+    try:
+        from step3_tts_and_subtitles import run_tts_pipeline
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        scenes = data.get("scenes", [])
+        if not scenes:
+            return jsonify({"ok": False, "error": "씬 데이터가 없습니다."}), 400
+
+        print(f"[STEP3-TTS] 새 파이프라인 시작: {len(scenes)}개 씬")
+
+        result = run_tts_pipeline(data)
+
+        # 파일 경로를 URL로 변환
+        if result.get("ok") and result.get("audio_file"):
+            audio_file = result["audio_file"]
+            result["audio_url"] = "/" + audio_file
+
+        if result.get("ok") and result.get("srt_file"):
+            srt_file = result["srt_file"]
+            result["srt_url"] = "/" + srt_file
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"[STEP3-TTS][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
