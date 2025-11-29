@@ -42,6 +42,44 @@ window.DramaMain = {
         this.onChannelTypeChange(e.target.value);
       });
     }
+
+    // URL 파라미터 처리 (YouTube OAuth 콜백 등)
+    this.handleUrlParams();
+  },
+
+  /**
+   * URL 파라미터 처리
+   */
+  handleUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+
+    // YouTube 인증 완료 처리
+    if (params.get('youtube_auth') === 'success') {
+      console.log('[DramaMain] YouTube 인증 완료 감지');
+      DramaUtils.showStatus('YouTube 계정이 연결되었습니다!', 'success');
+
+      // Step5 YouTube 상태 새로고침
+      if (typeof DramaStep5 !== 'undefined') {
+        setTimeout(() => {
+          DramaStep5.checkYouTubeAuth();
+        }, 500);
+      }
+
+      // URL에서 파라미터 제거 (히스토리 깔끔하게)
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+
+    // 특정 스텝으로 이동
+    const stepParam = params.get('step');
+    if (stepParam) {
+      const step = parseInt(stepParam);
+      if (step >= 1 && step <= 5) {
+        console.log(`[DramaMain] URL 파라미터로 Step ${step}로 이동`);
+        dramaApp.maxReachedStep = Math.max(dramaApp.maxReachedStep, step);
+        this.goToStep(step);
+      }
+    }
   },
 
   /**

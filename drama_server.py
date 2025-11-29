@@ -6038,25 +6038,9 @@ def youtube_callback():
 
         save_youtube_token_to_db(token_data)
 
-        return """
-        <html>
-        <head><title>YouTube 인증 완료</title></head>
-        <body style="font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #ff0000, #cc0000);">
-            <div style="text-align: center; color: white; padding: 40px; background: rgba(0,0,0,0.3); border-radius: 16px;">
-                <h1>✅ YouTube 인증 완료!</h1>
-                <p>이 창을 닫고 원래 페이지로 돌아가세요.</p>
-                <script>
-                    setTimeout(() => {
-                        if (window.opener) {
-                            window.opener.postMessage({type: 'youtube-auth-success'}, '*');
-                        }
-                        window.close();
-                    }, 2000);
-                </script>
-            </div>
-        </body>
-        </html>
-        """
+        print(f"[YOUTUBE-CALLBACK] 인증 완료, /drama 페이지로 리다이렉트")
+        # Drama Lab 페이지로 리다이렉트 (Step5로 이동)
+        return redirect('/drama?youtube_auth=success&step=5')
 
     except Exception as e:
         print(f"[YOUTUBE-CALLBACK][ERROR] {str(e)}")
@@ -7052,33 +7036,96 @@ def api_gpt_analyze_prompts():
 def api_youtube_auth_status_test():
     """
     YouTube 인증 상태 확인.
-    실제 OAuth 연결 상태를 반환합니다.
+    데이터베이스에 저장된 OAuth 토큰을 확인합니다.
     """
     try:
-        # step5_youtube_upload 모듈에서 인증 상태 확인
-        import sys
-        sys.path.insert(0, os.path.dirname(__file__))
+        # 데이터베이스에서 토큰 로드
+        token_data = load_youtube_token_from_db()
 
-        from step5_youtube_upload.youtube_auth import check_auth_status
+        if not token_data or not token_data.get('refresh_token'):
+            print("[YOUTUBE-AUTH-STATUS] 토큰 없음 - 인증 필요")
+            return jsonify({
+                "ok": True,
+                "authenticated": False,
+                "connected": False,
+                "mode": "setup",
+                "channelName": None,
+                "channelId": None,
+                "message": "YouTube 계정을 연결해주세요."
+            })
 
-        status = check_auth_status()
-        print(f"[YOUTUBE-AUTH-STATUS] {status.get('mode')}: {status.get('message')}")
+        # 토큰 유효성 검사 및 채널 정보 조회
+        try:
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
 
-        return jsonify(status)
+            creds = Credentials.from_authorized_user_info(token_data)
 
-    except ImportError as e:
-        print(f"[YOUTUBE-AUTH-STATUS] 모듈 임포트 오류: {e}")
-        return jsonify({
-            "ok": True,
-            "authenticated": False,
-            "connected": False,
-            "mode": "test",
-            "channelName": None,
-            "channelId": None,
-            "message": "YouTube 모듈을 로드할 수 없습니다. 테스트 모드로 실행 중입니다."
-        })
+            # 토큰 만료 시 갱신
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                # 갱신된 토큰 저장
+                updated_token = {
+                    'token': creds.token,
+                    'refresh_token': creds.refresh_token,
+                    'token_uri': creds.token_uri,
+                    'client_id': creds.client_id,
+                    'client_secret': creds.client_secret,
+                    'scopes': list(creds.scopes) if creds.scopes else []
+                }
+                save_youtube_token_to_db(updated_token)
+                print("[YOUTUBE-AUTH-STATUS] 토큰 갱신 완료")
+
+            # YouTube API로 채널 정보 조회
+            youtube = build('youtube', 'v3', credentials=creds)
+            channel_response = youtube.channels().list(part="snippet", mine=True).execute()
+
+            items = channel_response.get("items", [])
+            if items:
+                channel = items[0]
+                channel_name = channel.get("snippet", {}).get("title", "채널")
+                channel_id = channel.get("id")
+
+                print(f"[YOUTUBE-AUTH-STATUS] 연결됨: {channel_name}")
+                return jsonify({
+                    "ok": True,
+                    "authenticated": True,
+                    "connected": True,
+                    "mode": "live",
+                    "channelName": channel_name,
+                    "channelId": channel_id,
+                    "message": "YouTube 연결됨"
+                })
+            else:
+                print("[YOUTUBE-AUTH-STATUS] 채널 없음")
+                return jsonify({
+                    "ok": True,
+                    "authenticated": True,
+                    "connected": False,
+                    "mode": "live",
+                    "channelName": None,
+                    "channelId": None,
+                    "message": "연결된 채널이 없습니다."
+                })
+
+        except Exception as api_error:
+            print(f"[YOUTUBE-AUTH-STATUS] API 오류: {api_error}")
+            # 토큰은 있지만 API 호출 실패 - 재인증 필요할 수 있음
+            return jsonify({
+                "ok": True,
+                "authenticated": False,
+                "connected": False,
+                "mode": "setup",
+                "channelName": None,
+                "channelId": None,
+                "message": f"인증 갱신이 필요합니다: {str(api_error)}"
+            })
+
     except Exception as e:
         print(f"[YOUTUBE-AUTH-STATUS] 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "ok": True,
             "authenticated": False,
@@ -7093,31 +7140,126 @@ def api_youtube_auth_status_test():
 @app.route('/api/youtube/auth', methods=['GET'])
 def api_youtube_auth_page():
     """
-    YouTube OAuth 인증 페이지.
-    현재는 테스트 모드 - 안내 메시지만 표시
+    YouTube OAuth 인증 시작 (GET 방식).
+    Google OAuth URL로 직접 리다이렉트합니다.
     """
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>YouTube 연결</title>
-        <style>
-            body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
-            .message { background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
-            .back-btn { margin-top: 20px; padding: 10px 20px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }
-        </style>
-    </head>
-    <body>
-        <h1>📺 YouTube 연결</h1>
-        <div class="message">
-            <p><strong>테스트 모드</strong></p>
-            <p>YouTube OAuth 인증이 아직 설정되지 않았습니다.</p>
-            <p>실제 업로드를 위해서는 Google Cloud Console에서 OAuth 자격 증명을 설정해야 합니다.</p>
-        </div>
-        <a href="/drama" class="back-btn">← Drama Lab으로 돌아가기</a>
-    </body>
-    </html>
-    """
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from google.oauth2.credentials import Credentials
+
+        # 환경 변수에서 OAuth 클라이언트 정보 가져오기
+        client_id = os.getenv('YOUTUBE_CLIENT_ID') or os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('YOUTUBE_CLIENT_SECRET') or os.getenv('GOOGLE_CLIENT_SECRET')
+
+        # Redirect URI 설정 - 기존 콜백 엔드포인트 사용
+        redirect_uri = os.getenv('YOUTUBE_REDIRECT_URI')
+        if not redirect_uri:
+            redirect_uri = request.url_root.rstrip('/') + '/api/drama/youtube-callback'
+            if redirect_uri.startswith('http://') and 'onrender.com' in redirect_uri:
+                redirect_uri = redirect_uri.replace('http://', 'https://')
+
+        print(f"[YOUTUBE-AUTH-GET] Redirect URI: {redirect_uri}")
+        print(f"[YOUTUBE-AUTH-GET] Client ID: {client_id[:20] if client_id else 'None'}...")
+
+        if not client_id or not client_secret:
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head><title>YouTube 연결</title>
+            <style>body{font-family:Arial;padding:50px;text-align:center}.error{background:#ffebee;padding:20px;border-radius:8px;margin:20px auto;max-width:500px;color:#c62828}.back-btn{margin-top:20px;padding:10px 20px;background:#1a73e8;color:white;border:none;border-radius:4px;cursor:pointer;text-decoration:none;display:inline-block}</style>
+            </head>
+            <body>
+                <h1>⚠️ YouTube 연결 오류</h1>
+                <div class="error">
+                    <p>YouTube API 인증 정보가 설정되지 않았습니다.</p>
+                    <p>Render 환경 변수에 <code>GOOGLE_CLIENT_ID</code>와 <code>GOOGLE_CLIENT_SECRET</code>을 설정해주세요.</p>
+                </div>
+                <a href="/drama" class="back-btn">← Drama Lab으로 돌아가기</a>
+            </body>
+            </html>
+            """
+
+        # 이미 인증된 토큰 확인
+        token_data = load_youtube_token_from_db()
+        if token_data and token_data.get('refresh_token'):
+            try:
+                from google.auth.transport.requests import Request
+                credentials = Credentials.from_authorized_user_info(token_data)
+                if credentials and (credentials.valid or credentials.refresh_token):
+                    # 이미 인증됨 - Drama 페이지로 리다이렉트
+                    return redirect('/drama?youtube_auth=success')
+            except Exception as e:
+                print(f"[YOUTUBE-AUTH-GET] 기존 토큰 검증 실패: {e}")
+
+        # OAuth 플로우 생성
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [redirect_uri]
+            }
+        }
+
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=[
+                'https://www.googleapis.com/auth/youtube.upload',
+                'https://www.googleapis.com/auth/youtube.readonly'
+            ],
+            redirect_uri=redirect_uri
+        )
+
+        auth_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'  # 항상 동의 화면 표시 (refresh_token 확보)
+        )
+
+        # 상태 저장
+        save_oauth_state({
+            'state': state,
+            'redirect_uri': redirect_uri,
+            'client_id': client_id,
+            'client_secret': client_secret
+        })
+
+        print(f"[YOUTUBE-AUTH-GET] Google OAuth URL로 리다이렉트")
+        return redirect(auth_url)
+
+    except ImportError as e:
+        print(f"[YOUTUBE-AUTH-GET] Import 오류: {e}")
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>YouTube 연결</title>
+        <style>body{{font-family:Arial;padding:50px;text-align:center}}.error{{background:#ffebee;padding:20px;border-radius:8px;margin:20px auto;max-width:500px}}</style>
+        </head>
+        <body>
+            <h1>⚠️ 라이브러리 오류</h1>
+            <div class="error"><p>Google 인증 라이브러리가 설치되지 않았습니다.</p><p>{str(e)}</p></div>
+            <a href="/drama">← 돌아가기</a>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        print(f"[YOUTUBE-AUTH-GET] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>YouTube 연결</title>
+        <style>body{{font-family:Arial;padding:50px;text-align:center}}.error{{background:#ffebee;padding:20px;border-radius:8px;margin:20px auto;max-width:500px}}</style>
+        </head>
+        <body>
+            <h1>⚠️ 연결 오류</h1>
+            <div class="error"><p>{str(e)}</p></div>
+            <a href="/drama">← 돌아가기</a>
+        </body>
+        </html>
+        """
 
 
 @app.route('/api/youtube/upload', methods=['POST'])
