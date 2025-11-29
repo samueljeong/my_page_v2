@@ -66,13 +66,18 @@ function hideStatus() {
 // ===== GPT 로딩 표시 =====
 let currentLoadingMessage = '';
 
-function showGptLoading(message) {
+function showGptLoading(message, isStep3 = false) {
   currentLoadingMessage = message || '처리 중입니다...';
   const guideDiv = document.getElementById('start-analysis-guide');
   const startBtn = document.getElementById('btn-start-analysis');
 
   // 버튼 비활성화
   if (startBtn) startBtn.style.display = 'none';
+
+  // Step3인 경우 전체 오버레이 표시
+  if (isStep3) {
+    showStep3Overlay();
+  }
 
   // 안내문구에 진행상황 표시
   if (guideDiv) {
@@ -86,9 +91,45 @@ function showGptLoading(message) {
 function hideGptLoading() {
   currentLoadingMessage = '';
 
+  // Step3 오버레이 제거
+  hideStep3Overlay();
+
   // UI 상태 업데이트 (안내 문구도 updateAnalysisUI에서 처리)
   if (typeof updateAnalysisUI === 'function') {
     updateAnalysisUI();
+  }
+}
+
+// Step3 전용 오버레이 표시
+function showStep3Overlay() {
+  // 기존 오버레이 제거
+  hideStep3Overlay();
+
+  const dualRow = document.querySelector('.dual-row');
+  if (!dualRow) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'step3-loading-overlay';
+  overlay.innerHTML = `
+    <div class="step3-loading-content">
+      <div class="step3-loading-title">설교문 생성 중</div>
+      <div class="step3-loading-subtitle">AI가 정성껏 설교문을 작성하고 있습니다</div>
+      <div class="step3-loading-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+  `;
+
+  dualRow.appendChild(overlay);
+}
+
+// Step3 오버레이 제거
+function hideStep3Overlay() {
+  const overlay = document.querySelector('.step3-loading-overlay');
+  if (overlay) {
+    overlay.remove();
   }
 }
 
@@ -210,6 +251,8 @@ window.showStatus = showStatus;
 window.hideStatus = hideStatus;
 window.showGptLoading = showGptLoading;
 window.hideGptLoading = hideGptLoading;
+window.showStep3Overlay = showStep3Overlay;
+window.hideStep3Overlay = hideStep3Overlay;
 window.updateLoadingMessage = updateLoadingMessage;
 window.modelPricing = modelPricing;
 window.calculateCost = calculateCost;
