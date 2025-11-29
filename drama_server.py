@@ -5140,6 +5140,10 @@ def api_generate_video():
         if not data:
             return jsonify({"ok": False, "error": "No data received"}), 400
 
+        # 디버깅: 요청 데이터 출력
+        print(f"[DRAMA-STEP6-VIDEO] === DEBUG: 요청 데이터 ===")
+        print(f"[DRAMA-STEP6-VIDEO] data keys: {list(data.keys())}")
+
         images = data.get("images", [])
         cuts = data.get("cuts", [])  # 씬별 이미지-오디오 매칭 배열
         audio_url = data.get("audioUrl", "")
@@ -5148,6 +5152,16 @@ def api_generate_video():
         resolution = data.get("resolution", "1920x1080")
         fps = data.get("fps", 30)
         transition = data.get("transition", "fade")
+
+        # 디버깅: 상세 정보 출력
+        print(f"[DRAMA-STEP6-VIDEO] images 개수: {len(images)}")
+        print(f"[DRAMA-STEP6-VIDEO] cuts 개수: {len(cuts)}")
+        print(f"[DRAMA-STEP6-VIDEO] audio_url: {audio_url[:100] if audio_url else 'N/A'}...")
+        print(f"[DRAMA-STEP6-VIDEO] resolution: {resolution}, fps: {fps}")
+
+        if cuts:
+            for i, cut in enumerate(cuts[:3]):  # 처음 3개만 출력
+                print(f"[DRAMA-STEP6-VIDEO] cuts[{i}]: imageUrl={cut.get('imageUrl', 'N/A')[:50]}..., audioUrl={cut.get('audioUrl', 'N/A')[:50] if cut.get('audioUrl') else 'N/A'}..., duration={cut.get('duration', 'N/A')}")
 
         # cuts 배열이 있으면 그것을 사용, 없으면 기존 방식
         if cuts and len(cuts) > 0:
@@ -5251,7 +5265,10 @@ def api_generate_video():
             }), 200
 
     except Exception as e:
+        import traceback
         print(f"[DRAMA-STEP6-VIDEO][ERROR] {str(e)}")
+        print(f"[DRAMA-STEP6-VIDEO][TRACEBACK]")
+        traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 200
 
 

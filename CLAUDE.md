@@ -68,6 +68,27 @@ Drama Lab - AI 기반 드라마 영상 자동 생성 시스템
   - 한국인 얼굴 특징 상세 명시: 둥근 얼굴, 홑꺼풀/속쌍꺼풀, 한국인 피부톤
   - 1970~80년대 빈티지 필름 스타일 적용: film grain, faded warm colors
 
+### 3. ~~Step2 캐릭터 일관성 문제~~ ✅ 해결됨 (2024-11-29)
+- ~~주인공 카드와 씬 이미지의 인물이 분리됨~~
+- **해결책**: 씬 프롬프트에 main_character 정보 강제 포함
+  - `drama-step2.js`: `buildCharacterConsistencyPrompt()` 함수 추가
+  - 씬 이미지 생성 시 주인공 정보를 프롬프트 맨 앞에 배치
+  - 한국인 할머니/할아버지 전용 일관성 프롬프트 적용
+
+### 4. ~~Step3 TTS 설명문 읽기 문제~~ ✅ 해결됨 (2024-11-29)
+- ~~TTS가 "1. 주인공 설정 – 이름: 이순자..." 같은 메타 설명을 읽음~~
+- **해결책**: 순수 나레이션만 추출하도록 수정
+  - `drama-step3.js`: `getScriptTexts()` 함수 개선
+  - 메타 설명 패턴 필터링 추가 (주인공 설정, 스토리 컨셉, 배경 등)
+  - `extractNarrationFromScene()` 함수로 순수 나레이션만 추출
+
+### 5. ~~Step4 500 에러~~ ✅ 디버깅 강화 (2024-11-29)
+- ~~`/api/drama/generate-video` 500 에러 발생~~
+- **해결책**: 상세 디버깅 로그 추가
+  - 요청 데이터 구조 출력
+  - cuts 배열 상세 정보 출력
+  - traceback 출력 추가
+
 ## 주요 API 엔드포인트 (drama_server.py)
 - `/api/drama/gpt-plan-step1` - 대본 생성
 - `/api/drama/analyze-characters` - 캐릭터/씬 분석
