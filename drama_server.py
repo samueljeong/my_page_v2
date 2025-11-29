@@ -6697,6 +6697,188 @@ def api_gpt_analyze_prompts():
         return jsonify({'ok': False, 'error': str(e)}), 200
 
 
+# ===== Step5: YouTube API (테스트 모드) =====
+
+@app.route('/api/youtube/auth-status', methods=['GET'])
+def youtube_auth_status():
+    """
+    YouTube 인증 상태 확인.
+    현재는 테스트 모드 - OAuth 미구현
+    """
+    return jsonify({
+        "ok": True,
+        "authenticated": False,  # 아직 OAuth 미구현
+        "connected": False,
+        "mode": "test",
+        "channelName": None,
+        "channelId": None,
+        "message": "YouTube OAuth가 아직 설정되지 않았습니다. 테스트 모드로 실행 중입니다."
+    })
+
+
+@app.route('/api/youtube/auth', methods=['GET'])
+def youtube_auth():
+    """
+    YouTube OAuth 인증 페이지.
+    현재는 테스트 모드 - 안내 메시지만 표시
+    """
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>YouTube 연결</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
+            .message { background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+            .back-btn { margin-top: 20px; padding: 10px 20px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }
+        </style>
+    </head>
+    <body>
+        <h1>📺 YouTube 연결</h1>
+        <div class="message">
+            <p><strong>테스트 모드</strong></p>
+            <p>YouTube OAuth 인증이 아직 설정되지 않았습니다.</p>
+            <p>실제 업로드를 위해서는 Google Cloud Console에서 OAuth 자격 증명을 설정해야 합니다.</p>
+        </div>
+        <a href="/drama" class="back-btn">← Drama Lab으로 돌아가기</a>
+    </body>
+    </html>
+    """
+
+
+@app.route('/api/youtube/upload', methods=['POST'])
+def youtube_upload():
+    """
+    YouTube 업로드 API.
+    현재는 테스트 모드 - 실제 업로드 없이 성공 응답만 반환
+    """
+    try:
+        data = request.get_json() or {}
+
+        video_path = data.get('videoPath', '')
+        title = data.get('title', '제목 없음')
+        description = data.get('description', '')
+        tags = data.get('tags', [])
+        category_id = data.get('categoryId', '27')
+        privacy_status = data.get('privacyStatus', 'private')
+        thumbnail_path = data.get('thumbnailPath')
+
+        print(f"[YOUTUBE-UPLOAD][TEST] 업로드 요청 수신")
+        print(f"  - 영상: {video_path}")
+        print(f"  - 제목: {title}")
+        print(f"  - 공개 설정: {privacy_status}")
+
+        # 영상 파일 존재 확인
+        if video_path and not video_path.startswith('http'):
+            full_path = os.path.join(os.path.dirname(__file__), video_path.lstrip('/'))
+            if not os.path.exists(full_path):
+                print(f"[YOUTUBE-UPLOAD][WARN] 영상 파일 없음: {full_path}")
+
+        # 테스트 모드: 가상의 videoId 생성
+        import random
+        import string
+        fake_video_id = ''.join(random.choices(string.ascii_letters + string.digits, k=11))
+
+        return jsonify({
+            "ok": True,
+            "mode": "test",
+            "videoId": fake_video_id,
+            "videoUrl": f"https://www.youtube.com/watch?v={fake_video_id}",
+            "status": "uploaded",
+            "message": "테스트 모드: 실제 업로드는 수행되지 않았습니다. OAuth 설정 후 실제 업로드가 가능합니다.",
+            "metadata": {
+                "title": title,
+                "description": description[:100] + "..." if len(description) > 100 else description,
+                "tags": tags,
+                "categoryId": category_id,
+                "privacyStatus": privacy_status
+            }
+        })
+
+    except Exception as e:
+        print(f"[YOUTUBE-UPLOAD][ERROR] {str(e)}")
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route('/api/drama/generate-thumbnails', methods=['POST'])
+def generate_thumbnails():
+    """
+    썸네일 3종 생성 API.
+    Step4에서 생성된 이미지를 기반으로 썸네일 후보 생성
+    """
+    try:
+        data = request.get_json() or {}
+
+        base_image_url = data.get('baseImageUrl')
+        title = data.get('title', '')
+        channel_type = data.get('channelType', 'nostalgia')
+        styles = data.get('styles', ['warm', 'dramatic', 'nostalgic'])
+
+        print(f"[DRAMA-THUMBNAIL] 썸네일 생성 요청 - 스타일: {styles}")
+
+        # outputs 폴더에서 기존 썸네일 확인
+        outputs_dir = os.path.join(os.path.dirname(__file__), 'outputs')
+        thumbnail_file = os.path.join(outputs_dir, 'thumbnail_output.json')
+
+        if os.path.exists(thumbnail_file):
+            with open(thumbnail_file, 'r', encoding='utf-8') as f:
+                thumb_data = json.load(f)
+
+            candidates = thumb_data.get('candidates', [])
+            if candidates:
+                print(f"[DRAMA-THUMBNAIL] 기존 썸네일 {len(candidates)}개 발견")
+
+                thumbnails = []
+                for idx, candidate in enumerate(candidates):
+                    thumb_url = candidate.get('url') or candidate.get('image_url')
+                    if thumb_url:
+                        thumbnails.append({
+                            "url": thumb_url,
+                            "style": styles[idx] if idx < len(styles) else "default",
+                            "path": candidate.get('path')
+                        })
+
+                if thumbnails:
+                    return jsonify({
+                        "ok": True,
+                        "thumbnails": thumbnails,
+                        "source": "cached"
+                    })
+
+        # 기존 썸네일이 없으면 Step2 이미지를 썸네일로 사용
+        if base_image_url:
+            thumbnails = [
+                {"url": base_image_url, "style": "warm", "path": None},
+                {"url": base_image_url, "style": "dramatic", "path": None},
+                {"url": base_image_url, "style": "nostalgic", "path": None}
+            ]
+
+            return jsonify({
+                "ok": True,
+                "thumbnails": thumbnails,
+                "source": "base_image",
+                "message": "기본 이미지를 썸네일로 사용합니다. 전용 썸네일 생성은 추후 지원 예정입니다."
+            })
+
+        # 이미지도 없으면 플레이스홀더
+        return jsonify({
+            "ok": True,
+            "thumbnails": [
+                {"url": "/static/images/placeholder-thumbnail.png", "style": "warm", "path": None},
+                {"url": "/static/images/placeholder-thumbnail.png", "style": "dramatic", "path": None},
+                {"url": "/static/images/placeholder-thumbnail.png", "style": "nostalgic", "path": None}
+            ],
+            "source": "placeholder",
+            "message": "썸네일 이미지가 없습니다. Step2에서 이미지를 먼저 생성해주세요."
+        })
+
+    except Exception as e:
+        print(f"[DRAMA-THUMBNAIL][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
