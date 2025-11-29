@@ -19,7 +19,7 @@ window.DramaStep1 = {
       channelType: document.getElementById('channel-type')?.value || 'senior-nostalgia',
       contentType: document.getElementById('content-type')?.value || 'nostalgia',
       duration: document.getElementById('duration')?.value || '10min',
-      aiModel: document.getElementById('ai-model')?.value || 'anthropic/claude-sonnet-4-5',
+      aiModel: document.getElementById('ai-model')?.value || 'anthropic/claude-sonnet-4.5',
       topic: document.getElementById('topic-input')?.value?.trim() || ''
     };
   },
