@@ -4,7 +4,7 @@
  */
 
 // ===== 데이터 버전 관리 =====
-const CONFIG_VERSION = 3; // 버전 업데이트 시 증가
+const CONFIG_VERSION = 4; // 버전 업데이트 시 증가 (v4: 기본 카테고리 병합)
 
 // ===== 기본 스타일 정의 (복구용) =====
 const DEFAULT_STYLES = {
@@ -1409,6 +1409,35 @@ function validateAndMigrateConfig(config) {
     });
 
     config._version = 3;
+    needsSave = true;
+  }
+
+  // 버전 3 -> 4: 기본 카테고리 병합 (education, lecture 등 누락된 카테고리 추가)
+  if (config._version < 4) {
+    console.log('[Config] 버전 마이그레이션: 3 -> 4 (기본 카테고리 병합)');
+
+    // 기본 카테고리 목록
+    const DEFAULT_CATEGORIES = [
+      {value: "general", label: "일반 설교"},
+      {value: "series", label: "시리즈 설교"},
+      {value: "education", label: "교육"},
+      {value: "lecture", label: "강의"},
+      {value: "design_helper", label: "🎨 디자인 도우미"}
+    ];
+
+    // 현재 카테고리 value 목록
+    const existingValues = config.categories.map(c => c.value);
+
+    // 누락된 기본 카테고리 추가
+    DEFAULT_CATEGORIES.forEach(defaultCat => {
+      if (!existingValues.includes(defaultCat.value)) {
+        console.log('[Config] 기본 카테고리 추가:', defaultCat.value);
+        config.categories.push(defaultCat);
+        needsSave = true;
+      }
+    });
+
+    config._version = 4;
     needsSave = true;
   }
 
