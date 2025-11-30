@@ -103,6 +103,7 @@ function switchCategoryContent(category) {
   const bibleKnowledgeContent = document.getElementById('bible-knowledge-content');
   const emptyContent = document.getElementById('empty-content');
   const designHelperContent = document.getElementById('design-helper-content');
+  const educationContent = document.getElementById('education-content');
 
   // 모든 콘텐츠 숨기기
   if (sermonContent) sermonContent.style.display = 'none';
@@ -110,6 +111,7 @@ function switchCategoryContent(category) {
   if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'none';
   if (emptyContent) emptyContent.style.display = 'none';
   if (designHelperContent) designHelperContent.style.display = 'none';
+  if (educationContent) educationContent.style.display = 'none';
 
   // 카테고리 label 가져오기
   const catConfig = window.config.categories.find(c => c.value === category);
@@ -123,6 +125,9 @@ function switchCategoryContent(category) {
     }
   } else if (label.includes('배경지식')) {
     if (bibleKnowledgeContent) bibleKnowledgeContent.style.display = 'block';
+  } else if (category === 'education' || label === '교육') {
+    // 교육 카테고리: iframe으로 education.html 표시
+    if (educationContent) educationContent.style.display = 'block';
   } else if (category === 'design_helper' || label.includes('디자인')) {
     const password = prompt('디자인 도우미는 테스트 중입니다.\n접근 비밀번호를 입력하세요:');
     if (password === '6039') {
@@ -134,7 +139,7 @@ function switchCategoryContent(category) {
       return;
     }
   } else if (label.includes('설교') || category.startsWith('step_') ||
-             ['general', 'series', 'education', 'lecture'].includes(category)) {
+             ['general', 'series', 'lecture'].includes(category)) {
     if (sermonContent) sermonContent.style.display = 'block';
   } else {
     if (emptyContent) emptyContent.style.display = 'block';
