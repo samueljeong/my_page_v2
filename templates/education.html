@@ -487,16 +487,85 @@
       color: #b45309;
     }
 
-    /* Responsive */
-    @media (max-width: 600px) {
+    /* Responsive - Tablet (601px ~ 1024px) */
+    @media (min-width: 601px) and (max-width: 1024px) {
+      .container {
+        max-width: 100%;
+        padding: 1rem 1.5rem;
+      }
+      .section {
+        padding: 1rem 1.2rem;
+      }
       .form-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: .8rem;
+      }
+      .form-group.full-width {
+        grid-column: 1 / -1;
+      }
+      input, select, textarea {
+        padding: .5rem .7rem;
+        font-size: .9rem;
+      }
+      .checkbox-group {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .tabs {
+        justify-content: flex-start;
+        gap: .5rem;
+      }
+      .tab {
+        padding: .7rem 1rem;
+        font-size: .85rem;
+      }
+      .session-card {
+        padding: 1.2rem;
+      }
+    }
+
+    /* Responsive - Mobile (max 600px) */
+    @media (max-width: 600px) {
+      .container {
+        padding: .8rem;
+      }
+      .header {
+        padding: 1rem;
+      }
+      .header h1 {
+        font-size: 1.2rem;
+      }
+      .section {
+        padding: .7rem .8rem;
+        margin-bottom: .5rem;
+      }
+      .section-title {
+        font-size: .85rem;
+      }
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: .5rem;
+      }
+      input, select, textarea {
+        font-size: .9rem;
+      }
+      .checkbox-group {
         grid-template-columns: 1fr;
       }
       .actions {
         flex-direction: column;
+        gap: .5rem;
       }
       .btn {
         width: 100%;
+        padding: .7rem 1rem;
+      }
+      .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .tab {
+        padding: .6rem .8rem;
+        font-size: .8rem;
       }
     }
   </style>
