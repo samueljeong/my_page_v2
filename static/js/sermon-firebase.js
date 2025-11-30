@@ -1412,30 +1412,19 @@ function validateAndMigrateConfig(config) {
     needsSave = true;
   }
 
-  // 버전 3 -> 4: 기본 카테고리 병합 (education, lecture 등 누락된 카테고리 추가)
+  // 버전 3 -> 4: education 카테고리 추가 (누락된 경우)
   if (config._version < 4) {
-    console.log('[Config] 버전 마이그레이션: 3 -> 4 (기본 카테고리 병합)');
-
-    // 기본 카테고리 목록
-    const DEFAULT_CATEGORIES = [
-      {value: "general", label: "일반 설교"},
-      {value: "series", label: "시리즈 설교"},
-      {value: "education", label: "교육"},
-      {value: "lecture", label: "강의"},
-      {value: "design_helper", label: "🎨 디자인 도우미"}
-    ];
+    console.log('[Config] 버전 마이그레이션: 3 -> 4 (교육 카테고리 추가)');
 
     // 현재 카테고리 value 목록
     const existingValues = config.categories.map(c => c.value);
 
-    // 누락된 기본 카테고리 추가
-    DEFAULT_CATEGORIES.forEach(defaultCat => {
-      if (!existingValues.includes(defaultCat.value)) {
-        console.log('[Config] 기본 카테고리 추가:', defaultCat.value);
-        config.categories.push(defaultCat);
-        needsSave = true;
-      }
-    });
+    // education 카테고리가 없으면 추가
+    if (!existingValues.includes('education')) {
+      console.log('[Config] 교육 카테고리 추가');
+      config.categories.push({value: "education", label: "교육"});
+      needsSave = true;
+    }
 
     config._version = 4;
     needsSave = true;
