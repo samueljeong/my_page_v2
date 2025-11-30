@@ -756,21 +756,14 @@
 
         <!-- Sessions Tab -->
         <div class="tab-content" id="tab-sessions">
-          <!-- 모델 선택 -->
-          <div style="background: #f8f9ff; padding: .8rem; border-radius: 8px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem;">
+          <!-- 안내 문구 -->
+          <div style="background: #f8f9ff; padding: .8rem; border-radius: 8px; margin-bottom: 1rem;">
             <div style="font-size: .85rem; color: #555;">
               📝 각 회차별 <strong>강의안 제작</strong> 버튼을 클릭하면 상세 강의안을 생성합니다.
             </div>
-            <div class="model-selector">
-              <label for="lesson-model">AI 모델:</label>
-              <select id="lesson-model">
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4o-mini">GPT-4o-mini (빠름)</option>
-                <option value="o3-mini">o3-mini (추론)</option>
-              </select>
-              <span class="model-badge recommended">GPT-4o 추천</span>
-            </div>
           </div>
+          <!-- 모델 고정 (hidden) -->
+          <input type="hidden" id="lesson-model" value="gpt-4o">
           <div id="sessions-content"></div>
         </div>
 
