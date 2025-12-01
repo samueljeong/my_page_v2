@@ -164,87 +164,58 @@
             <audio id="voice-preview-player" style="display:none;"></audio>
           </div>
 
-          <!-- 주인공/캐릭터 정보 -->
+          <!-- 전체 대본 입력 -->
           <div class="script-input-section">
             <div class="section-header">
-              <h3>👤 주인공 정보</h3>
-              <span class="section-hint">주인공의 이름, 나이, 외모 특징 등</span>
+              <h3>📝 전체 대본 입력</h3>
+              <span class="section-hint">대본 전체를 붙여넣으면 AI가 씬과 샷을 자동 분석합니다</span>
             </div>
-            <textarea id="character-info" class="script-textarea" rows="4" placeholder="예: 박봉수, 70세, 작은 한식당 주인, 앞치마 차림, 경계하는 표정, 한국인 할아버지"></textarea>
-          </div>
+            <textarea id="full-script" class="script-textarea" rows="15" placeholder="여기에 전체 대본을 붙여넣으세요...
 
-          <!-- 씬 1 -->
-          <div class="scene-input-group">
-            <div class="scene-header">
-              <h3>🎬 씬 1</h3>
-            </div>
-            <div class="scene-inputs">
-              <div class="input-row">
-                <label>이미지 프롬프트 (영문)</label>
-                <textarea id="scene1-image-prompt" class="script-textarea" rows="4" placeholder="Night, small Korean restaurant interior. Three men at wooden table. Cooling soybean stew in center..."></textarea>
-              </div>
-              <div class="input-row">
-                <label>나레이션 (한글 TTS)</label>
-                <textarea id="scene1-narration" class="script-textarea" rows="4" placeholder="그날 밤이었습니다. 저는 46년 만에 처음으로 그 이름을 들었습니다..."></textarea>
-              </div>
-            </div>
-          </div>
+예시:
+[주인공: 박봉수, 70세, 작은 한식당 주인, 한국인 할아버지]
 
-          <!-- 씬 2 -->
-          <div class="scene-input-group">
-            <div class="scene-header">
-              <h3>🎬 씬 2</h3>
-            </div>
-            <div class="scene-inputs">
-              <div class="input-row">
-                <label>이미지 프롬프트 (영문)</label>
-                <textarea id="scene2-image-prompt" class="script-textarea" rows="4" placeholder="Same restaurant. Old black-and-white photograph on table showing young security guard..."></textarea>
-              </div>
-              <div class="input-row">
-                <label>나레이션 (한글 TTS)</label>
-                <textarea id="scene2-narration" class="script-textarea" rows="4" placeholder="젊은 남자가 드디어 입을 열었습니다..."></textarea>
-              </div>
+그날 밤이었습니다. 저는 46년 만에 처음으로 그 이름을 들었습니다.
+작은 한식당, 김이 모락모락 나는 된장찌개가 식탁 위에 놓여 있었습니다.
+
+젊은 남자가 낡은 흑백 사진을 꺼냈습니다.
+'혹시... 이 사람 아세요?'
+
+이창수 씨의 눈에서 눈물이 흘러내렸습니다.
+46년 전 그날의 기억이 밀려왔습니다..."></textarea>
+
+            <div class="script-actions">
+              <button id="btn-analyze-script" class="btn-primary" onclick="DramaStep1.analyzeScript()">
+                <span class="btn-icon">🤖</span> AI 대본 분석하기
+              </button>
+              <span class="action-hint">GPT가 씬과 샷을 자동으로 나눠줍니다</span>
             </div>
           </div>
 
-          <!-- 씬 3 -->
-          <div class="scene-input-group">
-            <div class="scene-header">
-              <h3>🎬 씬 3</h3>
+          <!-- AI 분석 진행 상태 -->
+          <div id="analysis-progress" class="progress-panel hidden">
+            <h3>대본 분석 중...</h3>
+            <div class="progress-bar-container">
+              <div id="analysis-progress-bar" class="progress-bar"></div>
             </div>
-            <div class="scene-inputs">
-              <div class="input-row">
-                <label>이미지 프롬프트 (영문)</label>
-                <textarea id="scene3-image-prompt" class="script-textarea" rows="4" placeholder="Emotional confrontation. Lee Chang-su crying at table..."></textarea>
-              </div>
-              <div class="input-row">
-                <label>나레이션 (한글 TTS)</label>
-                <textarea id="scene3-narration" class="script-textarea" rows="4" placeholder="이창수 씨가 사진을 집어 들었습니다..."></textarea>
-              </div>
-            </div>
+            <div id="analysis-progress-text" class="progress-text">AI가 대본을 분석하고 있습니다...</div>
           </div>
 
-          <!-- 씬 4 -->
-          <div class="scene-input-group">
-            <div class="scene-header">
-              <h3>🎬 씬 4</h3>
+          <!-- AI 분석 결과 (씬/샷 트리) -->
+          <div id="analysis-result" class="analysis-result hidden">
+            <div class="section-header">
+              <h3>🎬 분석 결과</h3>
+              <span class="section-hint">각 샷의 이미지 프롬프트와 나레이션을 확인/수정하세요</span>
             </div>
-            <div class="scene-inputs">
-              <div class="input-row">
-                <label>이미지 프롬프트 (영문)</label>
-                <textarea id="scene4-image-prompt" class="script-textarea" rows="4" placeholder="Late night restaurant. Park Bong-su holding young man's hand..."></textarea>
-              </div>
-              <div class="input-row">
-                <label>나레이션 (한글 TTS)</label>
-                <textarea id="scene4-narration" class="script-textarea" rows="4" placeholder="밤이 깊어진 식당에서..."></textarea>
-              </div>
+            <div id="scene-shot-tree" class="scene-shot-tree">
+              <!-- JS로 동적 생성 -->
             </div>
           </div>
 
           <!-- 액션 버튼 -->
           <div class="action-buttons">
-            <button id="btn-save-script" class="btn-primary btn-large" onclick="DramaStep1.saveManualScript()">
-              <span class="btn-icon">💾</span> 대본 저장 및 다음 단계
+            <button id="btn-save-script" class="btn-primary btn-large hidden" onclick="DramaStep1.saveAnalyzedScript()">
+              <span class="btn-icon">💾</span> 분석 결과 저장 및 다음 단계
             </button>
           </div>
 

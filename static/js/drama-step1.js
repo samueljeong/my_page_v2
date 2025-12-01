@@ -15,6 +15,7 @@ window.DramaStep1 = {
     console.log('[Step1] 대본 입력 모듈 초기화');
     this.checkYouTubeAuth();
     this.restoreFromSession();
+    this.restoreAnalyzedData();  // 분석 데이터 복원
     this.initVoiceSelection();
   },
 
@@ -357,24 +358,357 @@ window.DramaStep1 = {
   clearAll() {
     if (!confirm('모든 입력 내용을 지우시겠습니까?')) return;
 
-    // 캐릭터 정보 초기화
-    const charInfo = document.getElementById('character-info');
-    if (charInfo) charInfo.value = '';
+    // 전체 대본 초기화
+    const fullScript = document.getElementById('full-script');
+    if (fullScript) fullScript.value = '';
 
-    // 씬별 필드 초기화
-    for (let i = 1; i <= 4; i++) {
-      const promptEl = document.getElementById(`scene${i}-image-prompt`);
-      const narrationEl = document.getElementById(`scene${i}-narration`);
-      if (promptEl) promptEl.value = '';
-      if (narrationEl) narrationEl.value = '';
-    }
+    // 분석 결과 숨김
+    const analysisResult = document.getElementById('analysis-result');
+    if (analysisResult) analysisResult.classList.add('hidden');
+
+    const saveBtn = document.getElementById('btn-save-script');
+    if (saveBtn) saveBtn.classList.add('hidden');
 
     this.currentScript = null;
+    this.analysisData = null;
     DramaSession.setStepData('step1', null);
 
     const savedNotice = document.getElementById('step1-saved-notice');
     if (savedNotice) savedNotice.classList.add('hidden');
 
     DramaUtils.showStatus('입력 내용이 초기화되었습니다.', 'info');
+  },
+
+  // ===== AI 대본 분석 기능 =====
+  analysisData: null,
+
+  /**
+   * AI 대본 분석 시작
+   */
+  async analyzeScript() {
+    const scriptTextarea = document.getElementById('full-script');
+    const script = scriptTextarea?.value?.trim() || '';
+
+    // 유효성 검사
+    if (!script) {
+      DramaUtils.showStatus('대본을 입력해주세요.', 'error');
+      scriptTextarea?.focus();
+      return;
+    }
+
+    if (script.length < 100) {
+      DramaUtils.showStatus('대본이 너무 짧습니다. (최소 100자 이상)', 'error');
+      return;
+    }
+
+    const config = this.getConfig();
+    console.log('[Step1] AI 대본 분석 시작 - 길이:', script.length, '자');
+
+    // UI 상태 변경
+    const analyzeBtn = document.getElementById('btn-analyze-script');
+    const progressPanel = document.getElementById('analysis-progress');
+    const progressBar = document.getElementById('analysis-progress-bar');
+    const progressText = document.getElementById('analysis-progress-text');
+    const resultPanel = document.getElementById('analysis-result');
+
+    if (analyzeBtn) {
+      analyzeBtn.disabled = true;
+      analyzeBtn.innerHTML = '<span class="btn-icon">⏳</span> 분석 중...';
+    }
+    if (progressPanel) progressPanel.classList.remove('hidden');
+    if (progressBar) progressBar.style.width = '20%';
+    if (progressText) progressText.textContent = 'AI가 대본을 읽고 있습니다...';
+
+    try {
+      // API 호출
+      const response = await fetch('/api/drama/analyze-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script: script,
+          channelType: config.channelType,
+          protagonistGender: config.protagonistGender
+        })
+      });
+
+      if (progressBar) progressBar.style.width = '60%';
+      if (progressText) progressText.textContent = '씬과 샷을 분리하고 있습니다...';
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || '대본 분석 실패');
+      }
+
+      // 분석 결과 저장
+      this.analysisData = {
+        character: data.character,
+        scenes: data.scenes,
+        thumbnailSuggestion: data.thumbnailSuggestion,
+        totalShots: data.totalShots,
+        originalScript: script
+      };
+
+      if (progressBar) progressBar.style.width = '100%';
+      if (progressText) progressText.textContent = `분석 완료! (${data.scenes?.length || 0}개 씬, ${data.totalShots || 0}개 샷)`;
+
+      console.log('[Step1] 분석 완료:', this.analysisData);
+
+      // 결과 렌더링
+      setTimeout(() => {
+        if (progressPanel) progressPanel.classList.add('hidden');
+        this.renderAnalysisResult();
+      }, 1000);
+
+      DramaUtils.showStatus(`대본 분석 완료! ${data.scenes?.length || 0}개 씬, ${data.totalShots || 0}개 샷`, 'success');
+
+    } catch (error) {
+      console.error('[Step1] 분석 오류:', error);
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressText) progressText.textContent = `오류: ${error.message}`;
+      DramaUtils.showStatus('대본 분석 실패: ' + error.message, 'error');
+    } finally {
+      if (analyzeBtn) {
+        analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '<span class="btn-icon">🤖</span> AI 대본 분석하기';
+      }
+    }
+  },
+
+  /**
+   * 분석 결과 UI 렌더링 (씬/샷 트리)
+   */
+  renderAnalysisResult() {
+    const resultPanel = document.getElementById('analysis-result');
+    const treeContainer = document.getElementById('scene-shot-tree');
+    const saveBtn = document.getElementById('btn-save-script');
+
+    if (!this.analysisData || !treeContainer) {
+      console.error('[Step1] 분석 데이터 없음');
+      return;
+    }
+
+    const { character, scenes, thumbnailSuggestion } = this.analysisData;
+
+    // 캐릭터 정보 + 씬/샷 트리 구조 생성
+    let html = '';
+
+    // 캐릭터 카드
+    if (character) {
+      html += `
+        <div class="character-summary">
+          <h4>👤 주인공 정보</h4>
+          <div class="character-detail">
+            <span class="char-name">${character.name || '주인공'}</span>
+            <span class="char-age">${character.age || '?'}세</span>
+            <span class="char-gender">${character.gender === 'female' ? '여성' : '남성'}</span>
+          </div>
+          <p class="char-appearance">${character.appearance || ''}</p>
+        </div>
+      `;
+    }
+
+    // 씬/샷 트리
+    if (scenes && scenes.length > 0) {
+      html += '<div class="scene-tree">';
+
+      scenes.forEach((scene, sceneIdx) => {
+        const shots = scene.shots || [];
+        html += `
+          <div class="scene-node" data-scene-id="${scene.sceneId}">
+            <div class="scene-header">
+              <span class="scene-toggle" onclick="DramaStep1.toggleScene('${scene.sceneId}')">▼</span>
+              <span class="scene-title">🎬 ${scene.title || `씬 ${sceneIdx + 1}`}</span>
+              <span class="scene-shot-count">${shots.length}개 샷</span>
+            </div>
+            <div class="shot-list" id="shots-${scene.sceneId}">
+        `;
+
+        shots.forEach((shot, shotIdx) => {
+          html += `
+            <div class="shot-node" data-shot-id="${shot.shotId}">
+              <div class="shot-header">
+                <span class="shot-number">${shotIdx + 1}</span>
+                <span class="shot-id">${shot.shotId}</span>
+              </div>
+              <div class="shot-content">
+                <div class="shot-field">
+                  <label>🖼️ 이미지 프롬프트 (영문)</label>
+                  <textarea class="shot-prompt"
+                            data-scene="${sceneIdx}"
+                            data-shot="${shotIdx}"
+                            rows="3">${shot.imagePrompt || ''}</textarea>
+                </div>
+                <div class="shot-field">
+                  <label>🎙️ 나레이션 (한글)</label>
+                  <textarea class="shot-narration"
+                            data-scene="${sceneIdx}"
+                            data-shot="${shotIdx}"
+                            rows="2">${shot.narration || ''}</textarea>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div>';
+    }
+
+    // 썸네일 제안
+    if (thumbnailSuggestion) {
+      html += `
+        <div class="thumbnail-suggestion">
+          <h4>🎨 썸네일 제안</h4>
+          <p><strong>핵심 감정:</strong> ${thumbnailSuggestion.mainEmotion || '-'}</p>
+          <p><strong>텍스트:</strong> ${thumbnailSuggestion.textSuggestion || '-'}</p>
+        </div>
+      `;
+    }
+
+    treeContainer.innerHTML = html;
+    if (resultPanel) resultPanel.classList.remove('hidden');
+    if (saveBtn) saveBtn.classList.remove('hidden');
+  },
+
+  /**
+   * 씬 접기/펼치기 토글
+   */
+  toggleScene(sceneId) {
+    const shotList = document.getElementById(`shots-${sceneId}`);
+    const sceneNode = document.querySelector(`.scene-node[data-scene-id="${sceneId}"]`);
+    const toggle = sceneNode?.querySelector('.scene-toggle');
+
+    if (shotList) {
+      const isCollapsed = shotList.classList.toggle('collapsed');
+      if (toggle) toggle.textContent = isCollapsed ? '▶' : '▼';
+    }
+  },
+
+  /**
+   * 분석 결과 수정사항 수집
+   */
+  collectAnalysisData() {
+    if (!this.analysisData) return null;
+
+    // 수정된 데이터 수집
+    const scenes = [...this.analysisData.scenes];
+
+    // 각 샷의 수정된 내용 반영
+    document.querySelectorAll('.shot-prompt').forEach(textarea => {
+      const sceneIdx = parseInt(textarea.dataset.scene);
+      const shotIdx = parseInt(textarea.dataset.shot);
+      if (scenes[sceneIdx]?.shots?.[shotIdx]) {
+        scenes[sceneIdx].shots[shotIdx].imagePrompt = textarea.value.trim();
+      }
+    });
+
+    document.querySelectorAll('.shot-narration').forEach(textarea => {
+      const sceneIdx = parseInt(textarea.dataset.scene);
+      const shotIdx = parseInt(textarea.dataset.shot);
+      if (scenes[sceneIdx]?.shots?.[shotIdx]) {
+        scenes[sceneIdx].shots[shotIdx].narration = textarea.value.trim();
+      }
+    });
+
+    return {
+      ...this.analysisData,
+      scenes: scenes
+    };
+  },
+
+  /**
+   * 분석 결과 저장 및 다음 단계 이동
+   */
+  saveAnalyzedScript() {
+    const data = this.collectAnalysisData();
+    if (!data) {
+      DramaUtils.showStatus('분석 데이터가 없습니다. 먼저 대본을 분석해주세요.', 'error');
+      return;
+    }
+
+    const config = this.getConfig();
+
+    // 총 샷 수 계산
+    const totalShots = data.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0);
+
+    if (totalShots === 0) {
+      DramaUtils.showStatus('저장할 샷이 없습니다.', 'error');
+      return;
+    }
+
+    console.log('[Step1] 분석 결과 저장:', {
+      character: data.character?.name,
+      sceneCount: data.scenes.length,
+      totalShots: totalShots
+    });
+
+    // 데이터 구조화
+    this.currentScript = {
+      type: 'analyzed',
+      config: config,
+      character: data.character,
+      scenes: data.scenes,
+      thumbnailSuggestion: data.thumbnailSuggestion,
+      originalScript: data.originalScript,
+      createdAt: new Date().toISOString()
+    };
+
+    // 전역 세션에 저장
+    dramaApp.session.script = JSON.stringify(this.currentScript);
+    dramaApp.session.scriptData = this.currentScript;
+    dramaApp.session.protagonistGender = config.protagonistGender;
+    dramaApp.session.ttsVoiceQuality = config.ttsVoiceQuality;
+    dramaApp.session.ttsVoice = config.ttsVoice;
+    dramaApp.session.channelType = config.channelType;
+
+    // DramaSession에도 저장 (localStorage)
+    DramaSession.setStepData('step1', this.currentScript);
+    DramaMain.saveSessionToStorage();
+
+    // 저장 완료 UI 표시
+    const savedNotice = document.getElementById('step1-saved-notice');
+    if (savedNotice) savedNotice.classList.remove('hidden');
+
+    DramaUtils.showStatus(`대본 저장 완료! (${data.scenes.length}개 씬, ${totalShots}개 샷)`, 'success');
+
+    // 다음 단계로 이동
+    setTimeout(() => {
+      DramaMain.completeStep(1);
+      DramaMain.goToStep(2);
+    }, 1000);
+  },
+
+  /**
+   * 세션에서 분석 데이터 복원
+   */
+  restoreAnalyzedData() {
+    const data = DramaSession.getStepData('step1');
+    if (!data || data.type !== 'analyzed') return;
+
+    console.log('[Step1] 분석 데이터 복원');
+
+    // 원본 대본 복원
+    const fullScript = document.getElementById('full-script');
+    if (fullScript && data.originalScript) {
+      fullScript.value = data.originalScript;
+    }
+
+    // 분석 데이터 복원
+    this.analysisData = {
+      character: data.character,
+      scenes: data.scenes,
+      thumbnailSuggestion: data.thumbnailSuggestion,
+      originalScript: data.originalScript
+    };
+
+    // UI 렌더링
+    this.renderAnalysisResult();
+    this.currentScript = data;
   }
 };
