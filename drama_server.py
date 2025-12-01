@@ -4028,15 +4028,21 @@ def api_generate_tts():
             audio_data_list = []
             url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
 
-            # 속도 변환: 네이버(-5~5) -> Google(0.25~4.0), 기본값 1.0
+            # 속도 변환: 배율(0.85~1.1) 또는 네이버(-5~5) -> Google(0.25~4.0)
             if isinstance(speed, (int, float)):
-                if speed == 0:
+                if 0.1 <= speed <= 2.0:
+                    # 배율 형식 (0.85x, 0.95x, 1.0x, 1.1x 등) - 그대로 사용
+                    google_speed = speed
+                elif speed == 0:
                     google_speed = 1.0
                 else:
+                    # 네이버 형식 (-5~5)
                     google_speed = 1.0 + (speed * 0.1)  # -5->0.5, 0->1.0, 5->1.5
-                    google_speed = max(0.25, min(4.0, google_speed))
+                google_speed = max(0.25, min(4.0, google_speed))
             else:
                 google_speed = 1.0
+
+            print(f"[DRAMA-STEP5-TTS] 속도 설정: 입력={speed}, Google TTS={google_speed}")
 
             # 피치 변환: 네이버(-5~5) -> Google(-20~20)
             google_pitch = pitch * 4 if isinstance(pitch, (int, float)) else 0
@@ -4830,11 +4836,12 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         # 병렬 처리를 위한 작업 목록 생성
         tasks = [(idx, cut, temp_dir, width, height, fps) for idx, cut in enumerate(cuts)]
 
-        # 워커 수 결정 (Standard 2GB - 2개 병렬 처리)
-        max_workers = min(2, len(cuts), os.cpu_count() or 2)
-        print(f"[DRAMA-PARALLEL] 병렬 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커 (Standard 2GB)")
+        # 워커 수 결정 (Standard 2GB - 순차 처리로 메모리 절약)
+        # 병렬 처리 시 OOM 발생하므로 1개 워커로 순차 처리
+        max_workers = 1
+        print(f"[DRAMA-PARALLEL] 순차 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커 (메모리 절약 모드)")
 
-        update_progress(15, f"씬 {len(cuts)}개 병렬 처리 중... (워커 {max_workers}개)")
+        update_progress(15, f"씬 {len(cuts)}개 순차 처리 중...")
 
         # ThreadPoolExecutor로 병렬 처리
         results = []
