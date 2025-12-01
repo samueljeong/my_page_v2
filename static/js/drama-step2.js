@@ -121,10 +121,16 @@ window.DramaStep2 = {
   // 수동 입력 모드 처리 (Step1에서 이미지 프롬프트가 제공된 경우)
   prepareManualMode(step1Data) {
     console.log('[Step2] 수동 입력 모드 준비');
+    console.log('[Step2] step1Data:', JSON.stringify(step1Data, null, 2).substring(0, 500));
 
     const imagePrompts = step1Data.imagePrompts || [];
     const scenes = step1Data.scenes || [];
     const protagonistInfo = step1Data.protagonistInfo || '';
+
+    console.log(`[Step2] 이미지 프롬프트 ${imagePrompts.length}개, 씬 ${scenes.length}개 로드됨`);
+    imagePrompts.forEach((p, i) => {
+      if (p) console.log(`[Step2] 프롬프트 ${i + 1}:`, p.substring(0, 60) + '...');
+    });
 
     // 주인공 정보에서 이름 추출 시도
     let protagonistName = '주인공';
@@ -291,14 +297,18 @@ window.DramaStep2 = {
     const mainCharacter = characters[0];
 
     // 씬 프롬프트에 주인공 정보를 강제로 결합
-    let enhancedPrompt = scene.backgroundPrompt || '';
+    // 수동 모드: imagePrompt, 자동 모드: backgroundPrompt
+    let scenePrompt = scene.imagePrompt || scene.backgroundPrompt || '';
+    let enhancedPrompt = scenePrompt;
 
-    if (mainCharacter) {
+    if (mainCharacter && scenePrompt) {
       // 캐릭터 일관성 규칙: 주인공 정보를 프롬프트 맨 앞에 배치
       const characterConsistencyPrefix = this.buildCharacterConsistencyPrompt(mainCharacter);
-      enhancedPrompt = `${characterConsistencyPrefix} Scene: ${enhancedPrompt}`;
+      enhancedPrompt = `${characterConsistencyPrefix} Scene: ${scenePrompt}`;
       console.log('[Step2] 주인공 정보 결합 프롬프트 생성');
     }
+
+    console.log(`[Step2] 씬 ${idx + 1} 프롬프트:`, enhancedPrompt.substring(0, 100) + '...');
 
     DramaUtils.showStatus(`씬 ${idx + 1} 이미지 생성 중...`, 'info');
 
@@ -387,11 +397,14 @@ window.DramaStep2 = {
       if (!scene) return { success: false, index: sceneIdx, error: '씬 정보 없음' };
 
       // 씬 프롬프트에 주인공 정보를 강제로 결합
-      let enhancedPrompt = scene.backgroundPrompt || '';
-      if (mainCharacter) {
+      // 수동 모드: imagePrompt, 자동 모드: backgroundPrompt
+      let scenePrompt = scene.imagePrompt || scene.backgroundPrompt || '';
+      let enhancedPrompt = scenePrompt;
+      if (mainCharacter && scenePrompt) {
         const characterConsistencyPrefix = this.buildCharacterConsistencyPrompt(mainCharacter);
-        enhancedPrompt = `${characterConsistencyPrefix} Scene: ${enhancedPrompt}`;
+        enhancedPrompt = `${characterConsistencyPrefix} Scene: ${scenePrompt}`;
       }
+      console.log(`[Step2] 병렬 생성 - 씬 ${sceneIdx + 1} 프롬프트:`, scenePrompt.substring(0, 50) + '...');
 
       try {
         const response = await fetch('/api/drama/generate-image', {

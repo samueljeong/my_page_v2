@@ -134,12 +134,16 @@ window.DramaStep1 = {
 
   /**
    * 이미지 프롬프트 파싱 (박스1에서 추출)
+   * 지원 형식:
+   * - 씬 1: ... 씬 2: ...
+   * - Scene 1: ... Scene 2: ...
+   * - 장면 1: ... 장면 2: ...
    */
   parseImagePrompts(text) {
     const prompts = [];
 
-    // 씬1:, 씬2:, Scene1:, Scene2: 등의 패턴으로 분리
-    const scenePattern = /(?:씬|Scene|장면)\s*(\d+)\s*[:\-]\s*(.+?)(?=(?:씬|Scene|장면)\s*\d+|$)/gis;
+    // 씬1:, 씬2:, Scene1:, Scene2: 등의 패턴으로 분리 (멀티라인 지원)
+    const scenePattern = /(?:씬|Scene|장면)\s*(\d+)\s*[:\-]\s*([\s\S]+?)(?=(?:씬|Scene|장면)\s*\d+\s*[:\-]|$)/gi;
     let match;
 
     while ((match = scenePattern.exec(text)) !== null) {
@@ -147,9 +151,11 @@ window.DramaStep1 = {
       const prompt = match[2].trim();
       if (prompt) {
         prompts[sceneNum - 1] = prompt;
+        console.log(`[Step1] 씬 ${sceneNum} 프롬프트 파싱됨 (${prompt.length}자):`, prompt.substring(0, 80) + '...');
       }
     }
 
+    console.log(`[Step1] 총 ${prompts.filter(Boolean).length}개 이미지 프롬프트 파싱 완료`);
     return prompts;
   },
 
