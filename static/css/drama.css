@@ -1485,3 +1485,154 @@ body {
     align-items: flex-start;
   }
 }
+
+/* ===== TTS 음성 선택 섹션 ===== */
+.voice-selection-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.voice-selection-section .section-header {
+  margin-bottom: 16px;
+}
+
+.voice-selection-section h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.voice-cards {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.voice-category {
+  flex: 1;
+  min-width: 280px;
+}
+
+.voice-category h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  color: #555;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.voice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voice-card {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  background: #f8f9fa;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.voice-card:hover {
+  background: #f0f4ff;
+  border-color: #c5d5ff;
+}
+
+.voice-card.selected,
+.voice-card:has(input:checked) {
+  background: #e8f0ff;
+  border-color: #667eea;
+}
+
+.voice-card input[type="radio"] {
+  margin-right: 12px;
+  accent-color: #667eea;
+  width: 18px;
+  height: 18px;
+}
+
+.voice-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voice-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.voice-desc {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.btn-preview {
+  background: #667eea;
+  color: white;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-preview:hover {
+  background: #5a6fd6;
+  transform: scale(1.1);
+}
+
+.btn-preview:active {
+  transform: scale(0.95);
+}
+
+.btn-preview.loading {
+  background: #aaa;
+  pointer-events: none;
+}
+
+.btn-preview.loading::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 반응형 - 음성 선택 */
+@media (max-width: 768px) {
+  .voice-cards {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .voice-category {
+    min-width: 100%;
+  }
+
+  .voice-card {
+    padding: 10px 12px;
+  }
+}

@@ -534,34 +534,14 @@ window.DramaStep3 = {
     return result;
   },
 
-  // 음성 스타일에 따른 음성 선택 (성별 + 품질 연동)
+  // 음성 스타일에 따른 음성 선택 (Step1에서 직접 선택한 음성 사용)
   getVoiceSettings(style) {
-    const config = this.getConfig();
-
-    // Step1에서 저장한 성별/품질 정보 가져오기
+    // Step1에서 직접 선택한 음성 사용 (최우선)
+    const directVoice = dramaApp.session.ttsVoice;
     const gender = dramaApp.session.protagonistGender || 'female';
-    const quality = dramaApp.session.ttsVoiceQuality || 'wavenet';
+    const quality = dramaApp.session.ttsVoiceQuality || 'neural2';
 
-    console.log('[Step3] TTS 설정 - 성별:', gender, ', 품질:', quality);
-
-    // 품질별 음성 매핑
-    const voiceMap = {
-      // Standard (저렴)
-      standard: {
-        female: 'ko-KR-Standard-A',
-        male: 'ko-KR-Standard-C'
-      },
-      // Wavenet (고품질)
-      wavenet: {
-        female: 'ko-KR-Wavenet-A',
-        male: 'ko-KR-Wavenet-C'
-      },
-      // Neural2 (최고품질)
-      neural2: {
-        female: 'ko-KR-Neural2-A',
-        male: 'ko-KR-Neural2-B'
-      }
-    };
+    console.log('[Step3] TTS 설정 - 직접선택:', directVoice, ', 성별:', gender, ', 품질:', quality);
 
     // 스타일별 pitch/volume 조정
     const styleSettings = {
@@ -570,10 +550,22 @@ window.DramaStep3 = {
       'dramatic': { pitch: 2, volume: 2 }
     };
 
-    const speaker = voiceMap[quality]?.[gender] || voiceMap.wavenet.female;
+    // Step1에서 직접 선택한 음성이 있으면 그대로 사용
+    let speaker = directVoice;
+
+    // 없으면 품질+성별로 기본 음성 매핑
+    if (!speaker) {
+      const voiceMap = {
+        standard: { female: 'ko-KR-Standard-A', male: 'ko-KR-Standard-C' },
+        wavenet: { female: 'ko-KR-Wavenet-A', male: 'ko-KR-Wavenet-C' },
+        neural2: { female: 'ko-KR-Neural2-A', male: 'ko-KR-Neural2-C' }
+      };
+      speaker = voiceMap[quality]?.[gender] || 'ko-KR-Neural2-A';
+    }
+
     const settings = styleSettings[style] || styleSettings['warm'];
 
-    console.log('[Step3] 선택된 음성:', speaker);
+    console.log('[Step3] 최종 선택 음성:', speaker);
 
     return {
       speaker: speaker,
