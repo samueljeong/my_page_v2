@@ -15,6 +15,91 @@ window.DramaStep1 = {
     console.log('[Step1] 대본 입력 모듈 초기화');
     this.checkYouTubeAuth();
     this.restoreFromSession();
+    this.initVoiceSelection();
+  },
+
+  /**
+   * 음성 선택 UI 초기화
+   */
+  initVoiceSelection() {
+    const voiceCards = document.querySelectorAll('.voice-card');
+    voiceCards.forEach(card => {
+      card.addEventListener('click', (e) => {
+        // 미리듣기 버튼 클릭은 제외
+        if (e.target.classList.contains('btn-preview')) return;
+
+        // 선택 상태 업데이트
+        voiceCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+
+        // hidden input 값 업데이트
+        const voice = card.dataset.voice;
+        const quality = card.dataset.quality;
+        const gender = card.dataset.gender;
+
+        document.getElementById('selected-voice').value = voice;
+        document.getElementById('tts-voice-quality').value = quality;
+        document.getElementById('protagonist-gender').value = gender;
+
+        console.log(`[Step1] 음성 선택: ${voice} (${quality}, ${gender})`);
+      });
+    });
+  },
+
+  /**
+   * 음성 미리듣기
+   */
+  async previewVoice(voiceId, gender) {
+    const btn = event.target;
+    const player = document.getElementById('voice-preview-player');
+
+    // 이미 재생 중이면 중지
+    if (!player.paused) {
+      player.pause();
+      player.currentTime = 0;
+    }
+
+    // 로딩 상태
+    btn.classList.add('loading');
+    btn.textContent = '';
+
+    // 샘플 텍스트
+    const sampleTexts = {
+      female: '안녕하세요. 저는 이순자입니다. 오늘 제 이야기를 들려드릴게요.',
+      male: '안녕하세요. 저는 박봉수입니다. 오늘 제 이야기를 들려드릴게요.'
+    };
+    const text = sampleTexts[gender] || sampleTexts.female;
+
+    try {
+      const response = await fetch('/api/drama/generate-tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          speaker: voiceId,
+          speed: 1.0,
+          pitch: 0,
+          volume: 0,
+          ttsProvider: 'google'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.ok && data.audioUrl) {
+        player.src = data.audioUrl;
+        player.play();
+        DramaUtils.showStatus(`${voiceId} 미리듣기 재생 중...`, 'info');
+      } else {
+        throw new Error(data.error || 'TTS 생성 실패');
+      }
+    } catch (err) {
+      console.error('[Step1] 음성 미리듣기 오류:', err);
+      DramaUtils.showStatus('음성 미리듣기 실패: ' + err.message, 'error');
+    } finally {
+      btn.classList.remove('loading');
+      btn.textContent = '▶';
+    }
   },
 
   /**
@@ -107,7 +192,8 @@ window.DramaStep1 = {
     return {
       channelType: document.getElementById('channel-type')?.value || 'senior-nostalgia',
       protagonistGender: document.getElementById('protagonist-gender')?.value || 'female',
-      ttsVoiceQuality: document.getElementById('tts-voice-quality')?.value || 'wavenet'
+      ttsVoiceQuality: document.getElementById('tts-voice-quality')?.value || 'neural2',
+      ttsVoice: document.getElementById('selected-voice')?.value || 'ko-KR-Neural2-A'
     };
   },
 
@@ -190,7 +276,10 @@ window.DramaStep1 = {
     dramaApp.session.scriptData = this.currentScript;
     dramaApp.session.protagonistGender = config.protagonistGender;
     dramaApp.session.ttsVoiceQuality = config.ttsVoiceQuality;
+    dramaApp.session.ttsVoice = config.ttsVoice;
     dramaApp.session.channelType = config.channelType;
+
+    console.log('[Step1] 선택된 TTS 음성:', config.ttsVoice);
 
     // DramaSession에도 저장 (localStorage)
     DramaSession.setStepData('step1', this.currentScript);

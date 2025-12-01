@@ -84,15 +84,84 @@
                   <option value="male">남성 (할아버지)</option>
                 </select>
               </div>
-              <div class="config-item">
-                <label>TTS 음성 품질</label>
-                <select id="tts-voice-quality">
-                  <option value="standard">Standard (저렴)</option>
-                  <option value="wavenet" selected>Wavenet (고품질)</option>
-                  <option value="neural2">Neural2 (최고품질)</option>
-                </select>
+            </div>
+          </div>
+
+          <!-- TTS 음성 선택 -->
+          <div class="voice-selection-section">
+            <div class="section-header">
+              <h3>🎙️ 나레이션 음성 선택</h3>
+              <span class="section-hint">미리듣기 버튼으로 음성을 확인하세요</span>
+            </div>
+            <input type="hidden" id="tts-voice-quality" value="neural2">
+            <input type="hidden" id="selected-voice" value="ko-KR-Neural2-A">
+
+            <div class="voice-cards">
+              <!-- 여성 음성 -->
+              <div class="voice-category">
+                <h4>👩 여성 음성</h4>
+                <div class="voice-options">
+                  <label class="voice-card selected" data-voice="ko-KR-Neural2-A" data-quality="neural2" data-gender="female">
+                    <input type="radio" name="tts-voice" value="ko-KR-Neural2-A" checked>
+                    <div class="voice-info">
+                      <span class="voice-name">차분한 할머니</span>
+                      <span class="voice-desc">Neural2-A · 따뜻하고 안정적</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Neural2-A', 'female')">▶</button>
+                  </label>
+                  <label class="voice-card" data-voice="ko-KR-Neural2-B" data-quality="neural2" data-gender="female">
+                    <input type="radio" name="tts-voice" value="ko-KR-Neural2-B">
+                    <div class="voice-info">
+                      <span class="voice-name">밝은 할머니</span>
+                      <span class="voice-desc">Neural2-B · 경쾌하고 친근</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Neural2-B', 'female')">▶</button>
+                  </label>
+                  <label class="voice-card" data-voice="ko-KR-Wavenet-A" data-quality="wavenet" data-gender="female">
+                    <input type="radio" name="tts-voice" value="ko-KR-Wavenet-A">
+                    <div class="voice-info">
+                      <span class="voice-name">표준 여성</span>
+                      <span class="voice-desc">Wavenet-A · 깔끔한 목소리</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Wavenet-A', 'female')">▶</button>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 남성 음성 -->
+              <div class="voice-category">
+                <h4>👨 남성 음성</h4>
+                <div class="voice-options">
+                  <label class="voice-card" data-voice="ko-KR-Neural2-C" data-quality="neural2" data-gender="male">
+                    <input type="radio" name="tts-voice" value="ko-KR-Neural2-C">
+                    <div class="voice-info">
+                      <span class="voice-name">중후한 할아버지</span>
+                      <span class="voice-desc">Neural2-C · 깊고 신뢰감</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Neural2-C', 'male')">▶</button>
+                  </label>
+                  <label class="voice-card" data-voice="ko-KR-Wavenet-C" data-quality="wavenet" data-gender="male">
+                    <input type="radio" name="tts-voice" value="ko-KR-Wavenet-C">
+                    <div class="voice-info">
+                      <span class="voice-name">표준 남성</span>
+                      <span class="voice-desc">Wavenet-C · 명확한 발음</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Wavenet-C', 'male')">▶</button>
+                  </label>
+                  <label class="voice-card" data-voice="ko-KR-Wavenet-D" data-quality="wavenet" data-gender="male">
+                    <input type="radio" name="tts-voice" value="ko-KR-Wavenet-D">
+                    <div class="voice-info">
+                      <span class="voice-name">젊은 남성</span>
+                      <span class="voice-desc">Wavenet-D · 활기찬 톤</span>
+                    </div>
+                    <button type="button" class="btn-preview" onclick="DramaStep1.previewVoice('ko-KR-Wavenet-D', 'male')">▶</button>
+                  </label>
+                </div>
               </div>
             </div>
+
+            <!-- 오디오 플레이어 (숨김) -->
+            <audio id="voice-preview-player" style="display:none;"></audio>
           </div>
 
           <!-- 주인공/캐릭터 정보 -->
