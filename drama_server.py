@@ -5502,8 +5502,14 @@ def api_generate_scene_clips_zip():
     import zipfile
     import gc
 
+    print(f"[SCENE-ZIP] === API 진입 ===")
+    print(f"[SCENE-ZIP] Content-Length: {request.content_length}")
+
     try:
+        print(f"[SCENE-ZIP] JSON 파싱 시작...")
         data = request.get_json()
+        print(f"[SCENE-ZIP] JSON 파싱 완료")
+
         if not data:
             return jsonify({"ok": False, "error": "No data received"}), 400
 
@@ -5512,6 +5518,12 @@ def api_generate_scene_clips_zip():
             return jsonify({"ok": False, "error": "씬 데이터가 없습니다."}), 400
 
         print(f"[SCENE-ZIP] 씬 클립 ZIP 생성 시작: {len(cuts)}개 씬")
+
+        # 각 cut의 데이터 크기 확인 (디버깅)
+        for idx, cut in enumerate(cuts):
+            img_size = len(cut.get("imageUrl", "")) // 1024
+            audio_size = len(cut.get("audioUrl", "")) // 1024
+            print(f"[SCENE-ZIP] cut[{idx}] - 이미지: {img_size}KB, 오디오: {audio_size}KB")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             clip_paths = []
