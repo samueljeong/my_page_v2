@@ -4656,6 +4656,8 @@ def _create_scene_clip(args):
                 img_data = base64.b64decode(encoded)
                 with open(img_path, 'wb') as f:
                     f.write(img_data)
+                del img_data  # 메모리 즉시 해제
+                gc.collect()
             elif img_url.startswith('/static/'):
                 local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
                 if os.path.exists(local_path):
@@ -4690,6 +4692,8 @@ def _create_scene_clip(args):
                 audio_data = base64.b64decode(encoded)
                 with open(audio_path, 'wb') as f:
                     f.write(audio_data)
+                del audio_data  # 메모리 즉시 해제
+                gc.collect()
                 has_audio = True
             elif audio_url.startswith('/static/'):
                 local_path = os.path.join(os.path.dirname(__file__), audio_url.lstrip('/'))
@@ -4828,56 +4832,36 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] 메모리 최적화 - 해상도 조정: {resolution}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        update_progress(10, "씬별 영상 병렬 생성 준비 중...")
+        update_progress(10, "씬별 영상 순차 생성 중...")
 
         segment_files = []
         total_duration = 0.0
 
-        # 병렬 처리를 위한 작업 목록 생성
-        tasks = [(idx, cut, temp_dir, width, height, fps) for idx, cut in enumerate(cuts)]
+        # 완전 순차 처리 (ThreadPoolExecutor 제거 - OOM 방지)
+        print(f"[DRAMA-SEQUENTIAL] 순차 처리 시작 - {len(cuts)}개 씬 (메모리 절약 모드)")
 
-        # 워커 수 결정 (Standard 2GB - 순차 처리로 메모리 절약)
-        # 병렬 처리 시 OOM 발생하므로 1개 워커로 순차 처리
-        max_workers = 1
-        print(f"[DRAMA-PARALLEL] 순차 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커 (메모리 절약 모드)")
+        for idx, cut in enumerate(cuts):
+            update_progress(15 + int((idx / len(cuts)) * 55), f"씬 {idx+1}/{len(cuts)} 클립 생성 중...")
 
-        update_progress(15, f"씬 {len(cuts)}개 순차 처리 중...")
+            try:
+                # 씬 클립 생성
+                task = (idx, cut, temp_dir, width, height, fps)
+                result_idx, segment_path, duration = _create_scene_clip(task)
 
-        # ThreadPoolExecutor로 병렬 처리
-        results = []
-        completed_count = 0
+                if segment_path and os.path.exists(segment_path):
+                    segment_files.append(segment_path)
+                    total_duration += duration
+                    print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 완료: {duration:.1f}초")
+                else:
+                    print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 실패")
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_idx = {executor.submit(_create_scene_clip, task): task[0] for task in tasks}
+            except Exception as e:
+                print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 오류: {e}")
 
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                    completed_count += 1
+            # 각 씬 처리 후 강제 메모리 정리
+            gc.collect()
 
-                    # 진행률 업데이트
-                    progress_pct = 15 + int((completed_count / len(cuts)) * 55)
-                    update_progress(progress_pct, f"씬 클립 생성 중... ({completed_count}/{len(cuts)} 완료)")
-
-                    # 메모리 정리
-                    gc.collect()
-
-                except Exception as e:
-                    print(f"[DRAMA-PARALLEL] 씬 {idx} Future 오류: {e}")
-                    results.append((idx, None, 0))
-
-        # 결과를 인덱스 순서대로 정렬
-        results.sort(key=lambda x: x[0])
-
-        # 성공한 세그먼트만 수집
-        for idx, segment_path, duration in results:
-            if segment_path and os.path.exists(segment_path):
-                segment_files.append(segment_path)
-                total_duration += duration
-
-        print(f"[DRAMA-PARALLEL] 병렬 처리 완료 - 성공: {len(segment_files)}/{len(cuts)}, 총 길이: {total_duration:.1f}초")
+        print(f"[DRAMA-SEQUENTIAL] 순차 처리 완료 - 성공: {len(segment_files)}/{len(cuts)}, 총 길이: {total_duration:.1f}초")
 
         # 메모리 정리
         gc.collect()
