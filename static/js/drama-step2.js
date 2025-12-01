@@ -49,6 +49,13 @@ window.DramaStep2 = {
 
     const step1Data = DramaSession.getStepData('step1');
 
+    // AI 분석 모드 처리 (새로운 씬/샷 구조)
+    if (step1Data?.type === 'analyzed') {
+      console.log('[Step2] AI 분석 모드 - 씬/샷 구조 사용');
+      this.prepareAnalyzedMode(step1Data);
+      return;
+    }
+
     // 수동 입력 모드 처리
     if (step1Data?.type === 'manual') {
       console.log('[Step2] 수동 입력 모드 - 이미지 프롬프트 사용');
@@ -180,6 +187,135 @@ window.DramaStep2 = {
     this.displayAnalysisResult(this.analysisResult);
 
     DramaUtils.showStatus(`수동 입력 모드: ${analysisScenes.length}개 씬 준비 완료`, 'success');
+  },
+
+  // AI 분석 모드 처리 (새로운 씬/샷 구조)
+  prepareAnalyzedMode(step1Data) {
+    console.log('[Step2] AI 분석 모드 준비');
+
+    const { character, scenes } = step1Data;
+
+    console.log(`[Step2] 캐릭터: ${character?.name || '?'}`);
+    console.log(`[Step2] 씬 ${scenes?.length || 0}개 로드됨`);
+
+    // 모든 샷을 플랫하게 펼침 (각 샷 = 하나의 이미지)
+    const flatShots = [];
+    let shotIndex = 0;
+
+    scenes?.forEach((scene, sceneIdx) => {
+      const shots = scene.shots || [];
+      console.log(`[Step2] 씬 ${sceneIdx + 1}: ${scene.title} - ${shots.length}개 샷`);
+
+      shots.forEach((shot, shotIdx) => {
+        flatShots.push({
+          sceneId: scene.sceneId,
+          sceneTitle: scene.title,
+          sceneNumber: sceneIdx + 1,
+          shotId: shot.shotId,
+          shotNumber: shotIdx + 1,
+          imagePrompt: shot.imagePrompt || '',
+          narration: shot.narration || '',
+          globalIndex: shotIndex++
+        });
+      });
+    });
+
+    const totalShots = flatShots.length;
+    console.log(`[Step2] 총 ${totalShots}개 샷 준비됨`);
+
+    // 캐릭터 정보 구성
+    const characterData = {
+      name: character?.name || '주인공',
+      description: `${character?.age || '?'}세 ${character?.gender === 'female' ? '여성' : '남성'}`,
+      imagePrompt: character?.appearance || '',
+      gender: character?.gender || 'female'
+    };
+
+    // 씬 데이터 생성 (플랫 샷 배열)
+    const analysisScenes = flatShots.map((shot, idx) => ({
+      sceneId: shot.sceneId,
+      sceneNumber: shot.sceneNumber,
+      shotId: shot.shotId,
+      shotNumber: shot.shotNumber,
+      title: `${shot.sceneTitle} - 샷 ${shot.shotNumber}`,
+      description: shot.narration?.substring(0, 100) || `샷 ${idx + 1}`,
+      imagePrompt: shot.imagePrompt,
+      narration: shot.narration
+    }));
+
+    // 결과 저장
+    this.analysisResult = {
+      characters: [characterData],
+      scenes: analysisScenes,
+      type: 'analyzed'  // 타입 표시
+    };
+
+    DramaSession.setStepData('step2_analysis', this.analysisResult);
+
+    // UI 표시 (샷 기반)
+    this.displayAnalyzedResult(this.analysisResult);
+
+    DramaUtils.showStatus(`AI 분석 모드: ${scenes?.length || 0}개 씬, ${totalShots}개 샷 준비 완료`, 'success');
+  },
+
+  // AI 분석 결과 표시 (샷 기반 UI)
+  displayAnalyzedResult(result) {
+    // 캐릭터 분석 영역
+    const characterArea = document.getElementById('character-analysis');
+    const characterList = document.getElementById('character-list');
+
+    if (characterArea && characterList && result.characters) {
+      characterList.innerHTML = result.characters.map((char, idx) => `
+        <div class="character-card" data-idx="${idx}">
+          <div class="character-placeholder">
+            <span class="placeholder-icon">👤</span>
+          </div>
+          <div class="character-info">
+            <h4>${DramaUtils.escapeHtml(char.name)}</h4>
+            <p>${DramaUtils.escapeHtml(char.description || '')}</p>
+          </div>
+          <button class="btn-small" onclick="DramaStep2.generateCharacterImage(${idx})">
+            이미지 생성
+          </button>
+        </div>
+      `).join('');
+      characterArea.classList.remove('hidden');
+    }
+
+    // 씬/샷 이미지 영역
+    const sceneArea = document.getElementById('scene-images-area');
+    const sceneList = document.getElementById('scene-image-list');
+
+    if (sceneArea && sceneList && result.scenes) {
+      sceneList.innerHTML = result.scenes.map((scene, idx) => `
+        <div class="scene-card shot-card" data-idx="${idx}">
+          <div class="scene-image-placeholder" id="scene-image-${idx}">
+            <span class="placeholder-icon">📷</span>
+            <span class="placeholder-text">샷 ${idx + 1}</span>
+          </div>
+          <div class="scene-info">
+            <h4>${DramaUtils.escapeHtml(scene.title || `샷 ${idx + 1}`)}</h4>
+            <p class="scene-desc">${DramaUtils.escapeHtml(scene.narration?.substring(0, 80) || '')}...</p>
+            <p class="prompt-preview" title="${DramaUtils.escapeHtml(scene.imagePrompt || '')}">
+              🖼️ ${DramaUtils.escapeHtml((scene.imagePrompt || '').substring(0, 50))}...
+            </p>
+          </div>
+          <div class="scene-actions">
+            <input type="checkbox" id="scene-select-${idx}" class="scene-select">
+            <button class="btn-small" onclick="DramaStep2.generateSceneImage(${idx})">
+              이미지 생성
+            </button>
+          </div>
+        </div>
+      `).join('');
+      sceneArea.classList.remove('hidden');
+    }
+
+    // 다음 단계 버튼 표시
+    const nextButtons = document.getElementById('step2-next');
+    if (nextButtons) {
+      nextButtons.classList.remove('hidden');
+    }
   },
 
   // 분석 결과 표시

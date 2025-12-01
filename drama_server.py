@@ -7341,6 +7341,161 @@ def api_get_benchmark_detail(benchmark_id):
         return jsonify({'ok': False, 'error': str(e)}), 200
 
 
+# ===== AI 대본 분석 API (씬/샷 자동 분리) =====
+@app.route('/api/drama/analyze-script', methods=['POST'])
+def api_analyze_script():
+    """전체 대본을 분석하여 씬과 샷으로 자동 분리
+
+    Input:
+    {
+        "script": "전체 대본 텍스트...",
+        "channelType": "senior-nostalgia",
+        "protagonistGender": "female"
+    }
+
+    Output:
+    {
+        "ok": true,
+        "character": { "name": "이순자", "age": 70, "description": "..." },
+        "scenes": [
+            {
+                "sceneId": "scene_1",
+                "title": "식당에서의 만남",
+                "shots": [
+                    {
+                        "shotId": "shot_1_1",
+                        "imagePrompt": "Night, small Korean restaurant...",
+                        "narration": "그날 밤이었습니다..."
+                    },
+                    ...
+                ]
+            },
+            ...
+        ],
+        "thumbnailSuggestion": {
+            "mainEmotion": "눈물의 재회",
+            "textSuggestion": "46년만에 찾은 아버지"
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'ok': False, 'error': 'No data received'}), 400
+
+        script = data.get('script', '').strip()
+        channel_type = data.get('channelType', 'senior-nostalgia')
+        protagonist_gender = data.get('protagonistGender', 'female')
+
+        if not script:
+            return jsonify({'ok': False, 'error': '대본이 비어있습니다.'}), 400
+
+        if len(script) < 100:
+            return jsonify({'ok': False, 'error': '대본이 너무 짧습니다. (최소 100자)'}), 400
+
+        print(f"[ANALYZE-SCRIPT] 대본 분석 시작 - 길이: {len(script)}자, 채널: {channel_type}")
+
+        # OpenAI API 호출
+        from openai import OpenAI
+        client = OpenAI()
+
+        system_prompt = """당신은 드라마 대본 분석 전문가입니다. 주어진 대본을 분석하여 씬(Scene)과 샷(Shot)으로 나누고, 각 샷에 대한 이미지 프롬프트를 생성합니다.
+
+## 분석 규칙
+1. **씬(Scene)**: 장소나 시간이 크게 바뀔 때 새로운 씬
+2. **샷(Shot)**: 같은 씬 내에서 카메라 앵글/구도가 바뀔 때, 또는 중요한 감정 변화가 있을 때 새로운 샷
+3. 각 샷은 10-30초 정도의 나레이션을 담당
+4. 이미지 프롬프트는 영어로, 한국인 시니어 캐릭터에 맞게 작성
+
+## 이미지 프롬프트 가이드 (한국인 시니어)
+- 반드시 "Korean elderly woman/man" 또는 "Korean grandmother/grandfather" 포함
+- 얼굴 특징: round face, single eyelid or subtle double eyelid, warm skin tone
+- 1970-80년대 감성: film grain, faded warm colors, nostalgic atmosphere
+- 의상: 앞치마, 한복, 양복 등 시대에 맞게
+- 감정 표현 구체적으로: tearful eyes, gentle smile, worried expression 등
+
+## 출력 형식 (반드시 JSON)
+```json
+{
+  "character": {
+    "name": "주인공 이름",
+    "age": 나이,
+    "gender": "female/male",
+    "appearance": "외모 설명 (영문)"
+  },
+  "scenes": [
+    {
+      "sceneId": "scene_1",
+      "title": "씬 제목",
+      "shots": [
+        {
+          "shotId": "shot_1_1",
+          "imagePrompt": "영문 이미지 프롬프트...",
+          "narration": "해당 샷의 나레이션 텍스트 (한글)"
+        }
+      ]
+    }
+  ],
+  "thumbnailSuggestion": {
+    "mainEmotion": "핵심 감정 (예: 눈물의 재회)",
+    "textSuggestion": "썸네일 텍스트 제안 (2-5글자)"
+  }
+}
+```"""
+
+        user_prompt = f"""다음 대본을 분석해주세요:
+
+---
+{script}
+---
+
+주인공 성별: {"여성 (할머니)" if protagonist_gender == "female" else "남성 (할아버지)"}
+채널 타입: {channel_type}
+
+대본을 씬과 샷으로 나누고, 각 샷에 대한 이미지 프롬프트와 나레이션을 JSON 형식으로 출력해주세요."""
+
+        print(f"[ANALYZE-SCRIPT] GPT API 호출 중...")
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=4000,
+            response_format={"type": "json_object"}
+        )
+
+        result_text = response.choices[0].message.content
+        print(f"[ANALYZE-SCRIPT] GPT 응답 길이: {len(result_text)}자")
+
+        # JSON 파싱
+        import json
+        result = json.loads(result_text)
+
+        # 샷 개수 계산
+        total_shots = sum(len(scene.get('shots', [])) for scene in result.get('scenes', []))
+        print(f"[ANALYZE-SCRIPT] 분석 완료 - 씬: {len(result.get('scenes', []))}개, 샷: {total_shots}개")
+
+        return jsonify({
+            'ok': True,
+            'character': result.get('character', {}),
+            'scenes': result.get('scenes', []),
+            'thumbnailSuggestion': result.get('thumbnailSuggestion', {}),
+            'totalShots': total_shots
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"[ANALYZE-SCRIPT] JSON 파싱 오류: {e}")
+        return jsonify({'ok': False, 'error': f'AI 응답 파싱 오류: {str(e)}'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[ANALYZE-SCRIPT] 오류: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ===== GPT-4o-mini 2단계 기획 API =====
 @app.route('/api/drama/gpt-plan-step1', methods=['POST'])
 def api_gpt_plan_step1():

@@ -28,6 +28,27 @@ window.DramaStep3 = {
     const step1Data = DramaSession.getStepData('step1');
     console.log('[Step3] step1Data 전체:', step1Data);
 
+    // AI 분석 모드 처리 (type: 'analyzed' - 새로운 씬/샷 구조)
+    if (step1Data?.type === 'analyzed' && step1Data.scenes) {
+      console.log('[Step3] AI 분석 모드 - 씬/샷 구조에서 나레이션 추출');
+      const scripts = [];
+
+      step1Data.scenes.forEach((scene, sceneIdx) => {
+        const shots = scene.shots || [];
+        shots.forEach((shot, shotIdx) => {
+          if (shot.narration && shot.narration.length > 0) {
+            scripts.push({
+              id: shot.shotId || `shot_${sceneIdx + 1}_${shotIdx + 1}`,
+              text: shot.narration
+            });
+          }
+        });
+      });
+
+      console.log(`[Step3] AI 분석 모드에서 ${scripts.length}개 나레이션 추출`);
+      return scripts.filter(s => s.text && s.text.length > 0);
+    }
+
     // 수동 입력 모드 처리 (type: 'manual')
     if (step1Data?.type === 'manual' && step1Data.scenes) {
       console.log('[Step3] 수동 입력 모드 - scenes 배열 사용');

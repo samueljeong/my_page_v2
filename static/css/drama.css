@@ -1792,3 +1792,363 @@ body {
     gap: 8px;
   }
 }
+
+/* ===== Step 1: 전체 대본 입력 섹션 ===== */
+.script-input-section {
+  margin: 20px 0;
+}
+
+.script-textarea {
+  width: 100%;
+  min-height: 300px;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.7;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.script-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.script-textarea::placeholder {
+  color: #999;
+  font-size: 14px;
+}
+
+.script-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.action-hint {
+  color: #888;
+  font-size: 13px;
+}
+
+/* ===== 분석 결과 패널 ===== */
+.analysis-result {
+  margin: 24px 0;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
+/* ===== 캐릭터 정보 요약 ===== */
+.character-summary {
+  background: linear-gradient(135deg, #fff9e6 0%, #ffeeba 100%);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.character-summary h4 {
+  margin: 0 0 12px 0;
+  color: #856404;
+}
+
+.character-detail {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.char-name {
+  font-weight: 700;
+  color: #333;
+  font-size: 18px;
+}
+
+.char-age,
+.char-gender {
+  color: #666;
+  font-size: 14px;
+  padding: 2px 8px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+
+.char-appearance {
+  color: #555;
+  font-size: 13px;
+  margin: 8px 0 0 0;
+  line-height: 1.5;
+}
+
+/* ===== 씬/샷 트리 구조 ===== */
+.scene-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scene-node {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.scene-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.scene-toggle {
+  font-size: 12px;
+  width: 20px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.scene-title {
+  font-weight: 600;
+  font-size: 15px;
+  flex: 1;
+}
+
+.scene-shot-count {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+}
+
+/* 샷 목록 */
+.shot-list {
+  padding: 0;
+  transition: max-height 0.3s ease;
+}
+
+.shot-list.collapsed {
+  display: none;
+}
+
+.shot-node {
+  border-bottom: 1px solid #eee;
+  padding: 16px;
+}
+
+.shot-node:last-child {
+  border-bottom: none;
+}
+
+.shot-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.shot-number {
+  width: 24px;
+  height: 24px;
+  background: #667eea;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shot-id {
+  color: #888;
+  font-size: 12px;
+}
+
+.shot-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shot-field label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.shot-prompt,
+.shot-narration {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.shot-prompt:focus,
+.shot-narration:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.shot-prompt {
+  background: #f8f9ff;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.shot-narration {
+  background: #fffaf5;
+}
+
+/* ===== 썸네일 제안 ===== */
+.thumbnail-suggestion {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 20px;
+}
+
+.thumbnail-suggestion h4 {
+  margin: 0 0 12px 0;
+  color: #2e7d32;
+}
+
+.thumbnail-suggestion p {
+  margin: 6px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+/* ===== 진행 상태 패널 ===== */
+.progress-panel {
+  background: #f0f4ff;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.progress-panel h3 {
+  margin: 0 0 16px 0;
+  color: #667eea;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.progress-text {
+  color: #666;
+  font-size: 14px;
+}
+
+/* ===== 반응형 - Step 1 분석 결과 ===== */
+@media (max-width: 768px) {
+  .script-textarea {
+    min-height: 200px;
+    font-size: 14px;
+  }
+
+  .script-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-hint {
+    text-align: center;
+  }
+
+  .character-detail {
+    flex-wrap: wrap;
+  }
+
+  .scene-header {
+    padding: 12px;
+  }
+
+  .shot-node {
+    padding: 12px;
+  }
+
+  .shot-prompt,
+  .shot-narration {
+    font-size: 12px;
+  }
+}
+
+/* ===== Step 2: 샷 기반 이미지 카드 ===== */
+.shot-card {
+  border-left: 4px solid #667eea;
+}
+
+.shot-card .scene-image-placeholder {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8ecff 100%);
+}
+
+.prompt-preview {
+  font-size: 11px;
+  color: #888;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-card .scene-desc {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+
+/* 샷 카드 그리드 - 더 많은 카드를 표시 */
+.scene-image-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .scene-image-list {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-preview {
+    font-size: 10px;
+  }
+}
