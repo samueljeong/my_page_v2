@@ -5468,10 +5468,10 @@ def api_generate_video():
                     "jobId": job_id,
                     "status": "completed",
                     "progress": 100,
-                    "videoUrl": result.get('video_url'),
-                    "videoPath": result.get('video_path'),
+                    "videoUrl": result.get('videoUrl'),
+                    "videoPath": result.get('videoFileUrl'),
                     "duration": result.get('duration'),
-                    "fileSize": result.get('file_size'),
+                    "fileSize": result.get('fileSize'),
                     "message": "영상 생성 완료"
                 })
 
@@ -5677,7 +5677,7 @@ def api_generate_video_stream():
                             video_jobs[job_id]['result'] = result
                             save_video_jobs()
 
-                    yield f"data: {json.dumps({'event': 'complete', 'progress': 100, 'videoUrl': result.get('video_url'), 'videoPath': result.get('video_path'), 'duration': result.get('duration'), 'fileSize': result.get('file_size')})}\n\n"
+                    yield f"data: {json.dumps({'event': 'complete', 'progress': 100, 'videoUrl': result.get('videoUrl'), 'videoPath': result.get('videoFileUrl'), 'duration': result.get('duration'), 'fileSize': result.get('fileSize')})}\n\n"
 
                 else:
                     # 타임아웃
