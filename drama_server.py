@@ -4727,17 +4727,21 @@ def _create_scene_clip(args):
     # 씬별 클립 생성
     segment_path = os.path.join(temp_dir, f"segment_{idx:03d}.mp4")
 
+    # CPU 최적화: FPS 24, CRF 32, threads 1 (1 CPU 환경용)
+    target_fps = min(fps, 24)  # 최대 24 FPS로 제한
+
     if has_audio:
         # 이미지 + 오디오로 클립 생성
         ffmpeg_cmd = [
             'ffmpeg', '-y',
+            '-threads', '1',  # CPU 스파이크 방지
             '-loop', '1',
             '-i', img_path,
             '-i', audio_path,
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-            '-c:a', 'aac', '-b:a', '128k',
-            '-r', str(fps),
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '32', '-threads', '1',
+            '-c:a', 'aac', '-b:a', '96k',
+            '-r', str(target_fps),
             '-t', str(actual_duration),
             '-shortest',
             '-pix_fmt', 'yuv420p',
@@ -4747,13 +4751,14 @@ def _create_scene_clip(args):
         # 오디오 없이 이미지만으로 클립 생성 (무음)
         ffmpeg_cmd = [
             'ffmpeg', '-y',
+            '-threads', '1',  # CPU 스파이크 방지
             '-loop', '1',
             '-i', img_path,
             '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '32', '-threads', '1',
             '-c:a', 'aac',
-            '-r', str(fps),
+            '-r', str(target_fps),
             '-t', str(actual_duration),
             '-shortest',
             '-pix_fmt', 'yuv420p',
@@ -4817,9 +4822,9 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] ❌ 해상도 파싱 오류: resolution='{resolution}', error={e}")
         raise Exception(f"해상도 형식 오류: '{resolution}' (예상 형식: '1920x1080')")
 
-    # Render Standard 2GB 메모리: 720p 지원
-    MAX_WIDTH = 1280   # 720p (Standard 2GB)
-    MAX_HEIGHT = 720
+    # Render Standard 1 CPU: 480p로 제한 (CPU 부하 감소)
+    MAX_WIDTH = 854    # 480p (1 CPU 환경)
+    MAX_HEIGHT = 480
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         aspect_ratio = width / height
         if aspect_ratio > 16/9:
@@ -4982,9 +4987,9 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         print(f"[DRAMA-STEP6-VIDEO] ❌ 해상도 파싱 오류: resolution='{resolution}', error={e}")
         raise Exception(f"해상도 형식 오류: '{resolution}' (예상 형식: '1920x1080')")
 
-    # 1280x720 초과 시 자동으로 다운스케일
-    MAX_WIDTH = 1280
-    MAX_HEIGHT = 720
+    # Render Standard 1 CPU: 480p로 제한 (CPU 부하 감소)
+    MAX_WIDTH = 854
+    MAX_HEIGHT = 480
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         aspect_ratio = width / height
         if aspect_ratio > 16/9:  # 와이드
