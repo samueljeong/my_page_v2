@@ -4807,9 +4807,9 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] ❌ 해상도 파싱 오류: resolution='{resolution}', error={e}")
         raise Exception(f"해상도 형식 오류: '{resolution}' (예상 형식: '1920x1080')")
 
-    # Render 512MB 메모리 제한 대응: 해상도 제한
-    MAX_WIDTH = 854   # 480p (메모리 절약)
-    MAX_HEIGHT = 480
+    # Render Standard 2GB 메모리: 720p 지원
+    MAX_WIDTH = 1280   # 720p (Standard 2GB)
+    MAX_HEIGHT = 720
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         aspect_ratio = width / height
         if aspect_ratio > 16/9:
@@ -4830,9 +4830,9 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         # 병렬 처리를 위한 작업 목록 생성
         tasks = [(idx, cut, temp_dir, width, height, fps) for idx, cut in enumerate(cuts)]
 
-        # 워커 수 결정 (메모리 제한으로 2개로 축소)
+        # 워커 수 결정 (Standard 2GB - 2개 병렬 처리)
         max_workers = min(2, len(cuts), os.cpu_count() or 2)
-        print(f"[DRAMA-PARALLEL] 병렬 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커")
+        print(f"[DRAMA-PARALLEL] 병렬 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커 (Standard 2GB)")
 
         update_progress(15, f"씬 {len(cuts)}개 병렬 처리 중... (워커 {max_workers}개)")
 
