@@ -3130,11 +3130,22 @@ def api_analyze_characters():
             return jsonify({"ok": False, "error": "No data received"}), 400
 
         script = data.get("script", "")
+        duration = data.get("duration", "10min")  # 영상 길이 (기본값: 10분)
 
         if not script:
             return jsonify({"ok": False, "error": "대본이 없습니다."}), 400
 
-        print(f"[DRAMA-STEP4-ANALYZE] 등장인물 및 씬 분석 시작")
+        # duration에 따른 최대 씬 개수 설정
+        max_scenes_map = {
+            "2min": 2,
+            "5min": 3,
+            "10min": 4,
+            "20min": 6,
+            "30min": 8
+        }
+        max_scenes = max_scenes_map.get(duration, 4)
+
+        print(f"[DRAMA-STEP4-ANALYZE] 등장인물 및 씬 분석 시작 (duration: {duration}, max_scenes: {max_scenes})")
 
         system_content = """당신은 드라마 대본을 분석하여 등장인물과 씬 정보를 추출하는 전문가입니다.
 
@@ -3188,7 +3199,12 @@ def api_analyze_characters():
 
 {script[:15000]}
 
-⚠️ 중요: 대본에 있는 모든 씬을 빠짐없이 추출해주세요. 씬 번호가 있다면 모든 번호의 씬을 포함해야 합니다.
+⚠️ 매우 중요 - 씬 개수 제한:
+- 이 영상은 {duration} 길이입니다.
+- 씬은 반드시 **최대 {max_scenes}개**까지만 추출해주세요.
+- 대본에 씬이 많더라도 가장 핵심적인 {max_scenes}개만 선별하세요.
+- 비슷한 장면은 하나로 통합하세요.
+
 등장인물과 씬 정보를 JSON 형식으로 추출해주세요."""
 
         completion = client.chat.completions.create(
