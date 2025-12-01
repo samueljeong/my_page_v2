@@ -89,6 +89,15 @@ Drama Lab - AI 기반 드라마 영상 자동 생성 시스템
   - cuts 배열 상세 정보 출력
   - traceback 출력 추가
 
+### 6. ~~Step4 영상 생성 타임아웃~~ ✅ 병렬 처리로 해결 (2024-12-01)
+- ~~씬별 순차 처리로 300초 타임아웃 발생~~
+- **해결책**: ThreadPoolExecutor를 사용한 병렬 처리 도입
+  - `_create_scene_clip()`: 개별 씬 클립 생성 함수 분리
+  - `_generate_video_with_cuts()`: 병렬 처리 적용
+  - 최대 4개 워커로 씬 클립 동시 생성
+  - 모든 클립 생성 후 순서대로 concat 병합
+  - 예상 속도 향상: 4배 (10개 씬 기준)
+
 ## 주요 API 엔드포인트 (drama_server.py)
 - `/api/drama/gpt-plan-step1` - 대본 생성
 - `/api/drama/analyze-characters` - 캐릭터/씬 분석

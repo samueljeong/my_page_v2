@@ -6,6 +6,7 @@ import threading
 import queue
 import uuid
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime as dt
 from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
@@ -4599,10 +4600,163 @@ def api_check_images():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
-# ===== Step6: 씬별 클립 생성 후 concat 방식 영상 제작 =====
+# ===== Step6: 씬별 클립 생성 헬퍼 함수 (병렬 처리용) =====
+def _create_scene_clip(args):
+    """
+    단일 씬의 클립을 생성하는 헬퍼 함수 (ThreadPoolExecutor용)
+
+    Args:
+        args: (idx, cut, temp_dir, width, height, fps)
+
+    Returns:
+        (idx, segment_path, duration) 또는 (idx, None, 0) on failure
+    """
+    import requests
+    import base64
+    import subprocess
+    import shutil
+    import gc
+
+    idx, cut, temp_dir, width, height, fps = args
+    cut_id = cut.get('cutId', idx + 1)
+    img_url = cut.get('imageUrl', '')
+    audio_url = cut.get('audioUrl', '')
+    cut_duration = cut.get('duration', 10)
+
+    print(f"[DRAMA-PARALLEL] 씬 {cut_id} 병렬 처리 시작 (worker)")
+
+    # 이미지 다운로드/처리
+    img_path = os.path.join(temp_dir, f"image_{idx:03d}.png")
+    if img_url:
+        try:
+            if img_url.startswith('data:'):
+                header, encoded = img_url.split(',', 1)
+                img_data = base64.b64decode(encoded)
+                with open(img_path, 'wb') as f:
+                    f.write(img_data)
+            elif img_url.startswith('/static/'):
+                local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
+                if os.path.exists(local_path):
+                    shutil.copy2(local_path, img_path)
+                else:
+                    print(f"[DRAMA-PARALLEL] 씬 {cut_id} 로컬 이미지 없음: {local_path}")
+                    return (idx, None, 0)
+            else:
+                response = requests.get(img_url, timeout=60)
+                if response.status_code == 200:
+                    with open(img_path, 'wb') as f:
+                        f.write(response.content)
+                else:
+                    print(f"[DRAMA-PARALLEL] 씬 {cut_id} 이미지 다운로드 실패: {img_url}")
+                    return (idx, None, 0)
+        except Exception as e:
+            print(f"[DRAMA-PARALLEL] 씬 {cut_id} 이미지 처리 오류: {e}")
+            return (idx, None, 0)
+    else:
+        print(f"[DRAMA-PARALLEL] 씬 {cut_id} 이미지 URL 없음")
+        return (idx, None, 0)
+
+    # 오디오 다운로드/처리
+    audio_path = os.path.join(temp_dir, f"audio_{idx:03d}.mp3")
+    actual_duration = cut_duration
+    has_audio = False
+
+    if audio_url:
+        try:
+            if audio_url.startswith('data:'):
+                header, encoded = audio_url.split(',', 1)
+                audio_data = base64.b64decode(encoded)
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_data)
+                has_audio = True
+            elif audio_url.startswith('/static/'):
+                local_path = os.path.join(os.path.dirname(__file__), audio_url.lstrip('/'))
+                if os.path.exists(local_path):
+                    shutil.copy2(local_path, audio_path)
+                    has_audio = True
+            else:
+                response = requests.get(audio_url, timeout=60)
+                if response.status_code == 200:
+                    with open(audio_path, 'wb') as f:
+                        f.write(response.content)
+                    has_audio = True
+        except Exception as e:
+            print(f"[DRAMA-PARALLEL] 씬 {cut_id} 오디오 처리 오류: {e}")
+
+    # 오디오가 있으면 실제 길이 확인
+    if has_audio and os.path.exists(audio_path):
+        try:
+            probe_cmd = [
+                'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
+            ]
+            result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            if result.stdout.strip():
+                actual_duration = float(result.stdout.strip())
+        except Exception as e:
+            print(f"[DRAMA-PARALLEL] 씬 {cut_id} 오디오 길이 확인 오류: {e}")
+
+    print(f"[DRAMA-PARALLEL] 씬 {cut_id}: 오디오={has_audio}, 길이={actual_duration:.1f}초")
+
+    # 씬별 클립 생성
+    segment_path = os.path.join(temp_dir, f"segment_{idx:03d}.mp4")
+
+    if has_audio:
+        # 이미지 + 오디오로 클립 생성
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1',
+            '-i', img_path,
+            '-i', audio_path,
+            '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-r', str(fps),
+            '-t', str(actual_duration),
+            '-shortest',
+            '-pix_fmt', 'yuv420p',
+            segment_path
+        ]
+    else:
+        # 오디오 없이 이미지만으로 클립 생성 (무음)
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1',
+            '-i', img_path,
+            '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+            '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'aac',
+            '-r', str(fps),
+            '-t', str(actual_duration),
+            '-shortest',
+            '-pix_fmt', 'yuv420p',
+            segment_path
+        ]
+
+    try:
+        print(f"[DRAMA-PARALLEL] 씬 {cut_id} FFmpeg 시작...")
+        process = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=180)
+        if process.returncode == 0 and os.path.exists(segment_path):
+            print(f"[DRAMA-PARALLEL] 씬 {cut_id} 클립 생성 완료: {actual_duration:.1f}초")
+            gc.collect()
+            return (idx, segment_path, actual_duration)
+        else:
+            stderr_msg = process.stderr[:500] if process.stderr else '(stderr 없음)'
+            print(f"[DRAMA-PARALLEL] 씬 {cut_id} FFmpeg 오류: {stderr_msg[:200]}")
+            return (idx, None, 0)
+    except subprocess.TimeoutExpired:
+        print(f"[DRAMA-PARALLEL] 씬 {cut_id} 타임아웃 (180초 초과)")
+        return (idx, None, 0)
+    except Exception as e:
+        print(f"[DRAMA-PARALLEL] 씬 {cut_id} 클립 생성 오류: {e}")
+        return (idx, None, 0)
+
+
+# ===== Step6: 씬별 클립 생성 후 concat 방식 영상 제작 (병렬 처리) =====
 def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fps, update_progress):
     """
-    cuts 배열을 사용하여 각 씬별로 클립을 생성하고 concat하여 최종 영상 생성.
+    cuts 배열을 사용하여 각 씬별로 클립을 병렬 생성하고 concat하여 최종 영상 생성.
     이 방식은 각 씬의 이미지와 오디오가 정확히 매칭됨.
 
     Args:
@@ -4651,153 +4805,55 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] 해상도 조정: {resolution}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        update_progress(10, "씬별 영상 생성 준비 중...")
+        update_progress(10, "씬별 영상 병렬 생성 준비 중...")
 
         segment_files = []
         total_duration = 0.0
 
-        for idx, cut in enumerate(cuts):
-            cut_id = cut.get('cutId', idx + 1)
-            img_url = cut.get('imageUrl', '')
-            audio_url = cut.get('audioUrl', '')
-            cut_duration = cut.get('duration', 10)
+        # 병렬 처리를 위한 작업 목록 생성
+        tasks = [(idx, cut, temp_dir, width, height, fps) for idx, cut in enumerate(cuts)]
 
-            progress_pct = 10 + int((idx / len(cuts)) * 60)
-            update_progress(progress_pct, f"씬 {cut_id} 처리 중... ({idx + 1}/{len(cuts)})")
+        # 워커 수 결정 (CPU 코어 수 기반, 최대 4개로 제한 - 메모리 고려)
+        max_workers = min(4, len(cuts), os.cpu_count() or 2)
+        print(f"[DRAMA-PARALLEL] 병렬 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커")
 
-            print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} 처리 - 이미지: {img_url[:50] if img_url else 'N/A'}..., 오디오: {audio_url[:50] if audio_url else 'N/A'}...")
+        update_progress(15, f"씬 {len(cuts)}개 병렬 처리 중... (워커 {max_workers}개)")
 
-            # 이미지 다운로드/처리
-            img_path = os.path.join(temp_dir, f"image_{idx:03d}.png")
-            if img_url:
+        # ThreadPoolExecutor로 병렬 처리
+        results = []
+        completed_count = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {executor.submit(_create_scene_clip, task): task[0] for task in tasks}
+
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
                 try:
-                    if img_url.startswith('data:'):
-                        header, encoded = img_url.split(',', 1)
-                        img_data = base64.b64decode(encoded)
-                        with open(img_path, 'wb') as f:
-                            f.write(img_data)
-                    elif img_url.startswith('/static/'):
-                        local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
-                        if os.path.exists(local_path):
-                            shutil.copy2(local_path, img_path)
-                        else:
-                            print(f"[DRAMA-CUTS-VIDEO] 로컬 이미지 없음: {local_path}")
-                            continue
-                    else:
-                        response = requests.get(img_url, timeout=60)
-                        if response.status_code == 200:
-                            with open(img_path, 'wb') as f:
-                                f.write(response.content)
-                        else:
-                            print(f"[DRAMA-CUTS-VIDEO] 이미지 다운로드 실패: {img_url}")
-                            continue
+                    result = future.result()
+                    results.append(result)
+                    completed_count += 1
+
+                    # 진행률 업데이트
+                    progress_pct = 15 + int((completed_count / len(cuts)) * 55)
+                    update_progress(progress_pct, f"씬 클립 생성 중... ({completed_count}/{len(cuts)} 완료)")
+
                 except Exception as e:
-                    print(f"[DRAMA-CUTS-VIDEO] 이미지 처리 오류: {e}")
-                    continue
-            else:
-                print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} 이미지 URL 없음")
-                continue
+                    print(f"[DRAMA-PARALLEL] 씬 {idx} Future 오류: {e}")
+                    results.append((idx, None, 0))
 
-            # 오디오 다운로드/처리
-            audio_path = os.path.join(temp_dir, f"audio_{idx:03d}.mp3")
-            actual_duration = cut_duration
-            has_audio = False
+        # 결과를 인덱스 순서대로 정렬
+        results.sort(key=lambda x: x[0])
 
-            if audio_url:
-                try:
-                    if audio_url.startswith('data:'):
-                        header, encoded = audio_url.split(',', 1)
-                        audio_data = base64.b64decode(encoded)
-                        with open(audio_path, 'wb') as f:
-                            f.write(audio_data)
-                        has_audio = True
-                    elif audio_url.startswith('/static/'):
-                        local_path = os.path.join(os.path.dirname(__file__), audio_url.lstrip('/'))
-                        if os.path.exists(local_path):
-                            shutil.copy2(local_path, audio_path)
-                            has_audio = True
-                    else:
-                        response = requests.get(audio_url, timeout=60)
-                        if response.status_code == 200:
-                            with open(audio_path, 'wb') as f:
-                                f.write(response.content)
-                            has_audio = True
-                except Exception as e:
-                    print(f"[DRAMA-CUTS-VIDEO] 오디오 처리 오류: {e}")
+        # 성공한 세그먼트만 수집
+        for idx, segment_path, duration in results:
+            if segment_path and os.path.exists(segment_path):
+                segment_files.append(segment_path)
+                total_duration += duration
 
-            # 오디오가 있으면 실제 길이 확인
-            if has_audio and os.path.exists(audio_path):
-                try:
-                    probe_cmd = [
-                        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-                        '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
-                    ]
-                    result = subprocess.run(probe_cmd, capture_output=True, text=True)
-                    if result.stdout.strip():
-                        actual_duration = float(result.stdout.strip())
-                except Exception as e:
-                    print(f"[DRAMA-CUTS-VIDEO] 오디오 길이 확인 오류: {e}")
+        print(f"[DRAMA-PARALLEL] 병렬 처리 완료 - 성공: {len(segment_files)}/{len(cuts)}, 총 길이: {total_duration:.1f}초")
 
-            print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id}: 오디오={has_audio}, 길이={actual_duration:.1f}초")
-
-            # 씬별 클립 생성
-            segment_path = os.path.join(temp_dir, f"segment_{idx:03d}.mp4")
-
-            if has_audio:
-                # 이미지 + 오디오로 클립 생성
-                ffmpeg_cmd = [
-                    'ffmpeg', '-y',
-                    '-loop', '1',
-                    '-i', img_path,
-                    '-i', audio_path,
-                    '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-                    '-c:a', 'aac', '-b:a', '128k',
-                    '-r', str(fps),
-                    '-t', str(actual_duration),
-                    '-shortest',
-                    '-pix_fmt', 'yuv420p',
-                    segment_path
-                ]
-            else:
-                # 오디오 없이 이미지만으로 클립 생성 (무음)
-                ffmpeg_cmd = [
-                    'ffmpeg', '-y',
-                    '-loop', '1',
-                    '-i', img_path,
-                    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
-                    '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-                    '-c:a', 'aac',
-                    '-r', str(fps),
-                    '-t', str(actual_duration),
-                    '-shortest',
-                    '-pix_fmt', 'yuv420p',
-                    segment_path
-                ]
-
-            try:
-                print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} FFmpeg 명령: {' '.join(ffmpeg_cmd[:10])}...")
-                process = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=300)
-                if process.returncode == 0 and os.path.exists(segment_path):
-                    segment_files.append(segment_path)
-                    total_duration += actual_duration
-                    print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} 클립 생성 완료: {segment_path}")
-                else:
-                    stderr_msg = process.stderr[:500] if process.stderr else '(stderr 없음)'
-                    print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} FFmpeg 오류 (returncode={process.returncode}): {stderr_msg}")
-                    # FFmpeg 오류 상세 로그
-                    if process.stdout:
-                        print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} FFmpeg stdout: {process.stdout[:300]}")
-            except subprocess.TimeoutExpired:
-                print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} 타임아웃 (300초 초과)")
-            except Exception as e:
-                import traceback
-                print(f"[DRAMA-CUTS-VIDEO] 씬 {cut_id} 클립 생성 오류: {e}")
-                traceback.print_exc()
-
-            # 메모리 정리
-            gc.collect()
+        # 메모리 정리
+        gc.collect()
 
         if not segment_files:
             raise Exception("클립을 생성하지 못했습니다. 이미지와 오디오 파일을 확인해주세요.")
