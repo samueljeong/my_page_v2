@@ -285,15 +285,15 @@ function sanitizeForStorage(data, fieldName = '', depth = 0) {
         console.log(`[Session] Base64 데이터 제외: ${key} (${(value.length/1024).toFixed(1)}KB)`);
         continue;
       }
-      // content 필드는 5KB로 제한 (대본 내용)
-      if (key === 'content' && value.length > 5000) {
-        sanitized[key] = value.substring(0, 5000) + '... (truncated for storage)';
-        console.log(`[Session] content 필드 축소: ${(value.length/1024).toFixed(1)}KB -> 5KB`);
+      // content 필드는 20KB로 제한 (대본 내용)
+      if (key === 'content' && value.length > 20000) {
+        sanitized[key] = value.substring(0, 20000) + '... (truncated for storage)';
+        console.log(`[Session] content 필드 축소: ${(value.length/1024).toFixed(1)}KB -> 20KB`);
         continue;
       }
-      // 일반 문자열은 2KB로 제한
-      if (value.length > 2000) {
-        sanitized[key] = value.substring(0, 2000) + '...';
+      // 일반 문자열은 10KB로 제한 (나레이션 등)
+      if (value.length > 10000) {
+        sanitized[key] = value.substring(0, 10000) + '...';
         continue;
       }
       sanitized[key] = value;
