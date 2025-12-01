@@ -4656,6 +4656,8 @@ def _create_scene_clip(args):
                 img_data = base64.b64decode(encoded)
                 with open(img_path, 'wb') as f:
                     f.write(img_data)
+                del img_data  # 메모리 즉시 해제
+                gc.collect()
             elif img_url.startswith('/static/'):
                 local_path = os.path.join(os.path.dirname(__file__), img_url.lstrip('/'))
                 if os.path.exists(local_path):
@@ -4690,6 +4692,8 @@ def _create_scene_clip(args):
                 audio_data = base64.b64decode(encoded)
                 with open(audio_path, 'wb') as f:
                     f.write(audio_data)
+                del audio_data  # 메모리 즉시 해제
+                gc.collect()
                 has_audio = True
             elif audio_url.startswith('/static/'):
                 local_path = os.path.join(os.path.dirname(__file__), audio_url.lstrip('/'))
@@ -4723,17 +4727,21 @@ def _create_scene_clip(args):
     # 씬별 클립 생성
     segment_path = os.path.join(temp_dir, f"segment_{idx:03d}.mp4")
 
+    # CPU 최적화: FPS 24, CRF 32, threads 1 (1 CPU 환경용)
+    target_fps = min(fps, 24)  # 최대 24 FPS로 제한
+
     if has_audio:
         # 이미지 + 오디오로 클립 생성
         ffmpeg_cmd = [
             'ffmpeg', '-y',
+            '-threads', '1',  # CPU 스파이크 방지
             '-loop', '1',
             '-i', img_path,
             '-i', audio_path,
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-            '-c:a', 'aac', '-b:a', '128k',
-            '-r', str(fps),
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '32', '-threads', '1',
+            '-c:a', 'aac', '-b:a', '96k',
+            '-r', str(target_fps),
             '-t', str(actual_duration),
             '-shortest',
             '-pix_fmt', 'yuv420p',
@@ -4743,13 +4751,14 @@ def _create_scene_clip(args):
         # 오디오 없이 이미지만으로 클립 생성 (무음)
         ffmpeg_cmd = [
             'ffmpeg', '-y',
+            '-threads', '1',  # CPU 스파이크 방지
             '-loop', '1',
             '-i', img_path,
             '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '32', '-threads', '1',
             '-c:a', 'aac',
-            '-r', str(fps),
+            '-r', str(target_fps),
             '-t', str(actual_duration),
             '-shortest',
             '-pix_fmt', 'yuv420p',
@@ -4813,9 +4822,9 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] ❌ 해상도 파싱 오류: resolution='{resolution}', error={e}")
         raise Exception(f"해상도 형식 오류: '{resolution}' (예상 형식: '1920x1080')")
 
-    # Render Standard 2GB 메모리: 720p 지원
-    MAX_WIDTH = 1280   # 720p (Standard 2GB)
-    MAX_HEIGHT = 720
+    # Render Standard 1 CPU: 480p로 제한 (CPU 부하 감소)
+    MAX_WIDTH = 854    # 480p (1 CPU 환경)
+    MAX_HEIGHT = 480
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         aspect_ratio = width / height
         if aspect_ratio > 16/9:
@@ -4828,56 +4837,36 @@ def _generate_video_with_cuts(cuts, subtitle_data, burn_subtitle, resolution, fp
         print(f"[DRAMA-CUTS-VIDEO] 메모리 최적화 - 해상도 조정: {resolution}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        update_progress(10, "씬별 영상 병렬 생성 준비 중...")
+        update_progress(10, "씬별 영상 순차 생성 중...")
 
         segment_files = []
         total_duration = 0.0
 
-        # 병렬 처리를 위한 작업 목록 생성
-        tasks = [(idx, cut, temp_dir, width, height, fps) for idx, cut in enumerate(cuts)]
+        # 완전 순차 처리 (ThreadPoolExecutor 제거 - OOM 방지)
+        print(f"[DRAMA-SEQUENTIAL] 순차 처리 시작 - {len(cuts)}개 씬 (메모리 절약 모드)")
 
-        # 워커 수 결정 (Standard 2GB - 순차 처리로 메모리 절약)
-        # 병렬 처리 시 OOM 발생하므로 1개 워커로 순차 처리
-        max_workers = 1
-        print(f"[DRAMA-PARALLEL] 순차 처리 시작 - {len(cuts)}개 씬, {max_workers}개 워커 (메모리 절약 모드)")
+        for idx, cut in enumerate(cuts):
+            update_progress(15 + int((idx / len(cuts)) * 55), f"씬 {idx+1}/{len(cuts)} 클립 생성 중...")
 
-        update_progress(15, f"씬 {len(cuts)}개 순차 처리 중...")
+            try:
+                # 씬 클립 생성
+                task = (idx, cut, temp_dir, width, height, fps)
+                result_idx, segment_path, duration = _create_scene_clip(task)
 
-        # ThreadPoolExecutor로 병렬 처리
-        results = []
-        completed_count = 0
+                if segment_path and os.path.exists(segment_path):
+                    segment_files.append(segment_path)
+                    total_duration += duration
+                    print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 완료: {duration:.1f}초")
+                else:
+                    print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 실패")
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_idx = {executor.submit(_create_scene_clip, task): task[0] for task in tasks}
+            except Exception as e:
+                print(f"[DRAMA-SEQUENTIAL] 씬 {idx+1} 오류: {e}")
 
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                    completed_count += 1
+            # 각 씬 처리 후 강제 메모리 정리
+            gc.collect()
 
-                    # 진행률 업데이트
-                    progress_pct = 15 + int((completed_count / len(cuts)) * 55)
-                    update_progress(progress_pct, f"씬 클립 생성 중... ({completed_count}/{len(cuts)} 완료)")
-
-                    # 메모리 정리
-                    gc.collect()
-
-                except Exception as e:
-                    print(f"[DRAMA-PARALLEL] 씬 {idx} Future 오류: {e}")
-                    results.append((idx, None, 0))
-
-        # 결과를 인덱스 순서대로 정렬
-        results.sort(key=lambda x: x[0])
-
-        # 성공한 세그먼트만 수집
-        for idx, segment_path, duration in results:
-            if segment_path and os.path.exists(segment_path):
-                segment_files.append(segment_path)
-                total_duration += duration
-
-        print(f"[DRAMA-PARALLEL] 병렬 처리 완료 - 성공: {len(segment_files)}/{len(cuts)}, 총 길이: {total_duration:.1f}초")
+        print(f"[DRAMA-SEQUENTIAL] 순차 처리 완료 - 성공: {len(segment_files)}/{len(cuts)}, 총 길이: {total_duration:.1f}초")
 
         # 메모리 정리
         gc.collect()
@@ -4998,9 +4987,9 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
         print(f"[DRAMA-STEP6-VIDEO] ❌ 해상도 파싱 오류: resolution='{resolution}', error={e}")
         raise Exception(f"해상도 형식 오류: '{resolution}' (예상 형식: '1920x1080')")
 
-    # 1280x720 초과 시 자동으로 다운스케일
-    MAX_WIDTH = 1280
-    MAX_HEIGHT = 720
+    # Render Standard 1 CPU: 480p로 제한 (CPU 부하 감소)
+    MAX_WIDTH = 854
+    MAX_HEIGHT = 480
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         aspect_ratio = width / height
         if aspect_ratio > 16/9:  # 와이드
