@@ -100,11 +100,13 @@ Drama Lab - AI 기반 드라마 영상 자동 생성 시스템
 
 ## 주요 API 엔드포인트 (drama_server.py)
 - `/api/drama/gpt-plan-step1` - 대본 생성
+- `/api/drama/analyze-script` - **AI 대본 분석 (씬/샷 자동 분리) (NEW)**
 - `/api/drama/analyze-characters` - 캐릭터/씬 분석
 - `/api/drama/generate-image` - 이미지 생성
 - `/api/drama/generate-tts` - TTS 음성 생성 (기존)
 - `/api/drama/step3/tts` - **새 TTS 파이프라인 (5000바이트 제한 해결 + SRT 자막)**
-- `/api/drama/generate-video` - 영상 제작
+- `/api/drama/generate-scene-clips-zip` - **씬별 MP4 클립 ZIP 생성 (NEW)**
+- `/api/drama/generate-video` - 영상 제작 (레거시)
 - `/api/drama/video-status/{jobId}` - 영상 작업 상태 확인
 - `/api/youtube/auth-status` - YouTube 인증 상태
 - `/api/youtube/upload` - YouTube 업로드
@@ -121,19 +123,42 @@ Drama Lab - AI 기반 드라마 영상 자동 생성 시스템
 - 전체 5스텝 파이프라인 정상 동작 확인
 - Step1(대본) → Step2(이미지) → Step3(TTS) → Step4(영상) → Step5(YouTube 업로드) 완주
 
-## 🆕 수동 대본 입력 모드 (2024-12-01)
-- Step1 UI 변경: 자동 생성 → 수동 입력 5개 박스
-  - 박스1: 주인공 소개 + 이미지 프롬프트
-  - 박스2-5: 씬1-4 나레이션
-- YouTube 인증을 Step1 상단으로 이동
-- 주인공 성별 선택 → TTS 음성 자동 매칭
-  - 여성: ko-KR-Wavenet-A / Neural2-A
-  - 남성: ko-KR-Wavenet-C / Neural2-B
-- TTS 음성 품질 선택 (Standard/Wavenet/Neural2)
+## 🆕 AI 대본 분석 모드 (2024-12-01)
+- Step1 UI 대폭 변경: 전체 대본 1개 입력창 + AI 분석 버튼
+- `/api/drama/analyze-script` API 추가 (GPT-4o-mini 사용)
+  - 전체 대본 → 씬(Scene) + 샷(Shot) 자동 분리
+  - 각 샷별 이미지 프롬프트(영문) + 나레이션(한글) 생성
+  - 썸네일 텍스트 제안 기능 포함
+- 씬/샷 트리 구조 UI
+  - 씬별 접기/펼치기 토글
+  - 각 샷의 프롬프트/나레이션 수정 가능
+- Step2 다중 샷 이미지 생성 지원
+  - 플랫한 샷 배열로 이미지 생성
+  - 그리드 레이아웃으로 많은 샷 표시
+- Step3 AI 분석 모드 나레이션 추출 지원
+
+## 🆕 씬별 클립 다운로드 (2024-12-01)
+- Step4 변경: 전체 영상 생성 → 씬별 MP4 클립 다운로드
+- `/api/drama/generate-scene-clips-zip` API 추가
+  - 각 씬(이미지+오디오)를 개별 MP4로 생성
+  - ZIP 파일로 묶어 다운로드
+- CapCut 등 외부 편집기에서 자유롭게 편집 가능
+
+## 🆕 TTS 음성 선택 UI (2024-12-01)
+- 6개 음성 카드 UI (여성 3개, 남성 3개)
+- Neural2 음성 기본 선택 (최고 품질)
+- 미리듣기 버튼으로 음성 확인 가능
+- 음성 목록:
+  - 여성: Neural2-A (차분), Neural2-B (밝은), Wavenet-A (표준)
+  - 남성: Neural2-C (중후), Wavenet-C (표준), Wavenet-D (젊은)
 
 ## 알려진 이슈 (진행 중)
-- 영상에 소리/자막 누락 문제 - 서버 로그 확인 필요
-  - `[DRAMA-PARALLEL] 씬 X: 오디오=True/False` 로그 확인
+- ~~영상에 소리/자막 누락 문제~~ → 씬별 클립 다운로드로 전환
+
+## 다음 작업
+- [ ] 썸네일 생성 기능 추가
+  - AI 분석에서 썸네일 제안 데이터는 이미 생성됨
+  - 이미지 생성 API로 썸네일 이미지 자동 생성 구현 필요
 
 ## 참고 사항
 - 이미지 생성: Gemini (기본) / FLUX.1 Pro / DALL-E 3 지원
