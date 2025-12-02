@@ -3140,13 +3140,16 @@ def api_analyze_characters():
 
         script = data.get("script", "")
         duration = data.get("duration", "10min")  # 영상 길이 (기본값: 10분)
+        content_type = data.get("content_type", "drama")  # 콘텐츠 타입
 
         if not script:
             return jsonify({"ok": False, "error": "대본이 없습니다."}), 400
 
         # duration에 따른 최대 씬 개수 설정
         max_scenes_map = {
-            "2min": 2,
+            "30s": 1,     # 쇼츠
+            "60s": 2,     # 쇼츠
+            "3min": 2,
             "5min": 3,
             "10min": 4,
             "20min": 6,
@@ -3154,9 +3157,121 @@ def api_analyze_characters():
         }
         max_scenes = max_scenes_map.get(duration, 4)
 
-        print(f"[DRAMA-STEP4-ANALYZE] 등장인물 및 씬 분석 시작 (duration: {duration}, max_scenes: {max_scenes})")
+        # 쇼츠 여부 판단 (content_type이 shorts이거나 duration이 60s 이하)
+        is_shorts = content_type == 'shorts' or duration in ['30s', '60s']
 
-        system_content = """당신은 드라마 대본을 분석하여 등장인물과 씬 정보를 추출하는 전문가입니다.
+        print(f"[DRAMA-STEP4-ANALYZE] 등장인물 및 씬 분석 시작 (duration: {duration}, max_scenes: {max_scenes}, content_type: {content_type}, is_shorts: {is_shorts})")
+
+        # 콘텐츠 타입별 시스템 프롬프트 분기
+        if content_type == 'shorts' or is_shorts:
+            # 쇼츠/릴스 콘텐츠 (세로 9:16, 60초 이하)
+            system_content = """당신은 YouTube Shorts / Instagram Reels 대본을 분석하여 핵심 장면을 추출하는 전문가입니다.
+
+쇼츠는 세로 형식(9:16)이며 60초 이하의 짧은 영상입니다.
+대본을 분석하여 다음 정보를 JSON 형식으로 추출해주세요:
+
+1. 등장인물/요소 (characters): 각 항목에 대해
+   - name: 이름 (한글)
+   - description: 설명 (한글)
+   - imagePrompt: 세로 형식에 최적화된 영어 이미지 프롬프트
+
+2. 씬 (scenes): 각 씬에 대해 (최대 2개)
+   - title: 씬 제목 (한글)
+   - location: 장소 (한글)
+   - description: 씬 설명 (한글)
+   - characters: 등장하는 항목들
+   - backgroundPrompt: 세로 구도에 맞는 영어 배경 프롬프트
+
+응답 형식은 JSON으로:
+{
+  "characters": [...],
+  "scenes": [...]
+}
+
+🚨 쇼츠 이미지 프롬프트 핵심 규칙:
+- **세로 구도 (9:16)**: 모든 이미지는 세로 형식, 피사체를 화면 중앙에 배치
+- **클로즈업/미디엄샷**: 작은 화면에서 잘 보이도록 가까이 촬영
+- **심플한 배경**: 복잡한 배경은 피하고 피사체가 돋보이게
+- **강렬한 첫인상**: 첫 씬이 썸네일이 되므로 시선을 끄는 구도
+- **텍스트 오버레이 공간**: 상단/하단에 텍스트 영역 확보
+- 프롬프트 예시: "Vertical portrait composition (9:16 aspect ratio), [주제] centered in frame, close-up shot, simple blurred background, mobile-optimized framing, high contrast, eye-catching visual"
+- ⚠️ 가로 구도 금지, 복잡한 배경 금지, 너무 멀리서 찍은 샷 금지"""
+
+        elif content_type == 'product':
+            # 상품 소개 콘텐츠
+            system_content = """당신은 상품 소개 대본을 분석하여 제품과 씬 정보를 추출하는 전문가입니다.
+
+대본을 분석하여 다음 정보를 JSON 형식으로 추출해주세요:
+
+1. 등장물 (characters): 제품/상품에 대해
+   - name: 제품 이름 (한글)
+   - description: 제품 설명 (특징, 기능, 장점 등 - 한글)
+   - imagePrompt: 영어 이미지 프롬프트 (제품 외관, 디테일, 사용 장면 묘사)
+
+2. 씬 (scenes): 각 씬에 대해
+   - title: 씬 제목 또는 요약 (한글)
+   - location: 장소/배경 (한글)
+   - description: 씬 설명 (한글)
+   - characters: 등장하는 제품들 이름 배열
+   - backgroundPrompt: 영어 배경 프롬프트 (제품을 돋보이게 하는 배경, 조명)
+
+응답은 반드시 다음 JSON 형식으로:
+{
+  "characters": [
+    {"name": "스마트워치 X1", "description": "최신 건강 모니터링 기능이 탑재된 프리미엄 스마트워치", "imagePrompt": "Premium smartwatch with sleek metallic design, crystal clear OLED display, health monitoring interface visible, professional product photography, studio lighting..."},
+    ...
+  ],
+  "scenes": [
+    {"title": "제품 소개", "location": "스튜디오", "description": "스마트워치의 외관과 디자인을 소개하는 장면", "characters": ["스마트워치 X1"], "backgroundPrompt": "Clean white studio background, soft gradient lighting, professional product photography setup..."},
+    ...
+  ]
+}
+
+🚨 매우 중요 - 상품 이미지 프롬프트 규칙:
+- **제품이 주인공**: 모든 이미지 프롬프트에서 제품이 화면의 중심
+- **제품 클로즈업**: 제품의 디테일, 질감, 기능을 강조
+- **사용 장면**: 제품이 실제 사용되는 모습 (사람 손/몸 일부만 노출, 얼굴 없음)
+- **광고 품질**: 고급스러운 상업 사진 스타일 (studio lighting, soft shadows)
+- **배경은 심플하게**: 제품을 돋보이게 하는 단순한 배경 (그라데이션, 단색, 자연 배경)
+- **사람 얼굴 절대 금지**: 제품 홍보 이미지에 인물 얼굴이 나오면 안 됨
+- 프롬프트 예시: "Close-up product shot of [제품명], professional commercial photography, soft studio lighting, clean background, high-end advertising quality"
+- ⚠️ 절대 금지: 인물 초상화, 사람 얼굴 클로즈업, 드라마 장면"""
+
+        elif content_type == 'education':
+            # 교육/정보 콘텐츠
+            system_content = """당신은 교육/정보 콘텐츠 대본을 분석하여 핵심 개념과 씬 정보를 추출하는 전문가입니다.
+
+대본을 분석하여 다음 정보를 JSON 형식으로 추출해주세요:
+
+1. 핵심 요소 (characters): 주요 개념/요소에 대해
+   - name: 개념/요소 이름 (한글)
+   - description: 설명 (한글)
+   - imagePrompt: 영어 이미지 프롬프트 (개념을 시각화하는 인포그래픽/일러스트 스타일)
+
+2. 씬 (scenes): 각 씬에 대해
+   - title: 씬 제목 (한글)
+   - location: 배경 컨텍스트 (한글)
+   - description: 씬 설명 (한글)
+   - characters: 관련 개념들 배열
+   - backgroundPrompt: 영어 배경 프롬프트 (교육적 시각 자료 스타일)
+
+응답 형식은 JSON으로:
+{
+  "characters": [...],
+  "scenes": [...]
+}
+
+🚨 매우 중요 - 교육 콘텐츠 이미지 프롬프트 규칙:
+- **인포그래픽 스타일**: 깔끔한 다이어그램, 차트, 시각화
+- **개념 시각화**: 추상적 개념을 이해하기 쉽게 시각화
+- **아이콘과 심볼**: 핵심 포인트를 상징하는 아이콘 사용
+- **깔끔한 레이아웃**: 정보 전달에 집중하는 깔끔한 구성
+- 프롬프트 예시: "Clean infographic style illustration of [개념], modern flat design, educational visual, clear icons and diagrams"
+- ⚠️ 인물 사진보다는 개념 시각화에 집중"""
+
+        else:
+            # 드라마/스토리 콘텐츠 (기본값)
+            system_content = """당신은 드라마 대본을 분석하여 등장인물과 씬 정보를 추출하는 전문가입니다.
 
 대본을 분석하여 다음 정보를 JSON 형식으로 추출해주세요:
 
@@ -3217,7 +3332,7 @@ def api_analyze_characters():
 등장인물과 씬 정보를 JSON 형식으로 추출해주세요."""
 
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
