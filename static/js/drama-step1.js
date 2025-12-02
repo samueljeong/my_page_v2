@@ -167,6 +167,112 @@ window.DramaStep1 = {
   },
 
   /**
+   * 샤오홍수에서 상품 영상 검색
+   * 한국어 → 중국어 번역 후 샤오홍수 검색
+   */
+  async searchXiaohongshu() {
+    const productName = document.getElementById('coupang-product-name')?.value?.trim();
+
+    if (!productName) {
+      alert('상품명을 먼저 입력해주세요.');
+      return;
+    }
+
+    const btn = document.querySelector('.btn-xiaohongshu');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '🔄 번역 중...';
+    btn.disabled = true;
+
+    try {
+      // 한국어 → 중국어 번역 API 호출
+      const response = await fetch('/api/translate/ko-to-zh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: productName })
+      });
+
+      const result = await response.json();
+
+      if (result.ok && result.translated) {
+        const chineseKeyword = result.translated;
+        const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(chineseKeyword)}&source=web_search_result_notes`;
+
+        console.log(`[Xiaohongshu] 검색: ${productName} → ${chineseKeyword}`);
+
+        // 새 탭에서 열기 (iframe은 대부분 차단됨)
+        window.open(searchUrl, '_blank');
+
+        // iframe 시도 (차단될 수 있음)
+        // const container = document.getElementById('xiaohongshu-frame-container');
+        // const iframe = document.getElementById('xiaohongshu-iframe');
+        // const directLink = document.getElementById('xiaohongshu-direct-link');
+        //
+        // iframe.src = searchUrl;
+        // directLink.href = searchUrl;
+        // container.classList.remove('hidden');
+
+      } else {
+        // 번역 실패 시 한국어로 검색
+        const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(productName)}&source=web_search_result_notes`;
+        window.open(searchUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('[Xiaohongshu] 검색 오류:', error);
+      // 오류 시에도 한국어로 검색 시도
+      const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(productName)}&source=web_search_result_notes`;
+      window.open(searchUrl, '_blank');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  },
+
+  /**
+   * 샤오홍수 iframe 닫기
+   */
+  closeXiaohongshuFrame() {
+    const container = document.getElementById('xiaohongshu-frame-container');
+    const iframe = document.getElementById('xiaohongshu-iframe');
+    container.classList.add('hidden');
+    iframe.src = '';
+  },
+
+  /**
+   * 성별에 맞는 TTS 음성 자동 선택
+   */
+  autoSelectVoiceByGender(gender) {
+    const voiceCards = document.querySelectorAll('.voice-card');
+    let targetVoice = null;
+
+    // 성별에 맞는 첫 번째 Neural2 음성 찾기
+    voiceCards.forEach(card => {
+      if (card.dataset.gender === gender && card.dataset.quality === 'neural2' && !targetVoice) {
+        targetVoice = card;
+      }
+    });
+
+    // 찾은 음성으로 자동 선택
+    if (targetVoice) {
+      voiceCards.forEach(c => c.classList.remove('selected'));
+      targetVoice.classList.add('selected');
+
+      const voice = targetVoice.dataset.voice;
+      const quality = targetVoice.dataset.quality;
+
+      document.getElementById('selected-voice').value = voice;
+      document.getElementById('tts-voice-quality').value = quality;
+
+      if (typeof dramaApp !== 'undefined' && dramaApp.session) {
+        dramaApp.session.ttsVoice = voice;
+        dramaApp.session.ttsVoiceQuality = quality;
+        dramaApp.session.protagonistGender = gender;
+      }
+
+      console.log(`[Step1] 🎙️ 성별(${gender})에 맞는 음성 자동 선택: ${voice}`);
+    }
+  },
+
+  /**
    * 음성 선택 UI 초기화
    */
   initVoiceSelection() {
@@ -625,6 +731,16 @@ window.DramaStep1 = {
       if (progressText) progressText.textContent = `분석 완료! (${data.scenes?.length || 0}개 씬, ${data.totalShots || 0}개 샷)`;
 
       console.log('[Step1] 분석 완료:', this.analysisData);
+
+      // AI가 파악한 성별로 자동 설정
+      if (data.character?.gender) {
+        const detectedGender = data.character.gender;
+        document.getElementById('protagonist-gender').value = detectedGender;
+        console.log(`[Step1] AI가 파악한 주인공 성별: ${detectedGender}`);
+
+        // 성별에 맞는 TTS 음성 자동 선택
+        this.autoSelectVoiceByGender(detectedGender);
+      }
 
       // 결과 렌더링
       setTimeout(() => {

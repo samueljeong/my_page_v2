@@ -129,16 +129,14 @@
                 </select>
               </div>
               <div class="config-item">
-                <label>주인공 성별</label>
-                <select id="protagonist-gender">
-                  <option value="female" selected>여성 (할머니)</option>
-                  <option value="male">남성 (할아버지)</option>
-                </select>
+                <!-- 주인공 성별은 AI가 대본에서 자동 파악 -->
               </div>
               <div class="config-item">
                 <!-- 빈 칸 (레이아웃 유지) -->
               </div>
             </div>
+            <!-- 주인공 성별 (AI 자동 파악, hidden) -->
+            <input type="hidden" id="protagonist-gender" value="auto">
           </div>
 
           <!-- TTS 음성 선택 -->
@@ -267,7 +265,26 @@
 
             <div class="coupang-input-group">
               <label>상품명 직접 입력</label>
-              <input type="text" id="coupang-product-name" class="input-field" placeholder="예: 샤오미 무선 청소기 V12">
+              <input type="text" id="coupang-product-name" class="input-field" placeholder="예: 데스크캘린더, 무선 청소기, 블루투스 이어폰">
+              <div class="xiaohongshu-search-row">
+                <button type="button" class="btn-xiaohongshu" onclick="DramaStep1.searchXiaohongshu()">
+                  📕 샤오홍수에서 영상 찾기
+                </button>
+                <span class="xiaohongshu-hint">한국어 → 중국어 자동 번역 후 검색</span>
+              </div>
+            </div>
+
+            <!-- 샤오홍수 검색 결과 (iframe) -->
+            <div id="xiaohongshu-frame-container" class="hidden">
+              <div class="section-header">
+                <h4>📕 샤오홍수 검색 결과</h4>
+                <button type="button" class="btn-small btn-secondary" onclick="DramaStep1.closeXiaohongshuFrame()">✕ 닫기</button>
+              </div>
+              <div class="xiaohongshu-notice">
+                ⚠️ 마음에 드는 영상을 찾으면 다운로드 후 사용하세요.
+                <a href="#" id="xiaohongshu-direct-link" target="_blank">새 탭에서 열기 ↗</a>
+              </div>
+              <iframe id="xiaohongshu-iframe" src="" frameborder="0"></iframe>
             </div>
 
             <div class="coupang-input-group">
