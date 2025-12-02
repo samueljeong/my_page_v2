@@ -267,8 +267,26 @@ window.DramaStep5 = {
       <div class="thumbnail-option ${idx === this.selectedThumbnailIndex ? 'selected' : ''}"
            onclick="DramaStep5.selectThumbnail(${idx})">
         <img src="${thumb.url}" alt="썸네일 ${idx + 1}">
+        <button class="btn-download-thumb" onclick="event.stopPropagation(); DramaStep5.downloadThumbnail(${idx})">다운로드</button>
       </div>
     `).join('');
+  },
+
+  /**
+   * 썸네일 다운로드
+   */
+  downloadThumbnail(index) {
+    const thumbnails = dramaApp.session.thumbnails || [];
+    if (!thumbnails[index]) return;
+
+    const url = thumbnails[index].url;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `thumbnail_${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    DramaUtils.showStatus('썸네일 다운로드 시작!', 'success');
   },
 
   /**
