@@ -7,684 +7,957 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23667eea' width='32' height='32' rx='6'/><text x='16' y='22' font-size='18' fill='white' text-anchor='middle' font-weight='bold'>P</text></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/drama.css') }}?v=20241202">
   <style>
-    /* 상품관리 페이지 전용 스타일 */
-    .margin-tool-container {
-      padding: 20px;
+    .pm-container { padding: 16px; }
+
+    /* 탭 네비게이션 */
+    .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn {
+      padding: 10px 20px; border: 2px solid #e5e7eb; background: #fff;
+      border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all 0.2s;
     }
-    .margin-tool-container section {
-      background: #fff;
-      border-radius: 12px;
-      padding: 16px 18px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+    .tab-btn:hover { border-color: #4f46e5; }
+    .tab-btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* 수수료 요약 바 */
+    .fee-summary-bar {
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 10px 16px; margin-bottom: 16px; display: flex; gap: 16px;
+      flex-wrap: wrap; align-items: center; font-size: 12px;
     }
-    .margin-tool-container section h2 {
-      margin: 0 0 8px;
-      font-size: 16px;
-      color: #111827;
+    .fee-item { display: flex; align-items: center; gap: 4px; }
+    .fee-item label { color: #64748b; }
+    .fee-item select, .fee-item input {
+      padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px;
+      font-size: 12px; width: auto;
     }
-    .margin-tool-container section small {
-      color: #6b7280;
-      font-size: 12px;
+    .fee-item .value { font-weight: 600; color: #334155; }
+    .exchange-badge {
+      background: #dcfce7; color: #16a34a; padding: 2px 8px;
+      border-radius: 4px; font-size: 11px;
     }
-    .margin-tool-container .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px 14px;
-      margin-top: 8px;
+
+    /* 카드 */
+    .card {
+      background: #fff; border-radius: 12px; padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
     }
-    .margin-tool-container label {
-      font-size: 12px;
-      color: #374151;
-      display: block;
-      margin-bottom: 3px;
+    .card h3 { margin: 0 0 12px; font-size: 15px; color: #1e293b; }
+
+    /* 그리드 */
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
     }
-    .margin-tool-container input,
-    .margin-tool-container select,
-    .margin-tool-container textarea {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 6px 8px;
-      border-radius: 8px;
-      border: 1px solid #d1d5db;
-      font-size: 13px;
+
+    /* 폼 */
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 12px; color: #475569; margin-bottom: 4px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 8px 10px; border: 1px solid #d1d5db;
+      border-radius: 6px; font-size: 13px; box-sizing: border-box;
     }
-    .margin-tool-container input:focus,
-    .margin-tool-container select:focus,
-    .margin-tool-container textarea:focus {
-      outline: 2px solid #4f46e5;
-      border-color: transparent;
+    .form-group input:focus, .form-group select:focus {
+      outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.1);
     }
-    .margin-tool-container button {
-      border-radius: 999px;
-      border: none;
-      padding: 7px 14px;
-      font-size: 13px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
+    .form-row { display: flex; gap: 8px; align-items: flex-end; }
+    .form-hint { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+    /* 버튼 */
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer; font-weight: 500;
     }
-    .margin-tool-container button.primary {
-      background: #4f46e5;
-      color: #fff;
+    .btn-primary { background: #4f46e5; color: #fff; }
+    .btn-naver { background: #03c75a; color: #fff; }
+    .btn-coupang { background: #e41e25; color: #fff; }
+    .btn-secondary { background: #e5e7eb; color: #374151; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .btn-danger { background: #fee2e2; color: #dc2626; }
+
+    /* 결과 카드 */
+    .result-card {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border: 1px solid #bae6fd; border-radius: 10px; padding: 16px; margin-top: 16px;
     }
-    .margin-tool-container button.secondary {
-      background: #e5e7eb;
-      color: #111827;
+    .result-card.naver { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-color: #86efac; }
+    .result-card.coupang { background: linear-gradient(135deg, #fef2f2, #fee2e2); border-color: #fca5a5; }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .result-header h4 { margin: 0; font-size: 14px; }
+    .result-price { font-size: 24px; font-weight: 700; color: #1e293b; }
+    .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 12px; }
+    .result-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .result-row.total { border-top: 1px solid rgba(0,0,0,0.1); margin-top: 4px; padding-top: 8px; font-weight: 600; }
+    .profit-highlight {
+      background: #fff; border-radius: 8px; padding: 12px; margin-top: 12px;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .margin-tool-container button.danger {
-      background: #f97373;
-      color: #fff;
+    .profit-label { font-size: 13px; color: #475569; }
+    .profit-value { font-size: 20px; font-weight: 700; }
+    .profit-value.positive { color: #16a34a; }
+    .profit-value.negative { color: #dc2626; }
+
+    /* HS코드 추천 */
+    .hs-recommend {
+      background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+      padding: 12px; margin-top: 12px;
     }
-    .margin-tool-container button:disabled {
-      opacity: 0.5;
-      cursor: default;
+    .hs-recommend h5 { margin: 0 0 8px; font-size: 13px; color: #92400e; }
+    .hs-option {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px; background: #fff; border-radius: 6px; margin-bottom: 6px;
+      cursor: pointer; border: 2px solid transparent;
     }
-    .margin-tool-container .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      flex-wrap: wrap;
+    .hs-option:hover { border-color: #fbbf24; }
+    .hs-option.selected { border-color: #f59e0b; background: #fef3c7; }
+    .hs-option .code { font-weight: 600; }
+    .hs-option .rate { color: #16a34a; font-weight: 600; }
+    .hs-option .desc { font-size: 11px; color: #78716c; }
+
+    /* 부피 입력 */
+    .volume-input {
+      background: #f8fafc; border-radius: 8px; padding: 12px; margin-top: 8px;
     }
-    .margin-tool-container .toolbar span {
-      font-size: 12px;
-      color: #6b7280;
+    .volume-type-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+    .volume-type-btn {
+      flex: 1; padding: 8px; border: 2px solid #e2e8f0; background: #fff;
+      border-radius: 6px; font-size: 12px; cursor: pointer;
     }
-    .margin-tool-container table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      font-size: 12px;
+    .volume-type-btn.active { border-color: #4f46e5; background: #eef2ff; color: #4f46e5; }
+    .dimension-inputs { display: flex; gap: 8px; align-items: center; }
+    .dimension-inputs input { width: 60px; text-align: center; }
+    .dimension-inputs span { color: #94a3b8; }
+
+    /* 배송비 비교 */
+    .shipping-compare {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;
     }
-    .margin-tool-container th,
-    .margin-tool-container td {
-      border-bottom: 1px solid #e5e7eb;
-      padding: 6px 4px;
-      text-align: center;
+    .shipping-option {
+      border: 2px solid #e2e8f0; border-radius: 8px; padding: 12px;
+      cursor: pointer; transition: all 0.2s;
     }
-    .margin-tool-container th {
-      background: #f9fafb;
-      font-weight: 600;
+    .shipping-option:hover { border-color: #4f46e5; }
+    .shipping-option.selected { border-color: #4f46e5; background: #eef2ff; }
+    .shipping-option h5 { margin: 0 0 8px; font-size: 13px; }
+    .shipping-option .price { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .shipping-option .detail { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+    /* 테이블 */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 10px 8px; text-align: center; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f8fafc; font-weight: 600; color: #475569; }
+    tr:hover td { background: #f8fafc; }
+    .text-left { text-align: left; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500; }
+    .badge-naver { background: #dcfce7; color: #16a34a; }
+    .badge-coupang { background: #fee2e2; color: #dc2626; }
+    .badge-import { background: #dbeafe; color: #2563eb; }
+    .badge-proxy { background: #fef3c7; color: #d97706; }
+    .stock-input { width: 60px; padding: 4px; text-align: center; }
+
+    /* 모달 */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
     }
-    .margin-tool-container tr:hover td {
-      background: #f9fafb;
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 24px;
+      max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;
     }
-    .margin-tool-container .text-left { text-align: left; }
-    .margin-tool-container .badge-pos {
-      color: #16a34a;
-      font-weight: 600;
+    .modal h3 { margin: 0 0 16px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+    /* 판매량 추적 */
+    .sales-tracker {
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+      padding: 12px; margin-top: 8px;
     }
-    .margin-tool-container .badge-neg {
-      color: #dc2626;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    .margin-tool-container .pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      background: #ecfeff;
-      color: #0f766e;
-      gap: 4px;
-    }
-    .page-title {
-      margin: 0 0 8px;
-      font-size: 20px;
-      color: #111827;
-    }
-    .page-desc {
-      color: #6b7280;
-      font-size: 13px;
-      margin-bottom: 16px;
+    .sales-tracker h5 { margin: 0 0 8px; font-size: 13px; color: #166534; }
+    .sales-log { max-height: 150px; overflow-y: auto; font-size: 11px; }
+    .sales-log-item {
+      display: flex; justify-content: space-between;
+      padding: 4px 0; border-bottom: 1px dashed #bbf7d0;
     }
   </style>
 </head>
 <body>
-  <!-- Auth Header -->
   <div class="auth-header">
     <h1>Creator Lab</h1>
-    <div class="auth-links">
-      <a href="/" class="btn-home">홈</a>
-    </div>
+    <div class="auth-links"><a href="/" class="btn-home">홈</a></div>
   </div>
 
-  <!-- Main Layout with Sidebar -->
   <div class="main-layout">
-    <!-- Left Sidebar Navigation -->
     <aside class="sidebar">
       <nav class="sidebar-nav">
-        <a href="/drama" class="sidebar-item" data-page="drama">
-          <span class="sidebar-icon">🎬</span>
-          <span class="sidebar-label">드라마 제작</span>
-        </a>
-        <a href="/image" class="sidebar-item" data-page="image">
-          <span class="sidebar-icon">🖼️</span>
-          <span class="sidebar-label">이미지 제작</span>
-        </a>
-        <a href="/product" class="sidebar-item" data-page="product">
-          <span class="sidebar-icon">📦</span>
-          <span class="sidebar-label">상품 제작</span>
-        </a>
-        <a href="/product-manage" class="sidebar-item active" data-page="product-manage">
-          <span class="sidebar-icon">🏷️</span>
-          <span class="sidebar-label">상품관리</span>
-        </a>
+        <a href="/drama" class="sidebar-item"><span class="sidebar-icon">🎬</span><span class="sidebar-label">드라마 제작</span></a>
+        <a href="/image" class="sidebar-item"><span class="sidebar-icon">🖼️</span><span class="sidebar-label">이미지 제작</span></a>
+        <a href="/product" class="sidebar-item"><span class="sidebar-icon">📦</span><span class="sidebar-label">상품 제작</span></a>
+        <a href="/product-manage" class="sidebar-item active"><span class="sidebar-icon">🏷️</span><span class="sidebar-label">상품관리</span></a>
       </nav>
     </aside>
 
-    <!-- Main Content Area -->
     <div class="main-content">
-      <div id="product-manage-app" class="margin-tool-container">
-        <h1 class="page-title">중국 수입 마진 · LCL · HS 코드 시뮬레이터</h1>
-        <p class="page-desc">위안단가 / 환율 / 네이버 수수료 / 관·부가세 / LCL까지 한 번에 보는 내부용 툴 (실제 신고 HS 코드는 반드시 관세사 확인)</p>
+      <div class="pm-container">
+        <!-- 탭 네비게이션 -->
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="switchTab('register')">📝 상품등록</button>
+          <button class="tab-btn" onclick="switchTab('list')">📋 상품리스트</button>
+          <button class="tab-btn" onclick="switchTab('detail')">🎨 상세페이지 제작</button>
+        </div>
 
-        <!-- 글로벌 설정 -->
-        <section id="global-config">
-          <h2>① 글로벌 설정</h2>
-          <small>기본값은 지금 우리가 계산에 쓰던 값이야. 필요하면 네이버 수수료/부가세/카드 수수료/환율만 수정해.</small>
-          <div class="grid">
-            <div>
-              <label for="exchangeRate">환율 (KRW / CNY)</label>
-              <input id="exchangeRate" type="number" value="207" step="0.1" />
-            </div>
-            <div>
-              <label for="naverFeeRate">네이버 수수료율 (예: 0.06 = 6%)</label>
-              <input id="naverFeeRate" type="number" value="0.06" step="0.001" />
-            </div>
-            <div>
-              <label for="vatRate">부가세율 (예: 0.1 = 10%)</label>
-              <input id="vatRate" type="number" value="0.10" step="0.01" />
-            </div>
-            <div>
-              <label for="cardFeeRate">카드 해외결제 수수료율 (예: 0.015 = 1.5%)</label>
-              <input id="cardFeeRate" type="number" value="0.015" step="0.001" />
-            </div>
+        <!-- 수수료 요약 바 -->
+        <div class="fee-summary-bar">
+          <div class="fee-item">
+            <label>환율</label>
+            <span class="value" id="rateDisplay">207</span>원/CNY
+            <span class="exchange-badge" id="rateStatus">로딩</span>
+            <button class="btn btn-sm btn-secondary" onclick="fetchExchangeRate()">🔄</button>
           </div>
-        </section>
+          <div class="fee-item">
+            <label>네이버</label>
+            <select id="naverFee" onchange="recalculate()">
+              <option value="0.055">5.5%</option>
+              <option value="0.06" selected>6%</option>
+              <option value="0.08">8%</option>
+            </select>
+          </div>
+          <div class="fee-item">
+            <label>쿠팡</label>
+            <select id="coupangFee" onchange="recalculate()">
+              <option value="0.08">8%</option>
+              <option value="0.10" selected>10%</option>
+              <option value="0.12">12%</option>
+            </select>
+          </div>
+          <div class="fee-item">
+            <label>부가세</label>
+            <select id="vatRate" onchange="recalculate()">
+              <option value="0.10" selected>10%</option>
+              <option value="0">면세</option>
+            </select>
+          </div>
+          <div class="fee-item">
+            <label>카드수수료</label>
+            <select id="cardFee" onchange="recalculate()">
+              <option value="0">0%</option>
+              <option value="0.015" selected>1.5%</option>
+            </select>
+          </div>
+        </div>
 
-        <!-- LCL 시뮬레이션 -->
-        <section id="lcl-config">
-          <h2>② LCL 시뮬레이션</h2>
-          <small>한 번에 같은 박스로 몇 개를 넣어서 들여오는지, 그때 LCL 총 비용이 얼마인지 입력하면 개당 LCL 단가를 자동 계산해.</small>
-          <div class="grid">
+        <!-- 상품등록 탭 -->
+        <div id="tab-register" class="tab-content active">
+          <div class="grid-2">
+            <!-- 좌측: 상품 정보 입력 -->
             <div>
-              <label for="lclTotalCost">한 번 선적할 때 LCL 총 비용 (원, 예: 120000)</label>
-              <input id="lclTotalCost" type="number" value="0" />
+              <div class="card">
+                <h3>📦 상품 정보</h3>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label>카테고리</label>
+                    <input type="text" id="newCategory" placeholder="예: 여과기">
+                  </div>
+                  <div class="form-group">
+                    <label>상품명 *</label>
+                    <input type="text" id="newName" placeholder="예: 22L 스테인레스 여과기" oninput="suggestHSCodes()">
+                  </div>
+                </div>
+                <div class="grid-3">
+                  <div class="form-group">
+                    <label>중국 단가 (CNY) *</label>
+                    <input type="number" id="newCnyPrice" step="0.01" placeholder="400" oninput="recalculate()">
+                  </div>
+                  <div class="form-group">
+                    <label>수량 (선택)</label>
+                    <input type="number" id="newQuantity" value="1" min="1" oninput="recalculate()">
+                  </div>
+                  <div class="form-group">
+                    <label>목표 마진율 (%)</label>
+                    <input type="number" id="targetMargin" value="35" oninput="recalculate()">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>구매 링크</label>
+                  <input type="url" id="newLink" placeholder="https://...">
+                </div>
+
+                <!-- 판매 방식 -->
+                <div class="form-group" style="margin-top:16px;">
+                  <label>판매 방식</label>
+                  <div class="volume-type-toggle">
+                    <button class="volume-type-btn active" onclick="setSaleType('import')">🚢 한국수입</button>
+                    <button class="volume-type-btn" onclick="setSaleType('proxy')">📦 구매대행</button>
+                  </div>
+                </div>
+                <div id="proxyShippingBox" style="display:none;" class="form-group">
+                  <label>개당 해외배송비 (원)</label>
+                  <input type="number" id="proxyShipping" value="0" placeholder="15000" oninput="recalculate()">
+                </div>
+
+                <!-- HS코드 추천 -->
+                <div id="hsRecommendBox" class="hs-recommend" style="display:none;">
+                  <h5>💡 HS코드 추천 (낮은 관세 우선)</h5>
+                  <div id="hsOptions"></div>
+                  <div class="form-hint">* 실제 적용은 관세사 확인 필요. 신고 방법에 따라 관세 절감 가능</div>
+                </div>
+              </div>
+
+              <!-- 부피 입력 -->
+              <div class="card">
+                <h3>📐 부피 정보</h3>
+                <div class="volume-type-toggle">
+                  <button class="volume-type-btn active" onclick="setVolumeType('individual')">개별 상품</button>
+                  <button class="volume-type-btn" onclick="setVolumeType('box')">박스 단위</button>
+                </div>
+                <div class="volume-input">
+                  <div class="dimension-inputs">
+                    <input type="number" id="dimW" placeholder="가로" oninput="calcVolume()"> <span>×</span>
+                    <input type="number" id="dimH" placeholder="세로" oninput="calcVolume()"> <span>×</span>
+                    <input type="number" id="dimD" placeholder="높이" oninput="calcVolume()"> <span>cm</span>
+                    <span style="margin-left:12px;">= <strong id="volumeResult">0</strong> CBM</span>
+                  </div>
+                  <div id="boxQtyRow" style="display:none; margin-top:10px;">
+                    <label style="font-size:12px;">박스당 수량</label>
+                    <input type="number" id="boxQty" value="1" style="width:80px;" oninput="recalculate()">
+                  </div>
+                </div>
+              </div>
+
+              <!-- 배송비 비교 -->
+              <div class="card">
+                <h3>🚚 배송비 비교</h3>
+                <div class="shipping-compare">
+                  <div class="shipping-option selected" onclick="selectShipping('lcl')">
+                    <h5>🚢 LCL (해상소량)</h5>
+                    <div class="price" id="lclPrice">계산 필요</div>
+                    <div class="detail">
+                      <div>기본운임: <span id="lclBase">-</span></div>
+                      <div>기타비용: <span id="lclExtra">-</span></div>
+                    </div>
+                  </div>
+                  <div class="shipping-option" onclick="selectShipping('air')">
+                    <h5>✈️ 항공운송</h5>
+                    <div class="price" id="airPrice">계산 필요</div>
+                    <div class="detail">예상 7-10일 소요</div>
+                  </div>
+                </div>
+                <div class="form-hint" style="margin-top:8px;">
+                  * LCL 상세 비용은 배송대행지 견적서 제공 시 자동 반영됩니다
+                </div>
+              </div>
             </div>
+
+            <!-- 우측: 계산 결과 -->
             <div>
-              <label for="lclQuantity">그 선적에 들어가는 상품 개수 (예: 30개)</label>
-              <input id="lclQuantity" type="number" value="0" />
-            </div>
-            <div>
-              <label>계산된 개당 LCL 비용 (자동)</label>
-              <div id="lclPerUnitDisplay" class="pill">
-                <span>개당 LCL: 0 원</span>
+              <!-- 결제 예상 금액 -->
+              <div class="card">
+                <h3>💳 예상 결제 금액</h3>
+                <div class="result-grid">
+                  <div class="result-row"><span>중국 원가</span><span id="totalCny">-</span></div>
+                  <div class="result-row"><span>원화 환산</span><span id="totalKrw">-</span></div>
+                  <div class="result-row"><span>관세</span><span id="totalDuty">-</span></div>
+                  <div class="result-row"><span>부가세</span><span id="totalVat">-</span></div>
+                  <div class="result-row"><span>카드수수료</span><span id="totalCard">-</span></div>
+                  <div class="result-row"><span>배송비</span><span id="totalShipping">-</span></div>
+                  <div class="result-row total"><span>총 결제 예상</span><span id="grandTotal">-</span></div>
+                </div>
+              </div>
+
+              <!-- 네이버 판매 시뮬레이션 -->
+              <div class="result-card naver">
+                <div class="result-header">
+                  <h4>🟢 네이버 권장 판매가</h4>
+                  <div class="result-price" id="naverPrice">-</div>
+                </div>
+                <div class="result-grid" style="font-size:11px;">
+                  <div class="result-row"><span>플랫폼 수수료</span><span id="naverFeeAmt">-</span></div>
+                  <div class="result-row"><span>총 비용</span><span id="naverCost">-</span></div>
+                </div>
+                <div class="profit-highlight">
+                  <span class="profit-label">전체 판매 시 순이익</span>
+                  <span class="profit-value positive" id="naverProfit">-</span>
+                </div>
+              </div>
+
+              <!-- 쿠팡 판매 시뮬레이션 -->
+              <div class="result-card coupang">
+                <div class="result-header">
+                  <h4>🔴 쿠팡 권장 판매가</h4>
+                  <div class="result-price" id="coupangPrice">-</div>
+                </div>
+                <div class="result-grid" style="font-size:11px;">
+                  <div class="result-row"><span>플랫폼 수수료</span><span id="coupangFeeAmt">-</span></div>
+                  <div class="result-row"><span>총 비용</span><span id="coupangCost">-</span></div>
+                </div>
+                <div class="profit-highlight">
+                  <span class="profit-label">전체 판매 시 순이익</span>
+                  <span class="profit-value positive" id="coupangProfit">-</span>
+                </div>
+              </div>
+
+              <!-- 등록 버튼 -->
+              <div style="display:flex; gap:8px; margin-top:16px;">
+                <button class="btn btn-naver" style="flex:1;" onclick="addProduct('naver')">네이버용 등록</button>
+                <button class="btn btn-coupang" style="flex:1;" onclick="addProduct('coupang')">쿠팡용 등록</button>
               </div>
             </div>
           </div>
-          <div class="toolbar">
-            <span>※ LCL 비용을 계산해두면, 아래 모든 상품에 같은 개당 LCL 단가가 적용돼.</span>
+        </div>
+
+        <!-- 상품리스트 탭 -->
+        <div id="tab-list" class="tab-content">
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h3 style="margin:0;">📋 등록된 상품</h3>
+              <div style="display:flex; gap:8px;">
+                <select id="filterPlatform" onchange="renderTable()">
+                  <option value="all">전체 플랫폼</option>
+                  <option value="naver">네이버</option>
+                  <option value="coupang">쿠팡</option>
+                </select>
+                <select id="filterCategory" onchange="renderTable()">
+                  <option value="all">전체 카테고리</option>
+                </select>
+                <button class="btn btn-danger btn-sm" onclick="clearAll()">전체 삭제</button>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>플랫폼</th>
+                  <th>방식</th>
+                  <th class="text-left">상품명</th>
+                  <th>원가</th>
+                  <th>판매가</th>
+                  <th>마진율</th>
+                  <th>재고</th>
+                  <th>등록일</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody id="productTableBody"></tbody>
+            </table>
+            <div id="listSummary" style="margin-top:12px; font-size:12px; color:#64748b;"></div>
           </div>
-        </section>
 
-        <!-- 상품 리스트 / 필터 -->
-        <section id="product-list-section">
-          <h2>③ 상품 리스트</h2>
-          <div class="toolbar">
-            <div>
-              <label for="categoryFilter">카테고리 필터</label>
-              <select id="categoryFilter">
-                <option value="all">전체</option>
-              </select>
-            </div>
-            <span id="summaryText">상품 0개</span>
-          </div>
-
-          <table id="productTable">
-            <thead>
-              <tr>
-                <th>카테고리</th>
-                <th class="text-left">상품명</th>
-                <th>중국단가<br/>(CNY)</th>
-                <th>판매가<br/>(KRW)</th>
-                <th>부피(L)</th>
-                <th>HS코드<br/>/관세율</th>
-                <th>개당 LCL</th>
-                <th>마진 (원)</th>
-                <th>마진율</th>
-                <th>링크</th>
-                <th>삭제</th>
-              </tr>
-            </thead>
-            <tbody>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- 상품 추가 -->
-        <section id="product-add-section">
-          <h2>④ 상품 추가</h2>
-          <small>상품명 + 위안 가격 + 판매가 + 부피를 입력하고, 필요하면 HS코드 자동 추천을 눌러서 관세율까지 세팅해.</small>
-          <div class="grid">
-            <div>
-              <label for="newCategory">카테고리</label>
-              <input id="newCategory" type="text" placeholder="예: 여과기 / 부자재 / 소모품" />
-            </div>
-            <div>
-              <label for="newName">상품명</label>
-              <input id="newName" type="text" placeholder="예: 22L 스테인레스 여과기 (기본형)" />
-            </div>
-            <div>
-              <label for="newCnyPrice">중국 단가 (위안)</label>
-              <input id="newCnyPrice" type="number" step="0.01" placeholder="예: 400" />
-            </div>
-            <div>
-              <label for="newSellPrice">판매가 (원)</label>
-              <input id="newSellPrice" type="number" placeholder="예: 180000" />
-            </div>
-            <div>
-              <label for="newVolume">부피 (L, 대략)</label>
-              <input id="newVolume" type="number" step="0.1" placeholder="예: 22" />
-            </div>
-            <div>
-              <label for="newLink">구매 링크(URL)</label>
-              <input id="newLink" type="url" placeholder="예: https://..." />
-            </div>
-            <div>
-              <label for="newHsCode">HS 코드 (선택, 자동 추천 가능)</label>
-              <input id="newHsCode" type="text" placeholder="예: 732690" />
-            </div>
-            <div>
-              <label for="newDutyRate">관세율 (예: 0 또는 0.08)</label>
-              <div style="display:flex; gap:4px;">
-                <input id="newDutyRate" type="number" step="0.001" placeholder="예: 0 또는 0.08" />
-                <button type="button" class="secondary" id="hsSuggestBtn">HS 자동 추천</button>
+          <!-- 재고/판매량 추적 -->
+          <div class="card">
+            <h3>📊 재고 & 판매량 추적</h3>
+            <div class="sales-tracker">
+              <h5>최근 재고 변동 기록</h5>
+              <div class="sales-log" id="salesLog">
+                <div style="color:#94a3b8; text-align:center; padding:20px;">
+                  재고 변동 기록이 없습니다.<br>상품 재고를 입력하면 자동으로 추적됩니다.
+                </div>
               </div>
             </div>
           </div>
-          <div class="toolbar" style="margin-top:10px;">
-            <button class="primary" id="addProductBtn">상품 추가</button>
-            <button class="secondary" id="clearAllBtn">전체 삭제 (로컬 저장소 초기화)</button>
-            <span>※ 데이터는 브라우저 <b>localStorage</b>에 저장돼. 새로고침해도 유지됨.</span>
+        </div>
+
+        <!-- 상세페이지 제작 탭 -->
+        <div id="tab-detail" class="tab-content">
+          <div class="card">
+            <h3>🎨 상세페이지 제작</h3>
+            <div style="text-align:center; padding:60px; color:#94a3b8;">
+              <div style="font-size:48px; margin-bottom:16px;">🚧</div>
+              <div style="font-size:16px;">준비 중입니다</div>
+              <div style="font-size:13px; margin-top:8px;">AI 기반 상세페이지 자동 생성 기능이 곧 추가됩니다</div>
+            </div>
           </div>
-        </section>
+        </div>
       </div>
-    </div><!-- /main-content -->
-  </div><!-- /main-layout -->
-
-  <!-- 로딩 오버레이 -->
-  <div id="loading-overlay" class="loading-overlay">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">로딩 중...</div>
-    <div class="loading-subtext"></div>
+    </div>
   </div>
 
-  <!-- 상태바 -->
-  <div id="status-bar" class="status-bar"></div>
+  <!-- 수정 모달 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <h3>상품 수정</h3>
+      <input type="hidden" id="editId">
+      <div class="grid-2">
+        <div class="form-group">
+          <label>상품명</label>
+          <input type="text" id="editName">
+        </div>
+        <div class="form-group">
+          <label>카테고리</label>
+          <input type="text" id="editCategory">
+        </div>
+        <div class="form-group">
+          <label>원가 (CNY)</label>
+          <input type="number" id="editCnyPrice">
+        </div>
+        <div class="form-group">
+          <label>판매가 (KRW)</label>
+          <input type="number" id="editSellPrice">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+        <button class="btn btn-primary" onclick="saveEdit()">저장</button>
+      </div>
+    </div>
+  </div>
 
   <script>
+    // === 전역 변수 ===
     let products = [];
-    const STORAGE_KEY = "cn_margin_products_v1";
+    let salesLogs = [];
+    let exchangeRate = 207;
+    let selectedHsCode = null;
+    let selectedDutyRate = 0;
+    let saleType = 'import';
+    let volumeType = 'individual';
+    let shippingType = 'lcl';
 
-    const exchangeRateInput = document.getElementById("exchangeRate");
-    const naverFeeRateInput = document.getElementById("naverFeeRate");
-    const vatRateInput = document.getElementById("vatRate");
-    const cardFeeRateInput = document.getElementById("cardFeeRate");
+    const STORAGE_KEY = 'pm_products_v3';
+    const SALES_LOG_KEY = 'pm_sales_logs';
 
-    const lclTotalCostInput = document.getElementById("lclTotalCost");
-    const lclQuantityInput = document.getElementById("lclQuantity");
-    const lclPerUnitDisplay = document.getElementById("lclPerUnitDisplay");
+    // === HS 코드 데이터베이스 ===
+    const HS_DATABASE = {
+      '스테인레스': [
+        { code: '732690', rate: 0, desc: '기타 스테인리스 제품 (FTA 0%)' },
+        { code: '732393', rate: 0.08, desc: '스테인리스 식탁용품 (8%)' }
+      ],
+      '아크릴': [
+        { code: '392099', rate: 0, desc: '기타 플라스틱 판/시트 (FTA 0%)' },
+        { code: '392062', rate: 0.065, desc: '폴리카보네이트 판 (6.5%)' },
+        { code: '940360', rate: 0.08, desc: '가구류 (8%)' }
+      ],
+      '여과기': [
+        { code: '842121', rate: 0, desc: '액체 여과/정화기기 (0%)' },
+        { code: '842129', rate: 0, desc: '기타 여과기 (0%)' }
+      ],
+      '펌프': [
+        { code: '841370', rate: 0.08, desc: '원심펌프 (8%)' },
+        { code: '841381', rate: 0.08, desc: '기타 펌프 (8%)' }
+      ],
+      '플라스틱': [
+        { code: '392690', rate: 0, desc: '기타 플라스틱 제품 (FTA 0%)' },
+        { code: '391740', rate: 0.08, desc: '플라스틱 관/피팅 (8%)' }
+      ],
+      '전원': [
+        { code: '850440', rate: 0.08, desc: '정류기/변환기 (8%)' }
+      ],
+      '기본': [
+        { code: '999999', rate: 0.08, desc: '기타 (기본 8%)' }
+      ]
+    };
 
-    const categoryFilterSelect = document.getElementById("categoryFilter");
-    const summaryText = document.getElementById("summaryText");
-    const productTableBody = document.querySelector("#productTable tbody");
-
-    const newCategoryInput = document.getElementById("newCategory");
-    const newNameInput = document.getElementById("newName");
-    const newCnyPriceInput = document.getElementById("newCnyPrice");
-    const newSellPriceInput = document.getElementById("newSellPrice");
-    const newVolumeInput = document.getElementById("newVolume");
-    const newLinkInput = document.getElementById("newLink");
-    const newHsCodeInput = document.getElementById("newHsCode");
-    const newDutyRateInput = document.getElementById("newDutyRate");
-    const hsSuggestBtn = document.getElementById("hsSuggestBtn");
-
-    const addProductBtn = document.getElementById("addProductBtn");
-    const clearAllBtn = document.getElementById("clearAllBtn");
-
-    function formatNumber(num) {
-      if (isNaN(num)) return "-";
-      return num.toLocaleString("ko-KR");
+    // === 초기화 ===
+    function init() {
+      loadProducts();
+      loadSalesLogs();
+      fetchExchangeRate();
+      renderTable();
+      updateCategoryFilter();
     }
 
-    function formatPercent(num) {
-      if (isNaN(num)) return "-";
-      return num.toFixed(1) + "%";
+    // === 탭 전환 ===
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById(`tab-${tab}`).classList.add('active');
     }
 
-    const HS_RULES = [
-      {
-        keywords: ["스테인레스", "스텐", "stainless", "통"],
-        hsCode: "732690",
-        dutyRate: 0.0,
-        desc: "기타 스테인리스제 제품 (중국 FTA 0% 가정)"
-      },
-      {
-        keywords: ["여과기", "필터", "수족관", "어항", "필터통"],
-        hsCode: "842121",
-        dutyRate: 0.0,
-        desc: "여과기/정수기류 (관세 0% 가정)"
-      },
-      {
-        keywords: ["펌프", "모터"],
-        hsCode: "841370",
-        dutyRate: 0.08,
-        desc: "액체 펌프/모터 (관세 8% 가정)"
-      },
-      {
-        keywords: ["플라스틱", "튜브", "호스"],
-        hsCode: "391740",
-        dutyRate: 0.08,
-        desc: "플라스틱 관/피팅 (관세 8% 가정)"
-      },
-      {
-        keywords: ["아답터", "어댑터", "전원", "컨트롤러", "adapter"],
-        hsCode: "850440",
-        dutyRate: 0.08,
-        desc: "전원공급장치 (관세 8% 가정)"
+    // === 환율 가져오기 ===
+    async function fetchExchangeRate() {
+      document.getElementById('rateStatus').textContent = '로딩';
+      try {
+        const res = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
+        const data = await res.json();
+        exchangeRate = data.rates.KRW;
+        document.getElementById('rateDisplay').textContent = exchangeRate.toFixed(1);
+        document.getElementById('rateStatus').textContent = '실시간';
+        document.getElementById('rateStatus').style.background = '#dcfce7';
+        recalculate();
+      } catch (e) {
+        document.getElementById('rateStatus').textContent = '오프라인';
+        document.getElementById('rateStatus').style.background = '#fef3c7';
       }
-    ];
+    }
 
-    function guessHsFromName(name) {
-      if (!name) return null;
-      const lower = name.toLowerCase();
-      for (const rule of HS_RULES) {
-        for (const kw of rule.keywords) {
-          if (lower.includes(kw.toLowerCase())) {
-            return {
-              hsCode: rule.hsCode,
-              dutyRate: rule.dutyRate,
-              desc: rule.desc
-            };
-          }
+    // === 판매방식 설정 ===
+    function setSaleType(type) {
+      saleType = type;
+      document.querySelectorAll('.form-group .volume-type-btn').forEach((b, i) => {
+        b.classList.toggle('active', (type === 'import' && i === 0) || (type === 'proxy' && i === 1));
+      });
+      document.getElementById('proxyShippingBox').style.display = type === 'proxy' ? 'block' : 'none';
+      recalculate();
+    }
+
+    // === 부피타입 설정 ===
+    function setVolumeType(type) {
+      volumeType = type;
+      document.querySelectorAll('.card .volume-type-btn').forEach((b, i) => {
+        b.classList.toggle('active', (type === 'individual' && i === 0) || (type === 'box' && i === 1));
+      });
+      document.getElementById('boxQtyRow').style.display = type === 'box' ? 'block' : 'none';
+      recalculate();
+    }
+
+    // === 배송타입 선택 ===
+    function selectShipping(type) {
+      shippingType = type;
+      document.querySelectorAll('.shipping-option').forEach(o => o.classList.remove('selected'));
+      document.querySelector(`[onclick="selectShipping('${type}')"]`).classList.add('selected');
+      recalculate();
+    }
+
+    // === 부피 계산 ===
+    function calcVolume() {
+      const w = parseFloat(document.getElementById('dimW').value) || 0;
+      const h = parseFloat(document.getElementById('dimH').value) || 0;
+      const d = parseFloat(document.getElementById('dimD').value) || 0;
+      const cbm = (w * h * d) / 1000000;
+      document.getElementById('volumeResult').textContent = cbm.toFixed(4);
+      recalculate();
+    }
+
+    // === HS코드 추천 ===
+    function suggestHSCodes() {
+      const name = document.getElementById('newName').value.toLowerCase();
+      const box = document.getElementById('hsRecommendBox');
+      const container = document.getElementById('hsOptions');
+
+      let matchedCodes = [];
+      for (const [keyword, codes] of Object.entries(HS_DATABASE)) {
+        if (keyword !== '기본' && name.includes(keyword)) {
+          matchedCodes = [...matchedCodes, ...codes];
         }
       }
-      return null;
-    }
-
-    function getLclPerUnit() {
-      const total = Number(lclTotalCostInput.value || 0);
-      const qty = Number(lclQuantityInput.value || 0);
-      if (total > 0 && qty > 0) return total / qty;
-      return 0;
-    }
-
-    function updateLclDisplay() {
-      const perUnit = getLclPerUnit();
-      lclPerUnitDisplay.innerHTML = `<span>개당 LCL: ${formatNumber(Math.round(perUnit))} 원</span>`;
-      renderTable();
-    }
-
-    function calculateMargin(product) {
-      const exchangeRate = Number(exchangeRateInput.value || 0);
-      const naverFeeRate = Number(naverFeeRateInput.value || 0);
-      const vatRate = Number(vatRateInput.value || 0);
-      const cardFeeRate = Number(cardFeeRateInput.value || 0);
-      const lclPerUnit = getLclPerUnit();
-
-      const cnyPrice = Number(product.cnyPrice || 0);
-      const sellPrice = Number(product.sellPrice || 0);
-
-      const baseCostKrw = cnyPrice * exchangeRate;
-
-      const guessed = guessHsFromName(product.name || "");
-      let dutyRate = 0;
-      let hsCode = "";
-
-      if (product.dutyRate !== undefined && product.dutyRate !== null && !Number.isNaN(product.dutyRate)) {
-        dutyRate = Number(product.dutyRate);
-      } else if (guessed) {
-        dutyRate = guessed.dutyRate;
+      if (matchedCodes.length === 0) {
+        matchedCodes = HS_DATABASE['기본'];
       }
 
-      if (product.hsCode) {
-        hsCode = product.hsCode;
-      } else if (guessed) {
-        hsCode = guessed.hsCode;
+      // 관세율 낮은 순 정렬
+      matchedCodes.sort((a, b) => a.rate - b.rate);
+
+      if (matchedCodes.length > 0) {
+        box.style.display = 'block';
+        container.innerHTML = matchedCodes.map((hs, i) => `
+          <div class="hs-option ${i === 0 ? 'selected' : ''}" onclick="selectHS('${hs.code}', ${hs.rate}, this)">
+            <div>
+              <span class="code">${hs.code}</span>
+              <span class="desc">${hs.desc}</span>
+            </div>
+            <span class="rate">${(hs.rate * 100).toFixed(1)}%</span>
+          </div>
+        `).join('');
+
+        // 첫 번째 (가장 낮은 관세) 자동 선택
+        selectedHsCode = matchedCodes[0].code;
+        selectedDutyRate = matchedCodes[0].rate;
+        recalculate();
+      } else {
+        box.style.display = 'none';
+      }
+    }
+
+    function selectHS(code, rate, el) {
+      document.querySelectorAll('.hs-option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedHsCode = code;
+      selectedDutyRate = rate;
+      recalculate();
+    }
+
+    // === 메인 계산 ===
+    function recalculate() {
+      const cnyPrice = parseFloat(document.getElementById('newCnyPrice').value) || 0;
+      const quantity = parseInt(document.getElementById('newQuantity').value) || 1;
+      const targetMargin = parseFloat(document.getElementById('targetMargin').value) || 35;
+      const naverFeeRate = parseFloat(document.getElementById('naverFee').value);
+      const coupangFeeRate = parseFloat(document.getElementById('coupangFee').value);
+      const vatRate = parseFloat(document.getElementById('vatRate').value);
+      const cardFeeRate = parseFloat(document.getElementById('cardFee').value);
+
+      if (cnyPrice <= 0) return;
+
+      // 총 원가 계산
+      const totalCny = cnyPrice * quantity;
+      const totalKrw = totalCny * exchangeRate;
+      const duty = totalKrw * selectedDutyRate;
+      const vat = (totalKrw + duty) * vatRate;
+      const cardFee = totalKrw * cardFeeRate;
+
+      // 배송비 계산
+      let shipping = 0;
+      if (saleType === 'proxy') {
+        shipping = (parseFloat(document.getElementById('proxyShipping').value) || 0) * quantity;
+      } else {
+        // LCL/항공 배송비 (CBM 기반 - 임시 계산)
+        const cbm = parseFloat(document.getElementById('volumeResult').textContent) || 0.01;
+        const boxQty = volumeType === 'box' ? parseInt(document.getElementById('boxQty').value) || 1 : 1;
+        if (shippingType === 'lcl') {
+          shipping = Math.max(cbm * 150000, 50000) * Math.ceil(quantity / boxQty); // CBM당 15만원, 최소 5만원
+          document.getElementById('lclPrice').textContent = formatNum(shipping) + '원';
+          document.getElementById('lclBase').textContent = formatNum(cbm * 150000) + '원/CBM';
+          document.getElementById('lclExtra').textContent = '추후 반영';
+        } else {
+          shipping = cbm * 500000 * Math.ceil(quantity / boxQty); // 항공 CBM당 50만원
+          document.getElementById('airPrice').textContent = formatNum(shipping) + '원';
+        }
       }
 
-      const duty = baseCostKrw * dutyRate;
-      const vatBase = baseCostKrw + duty;
-      const vat = vatBase * vatRate;
-      const cardFee = baseCostKrw * cardFeeRate;
-      const platformFee = sellPrice * naverFeeRate;
+      const grandTotal = totalKrw + duty + vat + cardFee + shipping;
 
-      const totalCost = baseCostKrw + duty + vat + cardFee + lclPerUnit;
-      const profit = sellPrice - totalCost - platformFee;
-      const marginRate = sellPrice > 0 ? (profit / sellPrice) * 100 : 0;
+      // 결제 예상 금액 표시
+      document.getElementById('totalCny').textContent = formatNum(totalCny) + ' CNY';
+      document.getElementById('totalKrw').textContent = formatNum(totalKrw) + '원';
+      document.getElementById('totalDuty').textContent = formatNum(duty) + '원';
+      document.getElementById('totalVat').textContent = formatNum(vat) + '원';
+      document.getElementById('totalCard').textContent = formatNum(cardFee) + '원';
+      document.getElementById('totalShipping').textContent = formatNum(shipping) + '원';
+      document.getElementById('grandTotal').textContent = formatNum(grandTotal) + '원';
 
-      return {
-        baseCostKrw,
-        vat,
-        duty,
-        dutyRate,
-        hsCode,
-        cardFee,
-        lclPerUnit,
-        platformFee,
-        totalCost,
-        profit,
-        marginRate
+      // 개당 비용
+      const costPerUnit = grandTotal / quantity;
+      const marginDecimal = targetMargin / 100;
+
+      // 네이버 권장가
+      const naverSellPrice = costPerUnit / (1 - naverFeeRate - marginDecimal);
+      const naverFeeAmt = naverSellPrice * naverFeeRate;
+      const naverProfit = (naverSellPrice - costPerUnit - naverFeeAmt) * quantity;
+
+      document.getElementById('naverPrice').textContent = formatNum(naverSellPrice) + '원';
+      document.getElementById('naverFeeAmt').textContent = formatNum(naverFeeAmt * quantity) + '원';
+      document.getElementById('naverCost').textContent = formatNum(grandTotal) + '원';
+      document.getElementById('naverProfit').textContent = '+' + formatNum(naverProfit) + '원';
+      document.getElementById('naverProfit').className = 'profit-value ' + (naverProfit >= 0 ? 'positive' : 'negative');
+
+      // 쿠팡 권장가
+      const coupangSellPrice = costPerUnit / (1 - coupangFeeRate - marginDecimal);
+      const coupangFeeAmt = coupangSellPrice * coupangFeeRate;
+      const coupangProfit = (coupangSellPrice - costPerUnit - coupangFeeAmt) * quantity;
+
+      document.getElementById('coupangPrice').textContent = formatNum(coupangSellPrice) + '원';
+      document.getElementById('coupangFeeAmt').textContent = formatNum(coupangFeeAmt * quantity) + '원';
+      document.getElementById('coupangCost').textContent = formatNum(grandTotal) + '원';
+      document.getElementById('coupangProfit').textContent = '+' + formatNum(coupangProfit) + '원';
+      document.getElementById('coupangProfit').className = 'profit-value ' + (coupangProfit >= 0 ? 'positive' : 'negative');
+
+      // 전역 저장
+      window.calcResult = {
+        naverPrice: Math.round(naverSellPrice),
+        coupangPrice: Math.round(coupangSellPrice),
+        costPerUnit,
+        grandTotal
       };
     }
 
-    function renderTable() {
-      const selectedCategory = categoryFilterSelect.value;
-      productTableBody.innerHTML = "";
-      let filtered = products;
-
-      if (selectedCategory !== "all") {
-        filtered = products.filter(p => p.category === selectedCategory);
-      }
-
-      filtered.forEach((product) => {
-        const result = calculateMargin(product);
-        const tr = document.createElement("tr");
-
-        const tdCat = document.createElement("td");
-        tdCat.textContent = product.category;
-        tr.appendChild(tdCat);
-
-        const tdName = document.createElement("td");
-        tdName.className = "text-left";
-        tdName.textContent = product.name;
-        tr.appendChild(tdName);
-
-        const tdCny = document.createElement("td");
-        tdCny.textContent = product.cnyPrice;
-        tr.appendChild(tdCny);
-
-        const tdSell = document.createElement("td");
-        tdSell.textContent = formatNumber(product.sellPrice);
-        tr.appendChild(tdSell);
-
-        const tdVol = document.createElement("td");
-        tdVol.textContent = product.volume ? product.volume + "L" : "-";
-        tr.appendChild(tdVol);
-
-        const tdHs = document.createElement("td");
-        if (result.hsCode) {
-          tdHs.innerHTML = `${result.hsCode}<br/><span style="font-size:11px; color:#6b7280;">${(result.dutyRate*100).toFixed(1)}%</span>`;
-        } else {
-          tdHs.innerHTML = `<span style="font-size:11px; color:#9ca3af;">미지정</span>`;
-        }
-        tr.appendChild(tdHs);
-
-        const tdLcl = document.createElement("td");
-        tdLcl.textContent = result.lclPerUnit > 0 ? formatNumber(Math.round(result.lclPerUnit)) + "원" : "-";
-        tr.appendChild(tdLcl);
-
-        const tdProfit = document.createElement("td");
-        tdProfit.innerHTML = result.profit >= 0
-          ? `<span class="badge-pos">+${formatNumber(Math.round(result.profit))}</span>`
-          : `<span class="badge-neg">${formatNumber(Math.round(result.profit))}</span>`;
-        tr.appendChild(tdProfit);
-
-        const tdMargin = document.createElement("td");
-        tdMargin.innerHTML = `<span class="${result.marginRate >= 0 ? "badge-pos" : "badge-neg"}">${formatPercent(result.marginRate)}</span>`;
-        tr.appendChild(tdMargin);
-
-        const tdLink = document.createElement("td");
-        if (product.link) {
-          const linkBtn = document.createElement("button");
-          linkBtn.className = "secondary";
-          linkBtn.textContent = "링크 복사";
-          linkBtn.addEventListener("click", () => {
-            navigator.clipboard.writeText(product.link).then(() => {
-              linkBtn.textContent = "복사됨!";
-              setTimeout(() => (linkBtn.textContent = "링크 복사"), 1200);
-            }).catch(() => alert("클립보드 복사 실패"));
-          });
-          tdLink.appendChild(linkBtn);
-        } else {
-          tdLink.textContent = "-";
-        }
-        tr.appendChild(tdLink);
-
-        const tdDelete = document.createElement("td");
-        const delBtn = document.createElement("button");
-        delBtn.className = "danger";
-        delBtn.textContent = "X";
-        delBtn.addEventListener("click", () => {
-          products = products.filter(p => p.id !== product.id);
-          saveProducts();
-          refreshAll();
-        });
-        tdDelete.appendChild(delBtn);
-        tr.appendChild(tdDelete);
-
-        productTableBody.appendChild(tr);
-      });
-
-      summaryText.textContent = `상품 ${filtered.length}개 (전체 ${products.length}개)`;
-    }
-
-    function refreshCategoryFilter() {
-      const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
-      const currentValue = categoryFilterSelect.value;
-      categoryFilterSelect.innerHTML = `<option value="all">전체</option>`;
-      categories.forEach(cat => {
-        const opt = document.createElement("option");
-        opt.value = cat;
-        opt.textContent = cat;
-        categoryFilterSelect.appendChild(opt);
-      });
-      if (categories.includes(currentValue)) {
-        categoryFilterSelect.value = currentValue;
-      } else {
-        categoryFilterSelect.value = "all";
-      }
-    }
-
-    function saveProducts() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-    }
-
-    function loadProducts() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        try {
-          products = JSON.parse(raw);
-        } catch (e) {
-          products = [];
-        }
-      }
-    }
-
-    function refreshAll() {
-      refreshCategoryFilter();
-      renderTable();
-    }
-
-    hsSuggestBtn.addEventListener("click", () => {
-      const name = newNameInput.value.trim();
-      if (!name) {
-        alert("상품명을 먼저 입력해 주세요.");
-        return;
-      }
-      const guess = guessHsFromName(name);
-      if (!guess) {
-        alert("매칭되는 HS 코드 추천이 없습니다. 직접 입력해 주세요.");
-        return;
-      }
-      newHsCodeInput.value = guess.hsCode;
-      newDutyRateInput.value = guess.dutyRate;
-    });
-
-    addProductBtn.addEventListener("click", () => {
-      const category = newCategoryInput.value.trim() || "미분류";
-      const name = newNameInput.value.trim();
-      const cny = Number(newCnyPriceInput.value || 0);
-      const sell = Number(newSellPriceInput.value || 0);
-      const volume = newVolumeInput.value ? Number(newVolumeInput.value) : null;
-      const link = newLinkInput.value.trim();
-      const hsCode = newHsCodeInput.value.trim() || null;
-      const dutyRate = newDutyRateInput.value ? Number(newDutyRateInput.value) : null;
-
-      if (!name || !cny || !sell) {
-        alert("상품명 / 중국단가 / 판매가는 필수입니다.");
+    // === 상품 추가 ===
+    function addProduct(platform) {
+      const name = document.getElementById('newName').value.trim();
+      const cnyPrice = parseFloat(document.getElementById('newCnyPrice').value);
+      if (!name || !cnyPrice) {
+        alert('상품명과 원가를 입력해주세요.');
         return;
       }
 
       const product = {
         id: crypto.randomUUID(),
-        category,
         name,
-        cnyPrice: cny,
-        sellPrice: sell,
-        volume,
-        link,
-        hsCode,
-        dutyRate
+        category: document.getElementById('newCategory').value.trim() || '미분류',
+        cnyPrice,
+        sellPrice: window.calcResult[platform + 'Price'],
+        quantity: parseInt(document.getElementById('newQuantity').value) || 1,
+        stock: 0,
+        platform,
+        saleType,
+        hsCode: selectedHsCode,
+        dutyRate: selectedDutyRate,
+        link: document.getElementById('newLink').value.trim(),
+        createdAt: new Date().toISOString()
       };
+
       products.push(product);
       saveProducts();
+      renderTable();
+      updateCategoryFilter();
 
-      newNameInput.value = "";
-      newCnyPriceInput.value = "";
-      newSellPriceInput.value = "";
-      newVolumeInput.value = "";
-      newLinkInput.value = "";
-      newHsCodeInput.value = "";
-      newDutyRateInput.value = "";
+      // 입력 초기화
+      document.getElementById('newName').value = '';
+      document.getElementById('newCnyPrice').value = '';
+      document.getElementById('hsRecommendBox').style.display = 'none';
+      alert('상품이 등록되었습니다!');
+    }
 
-      refreshAll();
-    });
+    // === 테이블 렌더링 ===
+    function renderTable() {
+      const platformFilter = document.getElementById('filterPlatform').value;
+      const categoryFilter = document.getElementById('filterCategory').value;
 
-    clearAllBtn.addEventListener("click", () => {
-      if (!confirm("정말 전체 상품을 삭제할까요? (되돌릴 수 없음)")) return;
+      let filtered = products;
+      if (platformFilter !== 'all') filtered = filtered.filter(p => p.platform === platformFilter);
+      if (categoryFilter !== 'all') filtered = filtered.filter(p => p.category === categoryFilter);
+
+      const tbody = document.getElementById('productTableBody');
+      tbody.innerHTML = filtered.map(p => {
+        const costKrw = p.cnyPrice * exchangeRate;
+        const marginRate = p.sellPrice > 0 ? ((p.sellPrice - costKrw) / p.sellPrice * 100).toFixed(1) : 0;
+        const date = new Date(p.createdAt).toLocaleDateString('ko-KR');
+
+        return `
+          <tr>
+            <td><span class="badge badge-${p.platform}">${p.platform === 'naver' ? '네이버' : '쿠팡'}</span></td>
+            <td><span class="badge badge-${p.saleType}">${p.saleType === 'import' ? '수입' : '대행'}</span></td>
+            <td class="text-left">${p.name}</td>
+            <td>${p.cnyPrice}¥</td>
+            <td>${formatNum(p.sellPrice)}원</td>
+            <td style="color:${marginRate >= 30 ? '#16a34a' : '#dc2626'}">${marginRate}%</td>
+            <td>
+              <input type="number" class="stock-input" value="${p.stock || 0}"
+                onchange="updateStock('${p.id}', this.value)">
+            </td>
+            <td style="font-size:10px;">${date}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="openEditModal('${p.id}')">수정</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">삭제</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // 요약
+      const totalValue = filtered.reduce((sum, p) => sum + (p.sellPrice * (p.stock || 0)), 0);
+      document.getElementById('listSummary').textContent =
+        `총 ${filtered.length}개 상품 | 재고 총 가치: ${formatNum(totalValue)}원`;
+    }
+
+    // === 재고 업데이트 ===
+    function updateStock(id, newStock) {
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      const oldStock = product.stock || 0;
+      const diff = newStock - oldStock;
+      product.stock = parseInt(newStock);
+      saveProducts();
+
+      // 판매 로그 기록
+      if (diff !== 0) {
+        salesLogs.push({
+          productId: id,
+          productName: product.name,
+          change: diff,
+          date: new Date().toISOString()
+        });
+        saveSalesLogs();
+        renderSalesLog();
+      }
+    }
+
+    function renderSalesLog() {
+      const container = document.getElementById('salesLog');
+      if (salesLogs.length === 0) {
+        container.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:20px;">재고 변동 기록이 없습니다.</div>';
+        return;
+      }
+
+      const recent = salesLogs.slice(-20).reverse();
+      container.innerHTML = recent.map(log => {
+        const date = new Date(log.date).toLocaleDateString('ko-KR');
+        const changeText = log.change > 0 ? `+${log.change} (입고)` : `${log.change} (출고/판매)`;
+        const color = log.change > 0 ? '#16a34a' : '#dc2626';
+        return `
+          <div class="sales-log-item">
+            <span>${log.productName}</span>
+            <span style="color:${color}">${changeText}</span>
+            <span style="color:#94a3b8">${date}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // === 수정 모달 ===
+    function openEditModal(id) {
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      document.getElementById('editId').value = id;
+      document.getElementById('editName').value = product.name;
+      document.getElementById('editCategory').value = product.category;
+      document.getElementById('editCnyPrice').value = product.cnyPrice;
+      document.getElementById('editSellPrice').value = product.sellPrice;
+      document.getElementById('editModal').classList.add('active');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('active');
+    }
+
+    function saveEdit() {
+      const id = document.getElementById('editId').value;
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      product.name = document.getElementById('editName').value;
+      product.category = document.getElementById('editCategory').value;
+      product.cnyPrice = parseFloat(document.getElementById('editCnyPrice').value);
+      product.sellPrice = parseInt(document.getElementById('editSellPrice').value);
+
+      saveProducts();
+      renderTable();
+      updateCategoryFilter();
+      closeEditModal();
+    }
+
+    // === 삭제 ===
+    function deleteProduct(id) {
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+      products = products.filter(p => p.id !== id);
+      saveProducts();
+      renderTable();
+      updateCategoryFilter();
+    }
+
+    function clearAll() {
+      if (!confirm('전체 상품을 삭제하시겠습니까?')) return;
       products = [];
       saveProducts();
-      refreshAll();
-    });
+      renderTable();
+    }
 
-    categoryFilterSelect.addEventListener("change", renderTable);
+    // === 카테고리 필터 업데이트 ===
+    function updateCategoryFilter() {
+      const categories = [...new Set(products.map(p => p.category))];
+      const select = document.getElementById('filterCategory');
+      select.innerHTML = '<option value="all">전체 카테고리</option>' +
+        categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
 
-    [exchangeRateInput, naverFeeRateInput, vatRateInput, cardFeeRateInput].forEach(input => {
-      input.addEventListener("input", renderTable);
-    });
+    // === 저장/로드 ===
+    function saveProducts() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    }
+    function loadProducts() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) products = JSON.parse(data);
+    }
+    function saveSalesLogs() {
+      localStorage.setItem(SALES_LOG_KEY, JSON.stringify(salesLogs));
+    }
+    function loadSalesLogs() {
+      const data = localStorage.getItem(SALES_LOG_KEY);
+      if (data) salesLogs = JSON.parse(data);
+      renderSalesLog();
+    }
 
-    [lclTotalCostInput, lclQuantityInput].forEach(input => {
-      input.addEventListener("input", updateLclDisplay);
-    });
+    // === 유틸 ===
+    function formatNum(n) {
+      return Math.round(n).toLocaleString('ko-KR');
+    }
 
-    loadProducts();
-    updateLclDisplay();
-    refreshAll();
+    // 초기화
+    init();
   </script>
 </body>
 </html>
