@@ -7531,20 +7531,163 @@ def api_analyze_script():
         script = data.get('script', '').strip()
         channel_type = data.get('channelType', 'senior-nostalgia')
         protagonist_gender = data.get('protagonistGender', 'female')
+        content_type = data.get('contentType', 'drama')
+        duration = data.get('duration', '5min')
+        video_format = data.get('videoFormat', 'horizontal')
+
+        # 쇼츠 여부 판단
+        is_shorts = content_type in ['shorts', 'coupang-shorts'] or duration in ['30s', '60s']
+        is_coupang = content_type == 'coupang-shorts'
 
         if not script:
             return jsonify({'ok': False, 'error': '대본이 비어있습니다.'}), 400
 
-        if len(script) < 100:
-            return jsonify({'ok': False, 'error': '대본이 너무 짧습니다. (최소 100자)'}), 400
+        # 쇼츠는 짧은 대본도 허용
+        min_length = 30 if is_shorts else 100
+        if len(script) < min_length:
+            return jsonify({'ok': False, 'error': f'대본이 너무 짧습니다. (최소 {min_length}자)'}), 400
 
-        print(f"[ANALYZE-SCRIPT] 대본 분석 시작 - 길이: {len(script)}자, 채널: {channel_type}")
+        print(f"[ANALYZE-SCRIPT] 대본 분석 시작 - 길이: {len(script)}자, 채널: {channel_type}, is_shorts: {is_shorts}, is_coupang: {is_coupang}")
 
         # OpenAI API 호출
         from openai import OpenAI
         client = OpenAI()
 
-        system_prompt = """당신은 드라마 대본 분석 전문가이자, AI 이미지/영상용 프롬프트 전문 작성가입니다.
+        # 쿠팡파트너스 쇼츠용 시스템 프롬프트
+        if is_coupang:
+            system_prompt = """당신은 쿠팡파트너스 제휴 마케팅용 상품 리뷰 쇼츠 전문가입니다.
+주어진 상품 정보/리뷰를 60초 이하의 세로 영상(9:16)에 맞게 분석합니다.
+
+## 🛒 쿠팡파트너스 쇼츠 핵심 규칙
+1. **상품이 주인공** - 사람 얼굴 X, 상품 클로즈업 O
+2. **가격/효과 훅** - 첫 3초에 가격 또는 효과로 후킹
+3. **간결한 리뷰** - 장점 1-2개만 강조
+4. **구매 유도 CTA** - "링크는 프로필에", "쿠팡에서 검색"
+
+## 🎬 쿠팡 쇼츠 구성 공식 (60초)
+1. **HOOK (0-3초)**: 가격/효과/놀람 훅
+   - "이게 만원대라고?"
+   - "써보고 깜짝 놀랐습니다"
+   - "이거 안 사면 후회합니다"
+   - "00 고민이시라면 이거 하나면 끝"
+2. **PRODUCT (3-40초)**: 상품 소개
+   - 상품 클로즈업 이미지
+   - 핵심 장점 1-2개
+   - 사용 장면 (손만 나오게)
+3. **CTA (40-60초)**: 구매 유도
+   - "링크는 프로필에 있어요"
+   - "쿠팡에서 [상품명] 검색하세요"
+   - "지금 할인 중이에요"
+
+## 📱 상품 이미지 프롬프트 규칙
+- **세로 구도 필수**: "vertical composition (9:16 aspect ratio)" 항상 포함
+- **상품 클로즈업**: "product close-up shot", "detailed product photography"
+- **깔끔한 배경**: "clean white background", "minimal studio setup", "soft gradient background"
+- **손/사용 장면**: "hands holding product", "product in use" (얼굴 없이)
+- **고급 광고 느낌**: "professional commercial photography", "high-end product shot"
+- ⚠️ **사람 얼굴 절대 금지** - 제품만 보여주거나 손만 나오게
+
+## 프롬프트 예시 (쿠팡 쇼츠용)
+"Vertical composition (9:16), professional product photography of [상품명], clean white studio background, soft diffused lighting, product centered in frame, high-end commercial quality, minimal and elegant, text-safe area at top and bottom."
+
+"Vertical composition (9:16), close-up of hands holding [상품명], product in use demonstration, soft natural lighting, blurred simple background, focus on product details, no face visible, mobile-optimized framing."
+
+## 출력 형식 (JSON)
+```json
+{
+  "product": {
+    "name": "상품명",
+    "category": "카테고리 (생활용품/가전/뷰티/식품 등)",
+    "priceRange": "가격대 (예: 만원대, 2만원대)",
+    "keyFeatures": ["핵심 장점 1", "핵심 장점 2"]
+  },
+  "scenes": [
+    {
+      "sceneId": "scene_1",
+      "title": "씬 제목",
+      "shots": [
+        {
+          "shotId": "shot_1_1",
+          "shotType": "hook/product/cta",
+          "imagePrompt": "상품 중심 세로 구도 프롬프트 (얼굴 없음)",
+          "narration": "짧고 임팩트있는 나레이션"
+        }
+      ]
+    }
+  ],
+  "thumbnailSuggestion": {
+    "mainEmotion": "핵심 후킹 포인트",
+    "textSuggestion": "썸네일 텍스트 (가격/효과 강조)"
+  },
+  "hookLine": "첫 3초 훅 멘트",
+  "ctaLine": "CTA 멘트 (구매 유도)"
+}
+```
+
+⚠️ 중요: 상품 쇼츠는 최대 1개 씬, 3개 샷! 나레이션 총합 100자 이내! 사람 얼굴 절대 금지!"""
+
+        # 일반 쇼츠용 시스템 프롬프트
+        elif is_shorts:
+            system_prompt = """당신은 YouTube Shorts / Instagram Reels 전문 콘텐츠 분석가입니다.
+주어진 대본을 60초 이하의 세로 영상(9:16)에 맞게 분석합니다.
+
+## 🎯 쇼츠 핵심 규칙
+1. **첫 3초가 생명** - 강렬한 훅(Hook)으로 시작해야 스크롤을 멈춤
+2. **짧고 임팩트있게** - 전체 나레이션 150자 이내 권장
+3. **세로 구도** - 모든 이미지 프롬프트는 세로(9:16) 최적화
+4. **1-2개 씬, 2-3개 샷** - 쇼츠는 간결해야 함
+
+## 🎬 쇼츠 구성 공식
+1. **HOOK (0-3초)**: 질문/충격적 사실/감정적 장면으로 시작
+2. **CONTENT (3-50초)**: 핵심 메시지 1개만 전달
+3. **CTA (50-60초)**: 좋아요/구독/다음 영상 유도
+
+## 📱 쇼츠 이미지 프롬프트 규칙
+- **세로 구도 필수**: "vertical composition (9:16 aspect ratio)" 항상 포함
+- **클로즈업 선호**: 작은 화면에서 잘 보이게
+- **주인공 중앙 배치**: 피사체를 화면 가운데에
+- **심플한 배경**: 복잡한 배경은 시선 분산
+- **텍스트 공간 확보**: 상단/하단에 자막 들어갈 공간
+
+## 프롬프트 예시 (쇼츠용)
+"Vertical composition (9:16), close-up shot of a Korean elderly grandmother's tearful eyes, soft warm lighting from the side, blurred simple background, emotional moment, text-safe area at top and bottom, mobile-optimized framing, cinematic shallow depth of field."
+
+## 출력 형식 (JSON)
+```json
+{
+  "character": {
+    "name": "주인공 이름",
+    "age": 나이,
+    "gender": "female/male",
+    "appearance": "외모 설명 (영문)"
+  },
+  "scenes": [
+    {
+      "sceneId": "scene_1",
+      "title": "씬 제목 (한글)",
+      "shots": [
+        {
+          "shotId": "shot_1_1",
+          "shotType": "hook/content/cta",
+          "imagePrompt": "세로 구도 영문 프롬프트 (vertical composition 포함)",
+          "narration": "짧고 임팩트있는 나레이션 (한글, 1-2문장)"
+        }
+      ]
+    }
+  ],
+  "thumbnailSuggestion": {
+    "mainEmotion": "핵심 감정",
+    "textSuggestion": "썸네일 텍스트 (2-4글자, 임팩트있게)"
+  },
+  "hookLine": "첫 3초 훅 멘트"
+}
+```
+
+⚠️ 중요: 쇼츠는 최대 2개 씬, 3개 샷까지만! 나레이션 총합 150자 이내!"""
+
+        else:
+            # 기존 드라마용 시스템 프롬프트
+            system_prompt = """당신은 드라마 대본 분석 전문가이자, AI 이미지/영상용 프롬프트 전문 작성가입니다.
 주어진 대본을 분석하여 씬(Scene)과 샷(Shot)으로 나누고, 각 샷에 대한 전문가급 이미지 프롬프트를 생성합니다.
 
 ## 분석 규칙
@@ -7611,7 +7754,47 @@ def api_analyze_script():
 }
 ```"""
 
-        user_prompt = f"""다음 대본을 분석해주세요:
+        if is_coupang:
+            user_prompt = f"""🛒 쿠팡파트너스 상품 쇼츠 분석:
+
+---
+{script}
+---
+
+⚡ 영상 형식: 세로 (9:16) 상품 쇼츠
+⏱️ 영상 길이: 60초 이내
+
+🎯 요청사항:
+1. 첫 3초에 가격/효과 훅 ("이게 만원대?", "써보고 놀람")
+2. 상품 클로즈업 이미지 프롬프트 (사람 얼굴 절대 금지!)
+3. 나레이션 총합 100자 이내로 압축
+4. 1개 씬, 3개 샷 (hook → product → cta)
+5. 모든 이미지 프롬프트는 세로 구도 + 상품 중심
+6. CTA: "링크는 프로필에" 또는 "쿠팡에서 검색"
+
+JSON 형식으로 출력해주세요."""
+
+        elif is_shorts:
+            user_prompt = f"""📱 쇼츠/릴스용 콘텐츠 분석:
+
+---
+{script}
+---
+
+⚡ 영상 형식: 세로 (9:16) 쇼츠
+⏱️ 영상 길이: {duration}
+👤 주인공 성별: {"여성" if protagonist_gender == "female" else "남성"}
+
+🎯 요청사항:
+1. 첫 3초에 강렬한 훅(Hook)으로 시작
+2. 나레이션 총합 150자 이내로 압축
+3. 씬 1-2개, 샷 2-3개로 간결하게
+4. 모든 이미지 프롬프트는 세로 구도(vertical composition) 포함
+5. CTA(구독/좋아요 유도) 포함
+
+JSON 형식으로 출력해주세요."""
+        else:
+            user_prompt = f"""다음 대본을 분석해주세요:
 
 ---
 {script}
@@ -8970,6 +9153,881 @@ def api_image_download_zip():
         import traceback
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ===== 쿠팡파트너스 쇼츠 API =====
+
+@app.route('/shorts')
+def shorts_page():
+    """쿠팡파트너스 쇼츠 제작 페이지"""
+    return render_template('shorts.html')
+
+
+@app.route('/api/shorts/fetch-coupang', methods=['POST'])
+def api_fetch_coupang():
+    """쿠팡 상품 URL에서 상품 정보 추출"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+
+        if not url or 'coupang.com' not in url:
+            return jsonify({'ok': False, 'error': '올바른 쿠팡 URL이 아닙니다.'}), 400
+
+        print(f"[SHORTS] 쿠팡 상품 정보 추출: {url}")
+
+        # 쿠팡 페이지 크롤링
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+        }
+
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # 상품명 추출
+        name = ''
+        name_el = soup.select_one('h2.prod-buy-header__title') or soup.select_one('.prod-buy-header__title') or soup.select_one('h1')
+        if name_el:
+            name = name_el.get_text(strip=True)
+
+        # 가격 추출
+        price = ''
+        price_el = soup.select_one('.total-price strong') or soup.select_one('.prod-sale-price .total-price') or soup.select_one('.prod-price')
+        if price_el:
+            price = price_el.get_text(strip=True)
+
+        # 이미지 추출
+        images = []
+        # 메인 이미지
+        main_img = soup.select_one('.prod-image__detail img') or soup.select_one('.prod-image img') or soup.select_one('#repImageContainer img')
+        if main_img:
+            src = main_img.get('src') or main_img.get('data-src')
+            if src:
+                if src.startswith('//'):
+                    src = 'https:' + src
+                images.append(src)
+
+        # 추가 이미지
+        thumb_imgs = soup.select('.prod-image__items img') or soup.select('.prod-image__item img') or soup.select('.subType-IMAGE img')
+        for img in thumb_imgs[:10]:
+            src = img.get('src') or img.get('data-src')
+            if src:
+                if src.startswith('//'):
+                    src = 'https:' + src
+                # 작은 썸네일은 큰 이미지로 변환
+                src = src.replace('_230x230', '_500x500').replace('_100x100', '_500x500')
+                if src not in images:
+                    images.append(src)
+
+        # 평점 추출
+        rating = '0.0'
+        rating_el = soup.select_one('.rating-star-num') or soup.select_one('.prod-rating__number')
+        if rating_el:
+            rating_text = rating_el.get_text(strip=True)
+            try:
+                rating = str(float(rating_text))
+            except:
+                pass
+
+        # 리뷰 수 추출
+        review_count = 0
+        review_el = soup.select_one('.count') or soup.select_one('.prod-review__count')
+        if review_el:
+            review_text = review_el.get_text(strip=True)
+            numbers = re.findall(r'\d+', review_text.replace(',', ''))
+            if numbers:
+                review_count = int(numbers[0])
+
+        product = {
+            'name': name or '상품명을 가져올 수 없습니다',
+            'price': price or '가격 정보 없음',
+            'images': images[:10],
+            'rating': rating,
+            'reviewCount': review_count,
+            'url': url
+        }
+
+        print(f"[SHORTS] 상품 정보 추출 완료: {name[:30]}..., 이미지 {len(images)}개")
+
+        return jsonify({'ok': True, 'product': product})
+
+    except requests.RequestException as e:
+        print(f"[SHORTS] 쿠팡 요청 오류: {e}")
+        return jsonify({'ok': False, 'error': f'쿠팡 페이지를 가져올 수 없습니다: {str(e)}'}), 500
+    except Exception as e:
+        print(f"[SHORTS] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shorts/generate-script', methods=['POST'])
+def api_generate_shorts_script():
+    """상품 정보 기반 쇼츠 대본 자동 생성"""
+    try:
+        data = request.get_json()
+        product_name = data.get('productName', '')
+        price = data.get('price', '')
+        rating = data.get('rating', '')
+        review_count = data.get('reviewCount', 0)
+
+        if not product_name:
+            return jsonify({'ok': False, 'error': '상품명이 필요합니다.'}), 400
+
+        print(f"[SHORTS] 대본 생성: {product_name[:30]}...")
+
+        system_prompt = """당신은 쿠팡파트너스 쇼츠 콘텐츠 전문 카피라이터입니다.
+60초 이내의 짧은 상품 리뷰 쇼츠 대본을 작성합니다.
+
+## 대본 구성
+1. **훅 (0-3초)**: 첫 마디로 시선을 끄는 문장 (최대 20자)
+   - 가격 훅: "이게 만원대라고?", "이 가격 실화?"
+   - 효과 훅: "써보고 깜짝 놀랐습니다", "이거 진짜 대박"
+   - 문제해결 훅: "00 고민이시라면 이거 하나면 끝"
+
+2. **상품 소개 (3-45초)**: 핵심 장점 1-2개만 (최대 80자)
+   - 짧고 간결하게
+   - 구체적인 효과나 특징
+   - 개인적 사용 경험 느낌으로
+
+3. **CTA (45-60초)**: 구매 유도 (최대 20자)
+   - "링크는 프로필에 있어요"
+   - "쿠팡에서 [상품명] 검색하세요"
+   - "지금 할인 중이에요"
+
+## 출력 형식 (JSON)
+{
+  "hook": "훅 문장",
+  "content": "상품 소개 문장",
+  "cta": "CTA 문장"
+}
+
+⚠️ 반드시 JSON 형식으로만 출력하세요."""
+
+        user_prompt = f"""다음 상품에 대한 쇼츠 대본을 작성해주세요:
+
+상품명: {product_name}
+가격: {price}
+평점: {rating}
+리뷰 수: {review_count}개
+
+위 정보를 바탕으로 훅, 상품소개, CTA를 작성해주세요."""
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.8,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+
+        result_text = completion.choices[0].message.content
+        script = json.loads(result_text)
+
+        print(f"[SHORTS] 대본 생성 완료: 훅={len(script.get('hook', ''))}자")
+
+        return jsonify({'ok': True, 'script': script})
+
+    except Exception as e:
+        print(f"[SHORTS] 대본 생성 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shorts/generate-tts', methods=['POST'])
+def api_generate_shorts_tts():
+    """쇼츠용 TTS 음성 생성"""
+    try:
+        data = request.get_json()
+        text = data.get('text', '').strip()
+        voice = data.get('voice', 'ko-KR-Neural2-C')
+        speed = float(data.get('speed', 1.2))
+
+        if not text:
+            return jsonify({'ok': False, 'error': '텍스트가 필요합니다.'}), 400
+
+        print(f"[SHORTS-TTS] 음성 생성: {len(text)}자, 속도: {speed}x")
+
+        from google.cloud import texttospeech
+
+        tts_client = texttospeech.TextToSpeechClient()
+
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+
+        voice_params = texttospeech.VoiceSelectionParams(
+            language_code="ko-KR",
+            name=voice
+        )
+
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=speed,
+            pitch=0.0
+        )
+
+        response = tts_client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_params,
+            audio_config=audio_config
+        )
+
+        # 오디오 파일 저장
+        audio_dir = 'static/audio/shorts'
+        os.makedirs(audio_dir, exist_ok=True)
+        audio_filename = f'shorts_tts_{uuid.uuid4().hex[:8]}.mp3'
+        audio_path = os.path.join(audio_dir, audio_filename)
+
+        with open(audio_path, 'wb') as f:
+            f.write(response.audio_content)
+
+        audio_url = f'/{audio_path}'
+        print(f"[SHORTS-TTS] 저장 완료: {audio_path}")
+
+        return jsonify({'ok': True, 'audioUrl': audio_url})
+
+    except Exception as e:
+        print(f"[SHORTS-TTS] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shorts/generate-video', methods=['POST'])
+def api_generate_shorts_video():
+    """쇼츠 영상 생성 (이미지 슬라이드쇼 + TTS)"""
+    try:
+        data = request.get_json()
+        images = data.get('images', [])
+        audio_url = data.get('audioUrl', '')
+        effect = data.get('effect', 'kenburns')
+        image_duration = int(data.get('imageDuration', 4))
+
+        if not images:
+            return jsonify({'ok': False, 'error': '이미지가 필요합니다.'}), 400
+
+        if not audio_url:
+            return jsonify({'ok': False, 'error': '오디오가 필요합니다.'}), 400
+
+        print(f"[SHORTS-VIDEO] 영상 생성: 이미지 {len(images)}개, 효과: {effect}")
+
+        from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip
+        from PIL import Image
+        import io
+
+        # 오디오 파일 경로
+        audio_path = audio_url.lstrip('/')
+
+        if not os.path.exists(audio_path):
+            return jsonify({'ok': False, 'error': '오디오 파일을 찾을 수 없습니다.'}), 400
+
+        # 오디오 길이 확인
+        audio_clip = AudioFileClip(audio_path)
+        audio_duration = audio_clip.duration
+
+        # 이미지당 시간 계산 (오디오 길이에 맞춤)
+        actual_image_duration = audio_duration / len(images) if len(images) > 0 else image_duration
+
+        # 세로 영상 크기 (9:16)
+        VIDEO_WIDTH = 1080
+        VIDEO_HEIGHT = 1920
+
+        clips = []
+
+        for idx, img_url in enumerate(images):
+            try:
+                print(f"[SHORTS-VIDEO] 이미지 {idx+1}/{len(images)} 처리 중...")
+
+                # 이미지 다운로드
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                img_response = requests.get(img_url, headers=headers, timeout=15)
+                img_response.raise_for_status()
+
+                # PIL로 이미지 열기
+                img = Image.open(io.BytesIO(img_response.content))
+                img = img.convert('RGB')
+
+                # 세로 비율에 맞게 리사이즈 (중앙 크롭)
+                img_ratio = img.width / img.height
+                target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
+
+                if img_ratio > target_ratio:
+                    # 이미지가 더 넓음 -> 좌우 크롭
+                    new_width = int(img.height * target_ratio)
+                    left = (img.width - new_width) // 2
+                    img = img.crop((left, 0, left + new_width, img.height))
+                else:
+                    # 이미지가 더 높음 -> 상하 크롭
+                    new_height = int(img.width / target_ratio)
+                    top = (img.height - new_height) // 2
+                    img = img.crop((0, top, img.width, top + new_height))
+
+                img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+
+                # numpy 배열로 변환
+                import numpy as np
+                img_array = np.array(img)
+
+                # ImageClip 생성
+                clip = ImageClip(img_array).set_duration(actual_image_duration)
+
+                # Ken Burns 효과 (줌인)
+                if effect == 'kenburns':
+                    def zoom_effect(get_frame, t):
+                        frame = get_frame(t)
+                        zoom = 1 + 0.1 * (t / actual_image_duration)  # 1.0 -> 1.1 줌
+                        h, w = frame.shape[:2]
+                        new_h, new_w = int(h * zoom), int(w * zoom)
+
+                        # 리사이즈
+                        from PIL import Image as PILImage
+                        pil_img = PILImage.fromarray(frame)
+                        pil_img = pil_img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
+
+                        # 중앙 크롭
+                        left = (new_w - w) // 2
+                        top = (new_h - h) // 2
+                        pil_img = pil_img.crop((left, top, left + w, top + h))
+
+                        return np.array(pil_img)
+
+                    clip = clip.fl(zoom_effect)
+
+                clips.append(clip)
+
+            except Exception as e:
+                print(f"[SHORTS-VIDEO] 이미지 {idx+1} 처리 오류: {e}")
+                continue
+
+        if not clips:
+            return jsonify({'ok': False, 'error': '처리 가능한 이미지가 없습니다.'}), 500
+
+        # 클립 연결
+        final_clip = concatenate_videoclips(clips, method="compose")
+
+        # 오디오 추가
+        final_clip = final_clip.set_audio(audio_clip)
+
+        # 영상 저장
+        video_dir = 'static/video/shorts'
+        os.makedirs(video_dir, exist_ok=True)
+        video_filename = f'shorts_{uuid.uuid4().hex[:8]}.mp4'
+        video_path = os.path.join(video_dir, video_filename)
+
+        final_clip.write_videofile(
+            video_path,
+            fps=30,
+            codec='libx264',
+            audio_codec='aac',
+            threads=4,
+            preset='fast',
+            verbose=False,
+            logger=None
+        )
+
+        # 리소스 정리
+        final_clip.close()
+        audio_clip.close()
+
+        video_url = f'/{video_path}'
+        print(f"[SHORTS-VIDEO] 영상 생성 완료: {video_path}")
+
+        return jsonify({'ok': True, 'videoUrl': video_url})
+
+    except Exception as e:
+        print(f"[SHORTS-VIDEO] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== 상세페이지 제작 API =====
+
+@app.route('/detail-page')
+def detail_page():
+    """상세페이지 제작 페이지"""
+    return render_template('detail-page.html')
+
+
+@app.route('/api/detail-page/generate-copy', methods=['POST'])
+def generate_detail_copy():
+    """상세페이지 카피 생성 API"""
+    try:
+        data = request.json
+        product_name = data.get('productName', '')
+        category = data.get('category', '생활용품')
+        target_audience = data.get('targetAudience', '전체')
+        features = data.get('features', '')
+        price_point = data.get('pricePoint', '')
+        page_style = data.get('pageStyle', 'modern')
+        sections = data.get('sections', ['hero', 'features', 'cta'])
+
+        print(f"[DETAIL-COPY] 상품명: {product_name}, 카테고리: {category}")
+        print(f"[DETAIL-COPY] 섹션: {sections}")
+
+        # 스타일별 톤 설정
+        style_tones = {
+            'modern': '깔끔하고 세련된 톤. 짧고 임팩트 있는 문장 사용.',
+            'premium': '고급스럽고 신뢰감 있는 톤. 품격있는 표현 사용.',
+            'cute': '친근하고 귀여운 톤. 이모티콘과 재미있는 표현 사용.',
+            'professional': '전문적이고 객관적인 톤. 데이터와 근거 중심.'
+        }
+
+        # 섹션별 프롬프트 가이드
+        section_guides = {
+            'hero': '메인 헤드라인과 서브 헤드라인. 한 줄로 제품의 핵심 가치 전달.',
+            'problem': '타겟 고객이 공감할 수 있는 문제점 3-4가지 나열.',
+            'solution': '이 제품이 문제를 어떻게 해결하는지 설명.',
+            'features': '제품의 주요 특징 3-4가지를 각각 제목+설명 형태로.',
+            'usage': '사용 방법을 단계별로 간단히 설명.',
+            'review': '가상의 고객 후기 2-3개 작성. 실감나게.',
+            'spec': '제품 스펙/사양 정리. 표 형태 텍스트.',
+            'cta': '구매를 유도하는 마무리 문구. 긴박감 또는 혜택 강조.'
+        }
+
+        # 선택된 섹션만 포함
+        selected_guides = {k: v for k, v in section_guides.items() if k in sections}
+
+        system_prompt = f"""당신은 쿠팡, 스마트스토어 등 이커머스 상세페이지 전문 카피라이터입니다.
+{style_tones.get(page_style, style_tones['modern'])}
+
+타겟 고객: {target_audience}
+가격대: {price_point if price_point else '미정'}
+
+각 섹션별로 판매력 있는 카피를 작성해주세요.
+응답은 반드시 JSON 형식으로, 각 섹션을 key로 하여 작성해주세요."""
+
+        user_prompt = f"""상품명: {product_name}
+카테고리: {category}
+핵심 특징: {features if features else '(자유롭게 추론)'}
+
+다음 섹션들의 카피를 작성해주세요:
+{chr(10).join([f'- {k}: {v}' for k, v in selected_guides.items()])}
+
+JSON 형식으로 응답해주세요. 예시:
+{{"hero": "헤드라인 텍스트", "features": "특징1\\n특징2\\n...", ...}}"""
+
+        # OpenAI API 호출
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.8
+        )
+
+        copy_text = response.choices[0].message.content
+        copy_data = json.loads(copy_text)
+
+        print(f"[DETAIL-COPY] 카피 생성 완료: {list(copy_data.keys())}")
+
+        return jsonify({'ok': True, 'copy': copy_data})
+
+    except Exception as e:
+        print(f"[DETAIL-COPY] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/detail-page/generate-images', methods=['POST'])
+def generate_detail_images():
+    """상세페이지 이미지 생성 API"""
+    try:
+        data = request.json
+        product_name = data.get('productName', '')
+        category = data.get('category', '생활용품')
+        page_style = data.get('pageStyle', 'modern')
+        sections = data.get('sections', ['hero'])
+        copy_data = data.get('copy', {})
+
+        print(f"[DETAIL-IMAGE] 상품명: {product_name}, 섹션 수: {len(sections)}")
+
+        # 스타일별 이미지 스타일
+        style_visuals = {
+            'modern': 'minimalist, clean white background, modern design, professional product photography',
+            'premium': 'luxury, elegant, dark background with gold accents, premium feel',
+            'cute': 'pastel colors, playful, kawaii style, soft lighting',
+            'professional': 'corporate style, clean lines, trustworthy, infographic style'
+        }
+
+        visual_style = style_visuals.get(page_style, style_visuals['modern'])
+
+        # 섹션별 이미지 프롬프트 생성
+        section_prompts = {
+            'hero': f'Hero banner for {product_name}, {category} product, {visual_style}, eye-catching main visual, no text',
+            'problem': f'Problem illustration, frustrated person concept, {visual_style}, emotional visual',
+            'solution': f'Solution concept, happy person with {product_name}, {visual_style}, positive mood',
+            'features': f'Product features showcase, {product_name} details, {visual_style}, multiple angle view',
+            'usage': f'Product usage demonstration, step by step visual, {product_name}, {visual_style}',
+            'review': f'Happy customer testimonial concept, satisfied person, {visual_style}',
+            'spec': f'Product specification infographic style, {product_name}, {visual_style}, clean layout',
+            'cta': f'Call to action banner, {product_name}, {visual_style}, promotional feel, urgent mood'
+        }
+
+        generated_images = []
+
+        # Gemini로 이미지 생성
+        for section in sections:
+            if section not in section_prompts:
+                continue
+
+            prompt = section_prompts[section]
+            print(f"[DETAIL-IMAGE] {section} 이미지 생성 중...")
+
+            try:
+                # Gemini imagen 사용
+                imagen = genai.ImageGenerationModel("imagen-3.0-generate-002")
+                result = imagen.generate_images(
+                    prompt=prompt,
+                    number_of_images=1,
+                    aspect_ratio="1:1",
+                    safety_filter_level="block_only_high",
+                    person_generation="allow_adult"
+                )
+
+                if result.images:
+                    # 이미지 저장
+                    timestamp = int(time.time() * 1000)
+                    filename = f"detail_{section}_{timestamp}.png"
+                    filepath = os.path.join(OUTPUT_DIR, filename)
+
+                    result.images[0].save(filepath)
+                    image_url = f'/output/{filename}'
+
+                    generated_images.append({
+                        'section': section,
+                        'url': image_url,
+                        'prompt': prompt
+                    })
+                    print(f"[DETAIL-IMAGE] {section} 완료: {image_url}")
+
+            except Exception as img_error:
+                print(f"[DETAIL-IMAGE] {section} 이미지 생성 실패: {img_error}")
+                # 실패한 섹션은 건너뛰기
+                continue
+
+        if not generated_images:
+            return jsonify({'ok': False, 'error': '이미지 생성에 실패했습니다'}), 500
+
+        return jsonify({'ok': True, 'images': generated_images})
+
+    except Exception as e:
+        print(f"[DETAIL-IMAGE] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/detail-page/download-zip', methods=['POST'])
+def download_detail_zip():
+    """상세페이지 전체 다운로드 (ZIP)"""
+    try:
+        data = request.json
+        images = data.get('images', [])
+        copy_data = data.get('copy', {})
+
+        print(f"[DETAIL-ZIP] 이미지 {len(images)}개, 카피 섹션 {len(copy_data)}개")
+
+        # ZIP 파일 생성
+        timestamp = int(time.time())
+        zip_filename = f"detail_page_{timestamp}.zip"
+        zip_path = os.path.join(OUTPUT_DIR, zip_filename)
+
+        import zipfile
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # 이미지 파일 추가
+            for img in images:
+                img_url = img.get('url', '')
+                section = img.get('section', 'unknown')
+
+                if img_url.startswith('/output/'):
+                    local_path = os.path.join(OUTPUT_DIR, img_url.replace('/output/', ''))
+                    if os.path.exists(local_path):
+                        zf.write(local_path, f'images/{section}.png')
+
+            # 카피 텍스트 파일 추가
+            section_names = {
+                'hero': '01_히어로배너',
+                'problem': '02_문제제기',
+                'solution': '03_해결책',
+                'features': '04_주요특징',
+                'usage': '05_사용방법',
+                'review': '06_후기리뷰',
+                'spec': '07_제품스펙',
+                'cta': '08_CTA'
+            }
+
+            copy_text = ""
+            for key, content in copy_data.items():
+                if content:
+                    title = section_names.get(key, key)
+                    copy_text += f"=== {title} ===\n{content}\n\n"
+
+            zf.writestr('copy.txt', copy_text.encode('utf-8'))
+
+        # ZIP 파일 반환
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_filename
+        )
+
+    except Exception as e:
+        print(f"[DETAIL-ZIP] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== 썸네일 자동 생성 API =====
+
+@app.route('/thumbnail')
+def thumbnail_page():
+    """썸네일 자동 생성 페이지"""
+    return render_template('thumbnail.html')
+
+
+@app.route('/api/thumbnail/generate', methods=['POST'])
+def generate_thumbnail():
+    """썸네일 생성 API"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageFilter
+        import requests
+        from io import BytesIO
+        import base64
+
+        data = request.json
+        image_src = data.get('image', '')
+        main_text = data.get('mainText', '')
+        price = data.get('price', '')
+        original_price = data.get('originalPrice')
+        tags = data.get('tags', [])
+        template = data.get('template', 'sale')
+        font_style = data.get('font', 'noto-black')
+        bg_style = data.get('bgStyle', 'blur')
+        bg_color = data.get('bgColor', '#1a1a2e')
+
+        print(f"[THUMBNAIL] 템플릿: {template}, 배경: {bg_style}")
+        print(f"[THUMBNAIL] 텍스트: {main_text}, 가격: {price}")
+
+        # 이미지 로드
+        if image_src.startswith('data:'):
+            # Base64 이미지
+            base64_data = image_src.split(',')[1]
+            img_data = base64.b64decode(base64_data)
+            product_img = Image.open(BytesIO(img_data))
+        elif image_src.startswith('http'):
+            # URL 이미지
+            response = requests.get(image_src, timeout=10)
+            product_img = Image.open(BytesIO(response.content))
+        else:
+            return jsonify({'ok': False, 'error': '유효하지 않은 이미지'}), 400
+
+        # RGBA로 변환
+        product_img = product_img.convert('RGBA')
+
+        # 썸네일 크기 (9:16)
+        WIDTH, HEIGHT = 1080, 1920
+
+        # 템플릿별 색상 설정
+        template_colors = {
+            'sale': {'primary': '#ff416c', 'secondary': '#ff4b2b', 'accent': '#ffffff'},
+            'value': {'primary': '#11998e', 'secondary': '#38ef7d', 'accent': '#ffffff'},
+            'must': {'primary': '#667eea', 'secondary': '#764ba2', 'accent': '#ffffff'},
+            'gift': {'primary': '#f093fb', 'secondary': '#f5576c', 'accent': '#ffffff'},
+            'hot': {'primary': '#eb3349', 'secondary': '#f45c43', 'accent': '#ffff00'},
+            'minimal': {'primary': '#2c3e50', 'secondary': '#4ca1af', 'accent': '#ffffff'}
+        }
+        colors = template_colors.get(template, template_colors['sale'])
+
+        # 배경 생성
+        if bg_style == 'blur':
+            # 상품 이미지를 확대하고 블러 처리
+            bg_img = product_img.copy()
+            bg_img = bg_img.resize((WIDTH + 100, HEIGHT + 100), Image.Resampling.LANCZOS)
+            bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=30))
+            # 중앙 크롭
+            left = (bg_img.width - WIDTH) // 2
+            top = (bg_img.height - HEIGHT) // 2
+            bg_img = bg_img.crop((left, top, left + WIDTH, top + HEIGHT))
+            # 어둡게 처리
+            dark_overlay = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 150))
+            bg_img = Image.alpha_composite(bg_img.convert('RGBA'), dark_overlay)
+        elif bg_style == 'gradient':
+            # 그라데이션 배경
+            bg_img = Image.new('RGBA', (WIDTH, HEIGHT))
+            draw = ImageDraw.Draw(bg_img)
+            c1 = tuple(int(colors['primary'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            c2 = tuple(int(colors['secondary'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            for y in range(HEIGHT):
+                r = int(c1[0] + (c2[0] - c1[0]) * y / HEIGHT)
+                g = int(c1[1] + (c2[1] - c1[1]) * y / HEIGHT)
+                b = int(c1[2] + (c2[2] - c1[2]) * y / HEIGHT)
+                draw.line([(0, y), (WIDTH, y)], fill=(r, g, b, 255))
+        else:
+            # 단색 배경
+            c = tuple(int(bg_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            bg_img = Image.new('RGBA', (WIDTH, HEIGHT), c + (255,))
+
+        # 상품 이미지 배치 (중앙)
+        product_size = int(WIDTH * 0.85)
+        product_img_resized = product_img.copy()
+        product_img_resized.thumbnail((product_size, product_size), Image.Resampling.LANCZOS)
+
+        # 상품 이미지 위치 (상단 여백 25%, 하단 여백 20% 고려)
+        img_x = (WIDTH - product_img_resized.width) // 2
+        img_y = int(HEIGHT * 0.28)
+
+        # 상품 이미지 합성
+        bg_img.paste(product_img_resized, (img_x, img_y), product_img_resized)
+
+        # 폰트 로드
+        font_paths = {
+            'noto-black': '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
+            'noto-bold': '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
+            'gmarket': '/usr/share/fonts/truetype/gmarket/GmarketSansBold.ttf',
+            'pretendard': '/usr/share/fonts/truetype/pretendard/Pretendard-Bold.ttf'
+        }
+        font_path = font_paths.get(font_style, font_paths['noto-black'])
+
+        # 폰트가 없으면 기본 폰트 사용
+        try:
+            font_large = ImageFont.truetype(font_path, 72)
+            font_medium = ImageFont.truetype(font_path, 56)
+            font_small = ImageFont.truetype(font_path, 40)
+            font_tag = ImageFont.truetype(font_path, 36)
+        except:
+            # 시스템 기본 폰트 시도
+            try:
+                font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+                font_large = ImageFont.truetype(font_path, 72)
+                font_medium = ImageFont.truetype(font_path, 56)
+                font_small = ImageFont.truetype(font_path, 40)
+                font_tag = ImageFont.truetype(font_path, 36)
+            except:
+                font_large = ImageFont.load_default()
+                font_medium = font_large
+                font_small = font_large
+                font_tag = font_large
+
+        draw = ImageDraw.Draw(bg_img)
+
+        # 상단 태그 영역 (상단 5~15%)
+        tag_y = int(HEIGHT * 0.06)
+        if tags:
+            tag_x_start = WIDTH // 2
+            tag_spacing = 20
+            total_width = 0
+
+            # 태그 총 너비 계산
+            tag_widths = []
+            for tag in tags[:3]:
+                if tag:
+                    bbox = draw.textbbox((0, 0), tag, font=font_tag)
+                    w = bbox[2] - bbox[0] + 40  # 패딩 포함
+                    tag_widths.append(w)
+                    total_width += w + tag_spacing
+
+            # 중앙 정렬을 위한 시작 위치
+            tag_x = (WIDTH - total_width) // 2
+
+            for i, tag in enumerate(tags[:3]):
+                if tag:
+                    bbox = draw.textbbox((0, 0), tag, font=font_tag)
+                    w = bbox[2] - bbox[0] + 40
+                    h = bbox[3] - bbox[1] + 20
+
+                    # 태그 배경 (둥근 사각형 효과)
+                    c = tuple(int(colors['primary'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                    draw.rounded_rectangle(
+                        [tag_x, tag_y, tag_x + w, tag_y + h],
+                        radius=h // 2,
+                        fill=c + (230,)
+                    )
+                    # 태그 텍스트
+                    text_x = tag_x + 20
+                    text_y = tag_y + 10
+                    draw.text((text_x, text_y), tag, font=font_tag, fill='white')
+
+                    tag_x += w + tag_spacing
+
+        # 하단 텍스트 영역 (하단 20%)
+        bottom_y = int(HEIGHT * 0.78)
+
+        # 메인 텍스트 (상품명)
+        if main_text:
+            # 텍스트 그림자
+            shadow_offset = 3
+            bbox = draw.textbbox((0, 0), main_text, font=font_large)
+            text_w = bbox[2] - bbox[0]
+            text_x = (WIDTH - text_w) // 2
+
+            draw.text((text_x + shadow_offset, bottom_y + shadow_offset), main_text, font=font_large, fill=(0, 0, 0, 150))
+            draw.text((text_x, bottom_y), main_text, font=font_large, fill='white')
+
+        # 가격
+        price_y = bottom_y + 90
+        if price:
+            # 원가 (취소선 효과)
+            if original_price:
+                bbox = draw.textbbox((0, 0), original_price, font=font_small)
+                orig_w = bbox[2] - bbox[0]
+                orig_x = (WIDTH - orig_w) // 2
+                draw.text((orig_x, price_y), original_price, font=font_small, fill=(200, 200, 200, 200))
+                # 취소선
+                line_y = price_y + (bbox[3] - bbox[1]) // 2
+                draw.line([(orig_x - 5, line_y), (orig_x + orig_w + 5, line_y)], fill=(200, 200, 200, 200), width=3)
+                price_y += 50
+
+            # 현재 가격
+            bbox = draw.textbbox((0, 0), price, font=font_medium)
+            price_w = bbox[2] - bbox[0]
+            price_x = (WIDTH - price_w) // 2
+
+            # 가격 강조 배경
+            padding = 20
+            c = tuple(int(colors['primary'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            draw.rounded_rectangle(
+                [price_x - padding, price_y - 10, price_x + price_w + padding, price_y + (bbox[3] - bbox[1]) + 10],
+                radius=10,
+                fill=c + (255,)
+            )
+            draw.text((price_x, price_y), price, font=font_medium, fill='white')
+
+        # 이미지 저장
+        timestamp = int(time.time() * 1000)
+        filename = f"thumbnail_{template}_{timestamp}.png"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+
+        # RGB로 변환하여 저장
+        final_img = bg_img.convert('RGB')
+        final_img.save(filepath, 'PNG', quality=95)
+
+        thumbnail_url = f'/output/{filename}'
+        print(f"[THUMBNAIL] 생성 완료: {thumbnail_url}")
+
+        return jsonify({'ok': True, 'thumbnailUrl': thumbnail_url})
+
+    except Exception as e:
+        print(f"[THUMBNAIL] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ===== Render 배포를 위한 설정 =====

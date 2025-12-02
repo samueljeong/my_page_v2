@@ -16,10 +16,26 @@ window.DramaStep3 = {
 
   // 설정값 가져오기
   getConfig() {
+    // Step1 설정에서 쇼츠 여부 확인
+    const step1Data = DramaSession.getStepData('step1');
+    const contentType = step1Data?.config?.contentType || 'drama';
+    const duration = step1Data?.config?.duration || '5min';
+    const isShorts = ['shorts', 'coupang-shorts'].includes(contentType) || ['30s', '60s'].includes(duration);
+    const isCoupang = contentType === 'coupang-shorts';
+
+    // 쇼츠일 경우 말하기 속도 자동 조절
+    let speechRate = parseFloat(document.getElementById('speech-rate')?.value) || 0.95;
+    if (isShorts) {
+      speechRate = isCoupang ? 1.2 : 1.15;  // 쿠팡 쇼츠는 더 빠르게 (1.2배속)
+      console.log(`[Step3] ${isCoupang ? '쿠팡파트너스' : ''} 쇼츠 모드 - TTS 속도 ${speechRate}배속 적용`);
+    }
+
     return {
       ttsEngine: document.getElementById('tts-engine')?.value || 'google',
       voiceStyle: document.getElementById('voice-style')?.value || 'warm',
-      speechRate: parseFloat(document.getElementById('speech-rate')?.value) || 0.95
+      speechRate: speechRate,
+      isShorts: isShorts,
+      isCoupang: isCoupang
     };
   },
 
