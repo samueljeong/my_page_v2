@@ -9378,38 +9378,69 @@ def api_generate_shorts_script():
 문장은 짧고 끊어서. 쉼표 대신 마침표.
 특징은 반드시 3개만."""
 
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.85,
-            max_tokens=700,
-            response_format={"type": "json_object"}
-        )
+        # 3개 대본 변형 생성 옵션
+        generate_variations = data.get('variations', False)
+        variation_count = 3 if generate_variations else 1
 
-        result_text = completion.choices[0].message.content
-        script = json.loads(result_text)
+        scripts = []
+        variation_styles = ['price_shock', 'pain_trigger', 'shock_surprise'] if generate_variations else [hook_style]
 
-        # 호환성을 위해 content 필드도 생성
-        if 'content' not in script:
-            parts = []
-            if script.get('pain'):
-                parts.append(script['pain'])
-            if script.get('solution'):
-                parts.append(script['solution'])
-            if script.get('features'):
-                features = script['features']
-                if isinstance(features, list):
-                    parts.append(f"첫째, {features[0]}." if len(features) > 0 else '')
-                    parts.append(f"둘째, {features[1]}." if len(features) > 1 else '')
-                    parts.append(f"셋째, {features[2]}." if len(features) > 2 else '')
-            script['content'] = ' '.join(filter(None, parts))
+        for i in range(variation_count):
+            # 각 변형별로 다른 Hook 스타일 사용
+            current_style = variation_styles[i] if i < len(variation_styles) else 'random'
 
-        print(f"[SHORTS] 대본 생성 완료: 훅={script.get('hook', '')[:20]}...")
+            # Hook 예시 업데이트
+            if hook_library and current_style != 'random':
+                style_hooks = hooks_data.get(current_style, {}).get('templates', [])[:5]
+                hook_hint = f"\n\n이번 대본의 훅 스타일: {hooks_data.get(current_style, {}).get('name', current_style)}\n예시: {', '.join(style_hooks[:3])}"
+            else:
+                hook_hint = ""
 
-        return jsonify({'ok': True, 'script': script})
+            var_user_prompt = user_prompt + hook_hint
+            if generate_variations:
+                var_user_prompt += f"\n\n[버전 {i+1}] 다른 버전과 차별화된 독특한 훅과 접근 방식으로 작성해주세요."
+
+            completion = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": var_user_prompt}
+                ],
+                temperature=0.9 + (i * 0.05),  # 변형별로 다른 temperature
+                max_tokens=700,
+                response_format={"type": "json_object"}
+            )
+
+            result_text = completion.choices[0].message.content
+            script = json.loads(result_text)
+
+            # 호환성을 위해 content 필드도 생성
+            if 'content' not in script:
+                parts = []
+                if script.get('pain'):
+                    parts.append(script['pain'])
+                if script.get('solution'):
+                    parts.append(script['solution'])
+                if script.get('features'):
+                    features = script['features']
+                    if isinstance(features, list):
+                        parts.append(f"첫째, {features[0]}." if len(features) > 0 else '')
+                        parts.append(f"둘째, {features[1]}." if len(features) > 1 else '')
+                        parts.append(f"셋째, {features[2]}." if len(features) > 2 else '')
+                script['content'] = ' '.join(filter(None, parts))
+
+            # 버전 정보 추가
+            script['version'] = i + 1
+            script['style'] = current_style
+
+            scripts.append(script)
+            print(f"[SHORTS] 대본 {i+1} 생성 완료: 훅={script.get('hook', '')[:20]}...")
+
+        # 단일/다중 응답 처리
+        if generate_variations:
+            return jsonify({'ok': True, 'scripts': scripts, 'count': len(scripts)})
+        else:
+            return jsonify({'ok': True, 'script': scripts[0]})
 
     except Exception as e:
         print(f"[SHORTS] 대본 생성 오류: {e}")
