@@ -294,9 +294,16 @@
                     <input type="number" id="targetMargin" value="35" oninput="recalculate()">
                   </div>
                 </div>
-                <div class="form-group">
-                  <label>구매 링크</label>
-                  <input type="url" id="newLink" placeholder="https://...">
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label>🇰🇷 실제 판매가 (원) *</label>
+                    <input type="number" id="newSellPrice" placeholder="예: 159000" style="background:#fffbeb; border-color:#fcd34d;">
+                    <div class="form-hint">네이버/쿠팡에 등록할 실제 가격</div>
+                  </div>
+                  <div class="form-group">
+                    <label>구매 링크</label>
+                    <input type="url" id="newLink" placeholder="https://...">
+                  </div>
                 </div>
                 <div class="form-group">
                   <label>상품 이미지 URL</label>
@@ -927,8 +934,14 @@
     async function addProduct(platform) {
       const name = document.getElementById('newName').value.trim();
       const cnyPrice = parseFloat(document.getElementById('newCnyPrice').value);
+      const sellPrice = parseInt(document.getElementById('newSellPrice').value);
+
       if (!name || !cnyPrice) {
         alert('상품명과 원가를 입력해주세요.');
+        return;
+      }
+      if (!sellPrice) {
+        alert('실제 판매가를 입력해주세요.');
         return;
       }
 
@@ -937,7 +950,7 @@
         name,
         category: document.getElementById('newCategory').value.trim() || '미분류',
         cnyPrice,
-        sellPrice: window.calcResult[platform + 'Price'],
+        sellPrice,  // 실제 판매가 사용
         quantity: parseInt(document.getElementById('newQuantity').value) || 1,
         stock: 0,
         platform,
@@ -958,6 +971,7 @@
         // 입력 초기화
         document.getElementById('newName').value = '';
         document.getElementById('newCnyPrice').value = '';
+        document.getElementById('newSellPrice').value = '';
         document.getElementById('newImageUrl').value = '';
         document.getElementById('imagePreview').innerHTML = '<span style="font-size:10px; color:#94a3b8;">미리보기</span>';
         document.getElementById('hsRecommendBox').style.display = 'none';
