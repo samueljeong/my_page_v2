@@ -167,6 +167,77 @@ window.DramaStep1 = {
   },
 
   /**
+   * 샤오홍수에서 상품 영상 검색
+   * 한국어 → 중국어 번역 후 샤오홍수 검색
+   */
+  async searchXiaohongshu() {
+    const productName = document.getElementById('coupang-product-name')?.value?.trim();
+
+    if (!productName) {
+      alert('상품명을 먼저 입력해주세요.');
+      return;
+    }
+
+    const btn = document.querySelector('.btn-xiaohongshu');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '🔄 번역 중...';
+    btn.disabled = true;
+
+    try {
+      // 한국어 → 중국어 번역 API 호출
+      const response = await fetch('/api/translate/ko-to-zh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: productName })
+      });
+
+      const result = await response.json();
+
+      if (result.ok && result.translated) {
+        const chineseKeyword = result.translated;
+        const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(chineseKeyword)}&source=web_search_result_notes`;
+
+        console.log(`[Xiaohongshu] 검색: ${productName} → ${chineseKeyword}`);
+
+        // 새 탭에서 열기 (iframe은 대부분 차단됨)
+        window.open(searchUrl, '_blank');
+
+        // iframe 시도 (차단될 수 있음)
+        // const container = document.getElementById('xiaohongshu-frame-container');
+        // const iframe = document.getElementById('xiaohongshu-iframe');
+        // const directLink = document.getElementById('xiaohongshu-direct-link');
+        //
+        // iframe.src = searchUrl;
+        // directLink.href = searchUrl;
+        // container.classList.remove('hidden');
+
+      } else {
+        // 번역 실패 시 한국어로 검색
+        const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(productName)}&source=web_search_result_notes`;
+        window.open(searchUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('[Xiaohongshu] 검색 오류:', error);
+      // 오류 시에도 한국어로 검색 시도
+      const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(productName)}&source=web_search_result_notes`;
+      window.open(searchUrl, '_blank');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  },
+
+  /**
+   * 샤오홍수 iframe 닫기
+   */
+  closeXiaohongshuFrame() {
+    const container = document.getElementById('xiaohongshu-frame-container');
+    const iframe = document.getElementById('xiaohongshu-iframe');
+    container.classList.add('hidden');
+    iframe.src = '';
+  },
+
+  /**
    * 음성 선택 UI 초기화
    */
   initVoiceSelection() {

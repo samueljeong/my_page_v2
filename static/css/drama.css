@@ -2480,3 +2480,83 @@ body {
 .coupang-mode-active .section-header h3 {
   color: #ff6b35;
 }
+
+/* ===== 샤오홍수 검색 버튼 ===== */
+.xiaohongshu-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.btn-xiaohongshu {
+  background: linear-gradient(135deg, #ff2442 0%, #ff6b81 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(255, 36, 66, 0.3);
+}
+
+.btn-xiaohongshu:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.4);
+}
+
+.btn-xiaohongshu:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.xiaohongshu-hint {
+  font-size: 12px;
+  color: #888;
+}
+
+/* 샤오홍수 iframe 컨테이너 */
+#xiaohongshu-frame-container {
+  margin-top: 20px;
+  border: 2px solid #ff2442;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+#xiaohongshu-frame-container .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #ff2442 0%, #ff6b81 100%);
+  color: white;
+}
+
+#xiaohongshu-frame-container .section-header h4 {
+  margin: 0;
+  color: white;
+}
+
+.xiaohongshu-notice {
+  padding: 10px 16px;
+  background: #fff5f5;
+  font-size: 13px;
+  color: #666;
+  border-bottom: 1px solid #ffe0e0;
+}
+
+.xiaohongshu-notice a {
+  color: #ff2442;
+  margin-left: 10px;
+}
+
+#xiaohongshu-iframe {
+  width: 100%;
+  height: 500px;
+  border: none;
+}

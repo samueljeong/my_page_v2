@@ -7486,6 +7486,55 @@ def api_get_benchmark_detail(benchmark_id):
         return jsonify({'ok': False, 'error': str(e)}), 200
 
 
+# ===== 한국어 → 중국어 번역 API =====
+@app.route('/api/translate/ko-to-zh', methods=['POST'])
+def api_translate_ko_to_zh():
+    """한국어를 중국어(간체)로 번역
+
+    샤오홍수 검색을 위한 번역 API
+    """
+    try:
+        data = request.get_json()
+        text = data.get('text', '').strip()
+
+        if not text:
+            return jsonify({'ok': False, 'error': '번역할 텍스트가 없습니다.'}), 400
+
+        print(f"[TRANSLATE] 한국어 → 중국어: {text}")
+
+        from openai import OpenAI
+        client = OpenAI()
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一个翻译专家。将韩语翻译成简体中文。只输出翻译结果，不要解释。如果是产品名称，翻译成中国消费者常用的搜索词。"
+                },
+                {
+                    "role": "user",
+                    "content": f"翻译: {text}"
+                }
+            ],
+            temperature=0.3,
+            max_tokens=100
+        )
+
+        translated = response.choices[0].message.content.strip()
+        print(f"[TRANSLATE] 번역 결과: {translated}")
+
+        return jsonify({
+            'ok': True,
+            'original': text,
+            'translated': translated
+        })
+
+    except Exception as e:
+        print(f"[TRANSLATE][ERROR] {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ===== 쿠팡파트너스 상품 대본 생성 API =====
 @app.route('/api/drama/generate-coupang-script', methods=['POST'])
 def api_generate_coupang_script():
