@@ -7524,7 +7524,8 @@ def api_analyze_script():
         video_format = data.get('videoFormat', 'horizontal')
 
         # 쇼츠 여부 판단
-        is_shorts = content_type == 'shorts' or duration in ['30s', '60s']
+        is_shorts = content_type in ['shorts', 'coupang-shorts'] or duration in ['30s', '60s']
+        is_coupang = content_type == 'coupang-shorts'
 
         if not script:
             return jsonify({'ok': False, 'error': '대본이 비어있습니다.'}), 400
@@ -7534,14 +7535,87 @@ def api_analyze_script():
         if len(script) < min_length:
             return jsonify({'ok': False, 'error': f'대본이 너무 짧습니다. (최소 {min_length}자)'}), 400
 
-        print(f"[ANALYZE-SCRIPT] 대본 분석 시작 - 길이: {len(script)}자, 채널: {channel_type}, is_shorts: {is_shorts}")
+        print(f"[ANALYZE-SCRIPT] 대본 분석 시작 - 길이: {len(script)}자, 채널: {channel_type}, is_shorts: {is_shorts}, is_coupang: {is_coupang}")
 
         # OpenAI API 호출
         from openai import OpenAI
         client = OpenAI()
 
-        # 쇼츠용 시스템 프롬프트
-        if is_shorts:
+        # 쿠팡파트너스 쇼츠용 시스템 프롬프트
+        if is_coupang:
+            system_prompt = """당신은 쿠팡파트너스 제휴 마케팅용 상품 리뷰 쇼츠 전문가입니다.
+주어진 상품 정보/리뷰를 60초 이하의 세로 영상(9:16)에 맞게 분석합니다.
+
+## 🛒 쿠팡파트너스 쇼츠 핵심 규칙
+1. **상품이 주인공** - 사람 얼굴 X, 상품 클로즈업 O
+2. **가격/효과 훅** - 첫 3초에 가격 또는 효과로 후킹
+3. **간결한 리뷰** - 장점 1-2개만 강조
+4. **구매 유도 CTA** - "링크는 프로필에", "쿠팡에서 검색"
+
+## 🎬 쿠팡 쇼츠 구성 공식 (60초)
+1. **HOOK (0-3초)**: 가격/효과/놀람 훅
+   - "이게 만원대라고?"
+   - "써보고 깜짝 놀랐습니다"
+   - "이거 안 사면 후회합니다"
+   - "00 고민이시라면 이거 하나면 끝"
+2. **PRODUCT (3-40초)**: 상품 소개
+   - 상품 클로즈업 이미지
+   - 핵심 장점 1-2개
+   - 사용 장면 (손만 나오게)
+3. **CTA (40-60초)**: 구매 유도
+   - "링크는 프로필에 있어요"
+   - "쿠팡에서 [상품명] 검색하세요"
+   - "지금 할인 중이에요"
+
+## 📱 상품 이미지 프롬프트 규칙
+- **세로 구도 필수**: "vertical composition (9:16 aspect ratio)" 항상 포함
+- **상품 클로즈업**: "product close-up shot", "detailed product photography"
+- **깔끔한 배경**: "clean white background", "minimal studio setup", "soft gradient background"
+- **손/사용 장면**: "hands holding product", "product in use" (얼굴 없이)
+- **고급 광고 느낌**: "professional commercial photography", "high-end product shot"
+- ⚠️ **사람 얼굴 절대 금지** - 제품만 보여주거나 손만 나오게
+
+## 프롬프트 예시 (쿠팡 쇼츠용)
+"Vertical composition (9:16), professional product photography of [상품명], clean white studio background, soft diffused lighting, product centered in frame, high-end commercial quality, minimal and elegant, text-safe area at top and bottom."
+
+"Vertical composition (9:16), close-up of hands holding [상품명], product in use demonstration, soft natural lighting, blurred simple background, focus on product details, no face visible, mobile-optimized framing."
+
+## 출력 형식 (JSON)
+```json
+{
+  "product": {
+    "name": "상품명",
+    "category": "카테고리 (생활용품/가전/뷰티/식품 등)",
+    "priceRange": "가격대 (예: 만원대, 2만원대)",
+    "keyFeatures": ["핵심 장점 1", "핵심 장점 2"]
+  },
+  "scenes": [
+    {
+      "sceneId": "scene_1",
+      "title": "씬 제목",
+      "shots": [
+        {
+          "shotId": "shot_1_1",
+          "shotType": "hook/product/cta",
+          "imagePrompt": "상품 중심 세로 구도 프롬프트 (얼굴 없음)",
+          "narration": "짧고 임팩트있는 나레이션"
+        }
+      ]
+    }
+  ],
+  "thumbnailSuggestion": {
+    "mainEmotion": "핵심 후킹 포인트",
+    "textSuggestion": "썸네일 텍스트 (가격/효과 강조)"
+  },
+  "hookLine": "첫 3초 훅 멘트",
+  "ctaLine": "CTA 멘트 (구매 유도)"
+}
+```
+
+⚠️ 중요: 상품 쇼츠는 최대 1개 씬, 3개 샷! 나레이션 총합 100자 이내! 사람 얼굴 절대 금지!"""
+
+        # 일반 쇼츠용 시스템 프롬프트
+        elif is_shorts:
             system_prompt = """당신은 YouTube Shorts / Instagram Reels 전문 콘텐츠 분석가입니다.
 주어진 대본을 60초 이하의 세로 영상(9:16)에 맞게 분석합니다.
 
@@ -7668,7 +7742,27 @@ def api_analyze_script():
 }
 ```"""
 
-        if is_shorts:
+        if is_coupang:
+            user_prompt = f"""🛒 쿠팡파트너스 상품 쇼츠 분석:
+
+---
+{script}
+---
+
+⚡ 영상 형식: 세로 (9:16) 상품 쇼츠
+⏱️ 영상 길이: 60초 이내
+
+🎯 요청사항:
+1. 첫 3초에 가격/효과 훅 ("이게 만원대?", "써보고 놀람")
+2. 상품 클로즈업 이미지 프롬프트 (사람 얼굴 절대 금지!)
+3. 나레이션 총합 100자 이내로 압축
+4. 1개 씬, 3개 샷 (hook → product → cta)
+5. 모든 이미지 프롬프트는 세로 구도 + 상품 중심
+6. CTA: "링크는 프로필에" 또는 "쿠팡에서 검색"
+
+JSON 형식으로 출력해주세요."""
+
+        elif is_shorts:
             user_prompt = f"""📱 쇼츠/릴스용 콘텐츠 분석:
 
 ---

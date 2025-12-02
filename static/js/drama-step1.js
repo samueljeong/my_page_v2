@@ -31,11 +31,16 @@ window.DramaStep1 = {
 
     if (contentType) {
       contentType.addEventListener('change', (e) => {
-        if (e.target.value === 'shorts') {
+        const value = e.target.value;
+        if (value === 'shorts' || value === 'coupang-shorts') {
           // 쇼츠 선택시 자동 설정
           if (videoFormat) videoFormat.value = 'vertical';
           if (videoDuration) videoDuration.value = '60s';
           console.log('[Step1] 쇼츠 모드: 세로 형식 + 60초');
+
+          if (value === 'coupang-shorts') {
+            console.log('[Step1] 🛒 쿠팡파트너스 쇼츠 모드 활성화');
+          }
         }
       });
     }
