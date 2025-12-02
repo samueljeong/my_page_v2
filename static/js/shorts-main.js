@@ -141,6 +141,11 @@ window.ShortsApp = {
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-icon">⏳</span> 생성 중...';
 
+    // Hook 스타일 옵션 가져오기
+    const hookStyle = document.getElementById('hook-style')?.value || 'random';
+    const category = document.getElementById('product-category')?.value || 'auto';
+    const lengthPreset = document.getElementById('length-preset')?.value || 'medium';
+
     try {
       const response = await fetch('/api/shorts/generate-script', {
         method: 'POST',
@@ -149,7 +154,10 @@ window.ShortsApp = {
           productName: this.productData.name,
           price: this.productData.price,
           rating: this.productData.rating,
-          reviewCount: this.productData.reviewCount
+          reviewCount: this.productData.reviewCount,
+          hookStyle: hookStyle,
+          category: category,
+          lengthPreset: lengthPreset
         })
       });
 
@@ -159,11 +167,32 @@ window.ShortsApp = {
         throw new Error(data.error || '대본 생성 실패');
       }
 
-      // 대본 채우기
+      // 대본 채우기 (새 형식 지원)
       document.getElementById('script-hook').value = data.script.hook || '';
-      document.getElementById('script-content').value = data.script.content || '';
+
+      // content가 있으면 사용, 없으면 pain + solution + features 조합
+      let content = data.script.content || '';
+      if (!content) {
+        const parts = [];
+        if (data.script.pain) parts.push(data.script.pain);
+        if (data.script.solution) parts.push(data.script.solution);
+        if (data.script.features && Array.isArray(data.script.features)) {
+          const features = data.script.features;
+          if (features[0]) parts.push(`첫째, ${features[0]}.`);
+          if (features[1]) parts.push(`둘째, ${features[1]}.`);
+          if (features[2]) parts.push(`셋째, ${features[2]}.`);
+        }
+        content = parts.join('\n');
+      }
+      document.getElementById('script-content').value = content;
+
       document.getElementById('script-cta').value = data.script.cta || '';
       this.updateCharCounts();
+
+      // 쿠팡파트너스 고지 문구 추가
+      if (data.script.disclosure) {
+        console.log('[Shorts] 고지 문구:', data.script.disclosure);
+      }
 
       this.showStatus('대본이 생성되었습니다!', 'success');
 

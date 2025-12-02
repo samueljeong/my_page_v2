@@ -301,6 +301,57 @@ body {
 }
 
 /* 대본 에디터 */
+/* Hook 스타일 선택 */
+.script-style-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.style-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.style-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a8b4ce;
+}
+
+.style-group select {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.style-group select:hover {
+  border-color: rgba(102, 126, 234, 0.5);
+}
+
+.style-group select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+@media (max-width: 768px) {
+  .script-style-options {
+    grid-template-columns: 1fr;
+  }
+}
+
 .script-options {
   display: flex;
   align-items: center;
