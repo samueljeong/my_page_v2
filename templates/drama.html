@@ -129,16 +129,14 @@
                 </select>
               </div>
               <div class="config-item">
-                <label>주인공 성별</label>
-                <select id="protagonist-gender">
-                  <option value="female" selected>여성 (할머니)</option>
-                  <option value="male">남성 (할아버지)</option>
-                </select>
+                <!-- 주인공 성별은 AI가 대본에서 자동 파악 -->
               </div>
               <div class="config-item">
                 <!-- 빈 칸 (레이아웃 유지) -->
               </div>
             </div>
+            <!-- 주인공 성별 (AI 자동 파악, hidden) -->
+            <input type="hidden" id="protagonist-gender" value="auto">
           </div>
 
           <!-- TTS 음성 선택 -->

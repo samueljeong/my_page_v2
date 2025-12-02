@@ -238,6 +238,41 @@ window.DramaStep1 = {
   },
 
   /**
+   * 성별에 맞는 TTS 음성 자동 선택
+   */
+  autoSelectVoiceByGender(gender) {
+    const voiceCards = document.querySelectorAll('.voice-card');
+    let targetVoice = null;
+
+    // 성별에 맞는 첫 번째 Neural2 음성 찾기
+    voiceCards.forEach(card => {
+      if (card.dataset.gender === gender && card.dataset.quality === 'neural2' && !targetVoice) {
+        targetVoice = card;
+      }
+    });
+
+    // 찾은 음성으로 자동 선택
+    if (targetVoice) {
+      voiceCards.forEach(c => c.classList.remove('selected'));
+      targetVoice.classList.add('selected');
+
+      const voice = targetVoice.dataset.voice;
+      const quality = targetVoice.dataset.quality;
+
+      document.getElementById('selected-voice').value = voice;
+      document.getElementById('tts-voice-quality').value = quality;
+
+      if (typeof dramaApp !== 'undefined' && dramaApp.session) {
+        dramaApp.session.ttsVoice = voice;
+        dramaApp.session.ttsVoiceQuality = quality;
+        dramaApp.session.protagonistGender = gender;
+      }
+
+      console.log(`[Step1] 🎙️ 성별(${gender})에 맞는 음성 자동 선택: ${voice}`);
+    }
+  },
+
+  /**
    * 음성 선택 UI 초기화
    */
   initVoiceSelection() {
@@ -696,6 +731,16 @@ window.DramaStep1 = {
       if (progressText) progressText.textContent = `분석 완료! (${data.scenes?.length || 0}개 씬, ${data.totalShots || 0}개 샷)`;
 
       console.log('[Step1] 분석 완료:', this.analysisData);
+
+      // AI가 파악한 성별로 자동 설정
+      if (data.character?.gender) {
+        const detectedGender = data.character.gender;
+        document.getElementById('protagonist-gender').value = detectedGender;
+        console.log(`[Step1] AI가 파악한 주인공 성별: ${detectedGender}`);
+
+        // 성별에 맞는 TTS 음성 자동 선택
+        this.autoSelectVoiceByGender(detectedGender);
+      }
 
       // 결과 렌더링
       setTimeout(() => {
