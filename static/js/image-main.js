@@ -146,7 +146,6 @@ const ImageMain = {
     }
 
     const contentType = document.getElementById('content-type').value;
-    const protagonistType = document.getElementById('protagonist-type').value;
     const imageStyle = document.getElementById('image-style').value;
 
     // 진행 상태
@@ -167,7 +166,6 @@ const ImageMain = {
         body: JSON.stringify({
           script: script,
           content_type: contentType,
-          protagonist_type: protagonistType,
           image_style: imageStyle
         })
       });
