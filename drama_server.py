@@ -6479,20 +6479,24 @@ def generate_thumbnail():
             font_size = int(height * 0.08)  # 이미지 높이의 8%
             font = None
             font_paths = [
+                os.path.join(static_dir, 'fonts', 'NanumSquareRoundB.ttf'),
                 os.path.join(static_dir, 'fonts', 'NanumGothicBold.ttf'),
+                os.path.join(static_dir, 'fonts', 'NanumBarunGothicBold.ttf'),
                 "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
                 "/System/Library/Fonts/AppleSDGothicNeo.ttc",
                 "C:/Windows/Fonts/malgunbd.ttf",
             ]
             for fp in font_paths:
-                if os_module.path.exists(fp):
+                if os.path.exists(fp):
                     try:
                         font = ImageFont.truetype(fp, font_size)
+                        print(f"[THUMBNAIL] 폰트 로드: {fp}")
                         break
                     except:
                         continue
             if not font:
                 font = ImageFont.load_default()
+                print("[THUMBNAIL] 기본 폰트 사용 (한글 미지원 가능)")
 
             # 텍스트 줄 분리
             text_lines = thumbnail_text.replace('\\n', '\n').split('\n')
@@ -7123,7 +7127,12 @@ def api_thumbnail_overlay():
 
         # 폰트 로드 (한글 지원 폰트)
         font = None
+        base_dir = os_module.path.dirname(os_module.path.abspath(__file__))
         font_paths = [
+            # 프로젝트 로컬 폰트 (최우선)
+            os_module.path.join(base_dir, "static/fonts/NanumSquareRoundB.ttf"),
+            os_module.path.join(base_dir, "static/fonts/NanumGothicBold.ttf"),
+            os_module.path.join(base_dir, "static/fonts/NanumBarunGothicBold.ttf"),
             # Linux (Render)
             "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -8691,8 +8700,10 @@ def api_image_analyze_script():
 ## 출력 형식 (반드시 JSON)
 {{
   "thumbnail": {{
-    "title": "유튜브 썸네일용 한글 제목 (짧고 임팩트 있게, 6자 이내 권장)",
-    "prompt": "English thumbnail image prompt with all elements above"
+    "title": "유튜브 썸네일용 한글 제목 (짧고 임팩트 있게)",
+    "text_lines": ["1줄: 훅/숫자", "2줄: 핵심 인물", "3줄: 감정/강조", "4줄: 궁금증 유발"],
+    "highlight_line": 2,
+    "prompt": "English thumbnail image prompt - close-up or medium shot of main character with dramatic expression"
   }},
   "scenes": [
     {{
