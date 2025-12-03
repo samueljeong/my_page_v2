@@ -21,14 +21,16 @@ def parse_korean_datetime(datetime_str):
         print(f"[DATE-PARSER] 빈 값 수신")
         return None
 
-    # 문자열 정리 (앞뒤 공백 제거)
+    # 문자열 정리 (앞뒤 공백 및 대괄호 제거)
     datetime_str = str(datetime_str).strip()
+    datetime_str = datetime_str.strip('[]')  # 대괄호 제거
+    datetime_str = datetime_str.strip()  # 대괄호 제거 후 남은 공백 제거
 
     if not datetime_str:
         print(f"[DATE-PARSER] 정리 후 빈 값")
         return None
 
-    print(f"[DATE-PARSER] 입력값: '{datetime_str}'")
+    print(f"[DATE-PARSER] 입력값 (정리 후): '{datetime_str}'")
 
     # 이미 ISO 형식이면 그대로 반환 (timezone 포함 가능)
     if re.match(r'^\d{4}-\d{2}-\d{2}T', datetime_str):
