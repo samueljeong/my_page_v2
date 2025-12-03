@@ -9452,9 +9452,22 @@ def api_image_analyze_script():
 
         style_desc = style_guides.get(image_style, 'photorealistic')
 
-        # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트
+        # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트 - audience 반영
         if image_style == 'animation':
-            system_prompt = """You are an AI that generates image prompts for COLLAGE STYLE: Realistic Background + 2D Stickman Character.
+            # audience별 썸네일 규칙 설정
+            if audience == 'general':
+                thumb_length = "4-7자"
+                thumb_color = "#FFFFFF"
+                thumb_outline = "#000000"
+                thumb_style = "자극형/충격형 (결국 터졌다, 이게 실화?, 소름 돋았다)"
+            else:  # senior
+                thumb_length = "8-12자"
+                thumb_color = "#FFD700"
+                thumb_outline = "#000000"
+                thumb_style = "회상형/후회형 (그날을 잊지 않는다, 하는게 아니었다, 늦게 알았다)"
+
+            system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Realistic Background + 2D Stickman Character.
+타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
 ## CORE CONCEPT (CRITICAL!)
 The key visual style is:
@@ -9483,6 +9496,11 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
 - seamless composition
 - depth of field
 
+## 썸네일 텍스트 규칙 (중요!)
+- 문구 길이: {thumb_length}
+- 문구 스타일: {thumb_style}
+- 색상: text_color에 "{thumb_color}" 사용
+
 ## EMOTION THROUGH POSTURE
 - 긴장/걱정: standing nervously, hunched shoulders
 - 기쁨: arms raised, leaning forward
@@ -9492,8 +9510,8 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
 - 중립: neutral face expression, standing calmly
 
 ## OUTPUT FORMAT (MUST BE JSON)
-{
-  "youtube": {
+{{
+  "youtube": {{
     "titles": [
       "유튜브 제목 1 (클릭 유도, 50자 이내)",
       "유튜브 제목 2 (감정 강조)",
@@ -9501,21 +9519,21 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
       "유튜브 제목 4 (경험 공유형)"
     ],
     "description": "유튜브 설명란 (영상 내용 요약 + 해시태그 포함, 500자 이상)"
-  },
-  "thumbnail": {
-    "text_options": ["썸네일 텍스트1 (5~7자)", "썸네일 텍스트2 (5~7자)", "썸네일 텍스트3 (5~7자)"],
-    "text_color": "#FFD700",
-    "outline_color": "#000000",
+  }},
+  "thumbnail": {{
+    "text_options": ["썸네일 텍스트1 ({thumb_length})", "썸네일 텍스트2 ({thumb_length})", "썸네일 텍스트3 ({thumb_length})"],
+    "text_color": "{thumb_color}",
+    "outline_color": "{thumb_outline}",
     "prompt": "[Realistic background description], cinematic lighting. White stickman character with round head and black outline, clean minimal flat style, [pose/action]. Collage style, 2D cartoon character inserted into a realistic photo, seamless composition, depth of field, drop shadow to match lighting."
-  },
+  }},
   "scenes": [
-    {
+    {{
       "scene_number": 1,
       "narration": "한국어 나레이션",
       "image_prompt": "[Realistic background], cinematic lighting, detailed environment. White stickman character with round head and black outline, clean minimal flat style, [action]. Collage style, cartoon character seamlessly placed in realistic world, depth of field, drop shadow to match lighting."
-    }
+    }}
   ]
-}
+}}
 
 ## EXAMPLE PROMPTS
 
@@ -9689,10 +9707,17 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
 
         # 스타일별 user prompt 분기
         if image_style == 'animation':
+            # audience에 따른 썸네일 규칙
+            if audience == 'general':
+                thumb_instruction = "썸네일 문구는 일반 타겟 (4-7자 이하, 자극형/충격형: 결국 터졌다, 이게 실화?, 소름)"
+            else:
+                thumb_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형: 그날을 잊지 않는다, 하는게 아니었다)"
+
             user_prompt = f"""대본:
 {script}
 
 위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 "COLLAGE STYLE: 실사 배경 + 스틱맨" 이미지 프롬프트를 생성해주세요.
+타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
 핵심 스타일 (반드시 지킬 것):
 - 배경 = 리얼/사실적/영화적 (realistic, cinematic, 35mm film look)
@@ -9701,12 +9726,12 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
 
 중요 규칙:
 1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
-2. 배경은 반드시 REALISTIC (실사 사진, 영화적 조명, 35mm film look)
+2. 배경은 반드시 REALISTIC (실사 사진, 영화적 조명, 35mm film look) - 애니메이션/일러스트 스타일 절대 금지!
 3. 캐릭터는 "white stickman character with round head and black outline, clean minimal flat style"로 표현
-4. 절대 애니메이션 캐릭터, 만화 캐릭터를 그리지 말 것. 오직 심플한 스틱맨만!
+4. 절대 애니메이션 캐릭터, 만화 캐릭터, 지브리 스타일을 그리지 말 것. 오직 심플한 스틱맨만!
 5. 감정은 자세와 몸짓으로만 표현 (hunched shoulders, arms raised 등)
 6. 모든 프롬프트 끝에 필수 태그: collage style, cartoon character inserted into realistic photo, seamless composition, depth of field, drop shadow to match lighting
-7. 썸네일 문구는 시니어 타겟 (12자 이하, 감정+사건)
+7. {thumb_instruction}
 
 프롬프트는 반드시 영어로 작성해주세요."""
         else:
