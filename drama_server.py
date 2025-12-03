@@ -7598,9 +7598,10 @@ def api_thumbnail_overlay():
         base_dir = os_module.path.dirname(os_module.path.abspath(__file__))
         font_paths = [
             # 프로젝트 로컬 폰트 (최우선)
-            os_module.path.join(base_dir, "static/fonts/NanumSquareRoundB.ttf"),
-            os_module.path.join(base_dir, "static/fonts/NanumGothicBold.ttf"),
-            os_module.path.join(base_dir, "static/fonts/NanumBarunGothicBold.ttf"),
+            os_module.path.join(base_dir, "fonts/NanumSquareB.ttf"),
+            os_module.path.join(base_dir, "fonts/NanumSquareRoundB.ttf"),
+            os_module.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
+            os_module.path.join(base_dir, "fonts/NanumBarunGothicBold.ttf"),
             # Linux (Render)
             "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -9422,10 +9423,20 @@ def api_image_analyze_script():
         data = request.get_json()
         script = data.get('script', '')
         content_type = data.get('content_type', 'drama')
-        image_style = data.get('image_style', 'nostalgic')
+        image_style = data.get('image_style', 'realistic')
+        image_count = data.get('image_count', 4)  # 기본 4개
+        audience = data.get('audience', 'senior')  # 시니어/일반 타겟
 
         if not script:
             return jsonify({"ok": False, "error": "대본이 필요합니다"}), 400
+
+        # 시니어 썸네일 가이드 로드
+        senior_thumbnail_guide = None
+        try:
+            with open('guides/senior-thumbnail-guide.json', 'r', encoding='utf-8') as f:
+                senior_thumbnail_guide = json.load(f)
+        except:
+            pass
 
         # 가이드 파일 로드
         guides = load_prompt_guides()
@@ -9435,16 +9446,69 @@ def api_image_analyze_script():
         # 시대 감성 스타일 가이드
         era_guide = korean_senior.get('era_1970s_1980s', {}).get('visual_style', {}) if korean_senior else {}
         style_guides = {
-            'nostalgic': era_guide.get('film_look', '1970s-1980s South Korea nostalgic atmosphere, vintage Korean film photography, slightly faded warm colors, film grain texture'),
-            'realistic': 'photorealistic, high quality photography, natural lighting, sharp focus',
-            'cinematic': 'cinematic lighting, dramatic composition, movie still quality, shallow depth of field',
-            'warm': 'warm color tones, soft diffused lighting, cozy atmosphere, golden hour warmth'
+            'realistic': 'photorealistic, high quality photography, natural lighting, sharp focus, cinematic composition',
+            'animation': 'STICKMAN_STYLE'  # 특별 처리 필요
         }
 
-        style_desc = style_guides.get(image_style, '')
+        style_desc = style_guides.get(image_style, 'photorealistic')
 
-        # 콘텐츠 타입별 시스템 프롬프트 분기
-        if content_type == 'product':
+        # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트
+        if image_style == 'animation':
+            system_prompt = """You are an AI that generates image prompts for a specific STICKMAN DRAMA visual style.
+
+## REQUIRED VISUAL STYLE
+- Background: detailed, realistic, anime slice-of-life illustration with soft lighting and gentle colors.
+- Foreground character: a simple stickman figure with a round white head, two dots for eyes, one line for mouth, black outline, white body, minimal details.
+- The stickman character must always look 2D, simple, and symbolic, while the background should be more complex and emotional.
+
+## RULES
+1. Characters NEVER have detailed faces. Use only simple shapes (circle head, dot eyes, line mouth).
+2. Emotions must be expressed through POSTURE and GESTURES, not facial expressions.
+   - 긴장: head down, shoulders hunched
+   - 기쁨: arms raised, body leaning forward
+   - 슬픔: head tilted down, arms limp
+   - 결의: standing straight, fist on chest
+3. Always include realistic locations (clinic entrance, hospital waiting room, street, home, office, etc.)
+4. If a sign or location name appears, include: signboard text: "한국어 텍스트"
+5. Always describe: time of day, lighting, weather/atmosphere, character actions, surrounding objects
+
+## MANDATORY STYLE TAGS (ALWAYS APPEND TO EVERY PROMPT)
+illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting, 2D character on detailed background, emotional slice-of-life
+
+## OUTPUT FORMAT (MUST BE JSON)
+{
+  "youtube": {
+    "titles": [
+      "유튜브 제목 1 (클릭 유도, 50자 이내)",
+      "유튜브 제목 2 (감정 강조)",
+      "유튜브 제목 3 (궁금증 유발)",
+      "유튜브 제목 4 (경험 공유형)"
+    ],
+    "description": "유튜브 설명란 (영상 내용 요약 + 해시태그 포함, 500자 이상)"
+  },
+  "thumbnail": {
+    "text_options": ["썸네일 텍스트1 (5~7자)", "썸네일 텍스트2 (5~7자)", "썸네일 텍스트3 (5~7자)"],
+    "text_color": "#FFD700",
+    "outline_color": "#000000",
+    "prompt": "Thumbnail prompt with simple stickman in emotional pose, detailed anime background, illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+  },
+  "scenes": [
+    {
+      "scene_number": 1,
+      "narration": "한국어 나레이션",
+      "image_prompt": "Scene description with simple stickman character doing [action], [location with details], [time of day], [lighting], [mood]. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+    }
+  ]
+}
+
+## EXAMPLE PROMPTS
+- "Early morning in front of a small Korean clinic with cherry blossom trees, petals falling in the wind, signboard text: '박선생 내과의원'. A simple stickman doctor holding a brown paper bag, standing at entrance, soft sunlight. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+- "Inside a cozy Korean home living room, warm afternoon light through window, traditional furniture. Simple stickman grandmother sitting on floor cushion, hands folded, peaceful expression through relaxed posture. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+- "1980s Seoul street at night, neon signs glowing, light rain, signboard text: '미래다방'. Simple stickman young man walking alone, head slightly down, hands in pockets. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+"""
+
+        # 콘텐츠 타입별 시스템 프롬프트 분기 (실사 스타일)
+        elif content_type == 'product':
             # 상품 소개 콘텐츠
             system_prompt = f"""당신의 역할은 상품 소개 대본을 분석하여 AI 이미지용 프롬프트를 전문적으로 작성하는 비서입니다.
 
@@ -9495,12 +9559,42 @@ def api_image_analyze_script():
   ]
 }}"""
         else:
-            # 드라마/스토리 콘텐츠 (기본값)
+            # 드라마/스토리 콘텐츠 (기본값) - audience에 따라 다른 규칙 적용
+            # audience별 썸네일 규칙 설정
+            if audience == 'general':
+                thumbnail_rules = """## 일반용 썸네일 문구 규칙 (중요!)
+일반 타겟(20-40대) 썸네일은 "궁금증/자극"을 유발해야 합니다.
+
+1. **문구 길이**: 4-7자 (짧고 강렬하게!)
+2. **문구 유형**:
+   - 자극형: "결국 터졌다", "이게 실화?", "완전 미쳤다"
+   - 궁금증형: "왜 아무도 안알려줬지?", "이것만 알면", "진짜 이유"
+   - 충격형: "소름 돋았다", "역대급 반전", "충격 실화"
+3. **색상 조합**: 흰색+검정, 빨강+검정 (강한 대비)
+4. **구도**: 중앙 텍스트 + 어두운 배경/실루엣"""
+                thumbnail_color = "#FFFFFF"
+                outline_color = "#000000"
+            else:
+                thumbnail_rules = """## 시니어용 썸네일 문구 규칙 (중요!)
+시니어 타겟(50-70대) 썸네일은 "경험을 떠올리게" 해야 합니다.
+
+1. **문구 길이**: 8-12자 (노안 고려, 읽기 쉽게)
+2. **문구 유형**:
+   - 회상형: "그날을 잊지 않는다", "처음엔 몰랐다", "돌아보면 눈물이 난다"
+   - 후회/교훈형: "하는 게 아니었다", "늦게 알았다", "왜 그랬을까"
+   - 경험 공유형: "다 겪어봤다", "나도 그랬다", "누구나 그런 날 있다"
+3. **색상 조합**: 노랑+검정이 최고 CTR (text_color에 반영)
+4. **구도**: 왼쪽 상단 텍스트 + 오른쪽 인물/상황"""
+                thumbnail_color = "#FFD700"
+                outline_color = "#000000"
+
             system_prompt = f"""당신의 역할은 대본을 분석하여 AI 이미지용 프롬프트를 전문적으로 작성하는 비서입니다.
+타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
 ## 핵심 작업
 1. 대본에서 주인공의 나이, 성별, 직업, 외모 특징을 자동으로 추출합니다.
 2. 추출된 인물 정보를 바탕으로 일관된 이미지 프롬프트를 생성합니다.
+3. 타겟 시청자에 맞는 유튜브 채널용 썸네일 텍스트와 프롬프트를 생성합니다.
 
 ## 한국인 인물 프롬프트 규칙
 - 한국인이 등장하면 반드시 "Korean" 또는 "South Korean"을 명시합니다.
@@ -9509,12 +9603,14 @@ def api_image_analyze_script():
 - 젊은 여성: "Young Korean woman, 20s-30s, modern Korean beauty features"
 - 젊은 남성: "Young Korean man, 20s-30s, clean-cut Korean features"
 
+{thumbnail_rules}
+
 ## 프롬프트 작성 원칙
 1. 출력 프롬프트는 항상 영어로 작성합니다.
 2. 프롬프트는 짧지만 정보 밀도가 높은 한 문단으로 작성합니다.
 3. 다음 요소를 포함합니다:
    - [subject] 피사체/장면 - 프롬프트 맨 앞에 배치 (인물 특징 상세히)
-   - [environment] 배경, 장소
+   - [environment] 배경, 장소 (한국적 공간: 병원, 골목, 시장, 기차역 등)
    - [lighting] 조명 (soft natural light, warm golden hour, dramatic side lighting)
    - [color] 색감·톤 (warm tones, muted colors, film color grading)
    - [camera] 샷 종류(wide/medium/close-up), 렌즈(50mm/85mm), depth of field
@@ -9526,11 +9622,24 @@ def api_image_analyze_script():
 
 ## 출력 형식 (반드시 JSON)
 {{
+  "youtube": {{
+    "titles": [
+      "유튜브 제목 1 (클릭 유도, 50자 이내)",
+      "유튜브 제목 2 (감정 강조)",
+      "유튜브 제목 3 (궁금증 유발)",
+      "유튜브 제목 4 (경험 공유형)"
+    ],
+    "description": "유튜브 설명란 (영상 내용 요약 + 해시태그 포함, 500자 이상)"
+  }},
   "thumbnail": {{
-    "title": "유튜브 썸네일용 한글 제목 (짧고 임팩트 있게)",
-    "text_lines": ["1줄: 훅/숫자", "2줄: 핵심 인물", "3줄: 감정/강조", "4줄: 궁금증 유발"],
-    "highlight_line": 2,
-    "prompt": "English thumbnail image prompt - close-up or medium shot of main character with dramatic expression"
+    "text_options": [
+      "썸네일 텍스트 옵션1 ({'4-7자' if audience == 'general' else '8-12자'})",
+      "썸네일 텍스트 옵션2 ({'4-7자' if audience == 'general' else '8-12자'})",
+      "썸네일 텍스트 옵션3 ({'4-7자' if audience == 'general' else '8-12자'})"
+    ],
+    "text_color": "{thumbnail_color}",
+    "outline_color": "{outline_color}",
+    "prompt": "Thumbnail prompt - {'dark dramatic background, silhouette, high contrast, text space center' if audience == 'general' else 'character in emotional pose, Korean setting (hospital/street/home), warm nostalgic lighting, text space on left, slightly blurred background 5%'}"
   }},
   "scenes": [
     {{
@@ -9539,18 +9648,60 @@ def api_image_analyze_script():
       "image_prompt": "English image prompt with subject, environment, lighting, color, camera, style, mood"
     }}
   ]
-}}"""
+}}
 
-        user_prompt = f"""대본:
+## 유튜브 제목 작성 규칙
+1. 시니어 타겟: 경험, 회상, 교훈 키워드 포함
+2. 50자 이내로 작성
+3. 숫자, 감정, 질문 등 클릭 유도 요소 포함
+4. 예시: "의사 30년, 아직도 후회하는 그 환자", "늦게 알았습니다... 그때 그 말"
+
+## 유튜브 설명란 작성 규칙
+1. 영상 내용 3줄 요약
+2. 관련 해시태그 5개 이상
+3. 구독/좋아요 유도 문구
+4. 500자 이상 작성"""
+
+        # 스타일별 user prompt 분기
+        if image_style == 'animation':
+            user_prompt = f"""대본:
 {script}
 
-위 대본을 4~8개 씬으로 분리하고, 각 씬에 맞는 전문가급 이미지 프롬프트를 생성해주세요.
-프롬프트는 반드시 영어로, 위의 작성 원칙을 따라주세요."""
+위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 스틱맨 드라마 이미지 프롬프트를 생성해주세요.
 
-        print(f"[IMAGE-ANALYZE] GPT-4o로 이미지 프롬프트 생성 중... (콘텐츠 타입: {content_type})")
+중요 규칙:
+1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
+2. 모든 캐릭터는 반드시 simple stickman (둥근 머리, 점 2개 눈, 선 1개 입, 검은 윤곽선)으로 표현
+3. 배경은 디테일한 애니메이션 스타일 (anime slice-of-life)
+4. 감정은 자세와 몸짓으로만 표현 (표정 X)
+5. 간판이나 장소명이 나오면 signboard text: "한글텍스트" 형식 포함
+6. 모든 프롬프트 끝에 필수 태그 추가: illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting
+7. 썸네일 문구는 시니어 타겟 (12자 이하, 감정+사건)
+
+프롬프트는 반드시 영어로 작성해주세요."""
+        else:
+            # audience에 따른 썸네일 규칙
+            if audience == 'general':
+                thumbnail_instruction = "썸네일 문구는 일반 타겟 (4-7자 이하, 자극형/궁금증형/충격형)"
+            else:
+                thumbnail_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형/경험공유형)"
+
+            user_prompt = f"""대본:
+{script}
+
+위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 전문가급 이미지 프롬프트를 생성해주세요.
+
+타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
+
+중요:
+1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
+2. {thumbnail_instruction}
+3. 프롬프트는 반드시 영어로, 위의 작성 원칙을 따라주세요."""
+
+        print(f"[IMAGE-ANALYZE] GPT-5.1로 이미지 프롬프트 생성 중... (스타일: {image_style}, 콘텐츠: {content_type}, 타겟: {audience})")
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.1",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -9559,18 +9710,21 @@ def api_image_analyze_script():
             response_format={"type": "json_object"}
         )
 
-        print(f"[IMAGE-ANALYZE] GPT-4o 응답 완료")
+        print(f"[IMAGE-ANALYZE] GPT-5.1 응답 완료")
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
 
         return jsonify({
             "ok": True,
+            "youtube": result.get("youtube", {}),
             "thumbnail": result.get("thumbnail", {}),
             "scenes": result.get("scenes", []),
             "settings": {
                 "content_type": content_type,
-                "image_style": image_style
+                "image_style": image_style,
+                "image_count": image_count,
+                "audience": audience
             }
         })
 
@@ -10625,6 +10779,797 @@ def generate_thumbnail_with_text():
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== 시니어 썸네일 문장 자동 생성 API =====
+SENIOR_THUMBNAIL_SYSTEM_PROMPT = """You are an assistant that generates short, highly clickable Korean YouTube thumbnail texts
+for a senior (50–70+) audience watching emotional drama and 회상/간증 스타일 videos.
+
+[RULES]
+
+1. Output only Korean text for thumbnail titles.
+2. Each line must be:
+   - 5~12 Korean characters
+   - Easy to read
+   - Emotionally evocative (memory, regret, gratitude, realization, first time, etc.)
+3. Target viewers:
+   - Korean seniors (50–70+)
+   - They respond to: 기억, 후회, 깨달음, 첫 경험, 가족, 부모, 첫사랑, 병원, 삶의 전환점
+4. Avoid:
+   - Internet slang, 영어, 광고 느낌 단어 (구독, 클릭, 유튜브 등)
+   - Abstract or vague words only (must hint at a concrete situation or feeling)
+5. Style examples:
+   - 그날을 잊지 않는다
+   - 처음엔 몰랐다
+   - 늦게 알았다
+   - 엄마의 마지막 부탁
+   - 왜 그랬을까
+   - 다시 만난 그 자리
+   - 하는 게 아니었다
+   - 다 겪어봤다
+   - 누구나 그런 날 있다
+
+[INPUT]
+You will receive a JSON with:
+- scene_summary: short description of the drama scene
+- tone: target emotional tone (e.g. "회상", "후회", "감사")
+- max_length: maximum character length for one line
+- num_candidates: how many lines to generate
+- keywords: optional list of words to reflect
+- ban_words: optional list of words to never use
+
+[OUTPUT]
+Return ONLY a JSON object:
+
+{
+  "candidates": [
+    {"text": "...", "emotion": "...", "intensity": 0.0},
+    ...
+  ]
+}
+
+Where:
+- text: the thumbnail phrase (Korean only, within max_length)
+- emotion: guessed emotional tag like "회상", "후회", "감사", "그리움", "깨달음", "긴장", "기적", "이별", "재회"
+- intensity: 0.0–1.0 indicating how strong the emotion feels.
+"""
+
+@app.route('/api/thumbnail/senior-titles', methods=['POST'])
+def api_thumbnail_senior_titles():
+    """시니어용 썸네일 문장 자동 생성 API"""
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        data = request.get_json() or {}
+
+        scene_summary = data.get("scene_summary", "")
+        tone = data.get("tone", "회상")
+        max_length = data.get("max_length", 12)
+        num_candidates = data.get("num_candidates", 10)
+        keywords = data.get("keywords", [])
+        ban_words = data.get("ban_words", [])
+        language = data.get("language", "ko")
+
+        # 최소 입력 체크
+        if not scene_summary:
+            return jsonify({"ok": False, "error": "scene_summary is required"}), 400
+
+        user_payload = {
+            "scene_summary": scene_summary,
+            "tone": tone,
+            "max_length": max_length,
+            "num_candidates": num_candidates,
+            "keywords": keywords,
+            "ban_words": ban_words,
+            "language": language,
+        }
+
+        print(f"[THUMBNAIL] 시니어 썸네일 문장 생성 요청 - tone: {tone}, candidates: {num_candidates}")
+
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",  # 빠르고 저렴한 모델 사용
+            messages=[
+                {"role": "system", "content": SENIOR_THUMBNAIL_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)}
+            ],
+            temperature=0.8,  # 다양성을 위해 약간 높게
+            response_format={"type": "json_object"}
+        )
+
+        result = completion.choices[0].message.content
+        result_json = json.loads(result)
+
+        # 글자 수 계산 추가
+        candidates = result_json.get("candidates", [])
+        for c in candidates:
+            c["length"] = len(c.get("text", ""))
+
+        print(f"[THUMBNAIL] 생성 완료 - {len(candidates)}개 후보")
+
+        return jsonify({
+            "ok": True,
+            "scene_summary": scene_summary,
+            "tone": tone,
+            "candidates": candidates
+        })
+
+    except Exception as e:
+        print(f"[THUMBNAIL][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ===== 통합 썸네일 디자인 자동 생성 API (스타일 포함) =====
+THUMBNAIL_STYLE_PRESETS = {
+    "nostalgia": {
+        "name": "시니어 감성",
+        "description": "세피아, 추억, 따뜻한 회상 느낌",
+        "audience": "senior",
+        "colors": {
+            "background": "#F7EFE5",
+            "text": "#373431",
+            "accent": "#D19C66",
+            "outline": "#2B2B2B"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "700",
+            "size": "72px",
+            "letter_spacing": "2px"
+        },
+        "layout": {
+            "position": "left-top",
+            "padding": "32px",
+            "text_box": True,
+            "text_box_opacity": 0.7
+        },
+        "image_style": "warm sepia tone, soft focus, nostalgic film grain, 1970s Korean aesthetic"
+    },
+    "clinic_warm": {
+        "name": "따뜻한 병원",
+        "description": "청결하면서도 따뜻한 의료 컨셉",
+        "audience": "senior",
+        "colors": {
+            "background": "#E8F4F8",
+            "text": "#1A365D",
+            "accent": "#4299E1",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumBarunGothicBold",
+            "weight": "700",
+            "size": "68px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "top-center",
+            "padding": "28px",
+            "text_box": True,
+            "text_box_opacity": 0.85
+        },
+        "image_style": "clean Korean clinic interior, soft natural light, warm atmosphere, modern medical setting"
+    },
+    "dramatic_conflict": {
+        "name": "강렬한 갈등",
+        "description": "어두운 배경 + 강렬한 노란 강조",
+        "audience": "senior",
+        "colors": {
+            "background": "#1A1A1A",
+            "text": "#FFD700",
+            "accent": "#FF4444",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "80px",
+            "letter_spacing": "0px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "24px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "dark moody atmosphere, dramatic lighting, high contrast shadows, intense emotional moment"
+    },
+    "family_tearjerker": {
+        "name": "가족 감동",
+        "description": "파스텔톤, 가족/부모 테마",
+        "audience": "senior",
+        "colors": {
+            "background": "#FFF5F5",
+            "text": "#4A3728",
+            "accent": "#E57373",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumMyeongjoBold",
+            "weight": "700",
+            "size": "64px",
+            "letter_spacing": "3px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "36px",
+            "text_box": True,
+            "text_box_opacity": 0.6
+        },
+        "image_style": "soft pastel colors, gentle lighting, family moments, warm emotional scene, Korean home setting"
+    },
+    "calm_documentary": {
+        "name": "차분한 다큐",
+        "description": "실제 사진 그대로, 담백한 톤",
+        "audience": "senior",
+        "colors": {
+            "background": "#F5F5F5",
+            "text": "#2D3748",
+            "accent": "#3182CE",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumBarunGothic",
+            "weight": "600",
+            "size": "60px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "bottom-left",
+            "padding": "24px",
+            "text_box": True,
+            "text_box_opacity": 0.9
+        },
+        "image_style": "realistic photography, natural colors, documentary style, authentic Korean setting"
+    },
+    "newspaper_retro": {
+        "name": "신문 레트로",
+        "description": "흑백 헤드라인 스타일",
+        "audience": "senior",
+        "colors": {
+            "background": "#FFFEF0",
+            "text": "#1A1A1A",
+            "accent": "#8B0000",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumMyeongjoBold",
+            "weight": "900",
+            "size": "76px",
+            "letter_spacing": "4px"
+        },
+        "layout": {
+            "position": "top-center",
+            "padding": "20px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "black and white photo, newspaper grain texture, vintage print style, bold headline aesthetic"
+    },
+    # ===== 일반용 스타일 (General Audience) =====
+    "breaking_news": {
+        "name": "속보/긴급",
+        "description": "붉은 배경, 속보/드디어/방금",
+        "audience": "general",
+        "colors": {
+            "background": "#8B0000",
+            "text": "#FFFFFF",
+            "accent": "#FFD700",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "84px",
+            "letter_spacing": "0px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "20px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "high contrast dramatic lighting, dark silhouette, red warning atmosphere, news broadcast style, empty space for text, YouTube thumbnail composition, no text, 16:9"
+    },
+    "crime": {
+        "name": "사건/범죄",
+        "description": "어두운 인물 실루엣, 강한 대비",
+        "audience": "general",
+        "colors": {
+            "background": "#131313",
+            "text": "#FFFFFF",
+            "accent": "#E60000",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "80px",
+            "letter_spacing": "0px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "24px",
+            "text_box": True,
+            "text_box_opacity": 0.5
+        },
+        "image_style": "high contrast dark background, silhouette of unknown person, red warning light, dramatic shadow, cinematic noir style, empty space for bold text, YouTube thumbnail composition, no text, 16:9"
+    },
+    "tech": {
+        "name": "테크/설명",
+        "description": "파란색 계열, 방법/해결/최적",
+        "audience": "general",
+        "colors": {
+            "background": "#0A1628",
+            "text": "#FFFFFF",
+            "accent": "#00D4FF",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumBarunGothicBold",
+            "weight": "700",
+            "size": "72px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "left-center",
+            "padding": "28px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "clean tech aesthetic, blue gradient background, modern digital style, futuristic lighting, sharp details, empty space for text, YouTube thumbnail composition, no text, 16:9"
+    },
+    "money": {
+        "name": "경제/재테크",
+        "description": "숫자 강조, 기회/수익",
+        "audience": "general",
+        "colors": {
+            "background": "#1A1A2E",
+            "text": "#00FF88",
+            "accent": "#FFD700",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "80px",
+            "letter_spacing": "0px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "24px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "financial chart background, money growth concept, green and gold colors, stock market aesthetic, clean composition, empty space for text, YouTube thumbnail style, no text, 16:9"
+    },
+    "vlog": {
+        "name": "브이로그/일상",
+        "description": "밝은 실제 사진, 진짜/처음/해봤다",
+        "audience": "general",
+        "colors": {
+            "background": "#FFFFFF",
+            "text": "#1A1A1A",
+            "accent": "#FF6B6B",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumSquareRoundB",
+            "weight": "700",
+            "size": "68px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "bottom-center",
+            "padding": "24px",
+            "text_box": True,
+            "text_box_opacity": 0.8
+        },
+        "image_style": "bright natural lighting, lifestyle photography, warm friendly atmosphere, authentic moment, clean background, empty space for text, YouTube thumbnail style, no text, 16:9"
+    },
+    "dramatic": {
+        "name": "드라마/감정폭발",
+        "description": "얼굴 클로즈업, 왜/몰랐다/그날",
+        "audience": "general",
+        "colors": {
+            "background": "#0D0D0D",
+            "text": "#FFFFFF",
+            "accent": "#FF4444",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "88px",
+            "letter_spacing": "-2px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "20px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "extreme close-up face, intense emotion, dramatic side lighting, high contrast shadows, cinematic portrait, dark background, empty space for text, YouTube thumbnail style, no text, 16:9"
+    }
+}
+
+THUMBNAIL_DESIGN_SYSTEM_PROMPT = """You are an AI system that generates fully structured YouTube thumbnail design data
+based on a single scene description.
+You must follow the "Thumbnail JSON Schema v1".
+
+Your output must ALWAYS be a valid JSON that matches the "result" structure.
+Do not include explanations, plain text, or markdown — ONLY output JSON.
+
+====================
+PRIMARY OBJECTIVE
+====================
+
+Given a scene summary and metadata (audience type, channel type, style preference),
+generate:
+
+1) Thumbnail short text candidates (for Korean thumbnails)
+2) Emotion and intensity classification
+3) Style selection (auto if needed)
+4) Typography recommendation (font, weight, size hint)
+5) Layout suggestion (alignment, position, padding)
+6) Color palette suggestion (HEX codes)
+7) Image-generation prompt (for AI tools like ImageFX, DALL-E, Midjourney)
+8) Optional "notes" to guide background-only image creation
+
+====================
+AUDIENCE RULES
+====================
+
+If "audience": "senior":
+
+- Text length: 8–12 Korean characters
+- Use emotions: 회상, 후회, 그리움, 감사, 깨달음, 기다림
+- Avoid clickbait, avoid slang, avoid excessive punctuation
+- Preferred tones: nostalgia, calm, warm, old photo, clinic, family
+- Friendly and reflective titles
+- Recommended style keys:
+  - "nostalgia"
+  - "clinic_warm"
+  - "family_tearjerker"
+  - "calm_documentary"
+  - "dramatic_conflict"
+  - "newspaper_retro"
+- Colors: low contrast, pastel, film, vintage tones
+
+If "audience": "general":
+
+- Text length: 4–7 Korean characters
+- Use emotions: 긴장, 궁금, 분노, 위기, 충격
+- Clickbait allowed (but stay concise, clear, not abusive)
+- Preferred tones: dramatic, breaking_news, crime, tech, money
+- Recommended style keys:
+  - "breaking_news"
+  - "crime"
+  - "tech"
+  - "money"
+  - "vlog"
+  - "dramatic"
+- Colors: high contrast, red/yellow/black/white dominant
+
+====================
+TEXT GENERATION RULES
+====================
+
+- ONLY Korean text for "text" field
+- Character count must not exceed "max_length"
+- Avoid banned words included in "ban_words"
+- At least one candidate must focus on a clear emotional center
+- Do not generate English mixed headlines
+- NEVER include "유튜브", "클릭", "구독" words
+
+====================
+IMAGE PROMPT RULES
+====================
+
+Image-generation prompts must:
+
+- NOT contain text
+- NOT contain watermark
+- MUST describe background only (no title text rendered inside image)
+- MUST include clear space ("negative space") for text placement
+- ALWAYS include cinematic composition instruction
+- Format: 16:9, no characters unless silhouette is needed
+
+Senior image prompt guidance:
+- "soft light", "vintage photo", "nostalgic Korean street",
+- "film texture", "pastel tones", "calm spring morning",
+- "empty clinic entrance", "falling cherry blossoms"
+
+General image prompt guidance:
+- "high contrast dramatic lighting", "dark background",
+- "silhouette", "red warning light", "empty urban alley",
+- "strong color accent", "center composition", "sharp clarity"
+
+====================
+STYLE AUTO-SELECTION RULES
+====================
+
+If "style": "auto",
+choose style from the "recommended style keys" based on:
+
+- scene_summary keywords
+- audience type
+- channel_type
+
+Examples:
+- scene contains "first day, 진료소, 병원" → "clinic_warm"
+- scene contains "사건, 피해, 증거, 진실" → "crime"
+- scene contains "기억, 편지, 마지막" → "nostalgia"
+- scene contains "돈, 투자, 수익" → "money"
+- scene contains "기술, 방법, 해결" → "tech"
+- scene contains "가족, 부모, 엄마, 아빠" → "family_tearjerker"
+
+====================
+REQUIRED OUTPUT FORMAT (JSON only)
+====================
+
+The final output MUST be a JSON object shaped as:
+
+{
+  "scene_summary": "...",
+  "audience": "...",
+  "channel_type": "...",
+  "style_auto_selected": "...",
+  "candidates": [
+    {
+      "id": "thumb_001",
+      "text": "...",
+      "length": 7,
+      "audience": "...",
+      "emotion": "...",
+      "intensity": 0.7,
+      "style_profile": {
+        "style_key": "...",
+        "tone": "...",
+        "category": "..."
+      },
+      "design": {
+        "layout": {
+          "position": "bottom-left",
+          "text_box": true,
+          "padding": 32,
+          "max_lines": 2,
+          "alignment": "left"
+        },
+        "colors": {
+          "background": "#F2E7D5",
+          "text": "#2B2B2B",
+          "accent": "#A67C52",
+          "suggested_palette": [
+            "#F2E7D5",
+            "#2B2B2B",
+            "#A67C52",
+            "#FFFFFF"
+          ]
+        },
+        "font": {
+          "family": "Noto Sans KR",
+          "weight": "900",
+          "size_hint": "72px",
+          "line_spacing": 1.1
+        }
+      },
+      "image_prompt": {
+        "prompt": "...(AI image-generation prompt)...",
+        "notes": "Background only for thumbnail. No text."
+      }
+    }
+  ]
+}
+
+====================
+VALIDATION RULES
+====================
+
+- ALWAYS return at least 3 candidates
+- NEVER leave any field empty
+- HEX codes must be valid (#RRGGBB)
+- "size_hint" must contain "px"
+- intensity value must be between 0.0 and 1.0
+
+====================
+OUTPUT LANGUAGE
+====================
+
+- Korean for "text"
+- English for "image_prompt"
+
+====================
+FAIL CASE INSTRUCTIONS
+====================
+
+If the request lacks "scene_summary", reply with:
+
+{
+  "error": "scene_summary is required"
+}
+
+NO free text, NO apology.
+
+====================
+END OF SYSTEM PROMPT
+====================
+"""
+
+@app.route('/api/thumbnail/generate', methods=['POST'])
+def api_thumbnail_generate():
+    """통합 썸네일 디자인 자동 생성 API v1 (스타일 + 디자인 + 이미지 프롬프트 포함)"""
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        data = request.get_json() or {}
+
+        # v1 스키마 파라미터
+        scene_summary = data.get("scene_summary", "")
+        audience = data.get("audience", "senior")  # senior / general
+        channel_type = data.get("channel_type", "drama")  # drama / issue / vlog / sermon / news
+        style = data.get("style", "auto")  # auto = AI가 자동 선택
+        num_candidates = data.get("num_candidates", 10)
+        max_length = data.get("max_length", 12 if audience == "senior" else 7)
+        language = data.get("language", "ko")
+        keywords = data.get("keywords", [])
+        ban_words = data.get("ban_words", ["구독", "유튜브", "클릭"])
+        options = data.get("options", {
+            "generate_layout": True,
+            "generate_palette": True,
+            "generate_image_prompt": True
+        })
+
+        if not scene_summary:
+            return jsonify({"ok": False, "error": "scene_summary is required"}), 400
+
+        # audience에 맞는 스타일만 필터링
+        available_styles = [
+            key for key, preset in THUMBNAIL_STYLE_PRESETS.items()
+            if preset.get("audience") == audience
+        ]
+
+        # 기본 스타일 (audience에 맞게)
+        default_style = "nostalgia" if audience == "senior" else "breaking_news"
+
+        user_payload = {
+            "scene_summary": scene_summary,
+            "audience": audience,
+            "channel_type": channel_type,
+            "style": style,
+            "available_styles": available_styles,
+            "num_candidates": num_candidates,
+            "max_length": max_length,
+            "language": language,
+            "keywords": keywords,
+            "ban_words": ban_words,
+            "options": options
+        }
+
+        print(f"[THUMBNAIL-DESIGN-V1] 통합 썸네일 생성 요청")
+        print(f"  - audience: {audience}, channel_type: {channel_type}, style: {style}")
+        print(f"  - available_styles: {available_styles}")
+
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": THUMBNAIL_DESIGN_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)}
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"}
+        )
+
+        result = completion.choices[0].message.content
+        result_json = json.loads(result)
+
+        # 에러 체크
+        if "error" in result_json:
+            return jsonify({"ok": False, "error": result_json["error"]}), 400
+
+        # 추천된 스타일 가져오기
+        style_auto_selected = result_json.get("style_auto_selected", default_style)
+        if style != "auto" and style in THUMBNAIL_STYLE_PRESETS:
+            style_auto_selected = style  # 사용자가 직접 지정한 경우
+
+        # 스타일이 audience에 맞는지 확인
+        if style_auto_selected not in available_styles:
+            style_auto_selected = default_style
+
+        style_preset = THUMBNAIL_STYLE_PRESETS.get(style_auto_selected, THUMBNAIL_STYLE_PRESETS[default_style])
+
+        # 각 후보에 디자인 정보 보강 (GPT 출력에 없는 경우 프리셋으로 대체)
+        candidates = result_json.get("candidates", [])
+        for i, c in enumerate(candidates):
+            c["id"] = c.get("id", f"thumb_{str(i+1).zfill(3)}")
+            c["length"] = len(c.get("text", ""))
+            c["audience"] = audience
+
+            # design 보강
+            if "design" not in c or not c["design"]:
+                c["design"] = {
+                    "layout": style_preset["layout"],
+                    "colors": style_preset["colors"],
+                    "font": style_preset["font"]
+                }
+            else:
+                # 부분적으로 누락된 경우 보강
+                if "layout" not in c["design"]:
+                    c["design"]["layout"] = style_preset["layout"]
+                if "colors" not in c["design"]:
+                    c["design"]["colors"] = style_preset["colors"]
+                if "font" not in c["design"]:
+                    c["design"]["font"] = style_preset["font"]
+
+            # image_prompt 보강
+            if "image_prompt" not in c or not c["image_prompt"]:
+                c["image_prompt"] = {
+                    "prompt": style_preset["image_style"] + ", YouTube thumbnail composition, no text, 16:9",
+                    "notes": "Background only for thumbnail. No text."
+                }
+
+        print(f"[THUMBNAIL-DESIGN-V1] 생성 완료 - style: {style_auto_selected}, {len(candidates)}개 후보")
+
+        # v1 스키마 응답
+        return jsonify({
+            "ok": True,
+            "version": "1.0",
+            "scene_summary": scene_summary,
+            "audience": audience,
+            "channel_type": channel_type,
+            "style_auto_selected": style_auto_selected,
+            "style_preset": {
+                "key": style_auto_selected,
+                "name": style_preset["name"],
+                "description": style_preset["description"],
+                "colors": style_preset["colors"],
+                "font": style_preset["font"],
+                "layout": style_preset["layout"],
+                "image_style": style_preset["image_style"]
+            },
+            "candidates": candidates
+        })
+
+    except Exception as e:
+        print(f"[THUMBNAIL-DESIGN-V1][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/thumbnail/styles', methods=['GET'])
+def api_thumbnail_styles():
+    """사용 가능한 썸네일 스타일 목록 조회 (audience 필터 지원)"""
+    audience_filter = request.args.get("audience")  # senior / general / None(전체)
+
+    styles = []
+    for key, preset in THUMBNAIL_STYLE_PRESETS.items():
+        preset_audience = preset.get("audience", "senior")
+
+        # audience 필터 적용
+        if audience_filter and preset_audience != audience_filter:
+            continue
+
+        styles.append({
+            "key": key,
+            "name": preset["name"],
+            "description": preset["description"],
+            "audience": preset_audience,
+            "colors": preset["colors"],
+            "font": preset["font"],
+            "layout": preset["layout"]
+        })
+
+    return jsonify({
+        "ok": True,
+        "audience_filter": audience_filter,
+        "total": len(styles),
+        "styles": styles
+    })
 
 
 # ===== Render 배포를 위한 설정 =====
