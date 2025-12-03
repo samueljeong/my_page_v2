@@ -10751,6 +10751,127 @@ def generate_thumbnail_with_text():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ===== 시니어 썸네일 문장 자동 생성 API =====
+SENIOR_THUMBNAIL_SYSTEM_PROMPT = """You are an assistant that generates short, highly clickable Korean YouTube thumbnail texts
+for a senior (50–70+) audience watching emotional drama and 회상/간증 스타일 videos.
+
+[RULES]
+
+1. Output only Korean text for thumbnail titles.
+2. Each line must be:
+   - 5~12 Korean characters
+   - Easy to read
+   - Emotionally evocative (memory, regret, gratitude, realization, first time, etc.)
+3. Target viewers:
+   - Korean seniors (50–70+)
+   - They respond to: 기억, 후회, 깨달음, 첫 경험, 가족, 부모, 첫사랑, 병원, 삶의 전환점
+4. Avoid:
+   - Internet slang, 영어, 광고 느낌 단어 (구독, 클릭, 유튜브 등)
+   - Abstract or vague words only (must hint at a concrete situation or feeling)
+5. Style examples:
+   - 그날을 잊지 않는다
+   - 처음엔 몰랐다
+   - 늦게 알았다
+   - 엄마의 마지막 부탁
+   - 왜 그랬을까
+   - 다시 만난 그 자리
+   - 하는 게 아니었다
+   - 다 겪어봤다
+   - 누구나 그런 날 있다
+
+[INPUT]
+You will receive a JSON with:
+- scene_summary: short description of the drama scene
+- tone: target emotional tone (e.g. "회상", "후회", "감사")
+- max_length: maximum character length for one line
+- num_candidates: how many lines to generate
+- keywords: optional list of words to reflect
+- ban_words: optional list of words to never use
+
+[OUTPUT]
+Return ONLY a JSON object:
+
+{
+  "candidates": [
+    {"text": "...", "emotion": "...", "intensity": 0.0},
+    ...
+  ]
+}
+
+Where:
+- text: the thumbnail phrase (Korean only, within max_length)
+- emotion: guessed emotional tag like "회상", "후회", "감사", "그리움", "깨달음", "긴장", "기적", "이별", "재회"
+- intensity: 0.0–1.0 indicating how strong the emotion feels.
+"""
+
+@app.route('/api/thumbnail/senior-titles', methods=['POST'])
+def api_thumbnail_senior_titles():
+    """시니어용 썸네일 문장 자동 생성 API"""
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        data = request.get_json() or {}
+
+        scene_summary = data.get("scene_summary", "")
+        tone = data.get("tone", "회상")
+        max_length = data.get("max_length", 12)
+        num_candidates = data.get("num_candidates", 10)
+        keywords = data.get("keywords", [])
+        ban_words = data.get("ban_words", [])
+        language = data.get("language", "ko")
+
+        # 최소 입력 체크
+        if not scene_summary:
+            return jsonify({"ok": False, "error": "scene_summary is required"}), 400
+
+        user_payload = {
+            "scene_summary": scene_summary,
+            "tone": tone,
+            "max_length": max_length,
+            "num_candidates": num_candidates,
+            "keywords": keywords,
+            "ban_words": ban_words,
+            "language": language,
+        }
+
+        print(f"[THUMBNAIL] 시니어 썸네일 문장 생성 요청 - tone: {tone}, candidates: {num_candidates}")
+
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",  # 빠르고 저렴한 모델 사용
+            messages=[
+                {"role": "system", "content": SENIOR_THUMBNAIL_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)}
+            ],
+            temperature=0.8,  # 다양성을 위해 약간 높게
+            response_format={"type": "json_object"}
+        )
+
+        result = completion.choices[0].message.content
+        result_json = json.loads(result)
+
+        # 글자 수 계산 추가
+        candidates = result_json.get("candidates", [])
+        for c in candidates:
+            c["length"] = len(c.get("text", ""))
+
+        print(f"[THUMBNAIL] 생성 완료 - {len(candidates)}개 후보")
+
+        return jsonify({
+            "ok": True,
+            "scene_summary": scene_summary,
+            "tone": tone,
+            "candidates": candidates
+        })
+
+    except Exception as e:
+        print(f"[THUMBNAIL][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
