@@ -661,10 +661,98 @@ JSON 외의 다른 텍스트(설명, 말투, 주석 등)는 절대로 출력하�
 
         result = json.loads(response.choices[0].message.content)
 
+        # save_to_db 파라미터가 true면 DB에 저장
+        save_to_db = data.get('save_to_db', False)
+        saved_events = []
+        saved_tasks = []
+
+        if save_to_db:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # 이벤트 저장
+            for event in result.get('events', []):
+                start_time = None
+                if event.get('date'):
+                    time_str = event.get('time') or '00:00'
+                    start_time = f"{event['date']}T{time_str}:00"
+
+                end_time = None
+                if event.get('date') and event.get('end_time'):
+                    end_time = f"{event['date']}T{event['end_time']}:00"
+
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        INSERT INTO events (title, start_time, end_time, category, source, sync_status)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    ''', (
+                        event.get('title'),
+                        start_time,
+                        end_time,
+                        event.get('category', '기타'),
+                        'gpt_parse',
+                        'pending_to_mac'
+                    ))
+                    event_id = cursor.fetchone()['id']
+                else:
+                    cursor.execute('''
+                        INSERT INTO events (title, start_time, end_time, category, source, sync_status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        event.get('title'),
+                        start_time,
+                        end_time,
+                        event.get('category', '기타'),
+                        'gpt_parse',
+                        'pending_to_mac'
+                    ))
+                    event_id = cursor.lastrowid
+
+                saved_events.append({'id': event_id, 'title': event.get('title')})
+
+            # 태스크 저장
+            for task in result.get('tasks', []):
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        INSERT INTO tasks (title, due_date, priority, category, source, sync_status)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    ''', (
+                        task.get('title'),
+                        task.get('due_date'),
+                        task.get('priority', 'normal'),
+                        task.get('category', '기타'),
+                        'gpt_parse',
+                        'pending_to_mac'
+                    ))
+                    task_id = cursor.fetchone()['id']
+                else:
+                    cursor.execute('''
+                        INSERT INTO tasks (title, due_date, priority, category, source, sync_status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        task.get('title'),
+                        task.get('due_date'),
+                        task.get('priority', 'normal'),
+                        task.get('category', '기타'),
+                        'gpt_parse',
+                        'pending_to_mac'
+                    ))
+                    task_id = cursor.lastrowid
+
+                saved_tasks.append({'id': task_id, 'title': task.get('title')})
+
+            conn.commit()
+            conn.close()
+
         return jsonify({
             'success': True,
             'parsed': result,
-            'original_text': text
+            'original_text': text,
+            'saved_to_db': save_to_db,
+            'saved_events': saved_events,
+            'saved_tasks': saved_tasks
         })
     except json.JSONDecodeError as e:
         return jsonify({'success': False, 'error': f'JSON 파싱 오류: {str(e)}'}), 500
