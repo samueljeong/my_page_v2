@@ -9435,16 +9435,60 @@ def api_image_analyze_script():
         # 시대 감성 스타일 가이드
         era_guide = korean_senior.get('era_1970s_1980s', {}).get('visual_style', {}) if korean_senior else {}
         style_guides = {
-            'nostalgic': era_guide.get('film_look', '1970s-1980s South Korea nostalgic atmosphere, vintage Korean film photography, slightly faded warm colors, film grain texture'),
-            'realistic': 'photorealistic, high quality photography, natural lighting, sharp focus',
-            'cinematic': 'cinematic lighting, dramatic composition, movie still quality, shallow depth of field',
-            'warm': 'warm color tones, soft diffused lighting, cozy atmosphere, golden hour warmth'
+            'realistic': 'photorealistic, high quality photography, natural lighting, sharp focus, cinematic composition',
+            'animation': 'STICKMAN_STYLE'  # 특별 처리 필요
         }
 
-        style_desc = style_guides.get(image_style, '')
+        style_desc = style_guides.get(image_style, 'photorealistic')
 
-        # 콘텐츠 타입별 시스템 프롬프트 분기
-        if content_type == 'product':
+        # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트
+        if image_style == 'animation':
+            system_prompt = """You are an AI that generates image prompts for a specific STICKMAN DRAMA visual style.
+
+## REQUIRED VISUAL STYLE
+- Background: detailed, realistic, anime slice-of-life illustration with soft lighting and gentle colors.
+- Foreground character: a simple stickman figure with a round white head, two dots for eyes, one line for mouth, black outline, white body, minimal details.
+- The stickman character must always look 2D, simple, and symbolic, while the background should be more complex and emotional.
+
+## RULES
+1. Characters NEVER have detailed faces. Use only simple shapes (circle head, dot eyes, line mouth).
+2. Emotions must be expressed through POSTURE and GESTURES, not facial expressions.
+   - 긴장: head down, shoulders hunched
+   - 기쁨: arms raised, body leaning forward
+   - 슬픔: head tilted down, arms limp
+   - 결의: standing straight, fist on chest
+3. Always include realistic locations (clinic entrance, hospital waiting room, street, home, office, etc.)
+4. If a sign or location name appears, include: signboard text: "한국어 텍스트"
+5. Always describe: time of day, lighting, weather/atmosphere, character actions, surrounding objects
+
+## MANDATORY STYLE TAGS (ALWAYS APPEND TO EVERY PROMPT)
+illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting, 2D character on detailed background, emotional slice-of-life
+
+## OUTPUT FORMAT (MUST BE JSON)
+{
+  "thumbnail": {
+    "title": "유튜브 썸네일용 한글 제목",
+    "text_lines": ["1줄: 훅/숫자", "2줄: 핵심 내용", "3줄: 감정/강조", "4줄: 궁금증"],
+    "highlight_line": 2,
+    "prompt": "Thumbnail prompt with simple stickman in emotional pose, detailed anime background, illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+  },
+  "scenes": [
+    {
+      "scene_number": 1,
+      "narration": "한국어 나레이션",
+      "image_prompt": "Scene description with simple stickman character doing [action], [location with details], [time of day], [lighting], [mood]. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+    }
+  ]
+}
+
+## EXAMPLE PROMPTS
+- "Early morning in front of a small Korean clinic with cherry blossom trees, petals falling in the wind, signboard text: '박선생 내과의원'. A simple stickman doctor holding a brown paper bag, standing at entrance, soft sunlight. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+- "Inside a cozy Korean home living room, warm afternoon light through window, traditional furniture. Simple stickman grandmother sitting on floor cushion, hands folded, peaceful expression through relaxed posture. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+- "1980s Seoul street at night, neon signs glowing, light rain, signboard text: '미래다방'. Simple stickman young man walking alone, head slightly down, hands in pockets. illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting"
+"""
+
+        # 콘텐츠 타입별 시스템 프롬프트 분기 (실사 스타일)
+        elif content_type == 'product':
             # 상품 소개 콘텐츠
             system_prompt = f"""당신의 역할은 상품 소개 대본을 분석하여 AI 이미지용 프롬프트를 전문적으로 작성하는 비서입니다.
 
@@ -9541,13 +9585,29 @@ def api_image_analyze_script():
   ]
 }}"""
 
-        user_prompt = f"""대본:
+        # 스타일별 user prompt 분기
+        if image_style == 'animation':
+            user_prompt = f"""대본:
+{script}
+
+위 대본을 4~8개 씬으로 분리하고, 각 씬에 맞는 스틱맨 드라마 이미지 프롬프트를 생성해주세요.
+
+중요 규칙:
+1. 모든 캐릭터는 반드시 simple stickman (둥근 머리, 점 2개 눈, 선 1개 입, 검은 윤곽선)으로 표현
+2. 배경은 디테일한 애니메이션 스타일 (anime slice-of-life)
+3. 감정은 자세와 몸짓으로만 표현 (표정 X)
+4. 간판이나 장소명이 나오면 signboard text: "한글텍스트" 형식 포함
+5. 모든 프롬프트 끝에 필수 태그 추가: illustration, anime background, simple stickman character, black outline, storytelling composition, soft pastel lighting
+
+프롬프트는 반드시 영어로 작성해주세요."""
+        else:
+            user_prompt = f"""대본:
 {script}
 
 위 대본을 4~8개 씬으로 분리하고, 각 씬에 맞는 전문가급 이미지 프롬프트를 생성해주세요.
 프롬프트는 반드시 영어로, 위의 작성 원칙을 따라주세요."""
 
-        print(f"[IMAGE-ANALYZE] GPT-4o로 이미지 프롬프트 생성 중... (콘텐츠 타입: {content_type})")
+        print(f"[IMAGE-ANALYZE] GPT-4o로 이미지 프롬프트 생성 중... (스타일: {image_style}, 콘텐츠: {content_type})")
 
         response = client.chat.completions.create(
             model="gpt-4o",
