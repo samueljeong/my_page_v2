@@ -7683,7 +7683,8 @@ def api_thumbnail_overlay():
 
         return jsonify({
             "ok": True,
-            "thumbnailUrl": result_url,
+            "imageUrl": result_url,  # 클라이언트 호환성을 위해 imageUrl 사용
+            "thumbnailUrl": result_url,  # 레거시 호환
             "width": width,
             "height": height
         })
@@ -9466,35 +9467,35 @@ def api_image_analyze_script():
                 thumb_outline = "#000000"
                 thumb_style = "회상형/후회형 (그날을 잊지 않는다, 하는게 아니었다, 늦게 알았다)"
 
-            system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Realistic Background + 2D Stickman Character.
+            system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
 ## CORE CONCEPT (CRITICAL!)
 The key visual style is:
-1. Background = REALISTIC / CINEMATIC / DETAILED (like a real photo or film still)
-2. Stickman = SIMPLE / BOLD OUTLINE / WHITE BODY (flat 2D cartoon character)
-3. Combination = "COLLAGE STYLE" - the stickman looks like it was inserted into a real photograph
+1. Background = DETAILED ANIME STYLE (slice-of-life anime, Ghibli-inspired, warm colors, soft lighting)
+2. Stickman = SIMPLE / BOLD OUTLINE / WHITE BODY (flat 2D minimal cartoon character)
+3. Combination = "CONTRAST COLLAGE" - simple stickman contrasts against detailed anime background
+4. NO OTHER CHARACTERS - absolutely NO anime characters, NO realistic humans, ONLY the stickman!
 
-This creates "a 2D cartoon character inside a realistic 3D world" effect.
+This creates contrast between the detailed anime world and the simple stickman.
 
 ## PROMPT STRUCTURE (ALWAYS FOLLOW THIS ORDER)
-(realistic detailed background) +
-(minimal stickman foreground) +
-(collage / composited character style) +
-(clean line art)
+(detailed anime background, slice-of-life style, Ghibli-inspired) +
+(minimal white stickman with black outline) +
+(contrast collage style) +
+(no other characters)
 
 ## STICKMAN CHARACTER DESCRIPTION (USE THIS EXACT PHRASE)
-"white stickman character with a round head and black outline, clean minimal flat style, placed naturally in the environment"
+"simple white stickman character with a round head and black outline, clean minimal flat style, placed naturally in the anime environment. NO other characters."
 
 ## MANDATORY STYLE KEYWORDS (MUST INCLUDE IN EVERY PROMPT)
-- collage style
-- 2D cartoon character inside a realistic 3D world
-- white stickman with black outline
-- clean minimal line art
-- flat character + realistic background
-- drop shadow to match lighting
+- detailed anime background, slice-of-life style
+- Ghibli-inspired warm colors and soft lighting
+- simple white stickman with black outline
+- contrast between detailed background and minimal character
+- NO anime characters, NO realistic humans, ONLY stickman
+- clean minimal line art for stickman only
 - seamless composition
-- depth of field
 
 ## 썸네일 텍스트 규칙 (중요!)
 - 문구 길이: {thumb_length}
@@ -9524,30 +9525,30 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
     "text_options": ["썸네일 텍스트1 ({thumb_length})", "썸네일 텍스트2 ({thumb_length})", "썸네일 텍스트3 ({thumb_length})"],
     "text_color": "{thumb_color}",
     "outline_color": "{thumb_outline}",
-    "prompt": "[Realistic background description], cinematic lighting. White stickman character with round head and black outline, clean minimal flat style, [pose/action]. Collage style, 2D cartoon character inserted into a realistic photo, seamless composition, depth of field, drop shadow to match lighting."
+    "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head and black outline, clean minimal flat style, [pose/action]. NO anime characters, NO realistic humans, ONLY stickman. Contrast collage style, detailed anime world with simple stickman."
   }},
   "scenes": [
     {{
       "scene_number": 1,
       "narration": "한국어 나레이션",
-      "image_prompt": "[Realistic background], cinematic lighting, detailed environment. White stickman character with round head and black outline, clean minimal flat style, [action]. Collage style, cartoon character seamlessly placed in realistic world, depth of field, drop shadow to match lighting."
+      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head and black outline, clean minimal flat style, [action]. NO anime characters, NO realistic humans, ONLY stickman. Contrast collage, detailed anime world with simple stickman."
     }}
   ]
 }}
 
 ## EXAMPLE PROMPTS
 
-### 신문 읽는 아저씨 스타일
-"Realistic middle-aged businessman sitting on the stairs outside an office building, reading a newspaper, warm morning sunlight, realistic texture, 35mm film look. Simple white stickman character with black outline kneeling and looking at the newspaper, flat cartoon style, clean lines. Collage style, cartoon character seamlessly placed in a realistic world, depth of field, drop shadow to match lighting."
+### 신문 읽는 스틱맨
+"Detailed anime background of office building stairs in warm morning sunlight, slice-of-life anime style, Ghibli-inspired warm colors, soft lighting. Simple white stickman character with round head and black outline reading a newspaper, clean minimal flat style. NO other characters, ONLY the stickman. Contrast collage style, seamless composition."
 
-### 주식 시장 혼돈 스타일
-"Wall Street trading floor chaos, monitors with red and green stock charts, crowded scene, dramatic lighting, high detail, newspapers and tickers. A white stickman character with neutral face expression placed in the center, clean line style, bold outline. Collage style, cartoon character inserted into a realistic scene, seamless composition, depth of field."
+### 주식 시장 혼돈
+"Detailed anime style trading floor background, monitors with stock charts, dramatic lighting, slice-of-life anime aesthetic. Simple white stickman character with black outline standing in the center, clean minimal flat style. NO anime characters, NO realistic humans, ONLY the stickman. Contrast collage, detailed background vs simple character."
 
 ### 한국 진료소 스타일
-"Spring morning in front of a small Korean clinic, cherry blossoms falling, soft pastel lighting, realistic background, 35mm film look. Stickman doctor wearing a white coat and holding a paper bag, minimal cartoon style, bold outline. Collage style, cartoon character in a realistic environment, drop shadow to match lighting, depth of field."
+"Anime style spring morning in front of a small Korean clinic, cherry blossoms falling, Ghibli-inspired soft pastel colors, detailed slice-of-life background. Simple white stickman wearing a white coat, minimal cartoon style with bold outline. NO other characters. Contrast collage style, detailed anime world with simple stickman."
 
 ### 도시 거리 스타일
-"Realistic Korean city street background, soft shadows, cinematic daylight, people and buildings in natural perspective. White stickman character with a round head, black outline, clean flat line style, standing in the foreground, interacting with real objects. Collage style, cartoon character inserted into a realistic photo, seamless composition, depth of field, drop shadow to match lighting."
+"Detailed anime style Korean city street background, warm colors, soft shadows, Ghibli-inspired slice-of-life aesthetic, detailed buildings and environment. Simple white stickman character with round head and black outline, clean flat minimal style, standing in the foreground. NO anime characters, NO realistic humans, ONLY the stickman. Contrast collage composition."
 """
 
         # 콘텐츠 타입별 시스템 프롬프트 분기 (실사 스타일)
@@ -9716,22 +9717,23 @@ This creates "a 2D cartoon character inside a realistic 3D world" effect.
             user_prompt = f"""대본:
 {script}
 
-위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 "COLLAGE STYLE: 실사 배경 + 스틱맨" 이미지 프롬프트를 생성해주세요.
+위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 "CONTRAST COLLAGE: 애니메이션 배경 + 스틱맨" 이미지 프롬프트를 생성해주세요.
 타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
 핵심 스타일 (반드시 지킬 것):
-- 배경 = 리얼/사실적/영화적 (realistic, cinematic, 35mm film look)
-- 스틱맨 = 단순/굵은 라인/흰 몸 (white stickman with black outline, flat style)
-- 결합 = "collage style" - 스틱맨이 실사 사진 안에 삽입된 느낌
+- 배경 = 상세한 애니메이션 스타일 (slice-of-life anime, Ghibli-inspired, warm colors, soft lighting)
+- 스틱맨 = 단순/굵은 라인/흰 몸 (simple white stickman with black outline, minimal flat style)
+- 결합 = "contrast collage" - 상세한 애니메이션 배경 속에 심플한 스틱맨이 대비되는 느낌
 
 중요 규칙:
 1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
-2. 배경은 반드시 REALISTIC (실사 사진, 영화적 조명, 35mm film look) - 애니메이션/일러스트 스타일 절대 금지!
-3. 캐릭터는 "white stickman character with round head and black outline, clean minimal flat style"로 표현
-4. 절대 애니메이션 캐릭터, 만화 캐릭터, 지브리 스타일을 그리지 말 것. 오직 심플한 스틱맨만!
-5. 감정은 자세와 몸짓으로만 표현 (hunched shoulders, arms raised 등)
-6. 모든 프롬프트 끝에 필수 태그: collage style, cartoon character inserted into realistic photo, seamless composition, depth of field, drop shadow to match lighting
-7. {thumb_instruction}
+2. 배경은 반드시 DETAILED ANIME STYLE (slice-of-life anime, Ghibli-inspired, warm colors) - 실사/사진 스타일 금지!
+3. 캐릭터는 오직 "simple white stickman character with round head and black outline, clean minimal flat style"만 표현
+4. 절대 애니메이션 캐릭터, 만화 캐릭터, 실사 인물을 그리지 말 것. 오직 심플한 흰색 스틱맨만!
+5. NO anime characters, NO realistic humans - ONLY the simple white stickman!
+6. 감정은 자세와 몸짓으로만 표현 (hunched shoulders, arms raised 등)
+7. 모든 프롬프트 끝에 필수 태그: detailed anime background, slice-of-life style, Ghibli-inspired, simple white stickman, NO other characters, contrast collage
+8. {thumb_instruction}
 
 프롬프트는 반드시 영어로 작성해주세요."""
         else:
