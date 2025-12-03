@@ -17,6 +17,11 @@ app.register_blueprint(market_bp)
 # Design Server Blueprint 등록
 from design_server import design_bp
 app.register_blueprint(design_bp)
+
+# TubeLens Server Blueprint 등록
+from tubelens_server import tubelens_bp
+app.register_blueprint(tubelens_bp)
+
 app.secret_key = os.urandom(24)  # Secret key for session management
 
 # OpenAI client setup
