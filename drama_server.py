@@ -10872,6 +10872,301 @@ def api_thumbnail_senior_titles():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ===== 통합 썸네일 디자인 자동 생성 API (스타일 포함) =====
+THUMBNAIL_STYLE_PRESETS = {
+    "nostalgia": {
+        "name": "시니어 감성",
+        "description": "세피아, 추억, 따뜻한 회상 느낌",
+        "colors": {
+            "background": "#F7EFE5",
+            "text": "#373431",
+            "accent": "#D19C66",
+            "outline": "#2B2B2B"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "700",
+            "size": "72px",
+            "letter_spacing": "2px"
+        },
+        "layout": {
+            "position": "left-top",
+            "padding": "32px",
+            "text_box": True,
+            "text_box_opacity": 0.7
+        },
+        "image_style": "warm sepia tone, soft focus, nostalgic film grain, 1970s Korean aesthetic"
+    },
+    "clinic_warm": {
+        "name": "따뜻한 병원",
+        "description": "청결하면서도 따뜻한 의료 컨셉",
+        "colors": {
+            "background": "#E8F4F8",
+            "text": "#1A365D",
+            "accent": "#4299E1",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumBarunGothicBold",
+            "weight": "700",
+            "size": "68px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "top-center",
+            "padding": "28px",
+            "text_box": True,
+            "text_box_opacity": 0.85
+        },
+        "image_style": "clean Korean clinic interior, soft natural light, warm atmosphere, modern medical setting"
+    },
+    "dramatic_conflict": {
+        "name": "강렬한 갈등",
+        "description": "어두운 배경 + 강렬한 노란 강조",
+        "colors": {
+            "background": "#1A1A1A",
+            "text": "#FFD700",
+            "accent": "#FF4444",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumSquareB",
+            "weight": "900",
+            "size": "80px",
+            "letter_spacing": "0px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "24px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "dark moody atmosphere, dramatic lighting, high contrast shadows, intense emotional moment"
+    },
+    "family_tearjerker": {
+        "name": "가족 감동",
+        "description": "파스텔톤, 가족/부모 테마",
+        "colors": {
+            "background": "#FFF5F5",
+            "text": "#4A3728",
+            "accent": "#E57373",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumMyeongjoBold",
+            "weight": "700",
+            "size": "64px",
+            "letter_spacing": "3px"
+        },
+        "layout": {
+            "position": "center",
+            "padding": "36px",
+            "text_box": True,
+            "text_box_opacity": 0.6
+        },
+        "image_style": "soft pastel colors, gentle lighting, family moments, warm emotional scene, Korean home setting"
+    },
+    "calm_documentary": {
+        "name": "차분한 다큐",
+        "description": "실제 사진 그대로, 담백한 톤",
+        "colors": {
+            "background": "#F5F5F5",
+            "text": "#2D3748",
+            "accent": "#3182CE",
+            "outline": "#FFFFFF"
+        },
+        "font": {
+            "family": "NanumBarunGothic",
+            "weight": "600",
+            "size": "60px",
+            "letter_spacing": "1px"
+        },
+        "layout": {
+            "position": "bottom-left",
+            "padding": "24px",
+            "text_box": True,
+            "text_box_opacity": 0.9
+        },
+        "image_style": "realistic photography, natural colors, documentary style, authentic Korean setting"
+    },
+    "newspaper_retro": {
+        "name": "신문 레트로",
+        "description": "흑백 헤드라인 스타일",
+        "colors": {
+            "background": "#FFFEF0",
+            "text": "#1A1A1A",
+            "accent": "#8B0000",
+            "outline": "#000000"
+        },
+        "font": {
+            "family": "NanumMyeongjoBold",
+            "weight": "900",
+            "size": "76px",
+            "letter_spacing": "4px"
+        },
+        "layout": {
+            "position": "top-center",
+            "padding": "20px",
+            "text_box": False,
+            "text_box_opacity": 0
+        },
+        "image_style": "black and white photo, newspaper grain texture, vintage print style, bold headline aesthetic"
+    }
+}
+
+THUMBNAIL_DESIGN_SYSTEM_PROMPT = """You are an AI thumbnail designer that generates complete YouTube thumbnail designs
+for Korean drama/emotional content channels.
+
+[YOUR ROLE]
+Generate thumbnail TEXT + recommend the best STYLE from the given style presets.
+
+[STYLE SELECTION RULES]
+Based on scene content, automatically select the best style:
+- 병원/진료소/의사/간호사 → clinic_warm
+- 첫날/기억/회상/옛날/그때 → nostalgia
+- 갈등/비밀/진실/충격/반전 → dramatic_conflict
+- 가족/부모/엄마/아빠/손자/자녀 → family_tearjerker
+- 실제/다큐/인터뷰/증언 → calm_documentary
+- 사건/뉴스/헤드라인 → newspaper_retro
+
+[TEXT RULES]
+1. Korean only, 5-12 characters per line
+2. Emotionally evocative for target audience
+3. Avoid: 영어, 인터넷 슬랭, 광고 단어(구독/클릭/유튜브)
+
+[AUDIENCE ADAPTATION]
+- senior: 기억, 후회, 깨달음, 가족, 병원, 첫 경험 → 큰 폰트, 높은 대비
+- general: 반전, 충격, 꿀팁, 비밀 → 트렌디한 표현 가능
+
+[OUTPUT FORMAT - JSON ONLY]
+{
+  "recommended_style": "nostalgia",
+  "style_reason": "첫 출근 장면으로 회상/추억 감성이 적합",
+  "candidates": [
+    {
+      "text": "처음엔 몰랐다",
+      "emotion": "회상",
+      "intensity": 0.7,
+      "image_prompt": "Early morning Korean clinic entrance, cherry blossoms falling, warm sunlight, nostalgic film grain"
+    }
+  ]
+}
+
+[IMPORTANT]
+- image_prompt must be in English
+- image_prompt should match the recommended style's aesthetic
+- Generate exactly the requested number of candidates
+"""
+
+@app.route('/api/thumbnail/generate', methods=['POST'])
+def api_thumbnail_generate():
+    """통합 썸네일 디자인 자동 생성 API (스타일 + 디자인 포함)"""
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        data = request.get_json() or {}
+
+        scene_summary = data.get("scene_summary", "")
+        audience = data.get("audience", "senior")  # senior / general
+        style = data.get("style", "auto")  # auto = AI가 자동 선택
+        num_candidates = data.get("num_candidates", 10)
+        max_length = data.get("max_length", 12)
+        keywords = data.get("keywords", [])
+        ban_words = data.get("ban_words", [])
+
+        if not scene_summary:
+            return jsonify({"ok": False, "error": "scene_summary is required"}), 400
+
+        # 스타일 프리셋 목록 전달
+        style_list = list(THUMBNAIL_STYLE_PRESETS.keys())
+
+        user_payload = {
+            "scene_summary": scene_summary,
+            "audience": audience,
+            "requested_style": style,
+            "available_styles": style_list,
+            "num_candidates": num_candidates,
+            "max_length": max_length,
+            "keywords": keywords,
+            "ban_words": ban_words
+        }
+
+        print(f"[THUMBNAIL-DESIGN] 통합 썸네일 생성 요청 - audience: {audience}, style: {style}")
+
+        # GPT 호출
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": THUMBNAIL_DESIGN_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)}
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"}
+        )
+
+        result = completion.choices[0].message.content
+        result_json = json.loads(result)
+
+        # 추천된 스타일 가져오기
+        recommended_style = result_json.get("recommended_style", "nostalgia")
+        if style != "auto" and style in THUMBNAIL_STYLE_PRESETS:
+            recommended_style = style  # 사용자가 직접 지정한 경우
+
+        style_preset = THUMBNAIL_STYLE_PRESETS.get(recommended_style, THUMBNAIL_STYLE_PRESETS["nostalgia"])
+
+        # 각 후보에 디자인 정보 추가
+        candidates = result_json.get("candidates", [])
+        for c in candidates:
+            c["length"] = len(c.get("text", ""))
+            c["design"] = {
+                "layout": style_preset["layout"],
+                "colors": style_preset["colors"],
+                "font": style_preset["font"]
+            }
+
+        print(f"[THUMBNAIL-DESIGN] 생성 완료 - style: {recommended_style}, {len(candidates)}개 후보")
+
+        return jsonify({
+            "ok": True,
+            "scene_summary": scene_summary,
+            "audience": audience,
+            "style": {
+                "key": recommended_style,
+                "name": style_preset["name"],
+                "description": style_preset["description"],
+                "reason": result_json.get("style_reason", "")
+            },
+            "design": {
+                "colors": style_preset["colors"],
+                "font": style_preset["font"],
+                "layout": style_preset["layout"],
+                "image_style": style_preset["image_style"]
+            },
+            "candidates": candidates
+        })
+
+    except Exception as e:
+        print(f"[THUMBNAIL-DESIGN][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/thumbnail/styles', methods=['GET'])
+def api_thumbnail_styles():
+    """사용 가능한 썸네일 스타일 목록 조회"""
+    styles = []
+    for key, preset in THUMBNAIL_STYLE_PRESETS.items():
+        styles.append({
+            "key": key,
+            "name": preset["name"],
+            "description": preset["description"],
+            "colors": preset["colors"]
+        })
+    return jsonify({"ok": True, "styles": styles})
+
+
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5059))
