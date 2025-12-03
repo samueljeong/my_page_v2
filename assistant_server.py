@@ -11,6 +11,39 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, request, jsonify, render_template
 
 
+def parse_korean_datetime(datetime_str):
+    """
+    한국어 날짜/시간 형식을 ISO timestamp로 변환
+    예: "2025. 12. 3. 오전 9:00" -> "2025-12-03T09:00:00"
+        "2025. 12. 3. 오후 2:30" -> "2025-12-03T14:30:00"
+    """
+    if not datetime_str:
+        return None
+
+    # 이미 ISO 형식이면 그대로 반환
+    if re.match(r'^\d{4}-\d{2}-\d{2}T', datetime_str):
+        return datetime_str
+
+    # 한국어 날짜/시간 형식 파싱: "2025. 12. 3. 오전 9:00"
+    match = re.match(r'(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{2})', datetime_str)
+    if match:
+        year, month, day, ampm, hour, minute = match.groups()
+        hour = int(hour)
+        if ampm == '오후' and hour != 12:
+            hour += 12
+        elif ampm == '오전' and hour == 12:
+            hour = 0
+        return f"{year}-{int(month):02d}-{int(day):02d}T{hour:02d}:{minute}:00"
+
+    # 날짜만 있는 경우: "2025. 12. 3."
+    match = re.match(r'(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?', datetime_str)
+    if match:
+        year, month, day = match.groups()
+        return f"{year}-{int(month):02d}-{int(day):02d}T00:00:00"
+
+    return None
+
+
 def parse_korean_date(date_str):
     """
     한국어 날짜 형식을 ISO 형식으로 변환
@@ -448,14 +481,18 @@ def sync_from_mac():
 
         # 이벤트 저장
         for event in data.get('events', []):
+            # 한국어 날짜/시간 형식을 ISO 형식으로 변환
+            start_time = parse_korean_datetime(event.get('start_time'))
+            end_time = parse_korean_datetime(event.get('end_time'))
+
             if USE_POSTGRES:
                 cursor.execute('''
                     INSERT INTO events (title, start_time, end_time, category, source, sync_status)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 ''', (
                     event.get('title'),
-                    event.get('start_time'),
-                    event.get('end_time'),
+                    start_time,
+                    end_time,
                     event.get('category', ''),
                     'mac_calendar',
                     'synced'
@@ -466,8 +503,8 @@ def sync_from_mac():
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     event.get('title'),
-                    event.get('start_time'),
-                    event.get('end_time'),
+                    start_time,
+                    end_time,
                     event.get('category', ''),
                     'mac_calendar',
                     'synced'
