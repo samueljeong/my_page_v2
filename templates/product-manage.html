@@ -1341,10 +1341,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(product)
         });
+        if (!res.ok) return false;
         const data = await res.json();
         return data.ok;
       } catch (e) {
-        console.error('API 상품 저장 실패 (localStorage에 백업됨):', e);
+        console.log('API 저장 실패 (localStorage 백업 사용):', e.message);
         return false;
       }
     }
