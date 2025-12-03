@@ -697,11 +697,20 @@ def sync_to_mac():
 
         conn.close()
 
-        # datetime 객체를 문자열로 변환
+        # datetime 객체를 문자열로 변환 + end_time 자동 계산
         for event in events:
             for key in ['start_time', 'end_time', 'created_at', 'updated_at']:
                 if event.get(key) and not isinstance(event[key], str):
                     event[key] = event[key].isoformat()
+
+            # end_time이 없으면 start_time + 1시간으로 계산
+            if not event.get('end_time') and event.get('start_time'):
+                try:
+                    start = datetime.fromisoformat(event['start_time'].replace('Z', '+00:00'))
+                    end = start + timedelta(hours=1)
+                    event['end_time'] = end.isoformat()
+                except:
+                    pass
 
         for task in tasks:
             for key in ['due_date', 'created_at', 'updated_at']:
