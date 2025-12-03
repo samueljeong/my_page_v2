@@ -359,7 +359,14 @@
 
               <!-- 배송비 비교 (이지타오 기준) -->
               <div class="card">
-                <h3>🚚 배송비 비교 <span style="font-size:11px; color:#64748b;">(이지타오 기준)</span></h3>
+                <h3>🚚 배송비 참고 <span style="font-size:11px; color:#64748b;">(이지타오 기준)</span></h3>
+                <div style="margin-bottom:12px; padding:10px; background:#fffbeb; border:1px solid #fcd34d; border-radius:6px;">
+                  <label style="font-size:12px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="includeShipping" onchange="recalculate()">
+                    <strong>배송비를 마진 계산에 포함</strong>
+                  </label>
+                  <div class="form-hint" style="margin-top:4px;">LCL은 여러 품목 합배송 시 사용. 단일 상품은 체크 해제 권장</div>
+                </div>
                 <div class="shipping-compare">
                   <div class="shipping-option selected" onclick="selectShipping('lcl')">
                     <h5>🚢 LCL (해상소량)</h5>
@@ -815,10 +822,13 @@
       const cardFee = totalKrw * cardFeeRate;
       const taobaoFee = totalKrw * taobaoFeeRate;
 
-      // 배송비 계산
-      let shipping = 0;
+      // 배송비 계산 (참고용 - 체크 시에만 마진 계산에 포함)
+      const includeShipping = document.getElementById('includeShipping').checked;
+      let shippingDisplay = 0;  // 화면 표시용
+      let shippingCalc = 0;     // 마진 계산용
+
       if (saleType === 'proxy') {
-        shipping = (parseFloat(document.getElementById('proxyShipping').value) || 0) * quantity;
+        shippingDisplay = (parseFloat(document.getElementById('proxyShipping').value) || 0) * quantity;
       } else {
         // 부피 정보 가져오기
         const w = parseFloat(document.getElementById('dimW').value) || 0;
@@ -838,10 +848,10 @@
           const domesticSurcharge = calcDomesticSurcharge(w, h, d) * quantity;
           const domesticBase = 3500 * quantity;  // 기본 국내배송비
 
-          shipping = freight + blFee + handlingFee + customsFee + ftaFee + domesticBase + domesticSurcharge;
+          shippingDisplay = freight + blFee + handlingFee + customsFee + ftaFee + domesticBase + domesticSurcharge;
 
           // UI 업데이트
-          document.getElementById('lclPrice').textContent = formatNum(shipping) + '원';
+          document.getElementById('lclPrice').textContent = formatNum(shippingDisplay) + '원';
           document.getElementById('lclFreight').textContent = formatNum(freight) + '원';
           document.getElementById('lclDomestic').textContent = formatNum(domesticBase + domesticSurcharge) + '원';
           document.getElementById('lclFtaRow').style.display = useFta ? 'block' : 'none';
@@ -852,8 +862,8 @@
         } else {
           // 항공 배송비
           const domesticBase = 3500 * quantity;
-          shipping = (cbm * shipmentCount * 500000) + domesticBase;
-          document.getElementById('airPrice').textContent = formatNum(shipping) + '원';
+          shippingDisplay = (cbm * shipmentCount * 500000) + domesticBase;
+          document.getElementById('airPrice').textContent = formatNum(shippingDisplay) + '원';
 
           // LCL 비교 (참고용)
           const lclTotal = calcLclFreight(cbm * shipmentCount) + 22000 + 33000 + 33000 + (useFta ? 35000 : 0) + domesticBase;
@@ -862,7 +872,10 @@
         }
       }
 
-      const grandTotal = totalKrw + duty + vat + cardFee + taobaoFee + shipping;
+      // 체크 시에만 마진 계산에 배송비 포함
+      shippingCalc = includeShipping ? shippingDisplay : 0;
+
+      const grandTotal = totalKrw + duty + vat + cardFee + taobaoFee + shippingCalc;
 
       // 결제 예상 금액 표시
       document.getElementById('totalCny').textContent = formatNum(totalCny) + ' CNY';
@@ -871,7 +884,8 @@
       document.getElementById('totalVat').textContent = formatNum(vat) + '원';
       document.getElementById('totalCard').textContent = formatNum(cardFee) + '원';
       document.getElementById('totalTaobao').textContent = formatNum(taobaoFee) + '원';
-      document.getElementById('totalShipping').textContent = formatNum(shipping) + '원';
+      document.getElementById('totalShipping').textContent = includeShipping ? formatNum(shippingCalc) + '원' : '미포함';
+      document.getElementById('totalShipping').style.color = includeShipping ? '#1e293b' : '#94a3b8';
       document.getElementById('grandTotal').textContent = formatNum(grandTotal) + '원';
 
       // 개당 비용
