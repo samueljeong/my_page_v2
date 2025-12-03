@@ -552,6 +552,13 @@ def mark_synced():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# 단축어 B 호환용 별칭 (mark-synced와 동일)
+@assistant_bp.route('/assistant/api/sync/confirm', methods=['POST'])
+def sync_confirm():
+    """Mac 단축어 B에서 사용하는 동기화 완료 확인 API (mark-synced 별칭)"""
+    return mark_synced()
+
+
 # ===== AI 파싱 API (GPT-4o-mini) =====
 @assistant_bp.route('/assistant/api/parse', methods=['POST'])
 def parse_input():
@@ -572,38 +579,75 @@ def parse_input():
             return jsonify({'success': False, 'error': 'OpenAI API 키가 설정되지 않았습니다.'}), 500
 
         today = date.today()
+        default_category = data.get('default_category', None)
 
-        system_prompt = f"""당신은 일정 및 할일 파싱 전문가입니다.
-사용자가 입력한 텍스트에서 이벤트(일정)와 태스크(할일)를 추출하여 JSON으로 반환합니다.
+        # 상세 GPT 파싱 프롬프트
+        system_prompt = f"""[역할]
+너는 '개인 비서용 일정/할 일 파서'이다.
+사용자가 붙여넣은 한국어/영어 텍스트를 읽고,
+그 안에 있는 일정(events)과 할 일(tasks)을 구조화된 JSON으로 추출하는 것이 너의 유일한 역할이다.
 
-오늘 날짜: {today.isoformat()} ({today.strftime('%A')})
+[입력 컨텍스트]
+- 오늘 날짜: {today.isoformat()} ({today.strftime('%A')})
+- 기본 카테고리: {default_category or '없음'}
 
-규칙:
-1. 특정 시간이 있는 일정은 events로 분류
-2. 마감일만 있거나 해야 할 일은 tasks로 분류
-3. 날짜 표현을 ISO 형식으로 변환 (예: "이번주 금요일" → 실제 날짜)
-4. 카테고리 자동 추정 (교회, 업무, 개인, 가족 등)
-
-반드시 아래 JSON 형식으로만 응답하세요:
+[출력]
+반드시 다음 JSON 형식으로만 출력하라:
 {{
   "events": [
     {{
-      "title": "일정 제목",
-      "date": "YYYY-MM-DD",
-      "time": "HH:MM",
-      "end_time": "HH:MM",
-      "category": "카테고리"
+      "title": "string",
+      "date": "yyyy-MM-dd",
+      "time": "HH:mm or null",
+      "end_time": "HH:mm or null",
+      "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
+      "location": "string or null",
+      "notes": "string or null"
     }}
   ],
   "tasks": [
     {{
-      "title": "할일 제목",
-      "due_date": "YYYY-MM-DD",
-      "priority": "high/medium/low",
-      "category": "카테고리"
+      "title": "string",
+      "due_date": "yyyy-MM-dd or null",
+      "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
+      "priority": "high | normal | low",
+      "notes": "string or null"
     }}
   ]
-}}"""
+}}
+
+[규칙]
+1. 날짜/시간 처리
+   - 구체적인 날짜가 나오면 yyyy-MM-dd 형식으로 변환한다.
+   - "이번 주 금요일", "다음 주일" 등 상대적 표현은 오늘 날짜를 기준으로 실제 날짜를 계산한다.
+   - 시간이 없으면 time은 null로 둔다.
+
+2. title 작성
+   - 최대한 짧고 요약된 표현으로 작성한다.
+   - 한 텍스트 안에 여러 일정이 있으면 각각 별도의 event로 나눈다.
+
+3. events vs tasks 판단
+   - 특정 시간/날짜에 실제로 '열리는 모임/행사/예배/회의'는 event로 처리한다.
+   - 그 행사를 준비하기 위한 "해야 할 일" (자료 준비, 문자 발송, 설교 작성 등)은 task로 처리한다.
+
+4. category 분류
+   - 교회: 예배, 기도회, 총회, 구역모임, 출석, 심방, 교회 행사 등
+   - 사업: 무역, 스마트스토어, 재고, 배송, 세금, 광고, 클라이언트 미팅 등
+   - 유튜브: 촬영, 편집, 썸네일, 스크립트, 업로드 일정 등
+   - 가정: 가족 모임, 아이 일정, 개인 건강/가사 관련 등
+   - 공부: 코딩 공부, 강의 수강, 책 읽기 등의 학습 관련
+   - 기타: 위 분류에 명확히 속하지 않는 경우
+
+5. priority 설정
+   - 남은 시간이 짧거나(3일 이내), 중요해 보이는 작업은 high로 설정한다.
+   - 일반적인 준비/보조 작업은 normal.
+   - 언제 해도 되는 장기적인 아이디어 수준이면 low.
+
+6. 모호한 경우
+   - 날짜/시간이 전혀 없지만 분명히 '해야 할 일'이면 task로 추가하되, due_date는 null로 둔다.
+   - 이해가 불가능한 정보는 무시한다. 추측으로 일정이나 할 일을 만들어내지 마라.
+
+JSON 외의 다른 텍스트(설명, 말투, 주석 등)는 절대로 출력하지 마라."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
