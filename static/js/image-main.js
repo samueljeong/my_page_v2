@@ -162,32 +162,27 @@ const ImageMain = {
     const scenes = this.analyzedData.scenes || [];
     const thumbnail = this.analyzedData.thumbnail || {};
 
-    // 1. 썸네일 자동 생성 (첫 번째 텍스트 옵션 사용)
+    // 썸네일 텍스트 옵션 준비 (자동 선택하지 않음 - 사용자가 직접 선택)
     if (thumbnail.text_options && thumbnail.text_options.length > 0) {
-      this.selectedThumbnailText = thumbnail.text_options[0];
-      // 첫 번째 옵션 자동 선택 UI 업데이트
+      // 첫 번째 옵션 UI만 선택 상태로 표시 (실제 생성은 안함)
       const firstOption = document.querySelector('.text-option');
       if (firstOption) {
         firstOption.classList.add('selected');
         const radio = firstOption.querySelector('input');
         if (radio) radio.checked = true;
       }
+      this.selectedThumbnailText = thumbnail.text_options[0];
       document.getElementById('btn-generate-with-text').disabled = false;
     }
 
-    // 2. 모든 씬 이미지 병렬 생성
+    // 씬 이미지만 병렬 생성 (썸네일은 사용자가 직접 생성)
     this.showStatus(`${scenes.length}개 씬 이미지 생성 중...`, 'info');
 
     const scenePromises = scenes.map((_, idx) => this.generateSceneImage(idx));
     await Promise.all(scenePromises);
 
-    // 3. 썸네일 자동 생성
-    if (this.selectedThumbnailText && thumbnail.prompt) {
-      this.showStatus('썸네일 생성 중...', 'info');
-      await this.generateThumbnailsWithText();
-    }
-
-    this.showStatus('모든 이미지 생성 완료!', 'success');
+    // 썸네일은 자동 생성하지 않음 - 사용자가 텍스트 선택 후 버튼 클릭
+    this.showStatus('씬 이미지 생성 완료! 썸네일 텍스트를 선택하고 생성 버튼을 눌러주세요.', 'success');
   },
 
   /**
