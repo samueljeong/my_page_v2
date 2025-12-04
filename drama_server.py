@@ -9987,6 +9987,195 @@ def api_image_download_zip():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route('/api/image/generate-assets-zip', methods=['POST'])
+def api_image_generate_assets_zip():
+    """CapCut용 에셋 ZIP 생성 (이미지 + TTS 오디오 + SRT 자막)"""
+    try:
+        import zipfile
+        import io
+        import urllib.request
+        from google.cloud import texttospeech
+        import uuid
+
+        data = request.get_json()
+        session_id = data.get('session_id', str(uuid.uuid4())[:8])
+        voice_name = data.get('voice', 'ko-KR-Neural2-A')
+        scenes = data.get('scenes', [])
+
+        if not scenes:
+            return jsonify({"ok": False, "error": "씬 데이터가 없습니다"}), 400
+
+        print(f"[ASSETS-ZIP] Generating assets for {len(scenes)} scenes, voice: {voice_name}")
+
+        # Google TTS 클라이언트
+        tts_client = texttospeech.TextToSpeechClient()
+
+        # 결과 저장용
+        audio_segments = []
+        srt_entries = []
+        current_time = 0.0  # 현재 시간 (초)
+
+        # 1. 각 씬별 TTS 생성
+        for idx, scene in enumerate(scenes):
+            narration = scene.get('text', '')
+            if not narration:
+                continue
+
+            print(f"[ASSETS-ZIP] Processing scene {idx + 1}: {narration[:30]}...")
+
+            # TTS 생성
+            synthesis_input = texttospeech.SynthesisInput(text=narration)
+            voice = texttospeech.VoiceSelectionParams(
+                language_code="ko-KR",
+                name=voice_name
+            )
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=0.95,
+                pitch=0
+            )
+
+            response = tts_client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config
+            )
+
+            audio_data = response.audio_content
+            audio_segments.append(audio_data)
+
+            # 오디오 길이 추정 (MP3는 정확한 길이 계산 어려움, 대략 추정)
+            # 한국어 평균 읽기 속도: 약 4-5자/초
+            estimated_duration = max(len(narration) / 4.5, 2.0)  # 최소 2초
+
+            # SRT 엔트리 생성
+            start_time = current_time
+            end_time = current_time + estimated_duration
+
+            srt_entries.append({
+                'index': idx + 1,
+                'start': start_time,
+                'end': end_time,
+                'text': narration
+            })
+
+            current_time = end_time + 0.3  # 0.3초 간격
+
+        # 2. ZIP 파일 생성
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+
+            # 이미지 다운로드 및 추가
+            image_count = 0
+            for idx, scene in enumerate(scenes):
+                image_url = scene.get('image_url', '')
+                if not image_url:
+                    continue
+
+                try:
+                    if image_url.startswith('http'):
+                        req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            img_data = response.read()
+                    elif image_url.startswith('/'):
+                        local_path = image_url.lstrip('/')
+                        if os.path.exists(local_path):
+                            with open(local_path, 'rb') as f:
+                                img_data = f.read()
+                        else:
+                            continue
+                    else:
+                        continue
+
+                    # 파일명: 01_scene.jpg, 02_scene.jpg, ...
+                    filename = f"{str(idx + 1).zfill(2)}_scene.jpg"
+                    zip_file.writestr(f"images/{filename}", img_data)
+                    image_count += 1
+
+                except Exception as e:
+                    print(f"[ASSETS-ZIP] Failed to add image {idx + 1}: {e}")
+
+            # 오디오 병합 및 추가
+            if audio_segments:
+                # 개별 오디오 파일들도 추가
+                for idx, audio in enumerate(audio_segments):
+                    filename = f"{str(idx + 1).zfill(2)}_audio.mp3"
+                    zip_file.writestr(f"audio/{filename}", audio)
+
+                # 전체 병합 오디오 (단순 concat - 실제로는 FFmpeg 필요하지만 간단히 처리)
+                combined_audio = b''.join(audio_segments)
+                zip_file.writestr("audio/narration_full.mp3", combined_audio)
+
+            # SRT 자막 파일 생성
+            srt_content = ""
+            for entry in srt_entries:
+                start = format_srt_time(entry['start'])
+                end = format_srt_time(entry['end'])
+                srt_content += f"{entry['index']}\n{start} --> {end}\n{entry['text']}\n\n"
+
+            zip_file.writestr("subtitles.srt", srt_content.encode('utf-8'))
+
+            # 가이드 파일 추가
+            guide_content = f"""CapCut 에셋 가이드
+==================
+
+📁 폴더 구조:
+- images/ : 씬별 이미지 ({image_count}개)
+- audio/  : 씬별 오디오 + 전체 오디오
+- subtitles.srt : 자막 파일
+
+🎬 CapCut 임포트 방법:
+1. images 폴더의 이미지들을 타임라인에 드래그
+2. audio/narration_full.mp3를 오디오 트랙에 드래그
+3. subtitles.srt를 자막으로 임포트
+
+💡 팁:
+- 이미지 순서대로 정렬되어 있습니다 (01, 02, 03...)
+- 각 씬의 개별 오디오도 포함되어 있어 편집 가능합니다
+
+생성일: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+            zip_file.writestr("README.txt", guide_content.encode('utf-8'))
+
+        # 3. ZIP 파일 저장
+        zip_buffer.seek(0)
+        zip_filename = f"capcut_assets_{session_id}.zip"
+        zip_path = os.path.join(UPLOAD_DIR, zip_filename)
+
+        with open(zip_path, 'wb') as f:
+            f.write(zip_buffer.read())
+
+        # 오디오 총 길이 계산
+        total_duration = current_time
+        minutes = int(total_duration // 60)
+        seconds = int(total_duration % 60)
+        duration_str = f"{minutes}분 {seconds}초"
+
+        print(f"[ASSETS-ZIP] ZIP created: {zip_path}, images: {image_count}, duration: {duration_str}")
+
+        return jsonify({
+            "ok": True,
+            "zip_url": f"/uploads/{zip_filename}",
+            "image_count": image_count,
+            "audio_duration": duration_str
+        })
+
+    except Exception as e:
+        print(f"[ASSETS-ZIP][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def format_srt_time(seconds):
+    """초를 SRT 시간 형식으로 변환 (00:00:00,000)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds - int(seconds)) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
 # ===== 쿠팡파트너스 쇼츠 API =====
 
 @app.route('/shorts')

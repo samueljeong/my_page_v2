@@ -12,6 +12,8 @@ const ImageMain = {
   sceneImages: {},       // { index: imageUrl }
   selectedThumbnailText: null,  // 선택된 썸네일 텍스트
   audience: 'senior',    // 타겟 시청자: 'senior' 또는 'general'
+  selectedVoice: 'ko-KR-Neural2-A',  // 선택된 TTS 음성
+  assetZipUrl: null,     // 생성된 ZIP 다운로드 URL
 
   /**
    * 초기화
@@ -430,6 +432,9 @@ const ImageMain = {
 
     // 전체 다운로드 버튼 표시
     document.getElementById('btn-download-all').classList.remove('hidden');
+
+    // 에셋 섹션 표시
+    this.showAssetSection();
   },
 
   /**
@@ -714,6 +719,132 @@ const ImageMain = {
    */
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  },
+
+  // ========== 에셋 생성 (TTS + ZIP) ==========
+
+  /**
+   * 음성 선택
+   */
+  selectVoice(btn) {
+    this.selectedVoice = btn.dataset.voice;
+    console.log('[ImageMain] Voice selected:', this.selectedVoice);
+
+    // 버튼 상태 업데이트
+    document.querySelectorAll('.voice-btn').forEach(b => {
+      b.classList.toggle('active', b === btn);
+    });
+  },
+
+  /**
+   * 에셋 섹션 표시 (이미지 생성 완료 후 호출)
+   */
+  showAssetSection() {
+    const section = document.getElementById('asset-section');
+    if (section) {
+      section.classList.remove('hidden');
+    }
+  },
+
+  /**
+   * 에셋 생성 (TTS + 이미지 → ZIP 패키지)
+   */
+  async generateAssets() {
+    if (!this.analyzedData || !this.analyzedData.scenes) {
+      this.showStatus('먼저 대본을 분석해주세요.', 'warning');
+      return;
+    }
+
+    // 이미지가 모두 생성되었는지 확인
+    const scenes = this.analyzedData.scenes;
+    const generatedImages = Object.keys(this.sceneImages).length;
+    if (generatedImages < scenes.length) {
+      this.showStatus(`이미지를 먼저 모두 생성해주세요. (${generatedImages}/${scenes.length})`, 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-generate-assets');
+    const progressDiv = document.getElementById('asset-progress');
+    const progressFill = document.getElementById('asset-progress-fill');
+    const progressText = document.getElementById('asset-progress-text');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ 생성 중...';
+    progressDiv.classList.remove('hidden');
+    progressFill.style.width = '10%';
+    progressText.textContent = 'TTS 음성 생성 중...';
+
+    try {
+      // 나레이션 텍스트 수집
+      const narrations = scenes.map((s, idx) => ({
+        scene_number: idx + 1,
+        text: s.narration,
+        image_url: this.sceneImages[idx] || ''
+      }));
+
+      progressFill.style.width = '30%';
+      progressText.textContent = 'TTS 음성 생성 중...';
+
+      // API 호출 - 에셋 ZIP 생성
+      const response = await fetch('/api/image/generate-assets-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          voice: this.selectedVoice,
+          scenes: narrations
+        })
+      });
+
+      progressFill.style.width = '80%';
+      progressText.textContent = 'ZIP 파일 생성 중...';
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'API 오류');
+      }
+
+      const data = await response.json();
+
+      progressFill.style.width = '100%';
+      progressText.textContent = '완료!';
+
+      // 결과 표시
+      this.assetZipUrl = data.zip_url;
+      document.getElementById('asset-image-count').textContent = `이미지 ${data.image_count}개`;
+      document.getElementById('asset-audio-info').textContent = `오디오 ${data.audio_duration}`;
+      document.getElementById('asset-preview').classList.remove('hidden');
+      document.getElementById('btn-download-assets').classList.remove('hidden');
+
+      btn.textContent = '✅ 생성 완료';
+      this.showStatus('CapCut 에셋이 준비되었습니다!', 'success');
+
+    } catch (error) {
+      console.error('[ImageMain] Asset generation error:', error);
+      this.showStatus('에셋 생성 실패: ' + error.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '📦 CapCut 에셋 생성';
+      progressDiv.classList.add('hidden');
+    }
+  },
+
+  /**
+   * 에셋 ZIP 다운로드
+   */
+  downloadAssets() {
+    if (!this.assetZipUrl) {
+      this.showStatus('먼저 에셋을 생성해주세요.', 'warning');
+      return;
+    }
+
+    const a = document.createElement('a');
+    a.href = this.assetZipUrl;
+    a.download = `capcut_assets_${this.sessionId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    this.showStatus('ZIP 파일 다운로드 중...', 'info');
   }
 };
 
