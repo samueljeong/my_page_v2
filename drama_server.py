@@ -10009,15 +10009,67 @@ def api_image_generate_assets_zip():
         import uuid
         from datetime import datetime
 
+        def detect_language(text):
+            """텍스트의 주요 언어 감지 (한국어/영어/일본어)"""
+            if not text:
+                return 'en'
+
+            # 한글 문자 수
+            korean_chars = len(re.findall(r'[가-힣]', text))
+            # 일본어 문자 수 (히라가나, 가타카나, 일부 한자)
+            japanese_chars = len(re.findall(r'[\u3040-\u309F\u30A0-\u30FF]', text))
+            # 전체 문자 수 (공백 제외)
+            total_chars = len(re.sub(r'\s', '', text))
+
+            if total_chars == 0:
+                return 'en'
+
+            korean_ratio = korean_chars / total_chars
+            japanese_ratio = japanese_chars / total_chars
+
+            if korean_ratio > 0.3:
+                return 'ko'
+            elif japanese_ratio > 0.2:
+                return 'ja'
+            else:
+                return 'en'
+
+        def get_voice_for_language(lang, base_voice):
+            """언어에 맞는 TTS 음성 반환"""
+            # 기본 음성에서 성별 추출 (Neural2-A, Neural2-B = 여성, Neural2-C, Neural2-D = 남성)
+            is_female = 'Neural2-A' in base_voice or 'Neural2-B' in base_voice or 'Wavenet-A' in base_voice
+
+            voice_map = {
+                'ko': {
+                    'female': 'ko-KR-Neural2-A',
+                    'male': 'ko-KR-Neural2-C'
+                },
+                'en': {
+                    'female': 'en-US-Neural2-F',
+                    'male': 'en-US-Neural2-D'
+                },
+                'ja': {
+                    'female': 'ja-JP-Neural2-B',
+                    'male': 'ja-JP-Neural2-C'
+                }
+            }
+
+            gender = 'female' if is_female else 'male'
+            return voice_map.get(lang, voice_map['en'])[gender]
+
+        def get_language_code(lang):
+            """언어 코드 반환"""
+            return {'ko': 'ko-KR', 'en': 'en-US', 'ja': 'ja-JP'}.get(lang, 'en-US')
+
         data = request.get_json()
         session_id = data.get('session_id', str(uuid.uuid4())[:8])
-        voice_name = data.get('voice', 'ko-KR-Neural2-A')
+        base_voice = data.get('voice', 'ko-KR-Neural2-A')  # 사용자가 선택한 기본 음성 (성별 참조용)
         scenes = data.get('scenes', [])
 
         if not scenes:
             return jsonify({"ok": False, "error": "씬 데이터가 없습니다"}), 400
 
-        print(f"[ASSETS-ZIP] Generating assets for {len(scenes)} scenes, voice: {voice_name}")
+        print(f"[ASSETS-ZIP] Generating assets for {len(scenes)} scenes, base_voice: {base_voice}")
 
         # Google Cloud TTS REST API 사용
         api_key = os.getenv("GOOGLE_CLOUD_API_KEY", "")
@@ -10037,13 +10089,18 @@ def api_image_generate_assets_zip():
             if not narration:
                 continue
 
-            print(f"[ASSETS-ZIP] Processing scene {idx + 1}: {narration[:30]}...")
+            # 언어 감지 및 적절한 음성 선택
+            detected_lang = detect_language(narration)
+            voice_name = get_voice_for_language(detected_lang, base_voice)
+            language_code = get_language_code(detected_lang)
+
+            print(f"[ASSETS-ZIP] Scene {idx + 1}: lang={detected_lang}, voice={voice_name}, text={narration[:30]}...")
 
             # TTS 생성 (REST API)
             payload = {
                 "input": {"text": narration},
                 "voice": {
-                    "languageCode": "ko-KR",
+                    "languageCode": language_code,
                     "name": voice_name
                 },
                 "audioConfig": {
@@ -10056,16 +10113,20 @@ def api_image_generate_assets_zip():
             tts_response = requests.post(tts_url, json=payload, timeout=60)
 
             if tts_response.status_code != 200:
-                print(f"[ASSETS-ZIP] TTS API error for scene {idx + 1}: {tts_response.status_code}")
+                print(f"[ASSETS-ZIP] TTS API error for scene {idx + 1}: {tts_response.status_code} - {tts_response.text}")
                 continue
 
             tts_result = tts_response.json()
             audio_content = base64.b64decode(tts_result.get("audioContent", ""))
             audio_segments.append(audio_content)
 
-            # 오디오 길이 추정 (MP3는 정확한 길이 계산 어려움, 대략 추정)
-            # 한국어 평균 읽기 속도: 약 4-5자/초
-            estimated_duration = max(len(narration) / 4.5, 2.0)  # 최소 2초
+            # 오디오 길이 추정 (언어별로 다른 속도)
+            # 한국어: 약 4-5자/초, 영어: 약 12-15자/초 (단어 기준 2-3단어/초)
+            if detected_lang == 'ko':
+                estimated_duration = max(len(narration) / 4.5, 2.0)
+            else:
+                word_count = len(narration.split())
+                estimated_duration = max(word_count / 2.5, 2.0)  # 영어는 단어 수 기준
 
             # SRT 엔트리 생성
             start_time = current_time
