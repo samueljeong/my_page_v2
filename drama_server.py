@@ -9868,6 +9868,14 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
             if result_text.startswith("json"):
                 result_text = result_text[4:]
         result_text = result_text.strip()
+
+        # Trailing comma 제거 (LLM이 자주 실수하는 패턴)
+        import re
+        # ,] → ]
+        result_text = re.sub(r',\s*\]', ']', result_text)
+        # ,} → }
+        result_text = re.sub(r',\s*\}', '}', result_text)
+
         result = json.loads(result_text)
 
         return jsonify({
