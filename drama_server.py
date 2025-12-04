@@ -9700,26 +9700,34 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
             system_prompt = f"""당신의 역할은 대본을 분석하여 AI 이미지용 프롬프트를 전문적으로 작성하는 비서입니다.
 타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
 
+## ★★★ 언어 규칙 (매우 중요!) ★★★
+1. 대본의 언어를 자동으로 감지합니다.
+2. **유튜브 제목, 설명, 썸네일 텍스트는 반드시 대본과 동일한 언어로 작성합니다!**
+   - 영어 대본 → 영어로 제목/설명/썸네일 작성
+   - 일본어 대본 → 일본어로 제목/설명/썸네일 작성
+   - 한국어 대본 → 한국어로 제목/설명/썸네일 작성
+3. 해당 언어권 시청자가 자연스럽게 느낄 표현과 어휘를 사용합니다.
+4. 이미지 프롬프트만 영어로 작성합니다 (AI 이미지 생성용).
+
 ## 핵심 작업
 1. 대본에서 주인공의 나이, 성별, 직업, 외모 특징을 자동으로 추출합니다.
 2. 추출된 인물 정보를 바탕으로 일관된 이미지 프롬프트를 생성합니다.
 3. 타겟 시청자에 맞는 유튜브 채널용 썸네일 텍스트와 프롬프트를 생성합니다.
 
-## 한국인 인물 프롬프트 규칙
-- 한국인이 등장하면 반드시 "Korean" 또는 "South Korean"을 명시합니다.
-- 할머니: "Korean grandmother (halmeoni), elderly Korean woman, 70s, round face, single eyelids, permed short gray hair, warm wrinkled smile"
-- 할아버지: "Korean grandfather (harabeoji), elderly Korean man, 70s, angular Korean face, weathered kind face, short gray hair"
-- 젊은 여성: "Young Korean woman, 20s-30s, modern Korean beauty features"
-- 젊은 남성: "Young Korean man, 20s-30s, clean-cut Korean features"
+## 인물 프롬프트 규칙 (이미지 프롬프트용 - 영어)
+- 대본에서 인물의 국적/인종이 명시되면 해당 특징을 반영합니다.
+- 한국인: "Korean" 또는 "South Korean" 명시
+- 일본인: "Japanese" 명시
+- 미국인/서양인: "American", "Caucasian" 등 명시
 
 {thumbnail_rules}
 
 ## 프롬프트 작성 원칙
-1. 출력 프롬프트는 항상 영어로 작성합니다.
+1. **이미지 프롬프트(image_prompt)만 영어로** 작성합니다.
 2. 프롬프트는 짧지만 정보 밀도가 높은 한 문단으로 작성합니다.
 3. 다음 요소를 포함합니다:
    - [subject] 피사체/장면 - 프롬프트 맨 앞에 배치 (인물 특징 상세히)
-   - [environment] 배경, 장소 (한국적 공간: 병원, 골목, 시장, 기차역 등)
+   - [environment] 배경, 장소
    - [lighting] 조명 (soft natural light, warm golden hour, dramatic side lighting)
    - [color] 색감·톤 (warm tones, muted colors, film color grading)
    - [camera] 샷 종류(wide/medium/close-up), 렌즈(50mm/85mm), depth of field
@@ -9733,18 +9741,18 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 {{
   "youtube": {{
     "titles": [
-      "유튜브 제목 1 (클릭 유도, 50자 이내)",
-      "유튜브 제목 2 (감정 강조)",
-      "유튜브 제목 3 (궁금증 유발)",
-      "유튜브 제목 4 (경험 공유형)"
+      "Title 1 - click-inducing (대본 언어로 작성, 50자 이내)",
+      "Title 2 - emotional (대본 언어로 작성)",
+      "Title 3 - curiosity-driven (대본 언어로 작성)",
+      "Title 4 - experience-sharing (대본 언어로 작성)"
     ],
-    "description": "유튜브 설명란 (영상 내용 요약 + 해시태그 포함, 500자 이상)"
+    "description": "YouTube description in the SAME LANGUAGE as the script (요약 + 해시태그, 500자 이상)"
   }},
   "thumbnail": {{
     "text_options": [
-      "썸네일 텍스트 옵션1 ({'4-7자' if audience == 'general' else '8-12자'})",
-      "썸네일 텍스트 옵션2 ({'4-7자' if audience == 'general' else '8-12자'})",
-      "썸네일 텍스트 옵션3 ({'4-7자' if audience == 'general' else '8-12자'})"
+      "Thumbnail text 1 in script language ({'4-7 chars' if audience == 'general' else '8-12 chars'})",
+      "Thumbnail text 2 in script language",
+      "Thumbnail text 3 in script language"
     ],
     "text_color": "{thumbnail_color}",
     "outline_color": "{outline_color}",
@@ -9753,22 +9761,22 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
   "scenes": [
     {{
       "scene_number": 1,
-      "narration": "한국어 나레이션 (원본 대본 기반)",
+      "narration": "Narration in the SAME LANGUAGE as the original script",
       "image_prompt": "English image prompt with subject, environment, lighting, color, camera, style, mood"
     }}
   ]
 }}
 
-## 유튜브 제목 작성 규칙
-1. 시니어 타겟: 경험, 회상, 교훈 키워드 포함
-2. 50자 이내로 작성
-3. 숫자, 감정, 질문 등 클릭 유도 요소 포함
-4. 예시: "의사 30년, 아직도 후회하는 그 환자", "늦게 알았습니다... 그때 그 말"
+## 제목/썸네일 작성 팁 (해당 언어로 자연스럽게)
+- 영어: "The Truth About...", "What Nobody Told You", "I Regret..."
+- 일본어: "衝撃の真実", "誰も教えてくれなかった", "後悔しています"
+- 한국어: "아무도 안 알려줬다", "후회합니다", "그날의 진실"
+- 해당 언어권에서 클릭을 유도하는 자연스러운 표현 사용!
 
 ## 유튜브 설명란 작성 규칙
-1. 영상 내용 3줄 요약
-2. 관련 해시태그 5개 이상
-3. 구독/좋아요 유도 문구
+1. 영상 내용 3줄 요약 (대본 언어로)
+2. 관련 해시태그 5개 이상 (대본 언어로)
+3. 구독/좋아요 유도 문구 (대본 언어로)
 4. 500자 이상 작성"""
 
         # 스타일별 user prompt 분기
@@ -9779,29 +9787,33 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
             else:
                 thumb_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형: 그날을 잊지 않는다, 하는게 아니었다)"
 
-            user_prompt = f"""대본:
+            user_prompt = f"""Script (analyze the language):
 {script}
 
-위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 "CONTRAST COLLAGE: 애니메이션 배경 + 스틱맨" 이미지 프롬프트를 생성해주세요.
-타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
+★★★ LANGUAGE RULE ★★★
+- Detect the language of the script above
+- Write YouTube titles, description, thumbnail text, and narration in THE SAME LANGUAGE as the script!
+- ONLY image_prompt should be in English
 
-핵심 스타일 (반드시 지킬 것):
-- 배경 = 상세한 애니메이션 스타일 (slice-of-life anime, Ghibli-inspired, warm colors, soft lighting)
-- 스틱맨 = 단순/굵은 라인/흰 몸 + 얼굴 필수 (simple white stickman with black outline, round head with TWO DOT EYES, SMALL CURVED MOUTH, THIN EYEBROWS)
-- 결합 = "contrast collage" - 상세한 애니메이션 배경 속에 심플한 스틱맨이 대비되는 느낌
+Split this script into exactly {image_count} scenes and generate "CONTRAST COLLAGE: Anime background + Stickman" image prompts.
+Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-70s)'}
 
-중요 규칙:
-1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
-2. 배경은 반드시 DETAILED ANIME STYLE (slice-of-life anime, Ghibli-inspired, warm colors) - 실사/사진 스타일 금지!
-3. 캐릭터는 오직 "simple white stickman with round head, TWO BLACK DOT EYES, small curved mouth, thin eyebrows, black outline body, clean minimal flat style"만 표현
-4. 스틱맨 얼굴 필수 요소: 둥근 머리, 검은 점 눈 2개, 작은 곡선 입, 얇은 눈썹 - 모든 씬에서 동일하게!
-5. 절대 애니메이션 캐릭터, 만화 캐릭터, 실사 인물을 그리지 말 것. 오직 심플한 흰색 스틱맨만!
-6. NO anime characters, NO realistic humans - ONLY the simple white stickman!
-7. 감정은 눈썹과 입 모양, 자세와 몸짓으로 표현 (raised eyebrows for surprise, curved down mouth for sad)
-9. 모든 프롬프트 끝에 필수 태그: detailed anime background, slice-of-life style, simple white stickman with dot eyes and mouth, NO other characters, contrast collage
-10. {thumb_instruction}
+Core Style (MUST follow):
+- Background = Detailed anime style (slice-of-life anime, Ghibli-inspired, warm colors, soft lighting)
+- Stickman = Simple white body + Face required (round head with TWO DOT EYES, SMALL CURVED MOUTH, THIN EYEBROWS)
+- Combination = "contrast collage" - simple stickman contrasts against detailed anime background
 
-프롬프트는 반드시 영어로 작성해주세요."""
+Rules:
+1. Generate exactly {image_count} scenes (no more, no less)
+2. Background MUST be DETAILED ANIME STYLE - NO photorealistic!
+3. Character is ONLY "simple white stickman with round head, TWO BLACK DOT EYES, small curved mouth, thin eyebrows, black outline body"
+4. Stickman face MUST have: round head, two black dot eyes, small curved mouth, thin eyebrows - SAME in every scene!
+5. NO anime characters, NO realistic humans - ONLY the simple white stickman!
+6. Express emotion through eyebrows, mouth shape, and body posture
+7. Add these tags to every image_prompt: detailed anime background, slice-of-life style, simple white stickman, NO other characters, contrast collage
+8. {thumb_instruction}
+
+image_prompt MUST be in English."""
         else:
             # audience에 따른 썸네일 규칙
             if audience == 'general':
@@ -9809,17 +9821,21 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
             else:
                 thumbnail_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형/경험공유형)"
 
-            user_prompt = f"""대본:
+            user_prompt = f"""Script (analyze the language):
 {script}
 
-위 대본을 정확히 {image_count}개 씬으로 분리하고, 각 씬에 맞는 전문가급 이미지 프롬프트를 생성해주세요.
+★★★ LANGUAGE RULE ★★★
+- Detect the language of the script above
+- Write YouTube titles, description, thumbnail text, and narration in THE SAME LANGUAGE as the script!
+- ONLY image_prompt should be in English
 
-타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
+Split this script into exactly {image_count} scenes and generate professional image prompts.
+Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-70s)'}
 
-중요:
-1. 반드시 {image_count}개의 씬을 생성할 것 (더 많거나 적으면 안됨)
+Rules:
+1. Generate exactly {image_count} scenes (no more, no less)
 2. {thumbnail_instruction}
-3. 프롬프트는 반드시 영어로, 위의 작성 원칙을 따라주세요."""
+3. image_prompt MUST be in English, following the prompt writing principles above."""
 
         print(f"[IMAGE-ANALYZE] GPT-5.1로 이미지 프롬프트 생성 중... (스타일: {image_style}, 콘텐츠: {content_type}, 타겟: {audience})")
 
