@@ -9697,95 +9697,91 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
                 thumbnail_color = "#FFD700"
                 outline_color = "#000000"
 
-            system_prompt = f"""당신의 역할은 대본을 분석하여 AI 이미지용 프롬프트를 전문적으로 작성하는 비서입니다.
-타겟 시청자: {'일반 (20-40대)' if audience == 'general' else '시니어 (50-70대)'}
+            system_prompt = f"""You are an AI assistant that analyzes scripts and generates image prompts.
 
-## ★★★ 언어 규칙 (매우 중요!) ★★★
-1. 대본의 언어를 자동으로 감지합니다.
-2. **유튜브 제목, 설명, 썸네일 텍스트는 반드시 대본과 동일한 언어로 작성합니다!**
-   - 영어 대본 → 영어로 제목/설명/썸네일 작성
-   - 일본어 대본 → 일본어로 제목/설명/썸네일 작성
-   - 한국어 대본 → 한국어로 제목/설명/썸네일 작성
-3. 해당 언어권 시청자가 자연스럽게 느낄 표현과 어휘를 사용합니다.
-4. 이미지 프롬프트만 영어로 작성합니다 (AI 이미지 생성용).
+## ⚠️⚠️⚠️ CRITICAL LANGUAGE RULE - READ THIS FIRST! ⚠️⚠️⚠️
+1. DETECT the language of the input script.
+2. OUTPUT titles, description, thumbnail text, and narration in THE EXACT SAME LANGUAGE as the script!
+   - If script is in ENGLISH → Write ALL text outputs in ENGLISH
+   - If script is in JAPANESE → Write ALL text outputs in JAPANESE
+   - If script is in KOREAN → Write ALL text outputs in KOREAN
+3. ONLY image_prompt should ALWAYS be in English (for AI image generation).
+4. Use natural expressions that native speakers of that language would use.
 
-## 핵심 작업
-1. 대본에서 주인공의 나이, 성별, 직업, 외모 특징을 자동으로 추출합니다.
-2. 추출된 인물 정보를 바탕으로 일관된 이미지 프롬프트를 생성합니다.
-3. 타겟 시청자에 맞는 유튜브 채널용 썸네일 텍스트와 프롬프트를 생성합니다.
+Example:
+- English script "The company collapsed..." → English title "The Day Everything Fell Apart"
+- Japanese script "会社が崩壊した..." → Japanese title "すべてが崩壊した日"
+- Korean script "회사가 무너졌다..." → Korean title "모든 것이 무너진 날"
 
-## 인물 프롬프트 규칙 (이미지 프롬프트용 - 영어)
-- 대본에서 인물의 국적/인종이 명시되면 해당 특징을 반영합니다.
-- 한국인: "Korean" 또는 "South Korean" 명시
-- 일본인: "Japanese" 명시
-- 미국인/서양인: "American", "Caucasian" 등 명시
+Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-70s)'}
+
+## Core Tasks
+1. Extract protagonist's age, gender, occupation, appearance from the script.
+2. Generate consistent image prompts based on extracted character info.
+3. Generate YouTube thumbnail text and prompts for the target audience.
+
+## Character Prompt Rules (for image_prompt - always in English)
+- Reflect nationality/ethnicity mentioned in script
+- Korean: use "Korean" or "South Korean"
+- Japanese: use "Japanese"
+- American/Western: use "American", "Caucasian", etc.
 
 {thumbnail_rules}
 
-## 프롬프트 작성 원칙
-1. **이미지 프롬프트(image_prompt)만 영어로** 작성합니다.
-2. 프롬프트는 짧지만 정보 밀도가 높은 한 문단으로 작성합니다.
-3. 다음 요소를 포함합니다:
-   - [subject] 피사체/장면 - 프롬프트 맨 앞에 배치 (인물 특징 상세히)
-   - [environment] 배경, 장소
-   - [lighting] 조명 (soft natural light, warm golden hour, dramatic side lighting)
-   - [color] 색감·톤 (warm tones, muted colors, film color grading)
-   - [camera] 샷 종류(wide/medium/close-up), 렌즈(50mm/85mm), depth of field
-   - [style] 스타일
-   - [mood] 감정·분위기
+## Prompt Writing Principles
+1. **image_prompt is ALWAYS in English** (for AI image generation)
+2. Write concise but information-dense prompts.
+3. Include these elements:
+   - [subject] Main subject - place at the beginning (detailed character features)
+   - [environment] Background, location
+   - [lighting] Lighting (soft natural light, warm golden hour, dramatic side lighting)
+   - [color] Color tone (warm tones, muted colors, film color grading)
+   - [camera] Shot type (wide/medium/close-up), lens (50mm/85mm), depth of field
+   - [style] Style
+   - [mood] Emotion/atmosphere
 
-## 이미지 스타일
+## Image Style
 {style_desc}
 
-## 출력 형식 (반드시 JSON)
+## Output Format (MUST be valid JSON)
 {{
   "youtube": {{
     "titles": [
-      "Title 1 - click-inducing (대본 언어로 작성, 50자 이내)",
-      "Title 2 - emotional (대본 언어로 작성)",
-      "Title 3 - curiosity-driven (대본 언어로 작성)",
-      "Title 4 - experience-sharing (대본 언어로 작성)"
+      "Title 1 in SCRIPT LANGUAGE (click-inducing, max 50 chars)",
+      "Title 2 in SCRIPT LANGUAGE (emotional)",
+      "Title 3 in SCRIPT LANGUAGE (curiosity-driven)",
+      "Title 4 in SCRIPT LANGUAGE (experience-sharing)"
     ],
-    "description": "YouTube description in the SAME LANGUAGE as the script (요약 + 해시태그, 500자 이상)"
+    "description": "Description in SCRIPT LANGUAGE (summary + hashtags, 500+ chars)"
   }},
   "thumbnail": {{
     "text_options": [
-      "Thumbnail text 1 in script language ({'4-7 chars' if audience == 'general' else '8-12 chars'})",
-      "Thumbnail text 2 in script language",
-      "Thumbnail text 3 in script language"
+      "Thumbnail text 1 in SCRIPT LANGUAGE ({'4-7 chars' if audience == 'general' else '8-12 chars'})",
+      "Thumbnail text 2 in SCRIPT LANGUAGE",
+      "Thumbnail text 3 in SCRIPT LANGUAGE"
     ],
     "text_color": "{thumbnail_color}",
     "outline_color": "{outline_color}",
-    "prompt": "Thumbnail prompt - detailed anime background with simple white stickman (round head, two dot eyes, small mouth, thin eyebrows), dramatic pose, emotional expression, text space on {'center' if audience == 'general' else 'left'}, Ghibli-inspired warm colors, NO realistic humans, NO anime characters, ONLY stickman"
+    "prompt": "English prompt - detailed anime background with simple white stickman..."
   }},
   "scenes": [
     {{
       "scene_number": 1,
-      "narration": "Narration in the SAME LANGUAGE as the original script",
-      "image_prompt": "English image prompt with subject, environment, lighting, color, camera, style, mood"
+      "narration": "Narration in SCRIPT LANGUAGE (same as original script)",
+      "image_prompt": "English image prompt..."
     }}
   ]
 }}
 
-## 제목/썸네일 작성 팁 (해당 언어로 자연스럽게)
-- 영어: "The Truth About...", "What Nobody Told You", "I Regret..."
-- 일본어: "衝撃の真実", "誰も教えてくれなかった", "後悔しています"
-- 한국어: "아무도 안 알려줬다", "후회합니다", "그날의 진실"
-- 해당 언어권에서 클릭을 유도하는 자연스러운 표현 사용!
+REMEMBER: If the script is in English, ALL titles/description/thumbnail/narration MUST be in English!"""
 
-## 유튜브 설명란 작성 규칙
-1. 영상 내용 3줄 요약 (대본 언어로)
-2. 관련 해시태그 5개 이상 (대본 언어로)
-3. 구독/좋아요 유도 문구 (대본 언어로)
-4. 500자 이상 작성"""
-
-        # 스타일별 user prompt 분기
+        # Style-specific user prompt
         if image_style == 'animation':
-            # audience에 따른 썸네일 규칙
+            # Thumbnail rules by audience
             if audience == 'general':
-                thumb_instruction = "썸네일 문구는 일반 타겟 (4-7자 이하, 자극형/충격형: 결국 터졌다, 이게 실화?, 소름)"
+                thumb_instruction = "Thumbnail text for General audience (4-7 chars, provocative/shocking style)"
             else:
-                thumb_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형: 그날을 잊지 않는다, 하는게 아니었다)"
+                thumb_instruction = "Thumbnail text for Senior audience (8-12 chars, nostalgic/reflective style)"
 
             user_prompt = f"""Script (analyze the language):
 {script}
@@ -9815,11 +9811,11 @@ Rules:
 
 image_prompt MUST be in English."""
         else:
-            # audience에 따른 썸네일 규칙
+            # Thumbnail rules by audience
             if audience == 'general':
-                thumbnail_instruction = "썸네일 문구는 일반 타겟 (4-7자 이하, 자극형/궁금증형/충격형)"
+                thumbnail_instruction = "Thumbnail text for General audience (4-7 chars, provocative/curiosity/shocking style)"
             else:
-                thumbnail_instruction = "썸네일 문구는 시니어 타겟 (8-12자 이하, 회상형/후회형/경험공유형)"
+                thumbnail_instruction = "Thumbnail text for Senior audience (8-12 chars, nostalgic/reflective/experience-sharing style)"
 
             user_prompt = f"""Script (analyze the language):
 {script}
@@ -9857,7 +9853,7 @@ Rules:
                     "content": [
                         {
                             "type": "input_text",
-                            "text": user_prompt + "\n\n반드시 유효한 JSON 형식으로만 응답해주세요. 다른 텍스트 없이 JSON만 출력하세요."
+                            "text": user_prompt + "\n\nIMPORTANT: Respond ONLY with valid JSON. No other text, just pure JSON output."
                         }
                     ]
                 }
