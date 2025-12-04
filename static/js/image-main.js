@@ -20,6 +20,16 @@ const ImageMain = {
     console.log('[ImageMain] Initializing...');
     this.sessionId = this.generateSessionId();
     this.updateSessionInfo();
+
+    // 폰트 크기 슬라이더 이벤트
+    const fontSizeSlider = document.getElementById('thumb-font-size');
+    const fontSizeValue = document.getElementById('thumb-font-size-value');
+    if (fontSizeSlider && fontSizeValue) {
+      fontSizeSlider.addEventListener('input', (e) => {
+        fontSizeValue.textContent = e.target.value;
+      });
+    }
+
     console.log('[ImageMain] Ready. Session:', this.sessionId);
   },
 
@@ -325,37 +335,49 @@ const ImageMain = {
       return;
     }
 
-    if (!this.selectedThumbnailText) {
-      this.showStatus('썸네일 텍스트를 선택해주세요.', 'warning');
+    // 직접 입력한 텍스트 우선 사용
+    const customTextEl = document.getElementById('thumbnail-custom-text');
+    const customText = customTextEl?.value?.trim() || '';
+
+    // 텍스트 결정: 직접 입력 > 선택한 옵션
+    let textLines = [];
+    if (customText) {
+      // 줄바꿈으로 분리하여 여러 줄 지원
+      textLines = customText.split('\n').filter(line => line.trim());
+    } else if (this.selectedThumbnailText) {
+      textLines = [this.selectedThumbnailText];
+    }
+
+    if (textLines.length === 0) {
+      this.showStatus('썸네일 텍스트를 입력하거나 선택해주세요.', 'warning');
       return;
     }
 
     const thumbnailData = this.analyzedData.thumbnail || {};
-    const prompt = thumbnailData.prompt || '';
-    const textColor = thumbnailData.text_color || '#FFD700';
-    const outlineColor = thumbnailData.outline_color || '#000000';
+    const prompt = thumbnailData.prompt || 'detailed anime background with simple white stickman, dramatic pose, Ghibli-inspired, NO realistic humans';
 
-    if (!prompt) {
-      this.showStatus('썸네일 프롬프트가 없습니다.', 'warning');
-      return;
-    }
+    // UI에서 스타일 값 읽기
+    const textColor = document.getElementById('thumb-text-color')?.value || '#FFD700';
+    const outlineColor = document.getElementById('thumb-outline-color')?.value || '#000000';
+    const fontSize = parseInt(document.getElementById('thumb-font-size')?.value) || 100;
+    const position = document.getElementById('thumb-position')?.value || 'left';
 
     // 썸네일 그리드 표시
     document.getElementById('thumbnail-grid').style.display = 'flex';
 
     const model = document.getElementById('image-model').value;
-    const textLines = [this.selectedThumbnailText];
+    const displayText = textLines.join('\n');
 
     // 텍스트 미리보기 표시
     for (let i = 0; i < 2; i++) {
       const textEl = document.getElementById(`thumbnail-text-${i}`);
       if (textEl) {
-        textEl.textContent = this.selectedThumbnailText;
+        textEl.textContent = displayText;
       }
     }
 
     // 병렬 생성
-    const promises = [0, 1].map(idx => this.generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor));
+    const promises = [0, 1].map(idx => this.generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor, fontSize, position));
     await Promise.all(promises);
 
     this.showStatus('썸네일 2개 생성 완료!', 'success');
@@ -470,9 +492,9 @@ const ImageMain = {
   },
 
   /**
-   * 단일 썸네일 생성 (시니어 가이드 적용)
+   * 단일 썸네일 생성 (사용자 설정 적용)
    */
-  async generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor) {
+  async generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor, fontSize = 100, position = 'left') {
     const card = document.getElementById(`thumbnail-card-${idx}`);
     const imageBox = card.querySelector('.thumbnail-image-box');
 
@@ -505,7 +527,7 @@ const ImageMain = {
         throw new Error('이미지 URL이 없습니다.');
       }
 
-      // 2단계: 텍스트 오버레이 (시니어 가이드: 노랑+검정)
+      // 2단계: 텍스트 오버레이 (사용자가 지정한 스타일 적용)
       if (textLines && textLines.length > 0) {
         imageBox.innerHTML = '<div class="placeholder"><div class="spinner"></div><span>텍스트 적용중...</span></div>';
 
@@ -519,9 +541,9 @@ const ImageMain = {
             textColor: textColor,
             highlightColor: textColor,
             outlineColor: outlineColor,
-            outlineWidth: 5,
-            fontSize: 72,
-            position: 'left'
+            outlineWidth: 6,
+            fontSize: fontSize,
+            position: position
           })
         });
 

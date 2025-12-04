@@ -731,6 +731,100 @@
       margin-bottom: 12px;
     }
 
+    .custom-text-input {
+      margin: 16px 0;
+      padding-top: 12px;
+      border-top: 1px dashed #e5e7eb;
+    }
+
+    .custom-text-input label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .custom-text-input textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .custom-text-input textarea:focus {
+      outline: none;
+      border-color: #8b5cf6;
+    }
+
+    .custom-text-input textarea::placeholder {
+      color: #999;
+      font-weight: 400;
+    }
+
+    .text-style-options {
+      margin: 16px 0;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+
+    .style-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .style-item {
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .style-item label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .style-item input[type="color"] {
+      width: 100%;
+      height: 32px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .style-item input[type="range"] {
+      width: calc(100% - 40px);
+      cursor: pointer;
+    }
+
+    .style-item input[type="range"] + span {
+      display: inline-block;
+      width: 30px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .style-item select {
+      width: 100%;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
     .text-option {
       display: flex;
       align-items: center;
@@ -983,12 +1077,46 @@
 
             <!-- 썸네일 텍스트 선택 (3개 중 선택) -->
             <div id="thumbnail-text-select" class="thumbnail-text-select">
-              <label>텍스트 선택 (3개 중 선택)</label>
+              <label>AI 추천 텍스트 (선택)</label>
               <div id="thumbnail-text-options" class="text-options">
                 <!-- JS로 동적 생성 -->
               </div>
-              <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()" disabled>
-                🎨 선택한 텍스트로 썸네일 생성
+
+              <!-- 직접 입력 필드 -->
+              <div class="custom-text-input">
+                <label>✏️ 직접 입력 (여러 줄 가능)</label>
+                <textarea id="thumbnail-custom-text" placeholder="예: 4시간의 배신&#10;그날 밤 일어난 일"></textarea>
+              </div>
+
+              <!-- 텍스트 스타일 옵션 -->
+              <div class="text-style-options">
+                <div class="style-row">
+                  <div class="style-item">
+                    <label>텍스트 색상</label>
+                    <input type="color" id="thumb-text-color" value="#FFD700">
+                  </div>
+                  <div class="style-item">
+                    <label>외곽선 색상</label>
+                    <input type="color" id="thumb-outline-color" value="#000000">
+                  </div>
+                  <div class="style-item">
+                    <label>폰트 크기</label>
+                    <input type="range" id="thumb-font-size" min="40" max="150" value="100">
+                    <span id="thumb-font-size-value">100</span>
+                  </div>
+                  <div class="style-item">
+                    <label>배치</label>
+                    <select id="thumb-position">
+                      <option value="left">왼쪽</option>
+                      <option value="center">가운데</option>
+                      <option value="right">오른쪽</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()">
+                🎨 썸네일 생성
               </button>
             </div>
 
@@ -1023,6 +1151,6 @@
 
   <!-- JavaScript -->
   <script src="{{ url_for('static', filename='js/drama-utils.js') }}?v=20241203"></script>
-  <script src="{{ url_for('static', filename='js/image-main.js') }}?v=20241204c"></script>
+  <script src="{{ url_for('static', filename='js/image-main.js') }}?v=20241204d"></script>
 </body>
 </html>
