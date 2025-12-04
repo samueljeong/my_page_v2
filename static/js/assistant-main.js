@@ -15,18 +15,190 @@ const AssistantMain = (() => {
   async function init() {
     console.log('[Assistant] Initializing...');
 
-    // Set today's date
-    const today = new Date();
-    const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-    document.getElementById('today-date').textContent = today.toLocaleDateString('ko-KR', options);
+    // Set today's date and greeting
+    updateGreeting();
+    setTodayDate();
 
     // Load dashboard data
     await loadDashboard();
+
+    // Load news
+    await loadNews();
 
     // Initialize attendance section
     initUploadDate();
     initStyleButtons();
     initDragDrop();
+  }
+
+  function updateGreeting() {
+    const hour = new Date().getHours();
+    let greeting = 'Good Morning!';
+    let message = "Today's schedule and news at a glance";
+
+    if (hour >= 12 && hour < 17) {
+      greeting = 'Good Afternoon!';
+      message = "Check your afternoon schedule";
+    } else if (hour >= 17 && hour < 21) {
+      greeting = 'Good Evening!';
+      message = "Review today's progress";
+    } else if (hour >= 21 || hour < 5) {
+      greeting = 'Good Night!';
+      message = "Prepare for tomorrow";
+    }
+
+    const greetingEl = document.getElementById('greeting-text');
+    const messageEl = document.getElementById('greeting-message');
+    if (greetingEl) greetingEl.textContent = greeting;
+    if (messageEl) messageEl.textContent = message;
+  }
+
+  function setTodayDate() {
+    const today = new Date();
+    const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+    const dateEl = document.getElementById('today-date');
+    if (dateEl) dateEl.textContent = today.toLocaleDateString('ko-KR', options);
+  }
+
+  // ===== News Functions =====
+  async function loadNews() {
+    const container = document.getElementById('news-container');
+    const timeEl = document.getElementById('news-time');
+
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="news-loading">
+        <div class="spinner"></div>
+        <p>Loading today's news...</p>
+      </div>
+    `;
+
+    try {
+      const response = await fetch('/assistant/api/news');
+      const data = await response.json();
+
+      if (data.success && data.news && data.news.length > 0) {
+        renderNewsTable(data.news);
+
+        if (timeEl && data.updated_at) {
+          const updateTime = new Date(data.updated_at);
+          timeEl.textContent = updateTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' Update';
+        }
+      } else {
+        container.innerHTML = `
+          <div class="news-empty">
+            <p>No news available. Click Refresh to load.</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('[Assistant] News load error:', error);
+      container.innerHTML = `
+        <div class="news-empty">
+          <p>Failed to load news. Please try again.</p>
+        </div>
+      `;
+    }
+  }
+
+  function renderNewsTable(news) {
+    const container = document.getElementById('news-container');
+    if (!container) return;
+
+    const html = `
+      <table class="news-table">
+        <thead>
+          <tr>
+            <th style="width: 80px;">Category</th>
+            <th>News</th>
+            <th style="width: 100px;">Video</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${news.map(item => `
+            <tr>
+              <td>
+                <span class="news-category ${item.category === '국내' ? 'domestic' : 'international'}">
+                  ${item.category}
+                </span>
+              </td>
+              <td>
+                <div class="news-title">${escapeHtml(item.title)}</div>
+                <div class="news-summary">${escapeHtml(item.summary || '')}</div>
+                ${item.interpretation ? `
+                  <div class="news-interpretation">
+                    💡 ${escapeHtml(item.interpretation)}
+                  </div>
+                ` : ''}
+              </td>
+              <td>
+                <div class="video-potential">
+                  <span class="video-score ${item.video_potential}">${getVideoScoreIcon(item.video_potential)}</span>
+                  <span class="video-label">${escapeHtml(item.video_reason || '')}</span>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    container.innerHTML = html;
+  }
+
+  function getVideoScoreIcon(potential) {
+    switch (potential) {
+      case 'high': return '🔥';
+      case 'medium': return '👍';
+      case 'low': return '➖';
+      default: return '❓';
+    }
+  }
+
+  async function refreshNews() {
+    const container = document.getElementById('news-container');
+    const refreshIcon = document.getElementById('refresh-icon');
+    const timeEl = document.getElementById('news-time');
+
+    if (!container) return;
+
+    if (refreshIcon) refreshIcon.style.animation = 'spin 1s linear infinite';
+    container.innerHTML = `
+      <div class="news-loading">
+        <div class="spinner"></div>
+        <p>Refreshing news...</p>
+      </div>
+    `;
+
+    try {
+      const response = await fetch('/assistant/api/news/refresh', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success && data.news) {
+        renderNewsTable(data.news);
+
+        if (timeEl && data.updated_at) {
+          const updateTime = new Date(data.updated_at);
+          timeEl.textContent = updateTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' Update';
+        }
+      } else {
+        container.innerHTML = `
+          <div class="news-empty">
+            <p>${data.error || 'Failed to refresh news'}</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('[Assistant] News refresh error:', error);
+      container.innerHTML = `
+        <div class="news-empty">
+          <p>Network error. Please try again.</p>
+        </div>
+      `;
+    } finally {
+      if (refreshIcon) refreshIcon.style.animation = '';
+    }
   }
 
   // Initialize drag and drop for file upload
@@ -1366,6 +1538,8 @@ const AssistantMain = (() => {
     saveTask,
     syncToMac,
     showSection,
+    // News functions
+    refreshNews,
     // Calendar functions
     calendarPrev,
     calendarNext,

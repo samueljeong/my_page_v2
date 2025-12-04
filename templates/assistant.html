@@ -7,17 +7,23 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%234CAF50' width='32' height='32' rx='6'/><text x='16' y='22' font-size='18' fill='white' text-anchor='middle' font-weight='bold'>A</text></svg>">
   <style>
     :root {
-      --primary-color: #4CAF50;
-      --primary-dark: #388E3C;
-      --secondary-color: #2196F3;
-      --danger-color: #f44336;
-      --warning-color: #ff9800;
-      --bg-color: #f5f7fa;
+      --primary-color: #10b981;
+      --primary-dark: #059669;
+      --primary-light: #d1fae5;
+      --secondary-color: #3b82f6;
+      --danger-color: #ef4444;
+      --warning-color: #f59e0b;
+      --bg-color: #f8fafc;
       --card-bg: #ffffff;
-      --text-primary: #1a1a2e;
-      --text-secondary: #666;
-      --border-color: #e0e0e0;
-      --shadow: 0 2px 8px rgba(0,0,0,0.1);
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border-color: #e2e8f0;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+      --radius: 12px;
+      --radius-lg: 16px;
     }
 
     * {
@@ -31,21 +37,31 @@
       background: var(--bg-color);
       color: var(--text-primary);
       min-height: 100vh;
+      line-height: 1.6;
     }
 
     /* Header */
     .header {
-      background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
       color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      padding: 1rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
       box-shadow: var(--shadow);
     }
 
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .header h1 {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
+      font-weight: 700;
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -53,7 +69,7 @@
 
     .header-links {
       display: flex;
-      gap: 1rem;
+      gap: 0.75rem;
       align-items: center;
     }
 
@@ -61,13 +77,15 @@
       color: white;
       text-decoration: none;
       padding: 0.5rem 1rem;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.2);
-      transition: background 0.2s;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.15);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s;
     }
 
     .header-links a:hover {
-      background: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.25);
     }
 
     /* Main Layout */
@@ -76,23 +94,44 @@
       min-height: calc(100vh - 60px);
     }
 
-    /* Sidebar */
+    /* Sidebar - Desktop */
     .sidebar {
-      width: 200px;
+      width: 220px;
       background: var(--card-bg);
       border-right: 1px solid var(--border-color);
-      padding: 1rem 0;
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 60px;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 0 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .sidebar-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 0 0.75rem;
+      margin-bottom: 0.5rem;
     }
 
     .sidebar-item {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.75rem 1.5rem;
+      padding: 0.75rem;
       color: var(--text-secondary);
       text-decoration: none;
+      border-radius: 8px;
       transition: all 0.2s;
-      border-left: 3px solid transparent;
+      font-size: 0.9rem;
+      font-weight: 500;
     }
 
     .sidebar-item:hover {
@@ -101,172 +140,507 @@
     }
 
     .sidebar-item.active {
-      background: rgba(76, 175, 80, 0.1);
-      color: var(--primary-color);
-      border-left-color: var(--primary-color);
-      font-weight: 600;
+      background: var(--primary-light);
+      color: var(--primary-dark);
     }
 
     .sidebar-icon {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
+      width: 24px;
+      text-align: center;
     }
 
     /* Main Content */
     .main-content {
       flex: 1;
-      padding: 2rem;
+      padding: 1.5rem;
       max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Section */
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    /* Welcome Banner */
+    .welcome-banner {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem 2rem;
+      color: white;
+      margin-bottom: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .welcome-banner::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 300px;
+      height: 300px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 50%;
+    }
+
+    .welcome-banner h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .welcome-banner .date {
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+
+    .welcome-banner .greeting {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+
+    /* Quick Input */
+    .quick-input-section {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+      border: 2px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .quick-input-section:focus-within {
+      border-color: var(--primary-color);
+    }
+
+    .quick-input-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .quick-input-header h3 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .quick-input-header .badge {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .quick-input-section textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: vertical;
+      transition: border-color 0.2s;
+      background: var(--bg-color);
+    }
+
+    .quick-input-section textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      background: white;
+    }
+
+    .quick-input-section textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .quick-input-actions {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    /* News Section */
+    .news-section {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .news-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+      color: white;
+    }
+
+    .news-header h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .news-header .time-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+    }
+
+    .news-body {
+      padding: 0;
+    }
+
+    .news-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .news-table th {
+      background: var(--bg-color);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .news-table td {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: top;
+    }
+
+    .news-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .news-table tr:hover {
+      background: var(--bg-color);
+    }
+
+    .news-category {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .news-category.domestic {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .news-category.international {
+      background: #fce7f3;
+      color: #9d174d;
+    }
+
+    .news-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .news-summary {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .news-interpretation {
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #fef3c7;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: #92400e;
+    }
+
+    .video-potential {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .video-score {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .video-score.high {
+      color: var(--primary-color);
+    }
+
+    .video-score.medium {
+      color: var(--warning-color);
+    }
+
+    .video-score.low {
+      color: var(--text-muted);
+    }
+
+    .video-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .news-loading, .news-empty {
+      padding: 3rem;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    .news-loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    .refresh-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.2s;
+    }
+
+    .refresh-btn:hover {
+      background: rgba(255,255,255,0.3);
     }
 
     /* Dashboard Grid */
     .dashboard-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 1.5rem;
     }
 
     /* Card */
     .card {
       background: var(--card-bg);
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       box-shadow: var(--shadow);
       overflow: hidden;
     }
 
     .card-header {
-      padding: 1rem 1.5rem;
+      padding: 1rem 1.25rem;
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
-    .card-header h2 {
-      font-size: 1.1rem;
+    .card-header h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
     .card-body {
-      padding: 1.5rem;
+      padding: 1rem 1.25rem;
     }
 
     .card-body.empty {
       color: var(--text-secondary);
       text-align: center;
       padding: 2rem;
+      font-size: 0.9rem;
     }
 
-    /* Event/Task Item */
-    .item {
+    /* Timeline Events */
+    .timeline {
+      position: relative;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: var(--border-color);
+    }
+
+    .timeline-item {
       display: flex;
-      align-items: flex-start;
       gap: 1rem;
+      padding: 0.75rem 0;
+      position: relative;
+    }
+
+    .timeline-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary-color);
+      border: 3px solid var(--primary-light);
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .timeline-dot.past {
+      background: var(--text-muted);
+      border-color: var(--border-color);
+    }
+
+    .timeline-dot.upcoming {
+      background: var(--warning-color);
+      border-color: #fef3c7;
+    }
+
+    .timeline-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .timeline-time {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary-color);
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-title {
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-meta {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    /* Tags & Badges */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .tag-category {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .tag-sync {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .tag-pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    /* Task Item */
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       padding: 0.75rem 0;
       border-bottom: 1px solid var(--border-color);
     }
 
-    .item:last-child {
+    .task-item:last-child {
       border-bottom: none;
     }
 
-    .item-time {
-      min-width: 60px;
-      font-weight: 600;
-      color: var(--primary-color);
-      font-size: 0.9rem;
-    }
-
-    .item-content {
-      flex: 1;
-    }
-
-    .item-title {
-      font-weight: 500;
-      margin-bottom: 0.25rem;
-    }
-
-    .item-meta {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-    }
-
-    .item-category {
-      display: inline-block;
-      padding: 0.15rem 0.5rem;
-      background: rgba(76, 175, 80, 0.1);
-      color: var(--primary-color);
-      border-radius: 4px;
-      font-size: 0.75rem;
-    }
-
-    /* Priority Badge */
-    .priority-high {
-      color: var(--danger-color);
-    }
-    .priority-medium {
-      color: var(--warning-color);
-    }
-    .priority-low {
-      color: var(--text-secondary);
-    }
-
-    /* Sync Status */
-    .sync-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.25rem 0.5rem;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
-
-    .sync-pending {
-      background: rgba(255, 152, 0, 0.15);
-      color: #f57c00;
-    }
-
-    .sync-synced {
-      background: rgba(76, 175, 80, 0.15);
-      color: #388E3C;
-    }
-
-    /* Input Analyzer */
-    .input-section {
-      margin-top: 2rem;
-    }
-
-    .input-section textarea {
-      width: 100%;
-      min-height: 120px;
-      padding: 1rem;
+    .task-checkbox {
+      width: 20px;
+      height: 20px;
       border: 2px solid var(--border-color);
-      border-radius: 8px;
-      font-size: 1rem;
-      font-family: inherit;
-      resize: vertical;
-      transition: border-color 0.2s;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      font-size: 0.7rem;
+      color: white;
     }
 
-    .input-section textarea:focus {
-      outline: none;
+    .task-checkbox:hover {
       border-color: var(--primary-color);
     }
 
-    .input-section .btn-row {
-      margin-top: 1rem;
-      display: flex;
-      gap: 1rem;
+    .task-checkbox.checked {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+    }
+
+    .task-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .task-title {
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .task-due {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .task-due.overdue {
+      color: var(--danger-color);
     }
 
     /* Buttons */
     .btn {
-      padding: 0.75rem 1.5rem;
+      padding: 0.625rem 1.25rem;
       border: none;
       border-radius: 8px;
-      font-size: 1rem;
+      font-size: 0.875rem;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s;
@@ -295,18 +669,33 @@
     }
 
     .btn-small {
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
+      padding: 0.5rem 0.875rem;
+      font-size: 0.8rem;
     }
 
     .btn:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    /* Loading */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border-color);
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
 
     /* Parsed Result */
     .parsed-result {
-      margin-top: 1.5rem;
+      margin-top: 1rem;
       padding: 1rem;
       background: var(--bg-color);
       border-radius: 8px;
@@ -318,8 +707,9 @@
     }
 
     .parsed-result h4 {
-      margin-bottom: 1rem;
-      color: var(--primary-color);
+      margin-bottom: 0.75rem;
+      color: var(--primary-dark);
+      font-size: 0.9rem;
     }
 
     .parsed-item {
@@ -330,31 +720,333 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      font-size: 0.9rem;
     }
 
-    /* Loading */
-    .loading {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
+    /* Calendar Styles */
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .calendar-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .calendar-nav button {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-color);
+      background: var(--card-bg);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .calendar-nav button:hover {
+      background: var(--bg-color);
+    }
+
+    .calendar-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .calendar-view-toggle {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--bg-color);
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+
+    .view-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    .view-btn.active {
+      background: var(--card-bg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      background: var(--border-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .calendar-day-header {
+      background: var(--bg-color);
+      padding: 0.75rem;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .calendar-day-header:first-child { color: var(--danger-color); }
+    .calendar-day-header:last-child { color: var(--secondary-color); }
+
+    .calendar-day {
+      background: var(--card-bg);
+      min-height: 80px;
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .calendar-day:hover { background: var(--bg-color); }
+    .calendar-day.other-month { background: var(--bg-color); color: var(--text-muted); }
+    .calendar-day.today { background: var(--primary-light); }
+    .calendar-day.selected { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+
+    .day-number {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+      font-size: 0.9rem;
+    }
+
+    .day-events {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .day-event {
+      background: var(--primary-color);
+      color: white;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .day-event.more { background: var(--text-muted); }
+
+    .selected-date-events {
+      margin-top: 1.5rem;
+    }
+
+    .selected-date-header {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--primary-color);
+    }
+
+    /* Tasks Section */
+    .tasks-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      padding: 1rem;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--primary-color);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .stat-card.pending .stat-number { color: var(--warning-color); }
+    .stat-card.overdue .stat-number { color: var(--danger-color); }
+
+    .quick-add-task {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .quick-add-task input {
+      flex: 1;
+      padding: 0.75rem 1rem;
       border: 2px solid var(--border-color);
-      border-top-color: var(--primary-color);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .quick-add-task input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+    }
+
+    .tasks-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .tasks-filters {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--bg-color);
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: var(--card-bg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .tasks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .task-list-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+    }
+
+    .task-list-item:hover {
+      box-shadow: var(--shadow);
+    }
+
+    .task-list-item.completed {
+      opacity: 0.6;
+    }
+
+    .task-list-item.completed .task-title {
+      text-decoration: line-through;
+      color: var(--text-secondary);
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .task-action-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: var(--bg-color);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .task-action-btn:hover {
+      background: var(--border-color);
+    }
+
+    .task-action-btn.delete:hover {
+      background: #fee2e2;
+      color: var(--danger-color);
+    }
+
+    .empty-tasks {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-tasks-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
     }
 
     /* Attendance Section */
-    .attendance-section {
-      margin-top: 2rem;
+    .tab-nav {
+      display: flex;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      padding: 0.75rem 1.25rem;
+      background: none;
+      border: none;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
 
     .file-upload-zone {
       border: 2px dashed var(--border-color);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 2rem;
       text-align: center;
       transition: all 0.2s;
@@ -364,55 +1056,47 @@
 
     .file-upload-zone:hover {
       border-color: var(--primary-color);
-      background: rgba(76, 175, 80, 0.05);
-    }
-
-    .file-upload-zone.dragover {
-      border-color: var(--primary-color);
-      background: rgba(76, 175, 80, 0.1);
+      background: var(--primary-light);
     }
 
     .file-upload-zone input[type="file"] {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      inset: 0;
       opacity: 0;
       cursor: pointer;
     }
 
-    .file-upload-icon {
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .file-upload-text {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
+    .file-upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .file-upload-text { color: var(--text-secondary); font-size: 0.9rem; }
 
     .upload-options {
       display: flex;
       gap: 1rem;
       margin-top: 1rem;
       flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .upload-options label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
     }
 
     .upload-options input, .upload-options select {
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 0.75rem;
       border: 1px solid var(--border-color);
       border-radius: 6px;
       font-size: 0.9rem;
     }
 
-    /* Under-attending list */
     .under-attending-controls {
       display: flex;
       gap: 1rem;
       margin-bottom: 1rem;
       flex-wrap: wrap;
-      align-items: center;
+      align-items: flex-end;
     }
 
     .under-attending-list {
@@ -436,118 +1120,19 @@
       cursor: pointer;
     }
 
-    .person-info {
-      flex: 1;
-    }
-
-    .person-name {
-      font-weight: 600;
-    }
-
-    .person-meta {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-    }
+    .person-info { flex: 1; }
+    .person-name { font-weight: 600; }
+    .person-meta { font-size: 0.85rem; color: var(--text-secondary); }
 
     .absent-badge {
-      background: rgba(244, 67, 54, 0.15);
+      background: #fee2e2;
       color: var(--danger-color);
-      padding: 0.25rem 0.5rem;
-      border-radius: 12px;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
       font-size: 0.75rem;
       font-weight: 600;
     }
 
-    /* Message result */
-    .message-list {
-      margin-top: 1rem;
-    }
-
-    .message-item {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .message-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .message-name {
-      font-weight: 600;
-      color: var(--primary-color);
-    }
-
-    .message-text {
-      color: var(--text-primary);
-      line-height: 1.5;
-      background: var(--bg-color);
-      padding: 0.75rem;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .message-text:hover {
-      background: var(--border-color);
-    }
-
-    .copy-btn {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.75rem;
-      background: var(--secondary-color);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .copy-btn:hover {
-      opacity: 0.9;
-    }
-
-    /* Tab navigation */
-    .tab-nav {
-      display: flex;
-      border-bottom: 2px solid var(--border-color);
-      margin-bottom: 1rem;
-    }
-
-    .tab-btn {
-      padding: 0.75rem 1.5rem;
-      background: none;
-      border: none;
-      font-size: 0.95rem;
-      color: var(--text-secondary);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      transition: all 0.2s;
-    }
-
-    .tab-btn:hover {
-      color: var(--text-primary);
-    }
-
-    .tab-btn.active {
-      color: var(--primary-color);
-      border-bottom-color: var(--primary-color);
-      font-weight: 600;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* Style selector */
     .style-selector {
       display: flex;
       gap: 0.5rem;
@@ -560,54 +1145,76 @@
       border-radius: 20px;
       background: var(--card-bg);
       cursor: pointer;
+      font-size: 0.85rem;
       transition: all 0.2s;
     }
 
-    .style-btn:hover {
-      border-color: var(--primary-color);
-    }
-
+    .style-btn:hover { border-color: var(--primary-color); }
     .style-btn.active {
       background: var(--primary-color);
       color: white;
       border-color: var(--primary-color);
     }
 
-    /* Responsive */
-    @media (max-width: 768px) {
-      .sidebar {
-        display: none;
-      }
+    .message-list { margin-top: 1rem; }
 
-      .main-content {
-        padding: 1rem;
-      }
+    .message-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
 
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .message-name { font-weight: 600; color: var(--primary-color); }
+
+    .message-text {
+      color: var(--text-primary);
+      line-height: 1.5;
+      background: var(--bg-color);
+      padding: 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .message-text:hover { background: var(--border-color); }
+
+    .copy-btn {
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+      background: var(--secondary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
 
     /* Modal */
     .modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       background: rgba(0,0,0,0.5);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      padding: 1rem;
     }
 
     .modal-content {
       background: var(--card-bg);
-      border-radius: 12px;
-      width: 90%;
+      border-radius: var(--radius-lg);
+      width: 100%;
       max-width: 450px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-lg);
     }
 
     .modal-header {
@@ -618,10 +1225,7 @@
       align-items: center;
     }
 
-    .modal-header h3 {
-      margin: 0;
-      font-size: 1.1rem;
-    }
+    .modal-header h3 { font-size: 1.1rem; }
 
     .modal-close {
       background: none;
@@ -629,11 +1233,10 @@
       font-size: 1.5rem;
       cursor: pointer;
       color: var(--text-secondary);
+      padding: 0.25rem;
     }
 
-    .modal-body {
-      padding: 1.5rem;
-    }
+    .modal-body { padding: 1.5rem; }
 
     .modal-footer {
       padding: 1rem 1.5rem;
@@ -643,9 +1246,7 @@
       gap: 0.75rem;
     }
 
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
+    .form-group { margin-bottom: 1.25rem; }
 
     .form-group label {
       display: block;
@@ -669,499 +1270,109 @@
       border-color: var(--primary-color);
     }
 
-    .due-date-toggle,
-    .category-toggle {
+    .due-date-toggle, .category-toggle {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
     }
 
-    .date-btn,
-    .cat-btn {
+    .date-btn, .cat-btn {
       padding: 0.5rem 1rem;
       border: 1px solid var(--border-color);
       border-radius: 20px;
       background: var(--card-bg);
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       transition: all 0.2s;
     }
 
-    .date-btn:hover,
-    .cat-btn:hover {
-      border-color: var(--primary-color);
-    }
-
-    .date-btn.active,
-    .cat-btn.active {
+    .date-btn:hover, .cat-btn:hover { border-color: var(--primary-color); }
+    .date-btn.active, .cat-btn.active {
       background: var(--primary-color);
       color: white;
       border-color: var(--primary-color);
     }
 
-    /* Section visibility */
-    .section {
+    /* Mobile Bottom Nav */
+    .mobile-nav {
       display: none;
-    }
-
-    .section.active {
-      display: block;
-    }
-
-    /* Calendar Styles */
-    .calendar-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
-
-    .calendar-nav {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .calendar-nav button {
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border-color);
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       background: var(--card-bg);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1.2rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .calendar-nav button:hover {
-      background: var(--bg-color);
-    }
-
-    .calendar-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-    }
-
-    .calendar-view-toggle {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .view-btn {
-      padding: 0.5rem 1rem;
-      border: 1px solid var(--border-color);
-      background: var(--card-bg);
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.875rem;
-    }
-
-    .view-btn.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .calendar-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 1px;
-      background: var(--border-color);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .calendar-day-header {
-      background: var(--bg-color);
-      padding: 0.75rem;
-      text-align: center;
-      font-weight: 600;
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-    }
-
-    .calendar-day-header:first-child {
-      color: var(--danger-color);
-    }
-
-    .calendar-day-header:last-child {
-      color: var(--secondary-color);
-    }
-
-    .calendar-day {
-      background: var(--card-bg);
-      min-height: 80px;
+      border-top: 1px solid var(--border-color);
       padding: 0.5rem;
-      cursor: pointer;
-      transition: background 0.2s;
+      z-index: 100;
     }
 
-    .calendar-day:hover {
-      background: var(--bg-color);
+    .mobile-nav-items {
+      display: flex;
+      justify-content: space-around;
     }
 
-    .calendar-day.other-month {
-      background: var(--bg-color);
-      color: var(--text-secondary);
-    }
-
-    .calendar-day.today {
-      background: rgba(76, 175, 80, 0.1);
-    }
-
-    .calendar-day.selected {
-      background: rgba(33, 150, 243, 0.1);
-      outline: 2px solid var(--secondary-color);
-      outline-offset: -2px;
-    }
-
-    .day-number {
-      font-weight: 500;
-      margin-bottom: 0.25rem;
-    }
-
-    .calendar-day:first-child .day-number,
-    .calendar-day:nth-child(7n+1) .day-number {
-      color: var(--danger-color);
-    }
-
-    .calendar-day:nth-child(7n) .day-number {
-      color: var(--secondary-color);
-    }
-
-    .day-events {
+    .mobile-nav-item {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-    }
-
-    .day-event {
-      background: var(--primary-color);
-      color: white;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-size: 0.7rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .day-event.mac {
-      background: var(--secondary-color);
-    }
-
-    .day-event.more {
-      background: var(--text-secondary);
-    }
-
-    /* Week View */
-    .week-view-grid {
-      display: grid;
-      grid-template-columns: 60px repeat(7, 1fr);
-      gap: 1px;
-      background: var(--border-color);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .week-day-header {
-      background: var(--bg-color);
-      padding: 0.5rem;
-      text-align: center;
-      font-size: 0.8rem;
-    }
-
-    .week-day-header .day-name {
-      font-weight: 600;
-      color: var(--text-secondary);
-    }
-
-    .week-day-header .day-date {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-top: 0.25rem;
-    }
-
-    .week-day-header.today {
-      background: rgba(76, 175, 80, 0.1);
-    }
-
-    .week-day-header.today .day-date {
-      background: var(--primary-color);
-      color: white;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0.25rem auto 0;
-    }
-
-    .time-slot {
-      background: var(--card-bg);
-      padding: 0.25rem;
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-      text-align: right;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .week-cell {
-      background: var(--card-bg);
-      min-height: 40px;
-      border-bottom: 1px solid var(--border-color);
-      position: relative;
-    }
-
-    .week-event {
-      position: absolute;
-      left: 2px;
-      right: 2px;
-      background: var(--primary-color);
-      color: white;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-size: 0.7rem;
-      overflow: hidden;
-      z-index: 1;
-    }
-
-    /* Selected date events */
-    .selected-date-events {
-      margin-top: 1.5rem;
-    }
-
-    .selected-date-header {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--primary-color);
-    }
-
-    /* Tasks Section Styles */
-    .tasks-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
-
-    .tasks-filters {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .filter-btn {
-      padding: 0.5rem 1rem;
-      border: 1px solid var(--border-color);
-      background: var(--card-bg);
-      border-radius: 20px;
-      cursor: pointer;
-      font-size: 0.875rem;
-      transition: all 0.2s;
-    }
-
-    .filter-btn:hover {
-      border-color: var(--primary-color);
-    }
-
-    .filter-btn.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .tasks-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .task-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 1rem;
-      padding: 1rem;
-      background: var(--card-bg);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      transition: all 0.2s;
-    }
-
-    .task-item:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-
-    .task-item.completed {
-      opacity: 0.6;
-    }
-
-    .task-item.completed .task-title {
-      text-decoration: line-through;
-      color: var(--text-secondary);
-    }
-
-    .task-checkbox {
-      width: 22px;
-      height: 22px;
-      border: 2px solid var(--border-color);
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: all 0.2s;
-    }
-
-    .task-checkbox:hover {
-      border-color: var(--primary-color);
-    }
-
-    .task-checkbox.checked {
-      background: var(--primary-color);
-      border-color: var(--primary-color);
-      color: white;
-    }
-
-    .task-content {
-      flex: 1;
-    }
-
-    .task-title {
-      font-weight: 500;
-      margin-bottom: 0.25rem;
-    }
-
-    .task-meta {
-      display: flex;
-      gap: 0.75rem;
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-    }
-
-    .task-due {
-      display: flex;
       align-items: center;
       gap: 0.25rem;
-    }
-
-    .task-due.overdue {
-      color: var(--danger-color);
-    }
-
-    .task-due.today {
-      color: var(--warning-color);
-    }
-
-    .task-actions {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .task-action-btn {
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: var(--bg-color);
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s;
-    }
-
-    .task-action-btn:hover {
-      background: var(--border-color);
-    }
-
-    .task-action-btn.delete:hover {
-      background: rgba(244, 67, 54, 0.2);
-      color: var(--danger-color);
-    }
-
-    .empty-tasks {
-      text-align: center;
-      padding: 3rem;
+      padding: 0.5rem;
       color: var(--text-secondary);
-    }
-
-    .empty-tasks-icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-    }
-
-    /* Quick Add Task */
-    .quick-add-task {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .quick-add-task input {
-      flex: 1;
-      padding: 0.75rem 1rem;
-      border: 2px solid var(--border-color);
+      text-decoration: none;
+      font-size: 0.7rem;
       border-radius: 8px;
-      font-size: 1rem;
+      transition: all 0.2s;
+      min-width: 60px;
     }
 
-    .quick-add-task input:focus {
-      outline: none;
-      border-color: var(--primary-color);
-    }
-
-    /* Stats cards for tasks section */
-    .tasks-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .stat-card {
-      background: var(--card-bg);
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      text-align: center;
-    }
-
-    .stat-number {
-      font-size: 2rem;
-      font-weight: 700;
+    .mobile-nav-item.active {
       color: var(--primary-color);
     }
 
-    .stat-label {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      margin-top: 0.25rem;
+    .mobile-nav-item .nav-icon {
+      font-size: 1.25rem;
     }
 
-    .stat-card.pending .stat-number {
-      color: var(--warning-color);
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .mobile-nav { display: block; }
+      .main-content { padding: 1rem; padding-bottom: 5rem; }
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .tasks-stats { grid-template-columns: repeat(2, 1fr); }
+      .welcome-banner { padding: 1.25rem; }
+      .welcome-banner h2 { font-size: 1.25rem; }
+      .news-table th, .news-table td { padding: 0.75rem 0.5rem; }
+      .news-table { font-size: 0.85rem; }
+      .header h1 { font-size: 1rem; }
+      .header-links a { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
     }
 
-    .stat-card.overdue .stat-number {
-      color: var(--danger-color);
+    @media (max-width: 480px) {
+      .news-table thead { display: none; }
+      .news-table tr {
+        display: block;
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 0;
+      }
+      .news-table td {
+        display: block;
+        padding: 0.5rem 1rem;
+        border: none;
+      }
+      .news-table td:first-child { padding-top: 0; }
     }
   </style>
 </head>
 <body>
   <!-- Header -->
   <header class="header">
-    <h1>Personal Assistant</h1>
-    <div class="header-links">
-      <a href="/drama">Creator Lab</a>
-      <a href="/">Home</a>
+    <div class="header-content">
+      <h1>Personal Assistant</h1>
+      <div class="header-links">
+        <a href="/drama">Creator Lab</a>
+        <a href="/">Home</a>
+      </div>
     </div>
   </header>
 
@@ -1169,226 +1380,133 @@
   <div class="main-layout">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <nav>
-        <a href="#" class="sidebar-item active" data-section="dashboard" onclick="AssistantMain.showSection('dashboard'); return false;">
-          <span class="sidebar-icon">📊</span>
-          <span>Dashboard</span>
-        </a>
-        <a href="#" class="sidebar-item" data-section="calendar" onclick="AssistantMain.showSection('calendar'); return false;">
-          <span class="sidebar-icon">📅</span>
-          <span>Calendar</span>
-        </a>
-        <a href="#" class="sidebar-item" data-section="tasks" onclick="AssistantMain.showSection('tasks'); return false;">
-          <span class="sidebar-icon">✅</span>
-          <span>Tasks</span>
-        </a>
-        <a href="#" class="sidebar-item" data-section="attendance" onclick="AssistantMain.showSection('attendance'); return false;">
-          <span class="sidebar-icon">📋</span>
-          <span>Attendance</span>
-        </a>
-      </nav>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Menu</div>
+        <nav>
+          <a href="#" class="sidebar-item active" data-section="dashboard" onclick="AssistantMain.showSection('dashboard'); return false;">
+            <span class="sidebar-icon">📊</span>
+            <span>Dashboard</span>
+          </a>
+          <a href="#" class="sidebar-item" data-section="calendar" onclick="AssistantMain.showSection('calendar'); return false;">
+            <span class="sidebar-icon">📅</span>
+            <span>Calendar</span>
+          </a>
+          <a href="#" class="sidebar-item" data-section="tasks" onclick="AssistantMain.showSection('tasks'); return false;">
+            <span class="sidebar-icon">✅</span>
+            <span>Tasks</span>
+          </a>
+          <a href="#" class="sidebar-item" data-section="attendance" onclick="AssistantMain.showSection('attendance'); return false;">
+            <span class="sidebar-icon">📋</span>
+            <span>Attendance</span>
+          </a>
+        </nav>
+      </div>
     </aside>
 
     <!-- Main Content -->
     <main class="main-content">
       <!-- Dashboard Section -->
       <div id="section-dashboard" class="section active">
-        <!-- Dashboard Grid -->
-        <div class="dashboard-grid">
-        <!-- Today's Events -->
-        <div class="card">
-          <div class="card-header">
-            <h2>📅 Today</h2>
-            <span id="today-date" class="item-meta"></span>
+        <!-- Welcome Banner -->
+        <div class="welcome-banner">
+          <h2 id="greeting-text">Good Morning!</h2>
+          <div class="date" id="today-date"></div>
+          <div class="greeting" id="greeting-message">Today's schedule and news at a glance</div>
+        </div>
+
+        <!-- News Section -->
+        <div class="news-section">
+          <div class="news-header">
+            <h3>📰 Today's News & Issues</h3>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <span class="time-badge" id="news-time">09:00 AM Update</span>
+              <button class="refresh-btn" onclick="AssistantMain.refreshNews()">
+                <span id="refresh-icon">🔄</span> Refresh
+              </button>
+            </div>
           </div>
-          <div class="card-body" id="today-events">
-            <div class="empty">Loading...</div>
+          <div class="news-body" id="news-container">
+            <div class="news-loading">
+              <div class="spinner"></div>
+              <p>Loading today's news...</p>
+            </div>
           </div>
         </div>
 
-        <!-- This Week -->
-        <div class="card">
-          <div class="card-header">
-            <h2>🗓 This Week</h2>
+        <!-- Quick Input -->
+        <div class="quick-input-section">
+          <div class="quick-input-header">
+            <h3>📥 Quick Input</h3>
+            <span class="badge">AI Powered</span>
           </div>
-          <div class="card-body" id="week-events">
-            <div class="empty">Loading...</div>
-          </div>
-        </div>
-
-        <!-- Pending Tasks -->
-        <div class="card">
-          <div class="card-header">
-            <h2>✅ Tasks</h2>
-            <button class="btn btn-small btn-secondary" onclick="AssistantMain.addTask()">+ Add</button>
-          </div>
-          <div class="card-body" id="pending-tasks">
-            <div class="empty">Loading...</div>
-          </div>
-        </div>
-
-        <!-- Pending Sync -->
-        <div class="card">
-          <div class="card-header">
-            <h2>🔄 Pending Sync</h2>
-            <button class="btn btn-small btn-primary" onclick="AssistantMain.syncToMac()" id="btn-sync">
-              Sync to Mac
+          <textarea id="input-box" placeholder="Paste notice, image text, or schedule info...&#10;예: 이번주 금요일 청년부 총회 오후 2시"></textarea>
+          <div class="quick-input-actions">
+            <button class="btn btn-primary" onclick="AssistantMain.analyzeInput()" id="btn-analyze">
+              Analyze & Save
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('input-box').value = ''">
+              Clear
             </button>
           </div>
-          <div class="card-body" id="pending-sync">
-            <div class="empty">Loading...</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Input Analyzer -->
-      <div class="input-section">
-        <div class="card">
-          <div class="card-header">
-            <h2>📥 Input Analyzer</h2>
-          </div>
-          <div class="card-body">
-            <textarea id="input-box" placeholder="Paste notice, image text, or schedule info here...&#10;예: 이번주 금요일 청년부 총회 오후 2시"></textarea>
-            <div class="btn-row">
-              <button class="btn btn-primary" onclick="AssistantMain.analyzeInput()" id="btn-analyze">
-                Analyze & Save
+          <div class="parsed-result" id="parsed-result">
+            <h4>Parsed Results</h4>
+            <div id="parsed-events"></div>
+            <div id="parsed-tasks"></div>
+            <div style="margin-top: 1rem;">
+              <button class="btn btn-primary btn-small" onclick="AssistantMain.saveParsedData()">
+                Save All
               </button>
-              <button class="btn btn-secondary" onclick="document.getElementById('input-box').value = ''">
-                Clear
-              </button>
-            </div>
-            <div class="parsed-result" id="parsed-result">
-              <h4>Parsed Results</h4>
-              <div id="parsed-events"></div>
-              <div id="parsed-tasks"></div>
-              <div class="btn-row" style="margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="AssistantMain.saveParsedData()">
-                  Save All
-                </button>
-              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Attendance Section -->
-      <div class="attendance-section">
-        <div class="card">
-          <div class="card-header">
-            <h2>📋 Attendance Management</h2>
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+          <!-- Today's Schedule -->
+          <div class="card">
+            <div class="card-header">
+              <h3>📅 Today's Schedule</h3>
+            </div>
+            <div class="card-body" id="today-events">
+              <div class="empty">Loading...</div>
+            </div>
           </div>
-          <div class="card-body">
-            <!-- Tab Navigation -->
-            <div class="tab-nav">
-              <button class="tab-btn active" onclick="AssistantMain.showAttendanceTab('upload')">
-                파일 업로드
-              </button>
-              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('under-attending')">
-                부진자 관리
-              </button>
-              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('messages')">
-                문자 생성
+
+          <!-- Upcoming This Week -->
+          <div class="card">
+            <div class="card-header">
+              <h3>🗓 This Week</h3>
+            </div>
+            <div class="card-body" id="week-events">
+              <div class="empty">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Tasks -->
+          <div class="card">
+            <div class="card-header">
+              <h3>✅ Tasks</h3>
+              <button class="btn btn-small btn-secondary" onclick="AssistantMain.addTask()">+ Add</button>
+            </div>
+            <div class="card-body" id="pending-tasks">
+              <div class="empty">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Sync Status -->
+          <div class="card">
+            <div class="card-header">
+              <h3>🔄 Sync Status</h3>
+              <button class="btn btn-small btn-primary" onclick="AssistantMain.syncToMac()" id="btn-sync">
+                Sync to Mac
               </button>
             </div>
-
-            <!-- Upload Tab -->
-            <div class="tab-content active" id="tab-upload">
-              <div class="file-upload-zone" id="upload-zone">
-                <input type="file" id="attendance-file" accept=".csv,.xlsx,.xls"
-                       onchange="AssistantMain.handleFileSelect(event)">
-                <div class="file-upload-icon">📁</div>
-                <div class="file-upload-text">
-                  CSV 또는 XLSX 파일을 드래그하거나 클릭하여 선택<br>
-                  <small>형식: name, date, status, group_name</small>
-                </div>
-              </div>
-              <div class="upload-options">
-                <div>
-                  <label>기본 날짜:</label>
-                  <input type="date" id="upload-date" value="">
-                </div>
-                <div>
-                  <label>그룹:</label>
-                  <select id="upload-group">
-                    <option value="">선택...</option>
-                    <option value="청년부">청년부</option>
-                    <option value="장년부">장년부</option>
-                    <option value="주일학교">주일학교</option>
-                  </select>
-                </div>
-                <button class="btn btn-primary" id="btn-upload" disabled onclick="AssistantMain.uploadAttendance()">
-                  업로드
-                </button>
-              </div>
-              <div id="upload-result" style="margin-top: 1rem; display: none;"></div>
-            </div>
-
-            <!-- Under-attending Tab -->
-            <div class="tab-content" id="tab-under-attending">
-              <div class="under-attending-controls">
-                <div>
-                  <label>연속 결석 기준:</label>
-                  <select id="absent-weeks">
-                    <option value="2">2주 이상</option>
-                    <option value="3">3주 이상</option>
-                    <option value="4">4주 이상</option>
-                  </select>
-                </div>
-                <div>
-                  <label>그룹:</label>
-                  <select id="filter-group">
-                    <option value="">전체</option>
-                    <option value="청년부">청년부</option>
-                    <option value="장년부">장년부</option>
-                    <option value="주일학교">주일학교</option>
-                  </select>
-                </div>
-                <button class="btn btn-primary" onclick="AssistantMain.findUnderAttending()">
-                  조회
-                </button>
-                <button class="btn btn-secondary" onclick="AssistantMain.selectAllUnderAttending()">
-                  전체 선택
-                </button>
-              </div>
-              <div class="under-attending-list" id="under-attending-list">
-                <div class="empty">조회 버튼을 클릭하여 부진자를 확인하세요.</div>
-              </div>
-            </div>
-
-            <!-- Messages Tab -->
-            <div class="tab-content" id="tab-messages">
-              <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                부진자 탭에서 대상자를 선택한 후 문자를 생성하세요.
-              </p>
-              <div class="under-attending-controls">
-                <div>
-                  <label>대상 프로필:</label>
-                  <div class="style-selector" id="profile-selector">
-                    <button class="style-btn" data-profile="youth">청년부 전도사</button>
-                    <button class="style-btn active" data-profile="adult">장년 목사</button>
-                  </div>
-                </div>
-              </div>
-              <div class="under-attending-controls" style="margin-top: 0.5rem;">
-                <div>
-                  <label>문체 스타일:</label>
-                  <div class="style-selector" id="style-selector">
-                    <button class="style-btn active" data-style="따뜻한">따뜻한</button>
-                    <button class="style-btn" data-style="격려">격려</button>
-                    <button class="style-btn" data-style="공식적인">공식적인</button>
-                  </div>
-                </div>
-              </div>
-              <div id="selected-people" style="margin: 1rem 0;"></div>
-              <button class="btn btn-primary" onclick="AssistantMain.generateMessages()" id="btn-generate-msg" disabled>
-                문자 생성 (GPT)
-              </button>
-              <div class="message-list" id="message-list"></div>
+            <div class="card-body" id="pending-sync">
+              <div class="empty">Loading...</div>
             </div>
           </div>
         </div>
       </div>
-      </div> <!-- End of section-dashboard -->
 
       <!-- Calendar Section -->
       <div id="section-calendar" class="section">
@@ -1397,41 +1515,34 @@
             <button onclick="AssistantMain.calendarPrev()">‹</button>
             <span class="calendar-title" id="calendar-title">2025년 12월</span>
             <button onclick="AssistantMain.calendarNext()">›</button>
-            <button class="btn btn-small btn-secondary" onclick="AssistantMain.calendarToday()">오늘</button>
+            <button class="btn btn-small btn-secondary" onclick="AssistantMain.calendarToday()">Today</button>
           </div>
           <div class="calendar-view-toggle">
-            <button class="view-btn active" data-view="month" onclick="AssistantMain.setCalendarView('month')">월</button>
-            <button class="view-btn" data-view="week" onclick="AssistantMain.setCalendarView('week')">주</button>
+            <button class="view-btn active" data-view="month" onclick="AssistantMain.setCalendarView('month')">Month</button>
+            <button class="view-btn" data-view="week" onclick="AssistantMain.setCalendarView('week')">Week</button>
           </div>
         </div>
 
-        <!-- Month View -->
         <div id="month-view">
           <div class="calendar-grid" id="calendar-grid">
-            <!-- Day headers -->
-            <div class="calendar-day-header">일</div>
-            <div class="calendar-day-header">월</div>
-            <div class="calendar-day-header">화</div>
-            <div class="calendar-day-header">수</div>
-            <div class="calendar-day-header">목</div>
-            <div class="calendar-day-header">금</div>
-            <div class="calendar-day-header">토</div>
-            <!-- Days will be rendered by JS -->
+            <div class="calendar-day-header">Sun</div>
+            <div class="calendar-day-header">Mon</div>
+            <div class="calendar-day-header">Tue</div>
+            <div class="calendar-day-header">Wed</div>
+            <div class="calendar-day-header">Thu</div>
+            <div class="calendar-day-header">Fri</div>
+            <div class="calendar-day-header">Sat</div>
           </div>
         </div>
 
-        <!-- Week View (hidden by default) -->
         <div id="week-view" style="display: none;">
-          <div class="week-view-grid" id="week-grid">
-            <!-- Will be rendered by JS -->
-          </div>
+          <div class="week-view-grid" id="week-grid"></div>
         </div>
 
-        <!-- Selected Date Events -->
         <div class="selected-date-events">
-          <div class="selected-date-header" id="selected-date-title">오늘의 일정</div>
+          <div class="selected-date-header" id="selected-date-title">Today's Events</div>
           <div id="selected-date-events-list">
-            <div class="empty">날짜를 선택하세요</div>
+            <div class="empty">Select a date</div>
           </div>
         </div>
       </div>
@@ -1441,205 +1552,211 @@
         <div class="tasks-stats">
           <div class="stat-card">
             <div class="stat-number" id="stat-total">0</div>
-            <div class="stat-label">전체</div>
+            <div class="stat-label">Total</div>
           </div>
           <div class="stat-card pending">
             <div class="stat-number" id="stat-pending">0</div>
-            <div class="stat-label">진행 중</div>
+            <div class="stat-label">Pending</div>
           </div>
           <div class="stat-card">
             <div class="stat-number" id="stat-completed">0</div>
-            <div class="stat-label">완료</div>
+            <div class="stat-label">Completed</div>
           </div>
           <div class="stat-card overdue">
             <div class="stat-number" id="stat-overdue">0</div>
-            <div class="stat-label">기한 초과</div>
+            <div class="stat-label">Overdue</div>
           </div>
         </div>
 
         <div class="quick-add-task">
-          <input type="text" id="quick-task-input" placeholder="새 태스크 추가... (Enter로 저장)"
+          <input type="text" id="quick-task-input" placeholder="Add new task... (Enter to save)"
                  onkeypress="if(event.key==='Enter')AssistantMain.quickAddTask()">
-          <button class="btn btn-primary" onclick="AssistantMain.quickAddTask()">추가</button>
+          <button class="btn btn-primary" onclick="AssistantMain.quickAddTask()">Add</button>
         </div>
 
         <div class="tasks-header">
           <div class="tasks-filters">
-            <button class="filter-btn active" data-filter="all" onclick="AssistantMain.filterTasks('all')">전체</button>
-            <button class="filter-btn" data-filter="pending" onclick="AssistantMain.filterTasks('pending')">진행 중</button>
-            <button class="filter-btn" data-filter="today" onclick="AssistantMain.filterTasks('today')">오늘</button>
-            <button class="filter-btn" data-filter="week" onclick="AssistantMain.filterTasks('week')">이번 주</button>
-            <button class="filter-btn" data-filter="completed" onclick="AssistantMain.filterTasks('completed')">완료</button>
+            <button class="filter-btn active" data-filter="all" onclick="AssistantMain.filterTasks('all')">All</button>
+            <button class="filter-btn" data-filter="pending" onclick="AssistantMain.filterTasks('pending')">Pending</button>
+            <button class="filter-btn" data-filter="today" onclick="AssistantMain.filterTasks('today')">Today</button>
+            <button class="filter-btn" data-filter="completed" onclick="AssistantMain.filterTasks('completed')">Done</button>
           </div>
-          <button class="btn btn-primary" onclick="AssistantMain.addTask()">+ 새 태스크</button>
+          <button class="btn btn-primary btn-small" onclick="AssistantMain.addTask()">+ New Task</button>
         </div>
 
         <div class="tasks-list" id="full-tasks-list">
           <div class="empty-tasks">
             <div class="empty-tasks-icon">✅</div>
-            <p>등록된 태스크가 없습니다</p>
+            <p>No tasks yet</p>
           </div>
         </div>
       </div>
 
-      <!-- Attendance Section (moved from dashboard) -->
+      <!-- Attendance Section -->
       <div id="section-attendance" class="section">
         <div class="card">
           <div class="card-header">
-            <h2>📋 출석 관리</h2>
+            <h3>📋 Attendance Management</h3>
           </div>
           <div class="card-body">
-            <!-- Tab Navigation -->
             <div class="tab-nav">
-              <button class="tab-btn active" onclick="AssistantMain.showAttendanceTab('upload')">
-                파일 업로드
-              </button>
-              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('under-attending')">
-                부진자 관리
-              </button>
-              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('messages')">
-                문자 생성
-              </button>
+              <button class="tab-btn active" onclick="AssistantMain.showAttendanceTab('upload')">Upload</button>
+              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('under-attending')">Under-attending</button>
+              <button class="tab-btn" onclick="AssistantMain.showAttendanceTab('messages')">Messages</button>
             </div>
 
             <!-- Upload Tab -->
-            <div class="tab-content active" id="tab-upload-attendance">
-              <div class="file-upload-zone" id="upload-zone-attendance">
-                <input type="file" id="attendance-file-section" accept=".csv,.xlsx,.xls"
-                       onchange="AssistantMain.handleFileSelect(event)">
+            <div class="tab-content active" id="tab-upload">
+              <div class="file-upload-zone" id="upload-zone">
+                <input type="file" id="attendance-file" accept=".csv,.xlsx,.xls" onchange="AssistantMain.handleFileSelect(event)">
                 <div class="file-upload-icon">📁</div>
                 <div class="file-upload-text">
-                  CSV 또는 XLSX 파일을 드래그하거나 클릭하여 선택<br>
-                  <small>형식: name, date, status, group_name</small>
+                  Drop CSV or XLSX file here, or click to select<br>
+                  <small>Format: name, date, status, group_name</small>
                 </div>
               </div>
               <div class="upload-options">
                 <div>
-                  <label>기본 날짜:</label>
-                  <input type="date" id="upload-date-attendance" value="">
+                  <label>Date:</label>
+                  <input type="date" id="upload-date" value="">
                 </div>
                 <div>
-                  <label>그룹:</label>
-                  <select id="upload-group-attendance">
-                    <option value="">선택...</option>
+                  <label>Group:</label>
+                  <select id="upload-group">
+                    <option value="">Select...</option>
                     <option value="청년부">청년부</option>
                     <option value="장년부">장년부</option>
                     <option value="주일학교">주일학교</option>
                   </select>
                 </div>
-                <button class="btn btn-primary" id="btn-upload-attendance" disabled onclick="AssistantMain.uploadAttendance()">
-                  업로드
-                </button>
+                <button class="btn btn-primary" id="btn-upload" disabled onclick="AssistantMain.uploadAttendance()">Upload</button>
               </div>
-              <div id="upload-result-attendance" style="margin-top: 1rem; display: none;"></div>
+              <div id="upload-result" style="margin-top: 1rem; display: none;"></div>
             </div>
 
             <!-- Under-attending Tab -->
-            <div class="tab-content" id="tab-under-attending-attendance">
+            <div class="tab-content" id="tab-under-attending">
               <div class="under-attending-controls">
                 <div>
-                  <label>연속 결석 기준:</label>
-                  <select id="absent-weeks-attendance">
-                    <option value="2">2주 이상</option>
-                    <option value="3">3주 이상</option>
-                    <option value="4">4주 이상</option>
+                  <label>Absent weeks:</label>
+                  <select id="absent-weeks">
+                    <option value="2">2+ weeks</option>
+                    <option value="3">3+ weeks</option>
+                    <option value="4">4+ weeks</option>
                   </select>
                 </div>
                 <div>
-                  <label>그룹:</label>
-                  <select id="filter-group-attendance">
-                    <option value="">전체</option>
+                  <label>Group:</label>
+                  <select id="filter-group">
+                    <option value="">All</option>
                     <option value="청년부">청년부</option>
                     <option value="장년부">장년부</option>
                     <option value="주일학교">주일학교</option>
                   </select>
                 </div>
-                <button class="btn btn-primary" onclick="AssistantMain.findUnderAttending()">
-                  조회
-                </button>
-                <button class="btn btn-secondary" onclick="AssistantMain.selectAllUnderAttending()">
-                  전체 선택
-                </button>
+                <button class="btn btn-primary" onclick="AssistantMain.findUnderAttending()">Search</button>
+                <button class="btn btn-secondary" onclick="AssistantMain.selectAllUnderAttending()">Select All</button>
               </div>
-              <div class="under-attending-list" id="under-attending-list-attendance">
-                <div class="empty">조회 버튼을 클릭하여 부진자를 확인하세요.</div>
+              <div class="under-attending-list" id="under-attending-list">
+                <div class="empty">Click Search to find under-attending members</div>
               </div>
             </div>
 
             <!-- Messages Tab -->
-            <div class="tab-content" id="tab-messages-attendance">
-              <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                부진자 탭에서 대상자를 선택한 후 문자를 생성하세요.
+            <div class="tab-content" id="tab-messages">
+              <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                Select people from Under-attending tab first, then generate messages.
               </p>
               <div class="under-attending-controls">
                 <div>
-                  <label>대상 프로필:</label>
-                  <div class="style-selector" id="profile-selector-attendance">
-                    <button class="style-btn" data-profile="youth">청년부 전도사</button>
-                    <button class="style-btn active" data-profile="adult">장년 목사</button>
+                  <label>Profile:</label>
+                  <div class="style-selector" id="profile-selector">
+                    <button class="style-btn" data-profile="youth">Youth Pastor</button>
+                    <button class="style-btn active" data-profile="adult">Senior Pastor</button>
                   </div>
                 </div>
               </div>
               <div class="under-attending-controls" style="margin-top: 0.5rem;">
                 <div>
-                  <label>문체 스타일:</label>
-                  <div class="style-selector" id="style-selector-attendance">
-                    <button class="style-btn active" data-style="따뜻한">따뜻한</button>
-                    <button class="style-btn" data-style="격려">격려</button>
-                    <button class="style-btn" data-style="공식적인">공식적인</button>
+                  <label>Tone:</label>
+                  <div class="style-selector" id="style-selector">
+                    <button class="style-btn active" data-style="따뜻한">Warm</button>
+                    <button class="style-btn" data-style="격려">Encouraging</button>
+                    <button class="style-btn" data-style="공식적인">Formal</button>
                   </div>
                 </div>
               </div>
-              <div id="selected-people-attendance" style="margin: 1rem 0;"></div>
-              <button class="btn btn-primary" onclick="AssistantMain.generateMessages()" id="btn-generate-msg-attendance" disabled>
-                문자 생성 (GPT)
+              <div id="selected-people" style="margin: 1rem 0;"></div>
+              <button class="btn btn-primary" onclick="AssistantMain.generateMessages()" id="btn-generate-msg" disabled>
+                Generate Messages (GPT)
               </button>
-              <div class="message-list" id="message-list-attendance"></div>
+              <div class="message-list" id="message-list"></div>
             </div>
           </div>
         </div>
       </div>
-
     </main>
   </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-nav">
+    <div class="mobile-nav-items">
+      <a href="#" class="mobile-nav-item active" data-section="dashboard" onclick="AssistantMain.showSection('dashboard'); return false;">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="mobile-nav-item" data-section="calendar" onclick="AssistantMain.showSection('calendar'); return false;">
+        <span class="nav-icon">📅</span>
+        <span>Calendar</span>
+      </a>
+      <a href="#" class="mobile-nav-item" data-section="tasks" onclick="AssistantMain.showSection('tasks'); return false;">
+        <span class="nav-icon">✅</span>
+        <span>Tasks</span>
+      </a>
+      <a href="#" class="mobile-nav-item" data-section="attendance" onclick="AssistantMain.showSection('attendance'); return false;">
+        <span class="nav-icon">📋</span>
+        <span>Attendance</span>
+      </a>
+    </div>
+  </nav>
 
   <!-- Task Add Modal -->
   <div class="modal-overlay" id="task-modal" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>새 태스크 추가</h3>
+        <h3>New Task</h3>
         <button class="modal-close" onclick="AssistantMain.closeTaskModal()">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>제목 *</label>
-          <input type="text" id="task-title" placeholder="태스크 제목 입력..." />
+          <label>Title *</label>
+          <input type="text" id="task-title" placeholder="Enter task title..." />
         </div>
         <div class="form-group">
-          <label>마감일</label>
+          <label>Due Date</label>
           <div class="due-date-toggle">
-            <button class="date-btn" data-date="none" onclick="AssistantMain.setDueDate('none')">없음</button>
-            <button class="date-btn" data-date="today" onclick="AssistantMain.setDueDate('today')">오늘</button>
-            <button class="date-btn" data-date="tomorrow" onclick="AssistantMain.setDueDate('tomorrow')">내일</button>
-            <button class="date-btn" data-date="week" onclick="AssistantMain.setDueDate('week')">이번 주</button>
-            <button class="date-btn" data-date="custom" onclick="AssistantMain.setDueDate('custom')">직접 선택</button>
+            <button class="date-btn" data-date="none" onclick="AssistantMain.setDueDate('none')">None</button>
+            <button class="date-btn" data-date="today" onclick="AssistantMain.setDueDate('today')">Today</button>
+            <button class="date-btn" data-date="tomorrow" onclick="AssistantMain.setDueDate('tomorrow')">Tomorrow</button>
+            <button class="date-btn" data-date="week" onclick="AssistantMain.setDueDate('week')">This Week</button>
+            <button class="date-btn" data-date="custom" onclick="AssistantMain.setDueDate('custom')">Custom</button>
           </div>
           <input type="date" id="task-due-date" style="display: none; margin-top: 0.5rem;" />
         </div>
         <div class="form-group">
-          <label>카테고리</label>
+          <label>Category</label>
           <div class="category-toggle">
-            <button class="cat-btn" data-cat="" onclick="AssistantMain.setCategory('')">없음</button>
-            <button class="cat-btn" data-cat="교회" onclick="AssistantMain.setCategory('교회')">교회</button>
-            <button class="cat-btn" data-cat="사업" onclick="AssistantMain.setCategory('사업')">사업</button>
-            <button class="cat-btn" data-cat="가정" onclick="AssistantMain.setCategory('가정')">가정</button>
-            <button class="cat-btn" data-cat="공부" onclick="AssistantMain.setCategory('공부')">공부</button>
+            <button class="cat-btn" data-cat="" onclick="AssistantMain.setCategory('')">None</button>
+            <button class="cat-btn" data-cat="교회" onclick="AssistantMain.setCategory('교회')">Church</button>
+            <button class="cat-btn" data-cat="사업" onclick="AssistantMain.setCategory('사업')">Business</button>
+            <button class="cat-btn" data-cat="가정" onclick="AssistantMain.setCategory('가정')">Home</button>
+            <button class="cat-btn" data-cat="공부" onclick="AssistantMain.setCategory('공부')">Study</button>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="AssistantMain.closeTaskModal()">취소</button>
-        <button class="btn btn-primary" onclick="AssistantMain.saveTask()">저장</button>
+        <button class="btn btn-secondary" onclick="AssistantMain.closeTaskModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="AssistantMain.saveTask()">Save</button>
       </div>
     </div>
   </div>
