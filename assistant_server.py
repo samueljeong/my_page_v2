@@ -1820,6 +1820,253 @@ def debug_all_events():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ===== 뉴스/이슈 분석 API =====
+import requests
+from xml.etree import ElementTree
+
+# 뉴스 캐시 (간단한 메모리 캐시)
+_news_cache = {
+    'data': None,
+    'updated_at': None
+}
+
+def fetch_rss_news():
+    """Google News RSS 피드에서 뉴스 가져오기"""
+    news_items = []
+
+    # 한국 뉴스 RSS 피드들
+    rss_feeds = [
+        # Google News Korea - 주요 뉴스
+        ('https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko', '국내'),
+        # Google News Korea - 세계 뉴스
+        ('https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtdHZHZ0pMVWlnQVAB?hl=ko&gl=KR&ceid=KR:ko', '해외'),
+    ]
+
+    for feed_url, category in rss_feeds:
+        try:
+            response = requests.get(feed_url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            })
+            if response.status_code == 200:
+                root = ElementTree.fromstring(response.content)
+                items = root.findall('.//item')[:10]  # 각 피드에서 최대 10개
+
+                for item in items:
+                    title = item.find('title')
+                    link = item.find('link')
+                    pub_date = item.find('pubDate')
+
+                    if title is not None:
+                        news_items.append({
+                            'title': title.text,
+                            'link': link.text if link is not None else '',
+                            'pub_date': pub_date.text if pub_date is not None else '',
+                            'category': category
+                        })
+        except Exception as e:
+            print(f"[NEWS] RSS 피드 오류 ({category}): {e}")
+            continue
+
+    return news_items
+
+
+def analyze_news_with_gpt(news_items):
+    """GPT로 뉴스 분석 및 유튜브 영상 소재 평가"""
+    client = get_openai_client()
+    if not client:
+        return None
+
+    today = date.today()
+
+    # 뉴스 헤드라인 목록 생성
+    headlines_text = "\n".join([
+        f"[{item['category']}] {item['title']}"
+        for item in news_items[:20]  # 최대 20개 분석
+    ])
+
+    system_prompt = f"""[역할]
+너는 뉴스 분석가이자 유튜브 이슈 채널 PD의 어시스턴트이다.
+오늘 날짜: {today.isoformat()}
+
+[임무]
+주어진 뉴스 헤드라인들을 분석하여:
+1. 중요한 뉴스를 선별하고 (중복/비슷한 내용은 하나로 통합)
+2. 각 뉴스를 간략하게 요약하고
+3. 해외 뉴스는 한국인이 이해하기 쉽게 맥락을 설명하고
+4. 유튜브 이슈 영상 소재로서의 가능성을 평가한다
+
+[영상 소재 가능성 평가 기준]
+- high (높음): 논쟁적, 대중적 관심 높음, 조회수 기대, 트렌드 연관
+- medium (보통): 정보 가치 있음, 일부 관심층 존재
+- low (낮음): 일상적 뉴스, 특별한 관심 유발 어려움
+
+[출력 형식]
+반드시 다음 JSON 형식으로만 출력:
+{{
+  "news": [
+    {{
+      "category": "국내" | "해외",
+      "title": "뉴스 제목 (간결하게)",
+      "summary": "2-3문장 요약",
+      "interpretation": "해외 뉴스인 경우 한국인을 위한 맥락 설명 (국내 뉴스면 null)",
+      "video_potential": "high" | "medium" | "low",
+      "video_reason": "영상 소재로서의 이유 (1문장)"
+    }}
+  ]
+}}
+
+[규칙]
+1. 최대 8개의 중요 뉴스만 선별한다
+2. 국내/해외 균형있게 포함한다 (각각 3-4개)
+3. 단순 연예/스포츠 결과보다는 사회적 이슈를 우선한다
+4. 같은 사건의 후속 보도는 하나로 통합한다
+5. JSON 외의 텍스트는 출력하지 마라"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"다음 뉴스 헤드라인들을 분석해주세요:\n\n{headlines_text}"}
+            ],
+            temperature=0.5,
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        return result.get('news', [])
+    except Exception as e:
+        print(f"[NEWS] GPT 분석 오류: {e}")
+        return None
+
+
+@assistant_bp.route('/assistant/api/news', methods=['GET'])
+def get_news():
+    """
+    오늘의 뉴스/이슈 조회 API
+
+    쿼리 파라미터:
+    - refresh: true면 캐시 무시하고 새로 가져오기
+
+    응답:
+    {
+        "success": true,
+        "news": [
+            {
+                "category": "국내" | "해외",
+                "title": "제목",
+                "summary": "요약",
+                "interpretation": "해석 (해외 뉴스만)",
+                "video_potential": "high" | "medium" | "low",
+                "video_reason": "영상 소재 이유"
+            }
+        ],
+        "updated_at": "2025-12-04T09:00:00"
+    }
+    """
+    try:
+        refresh = request.args.get('refresh', 'false').lower() == 'true'
+
+        # 캐시 확인 (30분 이내면 캐시 사용)
+        now = datetime.now()
+        if not refresh and _news_cache['data'] and _news_cache['updated_at']:
+            cache_age = (now - _news_cache['updated_at']).total_seconds()
+            if cache_age < 1800:  # 30분 = 1800초
+                return jsonify({
+                    'success': True,
+                    'news': _news_cache['data'],
+                    'updated_at': _news_cache['updated_at'].isoformat(),
+                    'cached': True
+                })
+
+        # 뉴스 가져오기
+        raw_news = fetch_rss_news()
+
+        if not raw_news:
+            # RSS 실패 시 기본 응답
+            return jsonify({
+                'success': True,
+                'news': [],
+                'updated_at': now.isoformat(),
+                'message': '뉴스를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            })
+
+        # GPT로 분석
+        analyzed_news = analyze_news_with_gpt(raw_news)
+
+        if analyzed_news:
+            # 캐시 업데이트
+            _news_cache['data'] = analyzed_news
+            _news_cache['updated_at'] = now
+
+            return jsonify({
+                'success': True,
+                'news': analyzed_news,
+                'updated_at': now.isoformat(),
+                'cached': False
+            })
+        else:
+            # GPT 분석 실패 시 원본 뉴스 반환
+            fallback_news = [
+                {
+                    'category': item['category'],
+                    'title': item['title'],
+                    'summary': '',
+                    'interpretation': None,
+                    'video_potential': 'medium',
+                    'video_reason': '분석 대기 중'
+                }
+                for item in raw_news[:8]
+            ]
+            return jsonify({
+                'success': True,
+                'news': fallback_news,
+                'updated_at': now.isoformat(),
+                'fallback': True
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/news/refresh', methods=['POST'])
+def refresh_news():
+    """뉴스 새로고침 (캐시 무시)"""
+    # GET API에 refresh=true 파라미터 전달하는 것과 동일
+    try:
+        raw_news = fetch_rss_news()
+
+        if not raw_news:
+            return jsonify({
+                'success': False,
+                'error': '뉴스를 가져오는 데 실패했습니다.'
+            }), 500
+
+        analyzed_news = analyze_news_with_gpt(raw_news)
+
+        now = datetime.now()
+
+        if analyzed_news:
+            _news_cache['data'] = analyzed_news
+            _news_cache['updated_at'] = now
+
+            return jsonify({
+                'success': True,
+                'news': analyzed_news,
+                'updated_at': now.isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'GPT 분석에 실패했습니다.'
+            }), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # 모듈 로드 시 DB 초기화
 try:
     init_assistant_db()
