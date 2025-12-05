@@ -16,6 +16,7 @@ const ImageMain = {
   assetZipUrl: null,     // 생성된 ZIP 다운로드 URL
   sceneMetadata: null,   // 영상 생성용 씬 메타데이터
   detectedLanguage: 'ko', // 감지된 언어
+  videoUrl: null,        // 생성된 영상 URL (YouTube 업로드용)
 
   /**
    * 초기화
@@ -1041,8 +1042,17 @@ const ImageMain = {
 
             this.showStatus(`영상 생성 완료! (${statusData.duration}, 자막 ${statusData.subtitle_count}개)`, 'success');
 
-            // 다운로드
+            // 영상 URL 저장 및 YouTube 업로드 버튼 표시
             if (statusData.video_url) {
+              this.videoUrl = statusData.video_url;
+
+              // YouTube 업로드 버튼 표시
+              const ytBtn = document.getElementById('btn-youtube-upload');
+              if (ytBtn) {
+                ytBtn.classList.remove('hidden');
+              }
+
+              // 자동 다운로드
               const a = document.createElement('a');
               a.href = statusData.video_url;
               a.download = `video_${this.sessionId}.mp4`;
@@ -1083,6 +1093,76 @@ const ImageMain = {
       btn.disabled = false;
       btn.textContent = '🎬 영상 생성';
       progressDiv.classList.add('hidden');
+    }
+  },
+
+  // ========== YouTube 업로드 ==========
+
+  /**
+   * YouTube 업로드
+   */
+  async uploadToYouTube() {
+    if (!this.videoUrl) {
+      this.showStatus('업로드할 영상이 없습니다. 먼저 영상을 생성해주세요.', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-youtube-upload');
+    btn.disabled = true;
+    btn.textContent = '⏳ 업로드 중...';
+
+    try {
+      // 유튜브 메타데이터 수집
+      const titleEl = document.querySelector('.title-option.selected .title-text');
+      const title = titleEl?.textContent?.trim() || `영상_${this.sessionId}`;
+      const description = document.getElementById('youtube-description')?.value?.trim() || '';
+
+      // videoUrl에서 서버 경로 추출 (예: /outputs/img_xxx/video.mp4 → outputs/img_xxx/video.mp4)
+      const videoPath = this.videoUrl.startsWith('/') ? this.videoUrl.substring(1) : this.videoUrl;
+
+      this.showStatus('YouTube 업로드 중...', 'info');
+
+      const response = await fetch('/api/youtube/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoPath: videoPath,
+          title: title,
+          description: description,
+          tags: ['AI영상', '자동생성'],
+          categoryId: '22',  // People & Blogs
+          privacyStatus: 'private'  // 비공개로 업로드
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        const videoUrl = result.videoUrl || `https://www.youtube.com/watch?v=${result.videoId}`;
+        btn.textContent = '✅ 업로드 완료';
+        this.showStatus(`YouTube 업로드 완료! ${videoUrl}`, 'success');
+
+        // 링크 열기
+        if (confirm('YouTube에 업로드되었습니다!\n영상 페이지를 열까요?')) {
+          window.open(videoUrl, '_blank');
+        }
+      } else {
+        throw new Error(result.error || 'YouTube 업로드 실패');
+      }
+
+    } catch (error) {
+      console.error('[ImageMain] YouTube upload error:', error);
+      btn.disabled = false;
+      btn.textContent = '📺 YouTube 업로드';
+
+      // 인증 필요한 경우
+      if (error.message.includes('인증') || error.message.includes('auth')) {
+        if (confirm('YouTube 계정 연결이 필요합니다.\n연결 페이지로 이동하시겠습니까?')) {
+          window.location.href = '/api/youtube/auth';
+        }
+      } else {
+        this.showStatus('업로드 실패: ' + error.message, 'error');
+      }
     }
   }
 };
