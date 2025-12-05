@@ -351,6 +351,62 @@ const ImageMain = {
   },
 
   /**
+   * 줄별 스타일 UI 업데이트 (텍스트 입력 시 호출)
+   */
+  updateLineStyles() {
+    const customTextEl = document.getElementById('thumbnail-custom-text');
+    const container = document.getElementById('line-styles-list');
+    if (!customTextEl || !container) return;
+
+    const text = customTextEl.value.trim();
+    const lines = text ? text.split('\n').filter(line => line.trim()) : [];
+
+    // 기본 색상 배열 (줄마다 다른 색상)
+    const defaultColors = ['#FFD700', '#FFFFFF', '#FF6B6B', '#4ECDC4', '#A78BFA'];
+
+    let html = '';
+    lines.forEach((line, idx) => {
+      const defaultColor = defaultColors[idx % defaultColors.length];
+      const defaultSize = idx === 0 ? 90 : 70;  // 첫 줄은 더 크게
+      html += `
+        <div class="line-style-row">
+          <span class="line-num">${idx + 1}줄</span>
+          <span class="line-text" title="${this.escapeHtml(line)}">${this.escapeHtml(line.substring(0, 20))}${line.length > 20 ? '...' : ''}</span>
+          <label>색상</label>
+          <input type="color" id="line-color-${idx}" value="${defaultColor}">
+          <label>크기</label>
+          <input type="number" id="line-size-${idx}" value="${defaultSize}" min="30" max="150">
+        </div>
+      `;
+    });
+
+    container.innerHTML = html || '<div style="color:#999; font-size:12px;">텍스트를 입력하면 줄별 스타일을 설정할 수 있습니다.</div>';
+  },
+
+  /**
+   * 줄별 스타일 수집
+   */
+  getLineStyles() {
+    const customTextEl = document.getElementById('thumbnail-custom-text');
+    if (!customTextEl) return [];
+
+    const text = customTextEl.value.trim();
+    const lines = text ? text.split('\n').filter(line => line.trim()) : [];
+
+    const styles = [];
+    lines.forEach((_, idx) => {
+      const colorEl = document.getElementById(`line-color-${idx}`);
+      const sizeEl = document.getElementById(`line-size-${idx}`);
+      styles.push({
+        color: colorEl?.value || '#FFD700',
+        fontSize: parseInt(sizeEl?.value) || 70
+      });
+    });
+
+    return styles;
+  },
+
+  /**
    * 선택한 텍스트로 썸네일 생성
    */
   async generateThumbnailsWithText() {
@@ -381,10 +437,12 @@ const ImageMain = {
     const prompt = thumbnailData.prompt || 'detailed anime background with simple white stickman, dramatic pose, Ghibli-inspired, NO realistic humans';
 
     // UI에서 스타일 값 읽기
-    const textColor = document.getElementById('thumb-text-color')?.value || '#FFD700';
     const outlineColor = document.getElementById('thumb-outline-color')?.value || '#000000';
-    const fontSize = parseInt(document.getElementById('thumb-font-size')?.value) || 100;
     const position = document.getElementById('thumb-position')?.value || 'left';
+
+    // 줄별 스타일 수집
+    const lineStyles = this.getLineStyles();
+    console.log('[ImageMain] Line styles:', lineStyles);
 
     // 썸네일 그리드 표시
     document.getElementById('thumbnail-grid').style.display = 'flex';
@@ -400,8 +458,8 @@ const ImageMain = {
       }
     }
 
-    // 병렬 생성
-    const promises = [0, 1].map(idx => this.generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor, fontSize, position));
+    // 병렬 생성 (줄별 스타일 전달)
+    const promises = [0, 1].map(idx => this.generateSingleThumbnail(idx, prompt, textLines, model, outlineColor, position, lineStyles));
     await Promise.all(promises);
 
     this.showStatus('썸네일 2개 생성 완료!', 'success');
@@ -533,19 +591,30 @@ const ImageMain = {
   },
 
   /**
-   * 단일 썸네일 생성 (사용자 설정 적용)
+   * 단일 썸네일 생성 (줄별 스타일 적용)
    */
-  async generateSingleThumbnail(idx, prompt, textLines, model, textColor, outlineColor, fontSize = 100, position = 'left') {
+  async generateSingleThumbnail(idx, prompt, textLines, model, outlineColor, position = 'left', lineStyles = []) {
     const card = document.getElementById(`thumbnail-card-${idx}`);
     const imageBox = card.querySelector('.thumbnail-image-box');
 
     imageBox.innerHTML = '<div class="placeholder"><div class="spinner"></div><span>생성중...</span></div>';
 
     try {
+      // 폰트 위치에 따라 캐릭터 배치 힌트 추가
+      let positionHint = '';
+      if (position === 'left') {
+        positionHint = 'Character positioned on the RIGHT side of the image, leaving LEFT side empty for text overlay.';
+      } else if (position === 'right') {
+        positionHint = 'Character positioned on the LEFT side of the image, leaving RIGHT side empty for text overlay.';
+      } else {
+        positionHint = 'Character positioned at the bottom, leaving top/center for text overlay.';
+      }
+
+      let finalPrompt = `${prompt}. IMPORTANT: ${positionHint} Character face must be clearly visible with expressive emotion.`;
+
       // 두 번째 썸네일은 약간 다른 프롬프트 변형 사용
-      let finalPrompt = prompt;
       if (idx === 1) {
-        finalPrompt = prompt + ', different angle, alternative composition';
+        finalPrompt += ' Different angle, alternative composition.';
       }
 
       // 1단계: 이미지 생성
@@ -568,7 +637,7 @@ const ImageMain = {
         throw new Error('이미지 URL이 없습니다.');
       }
 
-      // 2단계: 텍스트 오버레이 (사용자가 지정한 스타일 적용)
+      // 2단계: 텍스트 오버레이 (줄별 스타일 적용)
       if (textLines && textLines.length > 0) {
         imageBox.innerHTML = '<div class="placeholder"><div class="spinner"></div><span>텍스트 적용중...</span></div>';
 
@@ -578,13 +647,14 @@ const ImageMain = {
           body: JSON.stringify({
             imageUrl: imageData.imageUrl,
             textLines: textLines,
-            highlightLines: [0],
-            textColor: textColor,
-            highlightColor: textColor,
+            highlightLines: [],  // lineStyles로 대체
+            textColor: '#FFD700',  // 기본값 (lineStyles가 우선)
+            highlightColor: '#FFD700',
             outlineColor: outlineColor,
             outlineWidth: 6,
-            fontSize: fontSize,
-            position: position
+            fontSize: 70,  // 기본값 (lineStyles가 우선)
+            position: position,
+            lineStyles: lineStyles  // 줄별 색상/크기
           })
         });
 

@@ -6797,11 +6797,18 @@ def generate_thumbnail():
                 "X-Title": "Drama Thumbnail Generator"
             }
 
-            # 스틱맨 스타일 강제 적용 (프롬프트에 stickman이 포함되어 있으면)
-            if 'stickman' in image_prompt.lower():
-                enhanced_prompt = f"CRITICAL: 16:9 WIDESCREEN aspect ratio. {image_prompt}. IMPORTANT: Only simple white stickman with round head, two black dot eyes, small mouth, thin eyebrows, black outline body. NO realistic humans, NO anime characters, ONLY the stickman! Detailed anime background, dramatic composition, eye-catching YouTube thumbnail."
-            else:
-                enhanced_prompt = f"CRITICAL: 16:9 WIDESCREEN aspect ratio. Generate a high quality YouTube thumbnail image: {image_prompt}. IMPORTANT: Ensure Korean/East Asian facial features if person is depicted. Style: dramatic, eye-catching, professional YouTube thumbnail quality."
+            # 스틱맨 스타일 강제 적용 (항상!)
+            # 절대 사실적인 인물이나 할아버지/할머니 등장 금지
+            enhanced_prompt = f"""CRITICAL REQUIREMENTS:
+1. 16:9 WIDESCREEN aspect ratio
+2. ONLY simple white stickman character - round head, two black dot eyes, small mouth, thin eyebrows, black outline body
+3. ABSOLUTELY NO realistic humans, NO grandpa, NO grandma, NO elderly people, NO anime characters with detailed faces
+4. Detailed anime/Ghibli-style background ONLY
+5. The stickman should be the ONLY character in the scene
+
+Original request: {image_prompt}
+
+FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple white stickman character. Eye-catching YouTube thumbnail composition. The background is detailed and beautiful, but the character MUST be a simple stickman, NOT a realistic person."""
 
             payload = {
                 "model": "google/gemini-2.5-flash-image-preview",
@@ -7624,6 +7631,10 @@ def api_thumbnail_overlay():
         font_size = data.get("fontSize", 60)  # 폰트 크기
         position = data.get("position", "left")  # 텍스트 위치: left, center, right
 
+        # 줄별 스타일 지원 (새 기능)
+        # lineStyles: [{"color": "#FFD700", "fontSize": 80}, {"color": "#FFFFFF", "fontSize": 60}]
+        line_styles = data.get("lineStyles", [])  # 줄별 색상/크기 개별 지정
+
         print(f"[THUMBNAIL] 썸네일 생성 시작 - 텍스트 {len(text_lines)}줄")
 
         if not image_url:
@@ -7710,11 +7721,37 @@ def api_thumbnail_overlay():
         # X 위치
         x_margin = int(width * 0.05)  # 좌우 여백 5%
 
+        # 줄별 폰트 캐시 (서로 다른 크기 지원)
+        font_cache = {font_size: font}
+
+        def get_font_for_size(size):
+            """주어진 크기의 폰트 반환 (캐싱)"""
+            if size in font_cache:
+                return font_cache[size]
+            # 새 크기 폰트 로드
+            for font_path in font_paths:
+                if os_module.path.exists(font_path):
+                    try:
+                        new_font = ImageFont.truetype(font_path, size)
+                        font_cache[size] = new_font
+                        return new_font
+                    except Exception:
+                        continue
+            return font  # 기본 폰트 반환
+
+        y_current = y_start
         for i, line in enumerate(text_lines):
-            y = y_start + (i * line_height)
+            # 줄별 스타일 가져오기
+            line_style = line_styles[i] if i < len(line_styles) else {}
+            line_font_size = line_style.get("fontSize", font_size)
+            line_color = line_style.get("color", None)
+
+            # 이 줄의 폰트 가져오기
+            current_font = get_font_for_size(line_font_size)
+            current_line_height = line_font_size + 20
 
             # 텍스트 크기 측정
-            bbox = draw.textbbox((0, 0), line, font=font)
+            bbox = draw.textbbox((0, 0), line, font=current_font)
             text_width = bbox[2] - bbox[0]
 
             # X 위치 결정
@@ -7725,8 +7762,10 @@ def api_thumbnail_overlay():
             else:  # left
                 x = x_margin
 
-            # 색상 결정 (강조 줄인지 확인)
-            if i in highlight_lines:
+            # 색상 결정 (우선순위: lineStyles > highlightLines > textColor)
+            if line_color:
+                fill_color = line_color
+            elif i in highlight_lines:
                 fill_color = highlight_color
             else:
                 fill_color = text_color
@@ -7735,10 +7774,13 @@ def api_thumbnail_overlay():
             for dx in range(-outline_width, outline_width + 1):
                 for dy in range(-outline_width, outline_width + 1):
                     if dx != 0 or dy != 0:
-                        draw.text((x + dx, y + dy), line, font=font, fill=outline_color)
+                        draw.text((x + dx, y_current + dy), line, font=current_font, fill=outline_color)
 
             # 메인 텍스트 그리기
-            draw.text((x, y), line, font=font, fill=fill_color)
+            draw.text((x, y_current), line, font=current_font, fill=fill_color)
+
+            # 다음 줄 Y 위치
+            y_current += current_line_height
 
         # 결과 이미지를 base64로 인코딩
         output_buffer = BytesIO()
@@ -9588,7 +9630,13 @@ The key visual style is:
 1. Background = DETAILED ANIME STYLE (slice-of-life anime, Ghibli-inspired, warm colors, soft lighting)
 2. Stickman = SIMPLE WHITE BODY + CONSISTENT FACE (round head, TWO DOT EYES, small mouth, thin eyebrows)
 3. Combination = "CONTRAST COLLAGE" - simple stickman contrasts against detailed anime background
-4. NO OTHER CHARACTERS - absolutely NO anime characters, NO realistic humans, ONLY the stickman!
+4. ABSOLUTELY NO OTHER CHARACTERS - NO anime characters, NO realistic humans, NO elderly people, NO grandpa, NO grandma, NO senior citizens, ONLY the simple white stickman!
+
+⚠️ FORBIDDEN ELEMENTS (NEVER INCLUDE):
+- ANY realistic human faces or bodies
+- ANY elderly/senior/grandpa/grandma characters
+- ANY anime-style human characters
+- ANY silhouettes of people other than the stickman
 
 This creates contrast between the detailed anime world and the simple stickman.
 
@@ -9613,8 +9661,9 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 - simple white stickman with round head, two black dot eyes, small mouth, thin eyebrows
 - black outline body, clean minimal flat style
 - contrast between detailed background and minimal character
-- NO anime characters, NO realistic humans, ONLY stickman
+- NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman
 - seamless composition
+- CHARACTER FACE MUST BE CLEARLY VISIBLE
 
 ## 썸네일 텍스트 규칙 (중요!)
 - 문구 길이: {thumb_length}
@@ -9644,13 +9693,13 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     "text_options": ["Thumbnail text 1 in {lang_config['name']}", "Thumbnail text 2 in {lang_config['name']}", "Thumbnail text 3 in {lang_config['name']}"],
     "text_color": "{thumb_color}",
     "outline_color": "{thumb_outline}",
-    "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head and black outline, clean minimal flat style, [pose/action]. NO anime characters, NO realistic humans, ONLY stickman. Contrast collage style, detailed anime world with simple stickman."
+    "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [pose/action]. Character face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage style."
   }},
   "scenes": [
     {{
       "scene_number": 1,
       "narration": "⚠️ EXACT TEXT from the script - COPY-PASTE the original sentences, DO NOT summarize or paraphrase!",
-      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head and black outline, clean minimal flat style, [action]. NO anime characters, NO realistic humans, ONLY stickman. Contrast collage, detailed anime world with simple stickman."
+      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [action], face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage."
     }}
   ]
 }}
@@ -10517,16 +10566,26 @@ def _update_job_status(job_id, **kwargs):
 def _get_subtitle_style(lang):
     """언어별 자막 스타일 반환 (ASS 형식)"""
     if lang == 'ko':
+        # NanumGothic - 나눔고딕 폰트 (한글 전용)
+        # MarginV=180 으로 자막을 화면 위쪽으로 이동
         return (
-            "FontName=Noto Sans KR,FontSize=42,PrimaryColour=&H00FFFFFF,"
+            "FontName=NanumGothic,FontSize=38,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=3,Shadow=2,MarginV=25"
+            "BorderStyle=1,Outline=3,Shadow=2,MarginV=180"
+        )
+    elif lang == 'ja':
+        # 일본어 - NanumGothic 사용 (CJK 지원)
+        return (
+            "FontName=NanumGothic,FontSize=36,PrimaryColour=&H00FFFFFF,"
+            "OutlineColour=&H00000000,BackColour=&H80000000,"
+            "BorderStyle=1,Outline=3,Shadow=2,MarginV=180"
         )
     else:
+        # 영어/기타 언어
         return (
             "FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=2,Shadow=1,MarginV=60"
+            "BorderStyle=1,Outline=2,Shadow=1,MarginV=150"
         )
 
 def _generate_video_worker(job_id, session_id, scenes, detected_lang):
