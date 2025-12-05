@@ -21,6 +21,8 @@ const ImageMain = {
   selectedThumbnailIdx: null,  // 선택된 썸네일 인덱스 (YouTube 업로드용)
   privacyStatus: 'private',    // 공개 설정 (private, unlisted, public)
   scheduledTime: null,         // 예약 업로드 시간 (ISO 8601)
+  selectedChannelId: null,     // 선택된 YouTube 채널 ID
+  channels: [],                // 사용 가능한 채널 목록
 
   /**
    * 초기화
@@ -510,11 +512,13 @@ const ImageMain = {
    */
   renderSceneCards(scenes) {
     const container = document.getElementById('scene-cards');
+    const imagesSection = document.getElementById('images-section');
     console.log('[ImageMain] renderSceneCards called with', scenes?.length || 0, 'scenes');
 
     if (!scenes || scenes.length === 0) {
       console.log('[ImageMain] No scenes, showing placeholder');
       container.style.display = 'none';
+      if (imagesSection) imagesSection.style.display = 'none';
       document.getElementById('result-empty').style.display = 'flex';
       return;
     }
@@ -546,6 +550,7 @@ const ImageMain = {
 
     container.innerHTML = html;
     container.style.display = 'grid';
+    if (imagesSection) imagesSection.style.display = 'block';
     document.getElementById('result-empty').style.display = 'none';
 
     // 전체 다운로드 버튼 표시
@@ -1091,6 +1096,8 @@ const ImageMain = {
                 ytSection.classList.remove('hidden');
                 // 기본 예약 시간 설정 (내일 오전 9시)
                 this.setDefaultScheduleTime();
+                // 채널 목록 로드
+                this.loadYouTubeChannels();
               }
 
               // 자동 다운로드
@@ -1138,6 +1145,105 @@ const ImageMain = {
   },
 
   // ========== YouTube 업로드 ==========
+
+  /**
+   * YouTube 채널 목록 로드
+   */
+  async loadYouTubeChannels() {
+    const container = document.getElementById('channel-select-area');
+    if (!container) return;
+
+    container.innerHTML = '<div class="channel-loading">채널 정보 로딩 중...</div>';
+
+    try {
+      const response = await fetch('/api/drama/youtube-channels');
+      const data = await response.json();
+
+      if (!data.success) {
+        // 인증 필요
+        if (data.need_reauth || data.error?.includes('인증')) {
+          container.innerHTML = `
+            <div class="channel-error">
+              <p>YouTube 인증이 필요합니다.</p>
+              <a href="/api/youtube/auth" target="_blank">🔗 YouTube 연결하기</a>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="channel-error">
+              <p>${data.error || '채널을 불러올 수 없습니다.'}</p>
+              <a href="/api/youtube/auth" target="_blank">🔗 다시 연결하기</a>
+            </div>
+          `;
+        }
+        return;
+      }
+
+      this.channels = data.channels || [];
+
+      if (this.channels.length === 0) {
+        container.innerHTML = '<div class="no-channels">연결된 채널이 없습니다.</div>';
+        return;
+      }
+
+      // 채널 옵션 렌더링
+      let html = '<div class="channel-options">';
+      this.channels.forEach((channel, idx) => {
+        const isSelected = idx === 0;
+        if (isSelected) {
+          this.selectedChannelId = channel.id;
+        }
+        html += `
+          <label class="channel-option${isSelected ? ' selected' : ''}" data-channel-id="${channel.id}">
+            <input type="radio" name="youtube-channel" value="${channel.id}" ${isSelected ? 'checked' : ''}>
+            <img class="channel-thumbnail" src="${channel.thumbnail || ''}" alt="${this.escapeHtml(channel.title)}" onerror="this.style.display='none'">
+            <div class="channel-info">
+              <div class="channel-name">${this.escapeHtml(channel.title)}</div>
+              <div class="channel-id">${channel.id}</div>
+            </div>
+          </label>
+        `;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+
+      // 클릭 이벤트 바인딩
+      container.querySelectorAll('.channel-option').forEach(el => {
+        el.addEventListener('click', () => {
+          const channelId = el.dataset.channelId;
+          this.selectChannel(channelId);
+        });
+      });
+
+    } catch (error) {
+      console.error('[ImageMain] Load channels error:', error);
+      container.innerHTML = `
+        <div class="channel-error">
+          <p>채널 정보를 불러오는 데 실패했습니다.</p>
+          <a href="/api/youtube/auth" target="_blank">🔗 YouTube 연결하기</a>
+        </div>
+      `;
+    }
+  },
+
+  /**
+   * 채널 선택
+   */
+  selectChannel(channelId) {
+    this.selectedChannelId = channelId;
+
+    // UI 업데이트
+    document.querySelectorAll('.channel-option').forEach(el => {
+      const isSelected = el.dataset.channelId === channelId;
+      el.classList.toggle('selected', isSelected);
+      el.querySelector('input').checked = isSelected;
+    });
+
+    const channel = this.channels.find(c => c.id === channelId);
+    if (channel) {
+      this.showStatus(`채널 선택: ${channel.title}`, 'success');
+    }
+  },
 
   /**
    * 공개 설정 변경
@@ -1260,7 +1366,7 @@ const ImageMain = {
       }
 
       console.log('[ImageMain] Uploading to YouTube:', {
-        title, thumbnailUrl, privacy: this.privacyStatus, publishAt
+        title, thumbnailUrl, privacy: this.privacyStatus, publishAt, channelId: this.selectedChannelId
       });
 
       const response = await fetch('/api/youtube/upload', {
@@ -1274,7 +1380,8 @@ const ImageMain = {
           categoryId: '22',  // People & Blogs
           privacyStatus: publishAt ? 'private' : this.privacyStatus,  // 예약 시 비공개 필수
           publish_at: publishAt,  // 예약 시간 (ISO 8601) - 백엔드 snake_case
-          thumbnailUrl: thumbnailUrl  // 선택한 썸네일
+          thumbnailUrl: thumbnailUrl,  // 선택한 썸네일
+          channelId: this.selectedChannelId  // 선택한 채널 ID
         })
       });
 
