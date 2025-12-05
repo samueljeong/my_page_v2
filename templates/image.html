@@ -15,7 +15,59 @@
       min-height: calc(100vh - 120px);
     }
 
-    /* 왼쪽 패널: 입력 영역 */
+    /* 1컬럼 레이아웃 */
+    .image-workspace.single-column {
+      flex-direction: column;
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* 섹션 카드 스타일 */
+    .section-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+
+    .section-card h3, .section-card h4 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* 설정 행 */
+    .config-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .config-item {
+      flex: 1;
+    }
+
+    .config-item label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .config-item select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    /* 왼쪽 패널: 입력 영역 (폴백) */
     .input-panel {
       width: 45%;
       max-width: 500px;
@@ -450,18 +502,17 @@
 
     /* 분석 진행 상태 */
     .analyzing-overlay {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.9);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      border-radius: 12px;
-      z-index: 10;
+      z-index: 1000;
     }
 
     .analyzing-overlay.hidden {
@@ -1198,11 +1249,15 @@
 
     /* YouTube 업로드 섹션 */
     .youtube-upload-section {
-      margin-top: 20px;
+      margin-top: 0;
       padding: 20px;
       background: linear-gradient(135deg, #1e293b, #0f172a);
       border-radius: 12px;
       border: 1px solid #334155;
+    }
+
+    .youtube-upload-section.section-card {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
     }
 
     .youtube-upload-section.hidden {
@@ -1214,6 +1269,97 @@
       font-size: 1rem;
       font-weight: 600;
       color: #f1f5f9;
+    }
+
+    /* 채널 선택 영역 */
+    .channel-select-area {
+      margin-bottom: 8px;
+    }
+
+    .channel-loading {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .channel-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .channel-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #334155;
+      border: 2px solid #475569;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .channel-option:hover {
+      border-color: #60a5fa;
+      background: #3d4f61;
+    }
+
+    .channel-option.selected {
+      border-color: #ef4444;
+      background: #3d4f61;
+    }
+
+    .channel-option input[type="radio"] {
+      display: none;
+    }
+
+    .channel-thumbnail {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #475569;
+    }
+
+    .channel-info {
+      flex: 1;
+    }
+
+    .channel-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 2px;
+    }
+
+    .channel-id {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .channel-error {
+      padding: 16px;
+      background: #4a1f1f;
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      color: #fca5a5;
+      font-size: 0.9rem;
+    }
+
+    .channel-error a {
+      color: #60a5fa;
+      text-decoration: underline;
+    }
+
+    .no-channels {
+      padding: 16px;
+      background: #334155;
+      border-radius: 8px;
+      color: #94a3b8;
+      text-align: center;
+      font-size: 0.9rem;
     }
 
     .upload-option-group {
@@ -1363,10 +1509,15 @@
 
     <!-- Main Content Area -->
     <div class="main-content">
-      <div class="image-workspace">
-        <!-- 왼쪽: 입력 패널 -->
-        <div class="input-panel">
-          <!-- 설정 -->
+      <div class="image-workspace single-column">
+        <!-- 분석 중 오버레이 -->
+        <div id="analyzing-overlay" class="analyzing-overlay hidden">
+          <div class="spinner"></div>
+          <div>대본 분석 중...</div>
+        </div>
+
+        <!-- 설정 섹션 -->
+        <div class="section-card">
           <div class="config-row">
             <div class="config-item">
               <label>타겟 시청자</label>
@@ -1411,11 +1562,12 @@
               </select>
             </div>
           </div>
+        </div>
 
-          <!-- 대본 입력 -->
-          <div class="script-section">
-            <h3>📝 대본 입력</h3>
-            <textarea id="full-script" class="script-textarea" placeholder="여기에 전체 대본을 붙여넣으세요...
+        <!-- 대본 입력 -->
+        <div class="section-card">
+          <h3>📝 대본 입력</h3>
+          <textarea id="full-script" class="script-textarea" placeholder="여기에 전체 대본을 붙여넣으세요...
 
 예시:
 [주인공: 이순자, 75세, 한국인 할머니]
@@ -1426,49 +1578,19 @@
 60년 전, 그 시절의 기억이 밀려왔습니다.
 전쟁이 끝나고 폐허가 된 마을에서 어린 순자는 처음 학교에 갔습니다."></textarea>
 
-            <div class="analyze-actions">
-              <button id="btn-analyze" class="btn-analyze" onclick="ImageMain.analyzeScript()">
-                🤖 AI 대본 분석하기
-              </button>
-              <div class="image-count-input">
-                <label>이미지 수</label>
-                <input type="number" id="image-count" value="4" min="1" max="20">
-              </div>
-            </div>
-          </div>
-
-          <!-- 유튜브 메타데이터 영역 (분석 후 표시) -->
-          <div id="youtube-meta-section" class="youtube-meta-section hidden">
-            <h3>📺 유튜브 메타데이터</h3>
-
-            <!-- 제목 선택 -->
-            <div class="meta-group">
-              <label>제목 (4개 중 선택)</label>
-              <div id="youtube-titles" class="title-options">
-                <!-- JS로 동적 생성 -->
-              </div>
-            </div>
-
-            <!-- 설명란 -->
-            <div class="meta-group">
-              <label>설명란</label>
-              <div class="meta-content-box">
-                <textarea id="youtube-description" class="meta-textarea" rows="6" readonly></textarea>
-                <button class="btn-copy" onclick="ImageMain.copyToClipboard('youtube-description')">📋 복사</button>
-              </div>
+          <div class="analyze-actions">
+            <button id="btn-analyze" class="btn-analyze" onclick="ImageMain.analyzeScript()">
+              🤖 AI 대본 분석하기
+            </button>
+            <div class="image-count-input">
+              <label>이미지 수</label>
+              <input type="number" id="image-count" value="4" min="1" max="20">
             </div>
           </div>
         </div>
 
-        <!-- 오른쪽: 결과 패널 -->
-        <div class="result-panel" style="position: relative;">
-          <!-- 분석 중 오버레이 -->
-          <div id="analyzing-overlay" class="analyzing-overlay hidden">
-            <div class="spinner"></div>
-            <div>대본 분석 중...</div>
-          </div>
-
-          <!-- 헤더 -->
+        <!-- 생성된 이미지 섹션 -->
+        <div class="section-card" id="images-section" style="display: none;">
           <div class="result-header">
             <h3>🎬 생성된 이미지</h3>
             <button id="btn-download-all" class="btn-download-all hidden" onclick="ImageMain.downloadAllImages()">
@@ -1490,179 +1612,209 @@
             </select>
           </div>
 
-          <!-- 빈 상태 -->
-          <div id="result-empty" class="result-empty">
-            <div class="result-empty-icon">🖼️</div>
-            <div class="result-empty-text">대본을 분석하면 이미지가 여기에 생성됩니다</div>
-          </div>
-
-          <!-- 썸네일 영역 -->
-          <div id="thumbnail-section" class="thumbnail-section hidden">
-            <h4>🎨 썸네일</h4>
-
-            <!-- 썸네일 텍스트 선택 (3개 중 선택) -->
-            <div id="thumbnail-text-select" class="thumbnail-text-select">
-              <label>AI 추천 텍스트 (선택)</label>
-              <div id="thumbnail-text-options" class="text-options">
-                <!-- JS로 동적 생성 -->
-              </div>
-
-              <!-- 직접 입력 필드 -->
-              <div class="custom-text-input">
-                <label>✏️ 직접 입력 (여러 줄 가능)</label>
-                <textarea id="thumbnail-custom-text" placeholder="예: 4시간의 배신&#10;그날 밤 일어난 일" oninput="ImageMain.updateLineStyles()"></textarea>
-              </div>
-
-              <!-- 줄별 스타일 설정 (동적 생성) -->
-              <div id="line-styles-container" class="line-styles-container">
-                <label>🎨 줄별 색상/크기 설정</label>
-                <div id="line-styles-list" class="line-styles-list">
-                  <div style="color:#999; font-size:12px;">텍스트를 입력하면 줄별 스타일을 설정할 수 있습니다.</div>
-                </div>
-              </div>
-
-              <!-- 공통 스타일 옵션 -->
-              <div class="text-style-options">
-                <div class="style-row">
-                  <div class="style-item">
-                    <label>외곽선 색상</label>
-                    <input type="color" id="thumb-outline-color" value="#000000">
-                  </div>
-                  <div class="style-item">
-                    <label>배치</label>
-                    <select id="thumb-position">
-                      <option value="left">왼쪽</option>
-                      <option value="center">가운데</option>
-                      <option value="right">오른쪽</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()">
-                🎨 썸네일 생성
-              </button>
-            </div>
-
-            <!-- 생성된 썸네일 -->
-            <div id="thumbnail-grid" class="thumbnail-grid" style="display: none;">
-              <div class="thumbnail-card" id="thumbnail-card-0">
-                <div class="thumbnail-image-box">
-                  <div class="placeholder">썸네일 1</div>
-                </div>
-                <div class="thumbnail-text-preview" id="thumbnail-text-0"></div>
-                <button class="btn-select-thumbnail" id="btn-select-thumb-0" onclick="ImageMain.selectThumbnail(0)">선택</button>
-              </div>
-              <div class="thumbnail-card" id="thumbnail-card-1">
-                <div class="thumbnail-image-box">
-                  <div class="placeholder">썸네일 2</div>
-                </div>
-                <div class="thumbnail-text-preview" id="thumbnail-text-1"></div>
-                <button class="btn-select-thumbnail" id="btn-select-thumb-1" onclick="ImageMain.selectThumbnail(1)">선택</button>
-              </div>
-            </div>
-          </div>
-
           <!-- 씬 카드 목록 -->
-          <div id="scene-cards" class="scene-cards" style="display: none;">
+          <div id="scene-cards" class="scene-cards">
             <!-- JS로 동적 생성 -->
           </div>
+        </div>
 
-          <!-- TTS & 에셋 다운로드 섹션 -->
-          <div id="asset-section" class="asset-section hidden">
-            <h4>🎤 음성 & 에셋 다운로드</h4>
+        <!-- TTS & 에셋 다운로드 섹션 -->
+        <div id="asset-section" class="section-card asset-section hidden">
+          <h4>🎤 음성 & 에셋 다운로드</h4>
 
-            <!-- TTS 음성 선택 -->
-            <div class="tts-config">
-              <label>음성 선택</label>
-              <div class="voice-options">
-                <button type="button" class="voice-btn" data-voice="ko-KR-Neural2-A" onclick="ImageMain.selectVoice(this)">
-                  👩 여성 (차분)
-                </button>
-                <button type="button" class="voice-btn active" data-voice="ko-KR-Neural2-C" onclick="ImageMain.selectVoice(this)">
-                  👨 남성 (중후)
-                </button>
-                <button type="button" class="voice-btn" data-voice="ko-KR-Neural2-B" onclick="ImageMain.selectVoice(this)">
-                  👩 여성 (밝은)
-                </button>
-              </div>
-            </div>
-
-            <!-- 진행 상태 -->
-            <div id="asset-progress" class="asset-progress hidden">
-              <div class="progress-bar">
-                <div id="asset-progress-fill" class="progress-fill" style="width: 0%"></div>
-              </div>
-              <div id="asset-progress-text" class="progress-text">준비 중...</div>
-            </div>
-
-            <!-- 버튼 그룹 -->
-            <div class="asset-buttons">
-              <button id="btn-generate-assets" class="btn-generate-assets" onclick="ImageMain.generateAssets()">
-                📦 CapCut 에셋 생성
+          <!-- TTS 음성 선택 -->
+          <div class="tts-config">
+            <label>음성 선택</label>
+            <div class="voice-options">
+              <button type="button" class="voice-btn" data-voice="ko-KR-Neural2-A" onclick="ImageMain.selectVoice(this)">
+                👩 여성 (차분)
               </button>
-              <button id="btn-download-assets" class="btn-download-assets hidden" onclick="ImageMain.downloadAssets()">
-                ⬇️ ZIP 다운로드
+              <button type="button" class="voice-btn active" data-voice="ko-KR-Neural2-C" onclick="ImageMain.selectVoice(this)">
+                👨 남성 (중후)
               </button>
-              <button id="btn-generate-video" class="btn-generate-video hidden" onclick="ImageMain.generateVideo()">
-                🎬 영상 생성
+              <button type="button" class="voice-btn" data-voice="ko-KR-Neural2-B" onclick="ImageMain.selectVoice(this)">
+                👩 여성 (밝은)
               </button>
-            </div>
-
-            <!-- YouTube 업로드 섹션 -->
-            <div id="youtube-upload-section" class="youtube-upload-section hidden">
-              <h4>📺 YouTube 업로드</h4>
-
-              <!-- 공개 설정 -->
-              <div class="upload-option-group">
-                <label>공개 설정</label>
-                <div class="privacy-options">
-                  <button type="button" class="privacy-btn active" data-privacy="private" onclick="ImageMain.setPrivacy('private')">
-                    🔒 비공개
-                  </button>
-                  <button type="button" class="privacy-btn" data-privacy="unlisted" onclick="ImageMain.setPrivacy('unlisted')">
-                    🔗 일부공개
-                  </button>
-                  <button type="button" class="privacy-btn" data-privacy="public" onclick="ImageMain.setPrivacy('public')">
-                    🌐 공개
-                  </button>
-                </div>
-              </div>
-
-              <!-- 예약 설정 -->
-              <div class="upload-option-group">
-                <label>
-                  <input type="checkbox" id="schedule-upload" onchange="ImageMain.toggleSchedule()">
-                  예약 업로드
-                </label>
-                <div id="schedule-datetime-wrapper" class="schedule-datetime-wrapper hidden">
-                  <input type="datetime-local" id="schedule-datetime" class="schedule-datetime-input">
-                  <span class="schedule-hint">선택한 시간에 자동 공개됩니다</span>
-                </div>
-              </div>
-
-              <!-- 업로드 버튼 -->
-              <button id="btn-youtube-upload" class="btn-youtube-upload" onclick="ImageMain.uploadToYouTube()">
-                📺 YouTube 업로드
-              </button>
-            </div>
-
-            <!-- 생성 결과 미리보기 -->
-            <div id="asset-preview" class="asset-preview hidden">
-              <div class="asset-item">
-                <span class="asset-icon">🖼️</span>
-                <span id="asset-image-count">이미지 0개</span>
-              </div>
-              <div class="asset-item">
-                <span class="asset-icon">🎵</span>
-                <span id="asset-audio-info">오디오 0분 0초</span>
-              </div>
-              <div class="asset-item">
-                <span class="asset-icon">📝</span>
-                <span>자막 (SRT)</span>
-              </div>
             </div>
           </div>
+
+          <!-- 진행 상태 -->
+          <div id="asset-progress" class="asset-progress hidden">
+            <div class="progress-bar">
+              <div id="asset-progress-fill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <div id="asset-progress-text" class="progress-text">준비 중...</div>
+          </div>
+
+          <!-- 버튼 그룹 -->
+          <div class="asset-buttons">
+            <button id="btn-generate-assets" class="btn-generate-assets" onclick="ImageMain.generateAssets()">
+              ✅ 생성 완료
+            </button>
+            <button id="btn-download-assets" class="btn-download-assets hidden" onclick="ImageMain.downloadAssets()">
+              ⬇️ ZIP 다운로드
+            </button>
+            <button id="btn-generate-video" class="btn-generate-video hidden" onclick="ImageMain.generateVideo()">
+              🎬 35%
+            </button>
+          </div>
+
+          <!-- 생성 결과 미리보기 -->
+          <div id="asset-preview" class="asset-preview hidden">
+            <div class="asset-item">
+              <span class="asset-icon">🖼️</span>
+              <span id="asset-image-count">이미지 0개</span>
+            </div>
+            <div class="asset-item">
+              <span class="asset-icon">🎵</span>
+              <span id="asset-audio-info">오디오 0분 0초</span>
+            </div>
+            <div class="asset-item">
+              <span class="asset-icon">📝</span>
+              <span>자막 (SRT)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 유튜브 메타데이터 영역 (분석 후 표시) -->
+        <div id="youtube-meta-section" class="section-card youtube-meta-section hidden">
+          <h3>📺 유튜브 메타데이터</h3>
+
+          <!-- 제목 선택 -->
+          <div class="meta-group">
+            <label>제목 (4개 중 선택)</label>
+            <div id="youtube-titles" class="title-options">
+              <!-- JS로 동적 생성 -->
+            </div>
+          </div>
+
+          <!-- 설명란 -->
+          <div class="meta-group">
+            <label>설명란</label>
+            <div class="meta-content-box">
+              <textarea id="youtube-description" class="meta-textarea" rows="6" readonly></textarea>
+              <button class="btn-copy" onclick="ImageMain.copyToClipboard('youtube-description')">📋 복사</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 썸네일 영역 -->
+        <div id="thumbnail-section" class="section-card thumbnail-section hidden">
+          <h4>🎨 썸네일</h4>
+
+          <!-- 썸네일 텍스트 선택 (3개 중 선택) -->
+          <div id="thumbnail-text-select" class="thumbnail-text-select">
+            <label>AI 추천 텍스트 (선택)</label>
+            <div id="thumbnail-text-options" class="text-options">
+              <!-- JS로 동적 생성 -->
+            </div>
+
+            <!-- 직접 입력 필드 -->
+            <div class="custom-text-input">
+              <label>✏️ 직접 입력 (여러 줄 가능)</label>
+              <textarea id="thumbnail-custom-text" placeholder="예: 4시간의 배신&#10;그날 밤 일어난 일" oninput="ImageMain.updateLineStyles()"></textarea>
+            </div>
+
+            <!-- 줄별 스타일 설정 (동적 생성) -->
+            <div id="line-styles-container" class="line-styles-container">
+              <label>🎨 줄별 색상/크기 설정</label>
+              <div id="line-styles-list" class="line-styles-list">
+                <div style="color:#999; font-size:12px;">텍스트를 입력하면 줄별 스타일을 설정할 수 있습니다.</div>
+              </div>
+            </div>
+
+            <!-- 공통 스타일 옵션 -->
+            <div class="text-style-options">
+              <div class="style-row">
+                <div class="style-item">
+                  <label>외곽선 색상</label>
+                  <input type="color" id="thumb-outline-color" value="#000000">
+                </div>
+                <div class="style-item">
+                  <label>배치</label>
+                  <select id="thumb-position">
+                    <option value="left">왼쪽</option>
+                    <option value="center">가운데</option>
+                    <option value="right">오른쪽</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()">
+              🎨 썸네일 생성
+            </button>
+          </div>
+
+          <!-- 생성된 썸네일 -->
+          <div id="thumbnail-grid" class="thumbnail-grid" style="display: none;">
+            <div class="thumbnail-card" id="thumbnail-card-0">
+              <div class="thumbnail-image-box">
+                <div class="placeholder">썸네일 1</div>
+              </div>
+              <div class="thumbnail-text-preview" id="thumbnail-text-0"></div>
+              <button class="btn-select-thumbnail" id="btn-select-thumb-0" onclick="ImageMain.selectThumbnail(0)">선택</button>
+            </div>
+            <div class="thumbnail-card" id="thumbnail-card-1">
+              <div class="thumbnail-image-box">
+                <div class="placeholder">썸네일 2</div>
+              </div>
+              <div class="thumbnail-text-preview" id="thumbnail-text-1"></div>
+              <button class="btn-select-thumbnail" id="btn-select-thumb-1" onclick="ImageMain.selectThumbnail(1)">선택</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- YouTube 업로드 섹션 -->
+        <div id="youtube-upload-section" class="section-card youtube-upload-section hidden">
+          <h4>📺 YouTube 업로드</h4>
+
+          <!-- 채널 선택 -->
+          <div class="upload-option-group">
+            <label>채널 선택</label>
+            <div id="channel-select-area" class="channel-select-area">
+              <div class="channel-loading">채널 정보 로딩 중...</div>
+            </div>
+          </div>
+
+          <!-- 공개 설정 -->
+          <div class="upload-option-group">
+            <label>공개 설정</label>
+            <div class="privacy-options">
+              <button type="button" class="privacy-btn active" data-privacy="private" onclick="ImageMain.setPrivacy('private')">
+                🔒 비공개
+              </button>
+              <button type="button" class="privacy-btn" data-privacy="unlisted" onclick="ImageMain.setPrivacy('unlisted')">
+                🔗 일부공개
+              </button>
+              <button type="button" class="privacy-btn" data-privacy="public" onclick="ImageMain.setPrivacy('public')">
+                🌐 공개
+              </button>
+            </div>
+          </div>
+
+          <!-- 예약 설정 -->
+          <div class="upload-option-group">
+            <label>
+              <input type="checkbox" id="schedule-upload" onchange="ImageMain.toggleSchedule()">
+              예약 업로드
+            </label>
+            <div id="schedule-datetime-wrapper" class="schedule-datetime-wrapper hidden">
+              <input type="datetime-local" id="schedule-datetime" class="schedule-datetime-input">
+              <span class="schedule-hint">선택한 시간에 자동 공개됩니다</span>
+            </div>
+          </div>
+
+          <!-- 업로드 버튼 -->
+          <button id="btn-youtube-upload" class="btn-youtube-upload" onclick="ImageMain.uploadToYouTube()">
+            📺 YouTube 업로드
+          </button>
+        </div>
+
+        <!-- 빈 상태 (초기 화면) -->
+        <div id="result-empty" class="result-empty">
+          <div class="result-empty-icon">🖼️</div>
+          <div class="result-empty-text">대본을 분석하면 이미지가 여기에 생성됩니다</div>
         </div>
       </div>
     </div>

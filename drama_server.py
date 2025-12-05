@@ -9227,11 +9227,15 @@ def youtube_upload():
         category_id = data.get('categoryId', '22')  # People & Blogs
         privacy_status = data.get('privacyStatus', 'private')
         thumbnail_path = data.get('thumbnailPath')
+        publish_at = data.get('publish_at')  # ISO 8601 예약 공개 시간
+        channel_id = data.get('channelId')  # 선택된 채널 ID
 
         print(f"[YOUTUBE-UPLOAD] 업로드 요청 수신")
         print(f"  - 영상: {video_path}")
         print(f"  - 제목: {title}")
         print(f"  - 공개 설정: {privacy_status}")
+        print(f"  - 예약 시간: {publish_at}")
+        print(f"  - 채널 ID: {channel_id}")
 
         # 영상 파일 경로 처리
         if video_path and not video_path.startswith('http'):
@@ -9316,6 +9320,12 @@ def youtube_upload():
                         'selfDeclaredMadeForKids': False
                     }
                 }
+
+                # 예약 공개 설정 (publish_at이 있으면 적용)
+                if publish_at:
+                    body['status']['publishAt'] = publish_at
+                    body['status']['privacyStatus'] = 'private'  # 예약 시 반드시 비공개
+                    print(f"[YOUTUBE-UPLOAD] 예약 공개 설정: {publish_at}")
 
                 media = MediaFileUpload(
                     full_path,
