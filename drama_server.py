@@ -10773,28 +10773,28 @@ def _update_job_status(job_id, **kwargs):
                 json.dump(status, f, ensure_ascii=False)
 
 def _get_subtitle_style(lang):
-    """언어별 자막 스타일 반환 (ASS 형식) - 폰트40 기준 비례 축소"""
+    """언어별 자막 스타일 반환 (ASS 형식) - 폰트28 기준"""
     # 유튜브 스타일: 흰색 텍스트 + 검은색 외곽선 + 약간의 그림자
     if lang == 'ko':
         # NanumGothic Bold - 나눔고딕 굵은체 (한글 전용)
         return (
-            "FontName=NanumGothicBold,FontSize=40,PrimaryColour=&H00FFFFFF,"
+            "FontName=NanumGothicBold,FontSize=28,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=2,Shadow=1,MarginV=50,Bold=1"
+            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
         )
     elif lang == 'ja':
         # 일본어 - NanumGothicBold 사용 (CJK 지원)
         return (
-            "FontName=NanumGothicBold,FontSize=38,PrimaryColour=&H00FFFFFF,"
+            "FontName=NanumGothicBold,FontSize=26,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=2,Shadow=1,MarginV=50,Bold=1"
+            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
         )
     else:
         # 영어/기타 언어
         return (
-            "FontName=Arial,FontSize=30,PrimaryColour=&H00FFFFFF,"
+            "FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=2,Shadow=1,MarginV=50,Bold=1"
+            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
         )
 
 def _generate_video_worker(job_id, session_id, scenes, detected_lang):
