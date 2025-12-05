@@ -3904,27 +3904,36 @@ def api_generate_image():
             # 한국인 캐릭터인 경우 인종적 특징을 프롬프트 맨 앞에 배치하여 강조
             prompt_lower = prompt.lower()
 
-            # 한국인 시니어 관련 키워드 감지
-            is_elderly = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old', '70', '80', 'aged', 'senior'])
-            is_korean = "korean" in prompt_lower
+            # 스틱맨 스타일 감지 - 스틱맨이면 실사 인물 강화 건너뛰기
+            is_stickman_style = any(kw in prompt_lower for kw in ['stickman', 'stick man', 'stick figure', 'no realistic', 'only stickman'])
 
-            if is_korean:
-                if is_elderly and ('grandmother' in prompt_lower or 'woman' in prompt_lower or 'halmeoni' in prompt_lower):
-                    # 한국 할머니 - 상세한 한국인 특징
-                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandmother (halmeoni) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. NOT Western, NOT mixed ethnicity."
-                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
-                elif is_elderly and ('grandfather' in prompt_lower or 'man' in prompt_lower or 'harabeoji' in prompt_lower):
-                    # 한국 할아버지 - 상세한 한국인 특징
-                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandfather (harabeoji) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered kind face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers. NOT Western, NOT mixed ethnicity."
-                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
-                else:
-                    # 일반 한국인
-                    korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity from South Korea with Korean facial bone structure, Korean skin tone, natural Korean facial features. NOT Western features."
-                    style_suffix = "cinematic Korean drama photography, professional lighting, 8k resolution, detailed"
-
-                enhanced_prompt = f"{aspect_instruction} {korean_features} {prompt}. Style: {style_suffix}, wide shot composition"
+            if is_stickman_style:
+                # 스틱맨 스타일 - 실사 인물 생성 방지
+                stickman_restriction = "ABSOLUTE RULE: ONLY generate simple white stickman character with round head, black dot eyes, simple mouth. NEVER generate realistic humans, NEVER generate elderly people, NEVER generate grandpa, NEVER generate grandma, NEVER generate any photorealistic faces. The stickman must be the ONLY human-like figure in the image."
+                enhanced_prompt = f"{aspect_instruction} {stickman_restriction} {prompt}"
+                print(f"[DRAMA-STEP4-IMAGE] 스틱맨 스타일 감지 - 실사 인물 방지 적용")
             else:
-                enhanced_prompt = f"{aspect_instruction} Generate a high quality image: {prompt}. Style: cinematic lighting, professional photography, detailed, wide shot composition"
+                # 한국인 시니어 관련 키워드 감지
+                is_elderly = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old', '70', '80', 'aged', 'senior'])
+                is_korean = "korean" in prompt_lower
+
+                if is_korean:
+                    if is_elderly and ('grandmother' in prompt_lower or 'woman' in prompt_lower or 'halmeoni' in prompt_lower):
+                        # 한국 할머니 - 상세한 한국인 특징
+                        korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandmother (halmeoni) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. NOT Western, NOT mixed ethnicity."
+                        style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                    elif is_elderly and ('grandfather' in prompt_lower or 'man' in prompt_lower or 'harabeoji' in prompt_lower):
+                        # 한국 할아버지 - 상세한 한국인 특징
+                        korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandfather (harabeoji) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered kind face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers. NOT Western, NOT mixed ethnicity."
+                        style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
+                    else:
+                        # 일반 한국인
+                        korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity from South Korea with Korean facial bone structure, Korean skin tone, natural Korean facial features. NOT Western features."
+                        style_suffix = "cinematic Korean drama photography, professional lighting, 8k resolution, detailed"
+
+                    enhanced_prompt = f"{aspect_instruction} {korean_features} {prompt}. Style: {style_suffix}, wide shot composition"
+                else:
+                    enhanced_prompt = f"{aspect_instruction} Generate a high quality image: {prompt}. Style: cinematic lighting, professional photography, detailed, wide shot composition"
 
             # OpenRouter API 호출 (Chat Completions 형식)
             headers = {
