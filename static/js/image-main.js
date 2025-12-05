@@ -19,6 +19,8 @@ const ImageMain = {
   videoUrl: null,        // 생성된 영상 URL (YouTube 업로드용)
   selectedTitle: '',     // 선택된 유튜브 제목
   selectedThumbnailIdx: null,  // 선택된 썸네일 인덱스 (YouTube 업로드용)
+  privacyStatus: 'private',    // 공개 설정 (private, unlisted, public)
+  scheduledTime: null,         // 예약 업로드 시간 (ISO 8601)
 
   /**
    * 초기화
@@ -1079,14 +1081,16 @@ const ImageMain = {
 
             this.showStatus(`영상 생성 완료! (${statusData.duration}, 자막 ${statusData.subtitle_count}개)`, 'success');
 
-            // 영상 URL 저장 및 YouTube 업로드 버튼 표시
+            // 영상 URL 저장 및 YouTube 업로드 섹션 표시
             if (statusData.video_url) {
               this.videoUrl = statusData.video_url;
 
-              // YouTube 업로드 버튼 표시
-              const ytBtn = document.getElementById('btn-youtube-upload');
-              if (ytBtn) {
-                ytBtn.classList.remove('hidden');
+              // YouTube 업로드 섹션 표시
+              const ytSection = document.getElementById('youtube-upload-section');
+              if (ytSection) {
+                ytSection.classList.remove('hidden');
+                // 기본 예약 시간 설정 (내일 오전 9시)
+                this.setDefaultScheduleTime();
               }
 
               // 자동 다운로드
@@ -1136,6 +1140,63 @@ const ImageMain = {
   // ========== YouTube 업로드 ==========
 
   /**
+   * 공개 설정 변경
+   */
+  setPrivacy(privacy) {
+    this.privacyStatus = privacy;
+
+    // UI 업데이트
+    document.querySelectorAll('.privacy-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.privacy === privacy);
+    });
+
+    // 예약 업로드는 비공개 상태에서만 가능
+    const scheduleCheckbox = document.getElementById('schedule-upload');
+    if (privacy !== 'private') {
+      scheduleCheckbox.checked = false;
+      this.toggleSchedule();
+      scheduleCheckbox.disabled = true;
+    } else {
+      scheduleCheckbox.disabled = false;
+    }
+
+    console.log('[ImageMain] Privacy set to:', privacy);
+  },
+
+  /**
+   * 예약 업로드 토글
+   */
+  toggleSchedule() {
+    const checkbox = document.getElementById('schedule-upload');
+    const wrapper = document.getElementById('schedule-datetime-wrapper');
+
+    if (checkbox.checked) {
+      wrapper.classList.remove('hidden');
+      // 기본 시간 설정
+      this.setDefaultScheduleTime();
+    } else {
+      wrapper.classList.add('hidden');
+      this.scheduledTime = null;
+    }
+  },
+
+  /**
+   * 기본 예약 시간 설정 (내일 오전 9시)
+   */
+  setDefaultScheduleTime() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+
+    // datetime-local 형식으로 변환 (YYYY-MM-DDTHH:mm)
+    const dateStr = tomorrow.toISOString().slice(0, 16);
+    const input = document.getElementById('schedule-datetime');
+    if (input && !input.value) {
+      input.value = dateStr;
+    }
+  },
+
+  /**
    * YouTube 업로드
    */
   async uploadToYouTube() {
@@ -1167,8 +1228,40 @@ const ImageMain = {
         thumbnailUrl = this.thumbnailImages[this.selectedThumbnailIdx];
       }
 
-      this.showStatus('YouTube 업로드 중...', 'info');
-      console.log('[ImageMain] Uploading to YouTube:', { title, thumbnailUrl });
+      // 예약 업로드 시간 확인
+      let publishAt = null;
+      const scheduleCheckbox = document.getElementById('schedule-upload');
+      if (scheduleCheckbox?.checked) {
+        const datetimeInput = document.getElementById('schedule-datetime');
+        if (datetimeInput?.value) {
+          // ISO 8601 형식으로 변환
+          const localDate = new Date(datetimeInput.value);
+          publishAt = localDate.toISOString();
+
+          // 과거 시간 체크
+          if (localDate <= new Date()) {
+            this.showStatus('예약 시간은 현재보다 미래여야 합니다.', 'warning');
+            btn.disabled = false;
+            btn.textContent = '📺 YouTube 업로드';
+            return;
+          }
+        }
+      }
+
+      // 상태 메시지
+      if (publishAt) {
+        const scheduleDate = new Date(publishAt);
+        const dateStr = scheduleDate.toLocaleDateString('ko-KR', {
+          month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        this.showStatus(`YouTube 예약 업로드 중... (${dateStr} 공개 예정)`, 'info');
+      } else {
+        this.showStatus('YouTube 업로드 중...', 'info');
+      }
+
+      console.log('[ImageMain] Uploading to YouTube:', {
+        title, thumbnailUrl, privacy: this.privacyStatus, publishAt
+      });
 
       const response = await fetch('/api/youtube/upload', {
         method: 'POST',
@@ -1179,7 +1272,8 @@ const ImageMain = {
           description: description,
           tags: ['AI영상', '자동생성'],
           categoryId: '22',  // People & Blogs
-          privacyStatus: 'private',  // 비공개로 업로드
+          privacyStatus: publishAt ? 'private' : this.privacyStatus,  // 예약 시 비공개 필수
+          publish_at: publishAt,  // 예약 시간 (ISO 8601) - 백엔드 snake_case
           thumbnailUrl: thumbnailUrl  // 선택한 썸네일
         })
       });
@@ -1189,7 +1283,16 @@ const ImageMain = {
       if (result.ok) {
         const videoUrl = result.videoUrl || `https://www.youtube.com/watch?v=${result.videoId}`;
         btn.textContent = '✅ 업로드 완료';
-        this.showStatus(`YouTube 업로드 완료! ${videoUrl}`, 'success');
+
+        if (publishAt) {
+          const scheduleDate = new Date(publishAt);
+          const dateStr = scheduleDate.toLocaleDateString('ko-KR', {
+            month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+          });
+          this.showStatus(`예약 업로드 완료! ${dateStr}에 공개됩니다.`, 'success');
+        } else {
+          this.showStatus(`YouTube 업로드 완료! ${videoUrl}`, 'success');
+        }
 
         // 링크 열기
         if (confirm('YouTube에 업로드되었습니다!\n영상 페이지를 열까요?')) {
