@@ -613,10 +613,13 @@ const ImageMain = {
       });
 
       const data = await response.json();
+      console.log('[ImageMain] AI generate response:', data);
 
       if (!data.ok) {
         throw new Error(data.error || '썸네일 생성 실패');
       }
+
+      console.log('[ImageMain] AI results:', data.results);
 
       // 결과 저장
       this.aiThumbnailImageUrls = {
@@ -642,12 +645,19 @@ const ImageMain = {
    * AI 썸네일 렌더링
    */
   renderAIThumbnails(results) {
+    console.log('[ImageMain] renderAIThumbnails called with:', results);
     const grid = document.getElementById('ai-thumbnail-grid');
     grid.style.display = 'grid';
 
     ['A', 'B'].forEach(variant => {
       const result = results[variant];
       const promptData = this.aiThumbnailPrompts[variant];
+
+      console.log(`[ImageMain] Variant ${variant}:`, {
+        ok: result?.ok,
+        image_url: result?.image_url,
+        error: result?.error
+      });
 
       const imgEl = document.getElementById(`ai-thumb-img-${variant}`);
       const descEl = document.getElementById(`ai-thumb-desc-${variant}`);
@@ -658,6 +668,7 @@ const ImageMain = {
         imgEl.style.display = 'block';
       } else {
         imgEl.style.display = 'none';
+        console.warn(`[ImageMain] No image for ${variant}:`, result?.error || 'unknown reason');
       }
 
       descEl.textContent = promptData?.description || '옵션 ' + variant;
