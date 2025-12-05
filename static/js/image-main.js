@@ -311,80 +311,22 @@ const ImageMain = {
   },
 
   /**
-   * 썸네일 텍스트 옵션 렌더링
+   * 썸네일 섹션 표시 (AI 추천 텍스트 없이 직접 입력만)
    */
   renderThumbnailTextOptions(thumbnail) {
     const section = document.getElementById('thumbnail-section');
-    const optionsContainer = document.getElementById('thumbnail-text-options');
     const generateBtn = document.getElementById('btn-generate-with-text');
 
-    // 디버깅: thumbnail 객체 전체 내용 출력
-    console.log('[ImageMain] Thumbnail object details:', JSON.stringify(thumbnail, null, 2));
-
-    // text_options, text_lines, texts, options 등 다양한 필드명 폴백
-    let options = thumbnail?.text_options
-      || thumbnail?.text_lines
-      || thumbnail?.texts
-      || thumbnail?.options
-      || thumbnail?.textOptions
-      || [];
-
-    // 객체 배열인 경우 텍스트만 추출
-    if (options.length > 0 && typeof options[0] === 'object') {
-      options = options.map(opt => opt.text || opt.content || opt.value || JSON.stringify(opt));
+    // 썸네일 프롬프트 저장 (이미지 생성 시 사용)
+    if (thumbnail?.prompt) {
+      this.thumbnailPrompt = thumbnail.prompt;
     }
 
-    console.log('[ImageMain] Extracted text options:', options);
-
-    if (options.length === 0) {
-      section.classList.remove('hidden');
-      optionsContainer.innerHTML = '<div class="no-options">썸네일 텍스트 옵션이 없습니다.</div>';
-      return;
-    }
-
-    let optionsHtml = '';
-    options.forEach((text, idx) => {
-      // 첫 번째 옵션 자동 선택
-      const isSelected = idx === 0;
-      const escapedText = this.escapeHtml(text);
-      optionsHtml += `
-        <div class="text-option${isSelected ? ' selected' : ''}" data-idx="${idx}" data-text="${escapedText}">
-          <input type="radio" name="thumbnail-text" value="${idx}" ${isSelected ? 'checked' : ''}>
-          <span class="text-preview">${escapedText}</span>
-        </div>
-      `;
-    });
-    optionsContainer.innerHTML = optionsHtml;
-
-    // 클릭 이벤트 바인딩 (onclick 대신)
-    optionsContainer.querySelectorAll('.text-option').forEach(el => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.dataset.idx);
-        const text = el.dataset.text;
-        this.selectThumbnailText(idx, text);
-      });
-    });
-
-    // 첫 번째 옵션 자동 선택
-    this.selectedThumbnailText = options[0];
+    // 썸네일 섹션 표시
+    section.classList.remove('hidden');
     generateBtn.disabled = false;
 
-    section.classList.remove('hidden');
-  },
-
-  /**
-   * 썸네일 텍스트 선택
-   */
-  selectThumbnailText(idx, text) {
-    this.selectedThumbnailText = text;
-
-    document.querySelectorAll('.text-option').forEach((el, i) => {
-      el.classList.toggle('selected', i === idx);
-      el.querySelector('input').checked = (i === idx);
-    });
-
-    // 생성 버튼 활성화
-    document.getElementById('btn-generate-with-text').disabled = false;
+    console.log('[ImageMain] Thumbnail section shown (직접 입력 모드)');
   },
 
   /**
@@ -418,6 +360,32 @@ const ImageMain = {
     });
 
     container.innerHTML = html || '<div style="color:#999; font-size:12px;">텍스트를 입력하면 줄별 스타일을 설정할 수 있습니다.</div>';
+  },
+
+  /**
+   * 텍스트 언어 변경 시 placeholder 업데이트
+   */
+  onTextLanguageChange() {
+    const langRadio = document.querySelector('input[name="thumb-text-lang"]:checked');
+    const textArea = document.getElementById('thumbnail-custom-text');
+    if (!langRadio || !textArea) return;
+
+    const lang = langRadio.value;
+    if (lang === 'en') {
+      textArea.placeholder = "Example:\n4 hours of betrayal\nThat night's incident";
+    } else {
+      textArea.placeholder = "예:\n4시간의 배신\n그날 밤 일어난 일";
+    }
+
+    console.log(`[ImageMain] Thumbnail text language changed to: ${lang}`);
+  },
+
+  /**
+   * 선택된 텍스트 언어 반환
+   */
+  getTextLanguage() {
+    const langRadio = document.querySelector('input[name="thumb-text-lang"]:checked');
+    return langRadio ? langRadio.value : 'ko';
   },
 
   /**
@@ -1205,7 +1173,7 @@ const ImageMain = {
       let html = `
         <div class="channel-header">
           <button class="btn-refresh-channels" onclick="ImageMain.loadYouTubeChannels()" title="채널 목록 새로고침">🔄 새로고침</button>
-          <a href="/api/youtube/auth" target="_blank" class="btn-add-account">➕ 다른 계정 연결</a>
+          <a href="/api/youtube/auth?force=1" target="_blank" class="btn-add-account">➕ 다른 계정 연결</a>
         </div>
         <div class="channel-options">
       `;

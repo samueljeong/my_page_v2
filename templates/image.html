@@ -1029,6 +1029,131 @@
       font-size: 12px;
     }
 
+    .line-style-hint {
+      color: #9ca3af;
+      font-size: 12px;
+      padding: 8px;
+    }
+
+    /* 텍스트 언어 선택 */
+    .thumb-text-language {
+      margin-bottom: 12px;
+      padding: 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .thumb-text-language > label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+
+    .language-toggle {
+      display: flex;
+      gap: 12px;
+    }
+
+    .lang-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      background: white;
+      transition: all 0.2s;
+    }
+
+    .lang-option:has(input:checked) {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: white;
+    }
+
+    .lang-option input {
+      display: none;
+    }
+
+    .lang-hint {
+      display: block;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    /* 썸네일 직접 입력 */
+    .thumb-text-input {
+      margin-bottom: 12px;
+    }
+
+    .thumb-text-input label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+
+    .thumb-text-input textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    /* 줄별 스타일 */
+    .thumb-line-styles {
+      margin-bottom: 12px;
+    }
+
+    .thumb-line-styles label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+
+    /* 공통 옵션 */
+    .thumb-common-options {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .thumb-common-options .option-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .thumb-common-options label {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .thumb-common-options input[type="color"] {
+      width: 36px;
+      height: 28px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .thumb-common-options select {
+      padding: 4px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
     .line-style-row label {
       font-size: 10px;
       color: #6b7280;
@@ -1808,22 +1933,56 @@
             <!-- 썸네일 영역 (오른쪽 절반) -->
             <div id="thumbnail-section" class="section-card thumbnail-section hidden">
               <h4>🎨 썸네일</h4>
-              <div id="thumbnail-text-select" class="thumbnail-text-select">
-                <label>AI 추천 텍스트</label>
-                <div id="thumbnail-text-options" class="text-options"></div>
-                <div class="custom-text-input">
-                  <textarea id="thumbnail-custom-text" placeholder="직접 입력..." oninput="ImageMain.updateLineStyles()"></textarea>
+
+              <!-- 텍스트 언어 선택 -->
+              <div class="thumb-text-language">
+                <label>🌐 텍스트 언어</label>
+                <div class="language-toggle">
+                  <label class="lang-option">
+                    <input type="radio" name="thumb-text-lang" value="ko" checked onchange="ImageMain.onTextLanguageChange()">
+                    <span>한국어</span>
+                  </label>
+                  <label class="lang-option">
+                    <input type="radio" name="thumb-text-lang" value="en" onchange="ImageMain.onTextLanguageChange()">
+                    <span>English</span>
+                  </label>
                 </div>
-                <div class="text-style-options compact">
-                  <input type="color" id="thumb-outline-color" value="#000000" title="외곽선">
+                <small class="lang-hint">AI 이미지에 텍스트 삽입 시 영어 권장 (한글 깨짐 방지)</small>
+              </div>
+
+              <!-- 직접 입력 -->
+              <div class="thumb-text-input">
+                <label>✏️ 썸네일 텍스트 (줄바꿈으로 여러 줄)</label>
+                <textarea id="thumbnail-custom-text" rows="3" placeholder="예:&#10;4시간의 배신&#10;그날 밤 일어난 일" oninput="ImageMain.updateLineStyles()"></textarea>
+              </div>
+
+              <!-- 줄별 스타일 설정 -->
+              <div class="thumb-line-styles">
+                <label>🎨 줄별 색상/크기</label>
+                <div id="line-styles-list" class="line-styles-list">
+                  <div class="line-style-hint">텍스트 입력하면 줄별 설정 가능</div>
+                </div>
+              </div>
+
+              <!-- 공통 옵션 -->
+              <div class="thumb-common-options">
+                <div class="option-item">
+                  <label>외곽선</label>
+                  <input type="color" id="thumb-outline-color" value="#000000">
+                </div>
+                <div class="option-item">
+                  <label>배치</label>
                   <select id="thumb-position">
                     <option value="left">왼쪽</option>
                     <option value="center">가운데</option>
                     <option value="right">오른쪽</option>
                   </select>
                 </div>
-                <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()">🎨 생성</button>
               </div>
+
+              <button id="btn-generate-with-text" class="btn-generate-thumb" onclick="ImageMain.generateThumbnailsWithText()">🎨 썸네일 생성</button>
+
+              <!-- 생성된 썸네일 -->
               <div id="thumbnail-grid" class="thumbnail-grid" style="display: none;">
                 <div class="thumbnail-card" id="thumbnail-card-0">
                   <div class="thumbnail-image-box"><div class="placeholder">1</div></div>
