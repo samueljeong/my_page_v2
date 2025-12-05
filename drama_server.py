@@ -3690,23 +3690,22 @@ def api_analyze_characters():
 
 중요:
 - imagePrompt와 backgroundPrompt는 반드시 영어로 작성
-- 프롬프트는 DALL-E 3에 최적화되도록 상세하게 작성
-- 인물 프롬프트는 portrait 스타일에 적합하게 작성
-- 한국 드라마 스타일의 시각적 요소 반영
+- 프롬프트는 AI 이미지 생성에 최적화되도록 상세하게 작성
 
-🚨 매우 중요 - 한국인 외모 필수 요구사항 (반드시 프롬프트 맨 앞에 배치):
+🚨 매우 중요 - 스틱맨(Stickman) 캐릭터 사용 필수:
 
-- ⚠️ 한국인 할머니 (halmeoni):
-  "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers"
+- ⚠️⚠️⚠️ 실사 인물 절대 금지! 할아버지, 할머니, 노인, 실제 사람 얼굴 모두 사용 금지!
 
-- ⚠️ 한국인 할아버지 (harabeoji):
-  "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers"
+- ⚠️ 스틱맨 캐릭터 (모든 인물은 이걸로 표현):
+  "Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body"
 
-- ⚠️ 1970~80년대 시대 감성 스타일:
-  "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, soft focus edges, nostalgic color grading similar to 1970s-1980s Korean cinema"
+- ⚠️ 배경 스타일:
+  "Detailed anime-style background, Ghibli-inspired, warm colors, slice-of-life environment"
 
-- ⚠️ 절대 금지: "Asian" 단독 사용, Western facial features, 현대적 요소
-- ⚠️ 프롬프트 맨 앞에 한국인 특징을 배치해야 AI 모델이 정확히 인식합니다"""
+- ⚠️ 전체 스타일:
+  "Contrast collage style - simple stickman against detailed anime background"
+
+- ⚠️ 감정 표현: 스틱맨의 간단한 표정과 포즈로 표현 (점 눈, 곡선 입)"""
 
         user_content = f"""다음 드라마 대본을 분석해주세요:
 
@@ -3783,20 +3782,15 @@ def api_generate_scene_prompt():
 4. 한국 드라마 스타일의 시각적 요소
 5. DALL-E 3에 최적화된 상세하고 명확한 묘사
 
-🚨 매우 중요 - 인물 외모 일관성 유지:
-- 등장인물 정보에 제공된 외모 설명(나이, 머리 스타일, 체형, 얼굴 특징 등)을 정확히 그대로 사용하세요
-- 외모 설명을 재해석하거나 변경하지 마세요
-- 예: "78 years old elderly man" → 반드시 "78 years old elderly man"으로 유지
-- 예: "white hair, wrinkled face" → 반드시 "white hair, wrinkled face"로 유지
-- 추가할 수 있는 것: 위치, 표정, 행동, 자세 (외모는 변경 금지!)
+🚨 매우 중요 - 스틱맨(Stickman) 캐릭터만 사용:
+- 실사 인물(할아버지, 할머니, 노인, 사람 얼굴) 절대 금지!
+- 모든 인물은 스틱맨으로 표현
+- 스틱맨: "Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body"
+- 감정 표현: 스틱맨의 간단한 표정과 포즈로 표현
 
-🚨 한국인 외모 필수 - 프롬프트 맨 앞에 배치:
-- 한국인 할머니: "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids typical of Korean elderly, Korean skin tone, permed short gray/white hair"
-- 한국인 할아버지: "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: angular Korean face, single eyelids or hooded eyes, Korean skin tone, balding or short gray hair"
-- 절대로 "Asian" 단독 사용 금지 - 반드시 "Korean"과 구체적인 한국인 특징 명시
-
-🚨 1970~80년대 시대 감성 - 프롬프트 끝에 추가:
-- "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm lighting"
+🚨 배경 스타일:
+- 배경: "Detailed anime-style background, Ghibli-inspired, warm colors, slice-of-life environment"
+- 전체 스타일: "Contrast collage style - simple stickman against detailed anime background"
 
 응답 형식:
 BACKGROUND_PROMPT: [배경 프롬프트 - 영어, 1970~80년대 한국 배경 스타일 포함]
@@ -3904,25 +3898,16 @@ def api_generate_image():
             # 한국인 캐릭터인 경우 인종적 특징을 프롬프트 맨 앞에 배치하여 강조
             prompt_lower = prompt.lower()
 
-            # 한국인 시니어 관련 키워드 감지
-            is_elderly = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old', '70', '80', 'aged', 'senior'])
-            is_korean = "korean" in prompt_lower
+            # ⚠️ 실사 인물(노인, 할아버지, 할머니 등) 감지 → 스틱맨으로 변환
+            has_realistic_human = any(kw in prompt_lower for kw in ['elderly', 'grandmother', 'grandfather', 'halmeoni', 'harabeoji', 'old man', 'old woman', '할아버지', '할머니', 'korean woman', 'korean man', 'portrait', 'face', 'realistic'])
 
-            if is_korean:
-                if is_elderly and ('grandmother' in prompt_lower or 'woman' in prompt_lower or 'halmeoni' in prompt_lower):
-                    # 한국 할머니 - 상세한 한국인 특징
-                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandmother (halmeoni) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers. NOT Western, NOT mixed ethnicity."
-                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
-                elif is_elderly and ('grandfather' in prompt_lower or 'man' in prompt_lower or 'harabeoji' in prompt_lower):
-                    # 한국 할아버지 - 상세한 한국인 특징
-                    korean_features = "CRITICAL REQUIREMENT: Authentic Korean grandfather (harabeoji) from South Korea. MUST have pure Korean ethnicity with distinct Korean elderly facial features: angular Korean face shape, single eyelids or hooded eyes typical of Korean elderly men, Korean skin tone, weathered kind face with Korean aging characteristics, balding or short gray hair typical of Korean grandfathers. NOT Western, NOT mixed ethnicity."
-                    style_suffix = "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, nostalgic color grading similar to 1970s-1980s Korean cinema, soft warm natural lighting"
-                else:
-                    # 일반 한국인
-                    korean_features = "CRITICAL REQUIREMENT: The person MUST have authentic Korean/East Asian ethnicity from South Korea with Korean facial bone structure, Korean skin tone, natural Korean facial features. NOT Western features."
-                    style_suffix = "cinematic Korean drama photography, professional lighting, 8k resolution, detailed"
-
-                enhanced_prompt = f"{aspect_instruction} {korean_features} {prompt}. Style: {style_suffix}, wide shot composition"
+            if has_realistic_human:
+                # 실사 인물 → 스틱맨 스타일로 강제 변환
+                print(f"[IMAGE-GEN] ⚠️ 실사 인물 감지 → 스틱맨 스타일로 변환")
+                stickman_style = "Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body. NO realistic human faces, NO elderly people, NO grandmother, NO grandfather!"
+                background_style = "Detailed anime-style background, Ghibli-inspired, warm colors, slice-of-life environment"
+                style_suffix = "Contrast collage style - simple stickman against detailed anime background"
+                enhanced_prompt = f"{aspect_instruction} {stickman_style} {background_style}. The stickman is performing the action described: {prompt}. Style: {style_suffix}"
             else:
                 enhanced_prompt = f"{aspect_instruction} Generate a high quality image: {prompt}. Style: cinematic lighting, professional photography, detailed, wide shot composition"
 
@@ -6736,9 +6721,10 @@ def generate_thumbnail():
 
 🎯 목표: 시청자가 클릭하고 싶게 만드는 썸네일
 
-⚠️ 중요: 주인공은 반드시 한국인 할머니(halmeoni)로 설정하세요!
-- 할아버지/노인 남성은 절대 주인공으로 사용하지 마세요!
-- 대본에 할아버지가 나와도 할머니로 변경해주세요.
+⚠️ 중요: 캐릭터는 반드시 스틱맨(Stickman)으로만 표현하세요!
+- 실사 인물(할아버지, 할머니, 노인 등) 절대 사용 금지!
+- 스틱맨: 하얀 막대 인간, 둥근 머리, 검은 점 눈, 작은 입
+- 배경은 애니메이션 스타일 (지브리풍, 따뜻한 색감)
 
 대본:
 {script[:3000]}
@@ -6747,12 +6733,12 @@ def generate_thumbnail():
 
 【필수 형식】으로 응답해주세요:
 
-1. 주인공 정보: (대본의 주인공 - 나이, 성별, 직업, 현재 상황/감정) ※ 반드시 할머니로!
+1. 주인공 정보: (대본의 주인공 상황/감정 - 스틱맨으로 표현됨)
 2. 이미지 프롬프트: (영어로, 아래 조건 포함)
-   - 주인공의 나이와 외모 반영 (60~80대 한국인 할머니)
-   - 현재 감정 상태 (슬픔, 분노, 눈물, 기쁨 등)
-   - 클로즈업 또는 미디엄 샷
-   - 시네마틱 조명, 드라마틱한 분위기
+   - 스틱맨 캐릭터: "Simple white stickman with round head, black dot eyes, small mouth"
+   - 감정 표현: 스틱맨의 표정과 포즈로 표현
+   - 배경: 애니메이션 스타일 (Ghibli-inspired, warm colors)
+   - 구도: 스틱맨 + 배경 대비 스타일
 3. 썸네일 텍스트: (3~4줄로 구성, 각 줄 \\n으로 구분)
    - 1줄: 훅 (충격적인 숫자/상황)
    - 2줄: 핵심 인물/사건
@@ -6761,9 +6747,9 @@ def generate_thumbnail():
 4. 강조 줄 번호: (3줄 중 강조할 줄 번호, 예: 3)
 
 【예시】
-1. 주인공 정보: 76세 여성 할머니, 교회 문을 닫으려던 절망적 순간
-2. 이미지 프롬프트: Dramatic close-up portrait of a 76-year-old Korean grandmother (halmeoni), tears streaming down wrinkled face, permed gray hair, wearing simple hanbok, emotional expression of despair turning to hope, cinematic golden hour lighting, church interior blurred background, high quality photograph
-3. 썸네일 텍스트: 1년간 혼자 예배드리던\\n76세 할머니\\n교회 문 닫으려던 그날\\n한 청년이 나타났습니다
+1. 주인공 정보: 외로운 노인, 교회를 혼자 지키다 희망을 찾는 순간 (스틱맨으로 표현)
+2. 이미지 프롬프트: Simple white stickman with round head, black dot eyes, small sad mouth, thin eyebrows, standing alone in detailed anime-style church interior, Ghibli-inspired warm lighting through stained glass windows, contrast collage style, emotional atmosphere
+3. 썸네일 텍스트: 1년간 혼자 예배드리던\\n작은 교회\\n문 닫으려던 그날\\n한 청년이 나타났습니다
 4. 강조 줄 번호: 3"""
 
         response = req.post(
@@ -8285,7 +8271,7 @@ def api_analyze_script():
 - **텍스트 공간 확보**: 상단/하단에 자막 들어갈 공간
 
 ## 프롬프트 예시 (쇼츠용)
-"Vertical composition (9:16), close-up shot of a Korean elderly grandmother's tearful eyes, soft warm lighting from the side, blurred simple background, emotional moment, text-safe area at top and bottom, mobile-optimized framing, cinematic shallow depth of field."
+"Vertical composition (9:16), simple white stickman character with round head, black dot eyes showing sadness, emotional pose with head down, detailed anime-style background Ghibli-inspired with soft warm lighting, contrast collage style, text-safe area at top and bottom, mobile-optimized framing."
 
 ## 출력 형식 (JSON)
 ```json
@@ -8347,18 +8333,19 @@ def api_analyze_script():
 - **[style]** 스타일 (cinematic, photorealistic, nostalgic film photography, 1970s Korean film aesthetic 등)
 - **[mood]** 감정·분위기 (peaceful, dramatic, nostalgic, tearful, hopeful 등)
 
-## 한국인 시니어 캐릭터 가이드
-- 반드시 "Korean elderly woman/man" 또는 "Korean grandmother/grandfather (halmeoni/harabeoji)" 포함
-- 얼굴 특징: round face, single eyelid or subtle double eyelid, warm Korean skin tone
-- 1970-80년대 한국 감성: vintage Korean film photography, film grain, faded warm colors, nostalgic atmosphere
-- 의상: 앞치마(apron), 한복(hanbok), 양복(suit) 등 시대에 맞게
-- 감정 표현 구체적으로: tearful eyes with gentle wrinkles, warm gentle smile, worried expression, contemplative gaze
+## 스틱맨(Stickman) 캐릭터 가이드
+- ⚠️ 실사 인물 절대 금지! 할아버지, 할머니, 노인 등 사람 얼굴 생성 금지!
+- 모든 인물은 스틱맨으로만 표현
+- 스틱맨 특징: "Simple white stickman with round head, black dot eyes, small mouth, thin eyebrows, black outline body"
+- 감정 표현: 스틱맨의 표정(점 눈, 곡선 입)과 포즈로 표현
+- 배경: 애니메이션 스타일 (Ghibli-inspired, warm colors)
+- 전체 스타일: "Contrast collage style - simple stickman against detailed anime background"
 
 ## 프롬프트 예시
 좋은 예시:
-"A Korean elderly grandmother (halmeoni) in her 70s sitting alone at a small wooden kitchen table, soft morning light streaming through a frosted window, warm cup of barley tea in her weathered hands, medium close-up shot, 50mm lens, shallow depth of field, warm faded colors with slight film grain, 1970s Korean domestic interior, nostalgic and contemplative mood, cinematic."
+"Simple white stickman with round head, black dot eyes looking sad, small frowning mouth, sitting alone at a detailed anime-style wooden kitchen table, Ghibli-inspired soft morning light through window, warm cup of tea nearby, contrast collage style, nostalgic and contemplative atmosphere."
 
-"A tearful reunion between a Korean grandfather and his long-lost son in a humble Korean restaurant, emotional embrace, warm tungsten lighting mixed with natural daylight, medium wide shot, 35mm lens, slightly shallow depth of field, warm earth tones, vintage Korean film aesthetic, deeply emotional and hopeful atmosphere."
+"Two simple white stickmen embracing in emotional reunion pose, one larger one smaller, detailed anime-style humble restaurant background, Ghibli-inspired warm lighting, contrast collage style, emotional and hopeful atmosphere."
 
 ## 출력 형식 (반드시 JSON)
 ```json
@@ -8435,7 +8422,7 @@ JSON 형식으로 출력해주세요."""
 {script}
 ---
 
-주인공 성별: {"여성 (할머니)" if protagonist_gender == "female" else "남성 (할아버지)"}
+주인공 성별: {"여성" if protagonist_gender == "female" else "남성"} (⚠️ 스틱맨으로만 표현, 실사 인물 금지!)
 채널 타입: {channel_type}
 
 대본을 씬과 샷으로 나누고, 각 샷에 대한 이미지 프롬프트와 나레이션을 JSON 형식으로 출력해주세요."""
@@ -9107,8 +9094,15 @@ def api_youtube_auth_page():
             </html>
             """
 
+        # force 파라미터 확인 (다른 계정 연결 시 사용)
+        force_new_auth = request.args.get('force', '0') == '1'
+
+        if force_new_auth:
+            print("[YOUTUBE-AUTH-GET] force=1 - 새 계정 인증 강제 진행")
+
         # 이미 인증된 토큰 확인 (refresh_token이 있으면 재인증 불필요)
-        token_data = load_youtube_token_from_db()
+        # force=1이면 기존 토큰 무시하고 새 인증 진행
+        token_data = load_youtube_token_from_db() if not force_new_auth else None
         if token_data and token_data.get('refresh_token'):
             try:
                 from google.auth.transport.requests import Request
@@ -9162,10 +9156,13 @@ def api_youtube_auth_page():
             redirect_uri=redirect_uri
         )
 
+        # force=1이면 계정 선택 화면 표시, 아니면 동의 화면만
+        oauth_prompt = 'select_account consent' if force_new_auth else 'consent'
+
         auth_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent'  # 항상 동의 화면 표시 (refresh_token 확보)
+            prompt=oauth_prompt  # select_account: 계정 선택, consent: 동의 화면 (refresh_token 확보)
         )
 
         # 상태 저장
@@ -9871,11 +9868,12 @@ Output Language: {lang_config['name']} ({lang_config['native']})
 
 Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-70s)'}
 
-## ⚠️ CRITICAL: CHARACTER RESTRICTION ⚠️
-- NEVER generate elderly grandfather/old man as the main character!
-- Main characters should be: Korean grandmother (halmeoni), middle-aged woman, or young adult
-- If the script mentions elderly male, CONVERT to elderly grandmother (halmeoni) instead
-- Background/supporting characters can include various ages, but MAIN CHARACTER must NOT be grandfather/harabeoji/elderly man
+## ⚠️⚠️⚠️ CRITICAL: STICKMAN CHARACTER ONLY (MUST FOLLOW!) ⚠️⚠️⚠️
+- ABSOLUTELY NO realistic human faces! Use STICKMAN character style only!
+- Stickman description: "Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body"
+- Background: Use detailed anime-style backgrounds (Ghibli-inspired, warm colors, detailed environments)
+- NO grandfather, grandmother, halmeoni, harabeoji, elderly man, elderly woman - ONLY stickman!
+- Style: "Contrast collage style" - simple stickman against detailed anime background
 
 ## Core Tasks
 1. Extract protagonist's age, gender, occupation, appearance from the script.
@@ -9883,11 +9881,12 @@ Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-7
 3. Generate YouTube thumbnail text and prompts for the target audience.
 
 ## Character Prompt Rules (for image_prompt - always in English)
-- Reflect nationality/ethnicity mentioned in script
-- Korean: use "Korean" or "South Korean"
-- Japanese: use "Japanese"
-- American/Western: use "American", "Caucasian", etc.
-- IMPORTANT: If Korean elderly character needed, use GRANDMOTHER (halmeoni), NOT grandfather
+- ⚠️ ALL CHARACTERS = STICKMAN ONLY! No realistic human faces!
+- Stickman: "Simple white stickman with round head, black dot eyes, small mouth, thin eyebrows, black outline body"
+- Background: Detailed anime-style (Ghibli-inspired, warm colors, slice-of-life environments)
+- Combine: Simple stickman + detailed background = "Contrast collage style"
+- Actions/poses should be shown through stickman body language
+- Emotions shown through simple facial expressions on stickman (dot eyes, curved mouth)
 
 {thumbnail_rules}
 
@@ -9998,7 +9997,7 @@ Rules:
 2. {thumbnail_instruction}
 3. image_prompt MUST be in English, following the prompt writing principles above.
 4. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
-5. ⚠️ NO GRANDFATHER/ELDERLY MAN as main character! If elderly character needed, use Korean GRANDMOTHER (halmeoni) only."""
+5. ⚠️ ALL CHARACTERS = STICKMAN ONLY! No realistic humans (no grandfather, grandmother, elderly people). Use simple stickman with anime background."""
 
         print(f"[IMAGE-ANALYZE] GPT-5.1 generating prompts... (style: {image_style}, content: {content_type}, audience: {audience}, language: {output_language})")
 

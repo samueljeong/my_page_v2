@@ -1,81 +1,74 @@
 {
-  "version": "1.0",
-  "lastUpdated": "2025-11-29",
-  "description": "한국인 시니어 이미지 생성을 위한 최적화된 프롬프트 가이드",
+  "version": "2.0",
+  "lastUpdated": "2025-12-05",
+  "description": "스틱맨(Stickman) 캐릭터 이미지 생성 가이드 - 실사 인물 사용 금지",
 
-  "koreanEthnicityPrefix": {
-    "description": "모든 인물 프롬프트 맨 앞에 반드시 포함할 한국인 특징",
+  "characterStyle": {
+    "description": "모든 인물은 스틱맨으로만 표현 - 실사 인물 절대 금지!",
     "critical": true,
-    "note": "프롬프트 시작 부분에 위치해야 AI 모델이 정확히 인식. ⚠️ 할아버지(grandfather)는 주인공으로 사용 금지!",
+    "warning": "⚠️ 할아버지, 할머니, 노인, 실제 사람 얼굴 생성 절대 금지!",
 
-    "elderly_grandmother": "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features: round face shape, single eyelids (monolid) or narrow double eyelids typical of Korean elderly, flat nose bridge, Korean skin tone (light to medium beige with warm undertones), natural Korean aging patterns with laugh lines, permed short gray/white hair typical of Korean grandmothers",
+    "stickman": "Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body",
 
-    "elderly_grandfather_DEPRECATED": "⚠️ DO NOT USE AS MAIN CHARACTER - Use elderly_grandmother instead. (Authentic Korean grandfather (harabeoji) from South Korea - only for background characters)",
-
-    "middle_aged_woman": "Authentic Korean woman from South Korea, pure Korean ethnicity, Korean facial features: oval face, Korean eye shape with single or double eyelids, Korean skin tone, neat short permed hair typical of Korean middle-aged women",
-
-    "middle_aged_man": "Authentic Korean man from South Korea, pure Korean ethnicity, Korean facial features: Korean face shape, Korean eye shape, Korean skin tone, neat short black or graying hair"
-  },
-
-  "era_1970s_1980s": {
-    "description": "1970~80년대 한국 시대 감성을 위한 스타일 가이드",
-
-    "visual_style": {
-      "film_look": "vintage Korean film photography aesthetic, slightly faded warm colors, film grain texture, soft focus edges, nostalgic color grading similar to 1970s-1980s Korean cinema",
-      "lighting": "natural daylight, warm golden hour lighting, soft window light, incandescent bulb warm glow typical of 1970s Korean homes",
-      "color_palette": "muted earth tones, sepia undertones, faded blues and greens, warm yellows and oranges, vintage Korean color photography feel"
+    "emotions": {
+      "happy": "curved smile mouth, slightly raised eyebrows",
+      "sad": "downturned mouth, dot eyes looking down",
+      "surprised": "round O-shaped mouth, wide dot eyes",
+      "angry": "zigzag mouth, angled eyebrows",
+      "crying": "downturned mouth, tear drops from eyes"
     },
 
-    "clothing_elderly_woman": {
-      "traditional": "hanbok (traditional Korean dress) with muted colors like gray, beige, light purple, or indigo, typical of Korean grandmothers in 1970s-80s",
-      "casual": "simple cotton blouse with small floral patterns, comfortable wide pants, hand-knit cardigan, rubber shoes (gomushin), apron while cooking",
-      "winter": "padded traditional Korean jacket (nubi jeogori), woolen vest, knitted shawl"
-    },
-
-    "clothing_elderly_man": {
-      "traditional": "durumagi (traditional Korean overcoat), hanbok pants, traditional hat (gat or jeongjagwan)",
-      "casual": "simple button-up shirt, suspenders, comfortable slacks, rubber shoes, newsboy cap or fedora",
-      "working": "simple cotton workwear, straw hat for farming, simple vest"
-    },
-
-    "settings_rural": {
-      "home": "traditional Korean thatched-roof house (chogajip) or tile-roof hanok, wooden floor with ondol heating, paper sliding doors, courtyard with large earthen jars (onggi)",
-      "village": "narrow dirt roads, stone walls, persimmon trees, rice paddies, village well, small neighborhood store (gupangga)",
-      "interior": "low wooden table (soban), floor cushions, traditional chest (bandaji), old radio, oil lamp or early fluorescent lights, wall calendar"
-    },
-
-    "settings_urban_1970s_80s": {
-      "home": "small apartment or single-story house, linoleum floor, coal briquette (yeontan) heating, small kitchen with gas stove",
-      "street": "narrow alleyways, corner store (gupangga), street vendors, old buses and taxis, hand-painted shop signs",
-      "market": "traditional market (sijang), vendors selling vegetables on mats, hanging dried fish, crowded narrow aisles"
+    "poses": {
+      "standing": "straight body posture",
+      "sitting": "bent legs at angle",
+      "walking": "legs in stride position",
+      "embracing": "two stickmen with arms around each other",
+      "thinking": "hand near head"
     }
   },
 
-  "composition_guidelines": {
-    "portrait": "medium close-up or bust shot, slight warm tone, natural expression, soft lighting from side or window, shallow depth of field",
-    "scene": "wide establishing shot, include environmental context, cinematic 16:9 aspect ratio, Korean drama cinematography style",
-    "emotional": "focus on hands or facial details for emotional moments, warm color grading, soft vignette"
+  "backgroundStyle": {
+    "description": "배경은 애니메이션 스타일로 상세하게",
+
+    "anime_style": {
+      "base": "Detailed anime-style background, Ghibli-inspired, warm colors, slice-of-life environment",
+      "lighting": "soft warm lighting, golden hour glow, gentle shadows",
+      "color_palette": "warm earth tones, soft pastels, cozy atmosphere"
+    },
+
+    "settings": {
+      "kitchen": "detailed anime-style traditional Korean kitchen with earthen jars, wooden cabinets, warm lighting through window",
+      "living_room": "detailed anime-style cozy living room with low wooden table, floor cushions, warm lamp light",
+      "outdoor": "detailed anime-style Korean village street, trees, traditional buildings, soft sunlight",
+      "restaurant": "detailed anime-style humble restaurant interior, wooden tables, warm tungsten lighting"
+    }
   },
 
-  "negative_prompts": {
-    "description": "피해야 할 요소들",
-    "avoid": [
-      "Western facial features",
-      "non-Korean ethnicity",
-      "modern smartphones or technology",
-      "contemporary fashion brands",
-      "bright neon colors",
-      "sharp digital photography look",
-      "anime or cartoon style",
-      "overly saturated colors"
+  "overallStyle": {
+    "description": "심플한 스틱맨 + 상세한 배경의 대비 스타일",
+    "style": "Contrast collage style - simple stickman against detailed anime background",
+    "aspect_ratio": "16:9 for YouTube thumbnails, 9:16 for shorts"
+  },
+
+  "forbidden": {
+    "description": "절대 생성 금지 항목",
+    "never_use": [
+      "realistic human faces",
+      "elderly people (grandfather, grandmother)",
+      "halmeoni (할머니)",
+      "harabeoji (할아버지)",
+      "photorealistic portraits",
+      "detailed human facial features",
+      "realistic skin textures",
+      "Korean elderly characteristics"
     ]
   },
 
   "example_prompts": {
-    "grandmother_cooking": "Authentic Korean grandmother (halmeoni) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features with round face shape, single eyelids typical of Korean elderly, Korean skin tone with natural aging, permed short gray hair, wearing simple cotton hanbok with apron, cooking in traditional Korean kitchen with earthen jars in background, warm natural lighting, 1970s Korean film photography aesthetic with film grain and muted warm colors, nostalgic atmosphere",
+    "emotional_scene": "Simple white stickman with round head, black dot eyes looking sad, small frowning mouth, sitting alone at a detailed anime-style wooden kitchen table, Ghibli-inspired soft morning light through window, warm cup of tea nearby, contrast collage style, nostalgic and contemplative atmosphere",
 
-    "grandfather_reading": "Authentic Korean grandfather (harabeoji) from South Korea, pure Korean ethnicity, distinct Korean elderly facial features, weathered kind face with Korean aging characteristics, wearing simple cotton shirt with vest, sitting on wooden floor reading old newspaper, traditional Korean room with paper doors and wooden furniture, warm afternoon light through window, vintage 1970s Korean photography style with soft focus and film grain",
+    "reunion_scene": "Two simple white stickmen embracing in emotional reunion pose, one larger one smaller, detailed anime-style humble restaurant background, Ghibli-inspired warm lighting, contrast collage style, emotional and hopeful atmosphere",
 
-    "elderly_couple_evening": "Authentic elderly Korean couple from South Korea, pure Korean ethnicity, grandmother with permed gray hair and grandfather with balding head, both with distinct Korean elderly facial features, sitting together at low wooden table (soban), small oil lamp creating warm glow, traditional Korean interior, 1980s Korean family photo aesthetic, warm nostalgic atmosphere with film grain texture"
+    "outdoor_scene": "Simple white stickman with happy curved smile, walking along detailed anime-style Korean village path, cherry blossom trees, traditional tile-roof houses in background, Ghibli-inspired warm afternoon light, contrast collage style, peaceful atmosphere"
   }
 }
