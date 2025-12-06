@@ -14168,6 +14168,26 @@ Style: {style}, comic/illustration, eye-catching, high contrast"""
                                     if base64_image_data:
                                         print(f"[THUMBNAIL-AI] content.image에서 추출 성공")
                                         break
+                            # 방법 2-1: inline_data 형식 (Gemini 일반 형식)
+                            inline_data = item.get("inline_data")
+                            if inline_data and isinstance(inline_data, dict):
+                                base64_image_data = inline_data.get("data")
+                                if base64_image_data:
+                                    print(f"[THUMBNAIL-AI] inline_data에서 추출 성공")
+                                    break
+
+            # 방법 2-2: parts 배열 (네이티브 Gemini 형식)
+            if not base64_image_data:
+                parts = message.get("parts")
+                if isinstance(parts, list):
+                    for part in parts:
+                        if isinstance(part, dict):
+                            inline_data = part.get("inline_data") or part.get("inlineData")
+                            if inline_data and isinstance(inline_data, dict):
+                                base64_image_data = inline_data.get("data")
+                                if base64_image_data:
+                                    print(f"[THUMBNAIL-AI] parts.inline_data에서 추출 성공")
+                                    break
 
             # 방법 3: content가 문자열인 경우 (data:image 포함 여부 확인)
             if not base64_image_data:
@@ -14848,7 +14868,8 @@ def run_automation_pipeline(row_data, row_index):
         try:
             video_resp = req.post(f"{base_url}/api/image/generate-video", json={
                 "session_id": session_id,
-                "scenes": scenes
+                "scenes": scenes,
+                "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
             }, timeout=600)
 
             video_data = video_resp.json()
