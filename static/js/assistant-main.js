@@ -29,6 +29,10 @@ const AssistantMain = (() => {
     initUploadDate();
     initStyleButtons();
     initDragDrop();
+
+    // Check Google integrations status
+    checkGcalAuth();
+    checkGsheetsAuth();
   }
 
   function updateGreeting() {
@@ -863,6 +867,205 @@ const AssistantMain = (() => {
       btn.disabled = false;
     }
   }
+
+  // ===== Google Calendar Integration =====
+  let gcalAuthStatus = false;
+
+  async function checkGcalAuth() {
+    try {
+      const response = await fetch('/assistant/api/gcal/auth-status');
+      const data = await response.json();
+      gcalAuthStatus = data.authenticated;
+      updateGcalUI();
+      return data.authenticated;
+    } catch (error) {
+      console.error('[Assistant] GCal auth check error:', error);
+      return false;
+    }
+  }
+
+  function updateGcalUI() {
+    const authBtn = document.getElementById('btn-gcal-auth');
+    const syncBtn = document.getElementById('btn-gcal-sync');
+    const statusBadge = document.getElementById('gcal-status');
+
+    if (gcalAuthStatus) {
+      if (authBtn) authBtn.style.display = 'none';
+      if (syncBtn) syncBtn.style.display = 'inline-flex';
+      if (statusBadge) {
+        statusBadge.textContent = '연결됨';
+        statusBadge.className = 'status-badge connected';
+      }
+    } else {
+      if (authBtn) authBtn.style.display = 'inline-flex';
+      if (syncBtn) syncBtn.style.display = 'none';
+      if (statusBadge) {
+        statusBadge.textContent = '미연결';
+        statusBadge.className = 'status-badge disconnected';
+      }
+    }
+  }
+
+  async function authGcal() {
+    try {
+      const response = await fetch('/assistant/api/gcal/auth');
+      const data = await response.json();
+      if (data.auth_url) {
+        // Open auth window
+        window.open(data.auth_url, 'gcal_auth', 'width=500,height=600');
+      }
+    } catch (error) {
+      console.error('[Assistant] GCal auth error:', error);
+      alert('Google Calendar 인증 오류');
+    }
+  }
+
+  async function syncGcal() {
+    const btn = document.getElementById('btn-gcal-sync');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span> 동기화 중...';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch('/assistant/api/gcal/sync', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        const msg = `Google Calendar 동기화 완료!\n\n` +
+          `📤 업로드: ${data.synced_to_gcal}개\n` +
+          `📥 가져오기: ${data.synced_from_gcal}개`;
+        alert(msg);
+        // Reload dashboard to show updated events
+        await loadDashboard();
+      } else {
+        alert('동기화 실패: ' + data.error);
+      }
+    } catch (error) {
+      console.error('[Assistant] GCal sync error:', error);
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  // ===== Google Sheets Integration =====
+  let gsheetsAuthStatus = false;
+
+  async function checkGsheetsAuth() {
+    try {
+      const response = await fetch('/assistant/api/gsheets/auth-status');
+      const data = await response.json();
+      gsheetsAuthStatus = data.authenticated;
+      updateGsheetsUI();
+      return data.authenticated;
+    } catch (error) {
+      console.error('[Assistant] GSheets auth check error:', error);
+      return false;
+    }
+  }
+
+  function updateGsheetsUI() {
+    const authBtn = document.getElementById('btn-gsheets-auth');
+    const exportBtns = document.getElementById('gsheets-export-btns');
+    const statusBadge = document.getElementById('gsheets-status');
+
+    if (gsheetsAuthStatus) {
+      if (authBtn) authBtn.style.display = 'none';
+      if (exportBtns) exportBtns.style.display = 'flex';
+      if (statusBadge) {
+        statusBadge.textContent = '연결됨';
+        statusBadge.className = 'status-badge connected';
+      }
+    } else {
+      if (authBtn) authBtn.style.display = 'inline-flex';
+      if (exportBtns) exportBtns.style.display = 'none';
+      if (statusBadge) {
+        statusBadge.textContent = '미연결';
+        statusBadge.className = 'status-badge disconnected';
+      }
+    }
+  }
+
+  async function authGsheets() {
+    try {
+      const response = await fetch('/assistant/api/gsheets/auth');
+      const data = await response.json();
+      if (data.auth_url) {
+        window.open(data.auth_url, 'gsheets_auth', 'width=500,height=600');
+      }
+    } catch (error) {
+      console.error('[Assistant] GSheets auth error:', error);
+      alert('Google Sheets 인증 오류');
+    }
+  }
+
+  async function exportPeopleToSheets() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch('/assistant/api/gsheets/export-people', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`인물 데이터 내보내기 완료!\n\n` +
+          `📊 총 ${data.rows_written}개 행 저장\n` +
+          `📄 스프레드시트: ${data.spreadsheet_id}`);
+      } else {
+        alert('내보내기 실패: ' + data.error);
+      }
+    } catch (error) {
+      console.error('[Assistant] Export people error:', error);
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  async function exportEventsToSheets() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch('/assistant/api/gsheets/export-events', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`일정 데이터 내보내기 완료!\n\n` +
+          `📊 총 ${data.rows_written}개 행 저장\n` +
+          `📄 스프레드시트: ${data.spreadsheet_id}`);
+      } else {
+        alert('내보내기 실패: ' + data.error);
+      }
+    } catch (error) {
+      console.error('[Assistant] Export events error:', error);
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  // Google OAuth callback handler (called from popup)
+  window.handleGoogleAuthCallback = async function(service) {
+    if (service === 'gcal') {
+      await checkGcalAuth();
+      if (gcalAuthStatus) {
+        alert('Google Calendar 연결 완료!');
+      }
+    } else if (service === 'gsheets') {
+      await checkGsheetsAuth();
+      if (gsheetsAuthStatus) {
+        alert('Google Sheets 연결 완료!');
+      }
+    }
+  };
 
   // ===== Section Navigation =====
   let currentSection = 'dashboard';
@@ -2685,6 +2888,15 @@ const AssistantMain = (() => {
     setCategory,
     saveTask,
     syncToMac,
+    // Google Calendar functions
+    checkGcalAuth,
+    authGcal,
+    syncGcal,
+    // Google Sheets functions
+    checkGsheetsAuth,
+    authGsheets,
+    exportPeopleToSheets,
+    exportEventsToSheets,
     showSection,
     // News functions
     refreshNews,

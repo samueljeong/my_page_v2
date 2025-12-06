@@ -1619,6 +1619,22 @@
     .project-status-badge.completed { background: #dbeafe; color: #2563eb; }
     .project-status-badge.on-hold { background: #fef3c7; color: #d97706; }
 
+    /* Google integration status badges */
+    .status-badge {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .status-badge.connected {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+    .status-badge.disconnected {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
     .person-last-note, .project-last-note {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -2166,16 +2182,49 @@
           </div>
         </div>
 
-        <!-- Sync Status (Compact) -->
+        <!-- Google Integration -->
         <div class="card" style="margin-top: 1rem;">
           <div class="card-header" style="padding: 0.75rem 1rem;">
-            <h3 style="font-size: 0.875rem;">🔄 Sync Status</h3>
-            <button class="btn btn-small btn-primary" onclick="AssistantMain.syncToMac()" id="btn-sync" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
-              Sync to Mac
-            </button>
+            <h3 style="font-size: 0.875rem;">🔗 Google 연동</h3>
           </div>
-          <div class="card-body" id="pending-sync" style="padding: 0.75rem 1rem;">
-            <div class="empty" style="padding: 1rem;">No pending sync</div>
+          <div class="card-body" style="padding: 0.75rem 1rem;">
+            <!-- Google Calendar -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">📅</span>
+                <span style="font-weight: 500;">Google Calendar</span>
+                <span id="gcal-status" class="status-badge disconnected">미연결</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-gcal-auth" class="btn btn-small" onclick="AssistantMain.authGcal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: #4285f4; color: white; border: none;">
+                  연결하기
+                </button>
+                <button id="btn-gcal-sync" class="btn btn-small btn-primary" onclick="AssistantMain.syncGcal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; display: none;">
+                  🔄 동기화
+                </button>
+              </div>
+            </div>
+            <!-- Google Sheets -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">📊</span>
+                <span style="font-weight: 500;">Google Sheets</span>
+                <span id="gsheets-status" class="status-badge disconnected">미연결</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-gsheets-auth" class="btn btn-small" onclick="AssistantMain.authGsheets()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: #0f9d58; color: white; border: none;">
+                  연결하기
+                </button>
+                <div id="gsheets-export-btns" style="display: none; gap: 0.25rem;">
+                  <button class="btn btn-small" onclick="AssistantMain.exportPeopleToSheets()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #0f9d58; color: white; border: none;">
+                    👤 인물
+                  </button>
+                  <button class="btn btn-small" onclick="AssistantMain.exportEventsToSheets()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #0f9d58; color: white; border: none;">
+                    📅 일정
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

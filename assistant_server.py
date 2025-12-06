@@ -187,10 +187,11 @@ def init_assistant_db():
             )
         ''')
 
-        # 기존 테이블에 location, notes 컬럼 추가 (이미 존재하면 무시)
+        # 기존 테이블에 location, notes, gcal_id 컬럼 추가 (이미 존재하면 무시)
         try:
             cursor.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS location VARCHAR(200)')
             cursor.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS notes TEXT')
+            cursor.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS gcal_id VARCHAR(200)')
         except Exception:
             pass  # 컬럼이 이미 존재하면 무시
 
@@ -306,13 +307,17 @@ def init_assistant_db():
             )
         ''')
 
-        # 기존 테이블에 location, notes 컬럼 추가 (SQLite는 IF NOT EXISTS 미지원)
+        # 기존 테이블에 location, notes, gcal_id 컬럼 추가 (SQLite는 IF NOT EXISTS 미지원)
         try:
             cursor.execute('ALTER TABLE events ADD COLUMN location TEXT')
         except Exception:
             pass
         try:
             cursor.execute('ALTER TABLE events ADD COLUMN notes TEXT')
+        except Exception:
+            pass
+        try:
+            cursor.execute('ALTER TABLE events ADD COLUMN gcal_id TEXT')
         except Exception:
             pass
 
@@ -3648,6 +3653,771 @@ def quick_add_project():
             'is_new': is_new,
             'events_created': events_created
         })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ===== Google Calendar API 연동 =====
+
+# Google Calendar 토큰 저장소 (메모리 - 실제 운영에서는 DB나 파일로 저장 권장)
+_gcal_credentials = {}
+
+def get_gcal_credentials():
+    """저장된 Google Calendar 인증 정보 반환"""
+    global _gcal_credentials
+    return _gcal_credentials.get('credentials')
+
+def save_gcal_credentials(credentials):
+    """Google Calendar 인증 정보 저장"""
+    global _gcal_credentials
+    _gcal_credentials['credentials'] = credentials
+
+
+@assistant_bp.route('/assistant/api/gcal/auth-status', methods=['GET'])
+def gcal_auth_status():
+    """Google Calendar 인증 상태 확인"""
+    try:
+        creds = get_gcal_credentials()
+        if creds:
+            return jsonify({
+                'success': True,
+                'authenticated': True,
+                'message': 'Google Calendar 연동됨'
+            })
+        return jsonify({
+            'success': True,
+            'authenticated': False,
+            'message': '인증 필요'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/auth', methods=['GET'])
+def gcal_auth():
+    """Google Calendar OAuth 인증 시작"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+
+        # 환경변수에서 OAuth 클라이언트 정보 가져오기
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+
+        if not client_id or not client_secret:
+            return jsonify({
+                'success': False,
+                'error': 'GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET 환경변수를 설정해주세요.'
+            }), 400
+
+        # OAuth 클라이언트 설정
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [request.host_url.rstrip('/') + '/assistant/api/gcal/callback']
+            }
+        }
+
+        # Calendar API 스코프
+        scopes = [
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/calendar.events'
+        ]
+
+        flow = Flow.from_client_config(client_config, scopes=scopes)
+        flow.redirect_uri = request.host_url.rstrip('/') + '/assistant/api/gcal/callback'
+
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+
+        # state 저장 (간단히 전역 변수 사용, 실제로는 세션 등 사용)
+        _gcal_credentials['flow_state'] = state
+        _gcal_credentials['flow'] = flow
+
+        return jsonify({
+            'success': True,
+            'auth_url': authorization_url
+        })
+
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'error': 'Google 인증 라이브러리가 필요합니다. pip install google-auth-oauthlib google-api-python-client'
+        }), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/callback', methods=['GET'])
+def gcal_callback():
+    """Google Calendar OAuth 콜백"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+
+        flow = _gcal_credentials.get('flow')
+        if not flow:
+            return '<script>alert("인증 세션이 만료되었습니다. 다시 시도해주세요."); window.close();</script>'
+
+        # authorization response에서 토큰 가져오기
+        flow.fetch_token(authorization_response=request.url)
+        credentials = flow.credentials
+
+        # 인증 정보 저장
+        save_gcal_credentials({
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        })
+
+        # 성공 메시지와 함께 창 닫기
+        return '''
+        <html>
+        <head><title>Google Calendar 연동 완료</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2>✅ Google Calendar 연동 완료!</h2>
+            <p>이 창을 닫고 대시보드로 돌아가세요.</p>
+            <script>
+                setTimeout(function() {
+                    if (window.opener) {
+                        window.opener.location.reload();
+                    }
+                    window.close();
+                }, 2000);
+            </script>
+        </body>
+        </html>
+        '''
+
+    except Exception as e:
+        return f'<script>alert("인증 오류: {str(e)}"); window.close();</script>'
+
+
+@assistant_bp.route('/assistant/api/gcal/disconnect', methods=['POST'])
+def gcal_disconnect():
+    """Google Calendar 연동 해제"""
+    global _gcal_credentials
+    _gcal_credentials = {}
+    return jsonify({'success': True, 'message': 'Google Calendar 연동이 해제되었습니다.'})
+
+
+def get_gcal_service():
+    """Google Calendar API 서비스 객체 반환"""
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    creds_data = get_gcal_credentials()
+    if not creds_data:
+        return None
+
+    credentials = Credentials(
+        token=creds_data.get('token'),
+        refresh_token=creds_data.get('refresh_token'),
+        token_uri=creds_data.get('token_uri'),
+        client_id=creds_data.get('client_id'),
+        client_secret=creds_data.get('client_secret'),
+        scopes=creds_data.get('scopes')
+    )
+
+    # 토큰 만료 시 갱신
+    if credentials.expired and credentials.refresh_token:
+        from google.auth.transport.requests import Request
+        credentials.refresh(Request())
+        # 갱신된 토큰 저장
+        save_gcal_credentials({
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        })
+
+    return build('calendar', 'v3', credentials=credentials)
+
+
+@assistant_bp.route('/assistant/api/gcal/events', methods=['GET'])
+def gcal_get_events():
+    """Google Calendar에서 일정 가져오기"""
+    try:
+        service = get_gcal_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google Calendar 인증이 필요합니다.'}), 401
+
+        # 기간 설정 (기본: 오늘부터 30일)
+        days = request.args.get('days', 30, type=int)
+        time_min = datetime.utcnow().isoformat() + 'Z'
+        time_max = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
+
+        # 캘린더 목록 가져오기
+        calendar_id = request.args.get('calendar_id', 'primary')
+
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=time_min,
+            timeMax=time_max,
+            maxResults=100,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+
+        events = events_result.get('items', [])
+
+        # 이벤트 정리
+        formatted_events = []
+        for event in events:
+            start = event['start'].get('dateTime', event['start'].get('date'))
+            end = event['end'].get('dateTime', event['end'].get('date'))
+
+            formatted_events.append({
+                'id': event['id'],
+                'title': event.get('summary', '(제목 없음)'),
+                'start_time': start,
+                'end_time': end,
+                'location': event.get('location'),
+                'description': event.get('description'),
+                'source': 'google_calendar'
+            })
+
+        return jsonify({
+            'success': True,
+            'events': formatted_events,
+            'count': len(formatted_events)
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/sync', methods=['POST'])
+def gcal_sync():
+    """로컬 일정을 Google Calendar와 동기화"""
+    try:
+        service = get_gcal_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google Calendar 인증이 필요합니다.'}), 401
+
+        data = request.get_json() or {}
+        direction = data.get('direction', 'both')  # 'to_google', 'from_google', 'both'
+        calendar_id = data.get('calendar_id', 'primary')
+
+        synced_to_google = 0
+        synced_from_google = 0
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # === 1. 로컬 → Google Calendar (pending_to_mac 상태인 이벤트) ===
+        if direction in ['to_google', 'both']:
+            if USE_POSTGRES:
+                cursor.execute("SELECT * FROM events WHERE sync_status = 'pending_to_mac'")
+            else:
+                cursor.execute("SELECT * FROM events WHERE sync_status = 'pending_to_mac'")
+
+            local_events = cursor.fetchall()
+
+            for event in local_events:
+                try:
+                    # Google Calendar 이벤트 생성
+                    gcal_event = {
+                        'summary': event['title'],
+                        'start': {},
+                        'end': {}
+                    }
+
+                    # 시작 시간 설정
+                    if event['start_time']:
+                        start_dt = event['start_time']
+                        if isinstance(start_dt, str):
+                            if 'T' in start_dt:
+                                gcal_event['start']['dateTime'] = start_dt
+                                gcal_event['start']['timeZone'] = 'Asia/Seoul'
+                            else:
+                                gcal_event['start']['date'] = start_dt
+                        else:
+                            gcal_event['start']['dateTime'] = start_dt.isoformat()
+                            gcal_event['start']['timeZone'] = 'Asia/Seoul'
+
+                    # 종료 시간 설정
+                    if event['end_time']:
+                        end_dt = event['end_time']
+                        if isinstance(end_dt, str):
+                            if 'T' in end_dt:
+                                gcal_event['end']['dateTime'] = end_dt
+                                gcal_event['end']['timeZone'] = 'Asia/Seoul'
+                            else:
+                                gcal_event['end']['date'] = end_dt
+                        else:
+                            gcal_event['end']['dateTime'] = end_dt.isoformat()
+                            gcal_event['end']['timeZone'] = 'Asia/Seoul'
+                    else:
+                        # 종료 시간이 없으면 시작 시간 + 1시간
+                        gcal_event['end'] = gcal_event['start'].copy()
+
+                    if event.get('location'):
+                        gcal_event['location'] = event['location']
+
+                    # Google Calendar에 추가
+                    created_event = service.events().insert(
+                        calendarId=calendar_id,
+                        body=gcal_event
+                    ).execute()
+
+                    # 동기화 상태 업데이트
+                    if USE_POSTGRES:
+                        cursor.execute(
+                            "UPDATE events SET sync_status = 'synced', gcal_id = %s WHERE id = %s",
+                            (created_event['id'], event['id'])
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE events SET sync_status = 'synced', gcal_id = ? WHERE id = ?",
+                            (created_event['id'], event['id'])
+                        )
+
+                    synced_to_google += 1
+
+                except Exception as e:
+                    print(f"[GCAL-SYNC] 이벤트 동기화 오류 (ID: {event['id']}): {e}")
+
+        # === 2. Google Calendar → 로컬 ===
+        if direction in ['from_google', 'both']:
+            # 최근 30일 + 미래 60일 이벤트 가져오기
+            time_min = (datetime.utcnow() - timedelta(days=30)).isoformat() + 'Z'
+            time_max = (datetime.utcnow() + timedelta(days=60)).isoformat() + 'Z'
+
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=200,
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+
+            gcal_events = events_result.get('items', [])
+
+            for gcal_event in gcal_events:
+                gcal_id = gcal_event['id']
+
+                # 이미 동기화된 이벤트인지 확인
+                if USE_POSTGRES:
+                    cursor.execute("SELECT id FROM events WHERE gcal_id = %s", (gcal_id,))
+                else:
+                    cursor.execute("SELECT id FROM events WHERE gcal_id = ?", (gcal_id,))
+
+                existing = cursor.fetchone()
+
+                if not existing:
+                    # 새 이벤트 추가
+                    title = gcal_event.get('summary', '(제목 없음)')
+                    start = gcal_event['start'].get('dateTime', gcal_event['start'].get('date'))
+                    end = gcal_event['end'].get('dateTime', gcal_event['end'].get('date'))
+                    location = gcal_event.get('location')
+
+                    if USE_POSTGRES:
+                        cursor.execute('''
+                            INSERT INTO events (title, start_time, end_time, location, category, source, sync_status, gcal_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ''', (title, start, end, location, '기타', 'google_calendar', 'synced', gcal_id))
+                    else:
+                        cursor.execute('''
+                            INSERT INTO events (title, start_time, end_time, location, category, source, sync_status, gcal_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (title, start, end, location, '기타', 'google_calendar', 'synced', gcal_id))
+
+                    synced_from_google += 1
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'synced_to_google': synced_to_google,
+            'synced_from_google': synced_from_google,
+            'message': f'동기화 완료: Google로 {synced_to_google}개, 로컬로 {synced_from_google}개'
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/calendars', methods=['GET'])
+def gcal_list_calendars():
+    """사용 가능한 캘린더 목록 조회"""
+    try:
+        service = get_gcal_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google Calendar 인증이 필요합니다.'}), 401
+
+        calendar_list = service.calendarList().list().execute()
+        calendars = []
+
+        for cal in calendar_list.get('items', []):
+            calendars.append({
+                'id': cal['id'],
+                'summary': cal.get('summary', ''),
+                'primary': cal.get('primary', False),
+                'backgroundColor': cal.get('backgroundColor')
+            })
+
+        return jsonify({
+            'success': True,
+            'calendars': calendars
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ===== Google Sheets API 연동 =====
+
+_gsheets_credentials = {}
+
+def get_gsheets_service():
+    """Google Sheets API 서비스 객체 반환 (Calendar와 동일한 인증 사용)"""
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    # Google Calendar 인증 정보 재사용 (스코프 추가 필요)
+    creds_data = get_gcal_credentials()
+    if not creds_data:
+        return None
+
+    credentials = Credentials(
+        token=creds_data.get('token'),
+        refresh_token=creds_data.get('refresh_token'),
+        token_uri=creds_data.get('token_uri'),
+        client_id=creds_data.get('client_id'),
+        client_secret=creds_data.get('client_secret'),
+        scopes=creds_data.get('scopes')
+    )
+
+    if credentials.expired and credentials.refresh_token:
+        from google.auth.transport.requests import Request
+        credentials.refresh(Request())
+
+    return build('sheets', 'v4', credentials=credentials)
+
+
+@assistant_bp.route('/assistant/api/gsheets/auth-status', methods=['GET'])
+def gsheets_auth_status():
+    """Google Sheets 인증 상태 확인"""
+    try:
+        creds = load_gsheets_credentials()
+        if creds:
+            return jsonify({'authenticated': True, 'success': True})
+        return jsonify({'authenticated': False, 'success': True})
+    except Exception as e:
+        return jsonify({'authenticated': False, 'success': False, 'error': str(e)})
+
+
+@assistant_bp.route('/assistant/api/gsheets/auth', methods=['GET'])
+def gsheets_auth():
+    """Google Sheets OAuth 인증 시작 (Calendar + Sheets 통합)"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+
+        if not client_id or not client_secret:
+            return jsonify({
+                'success': False,
+                'error': 'GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET 환경변수를 설정해주세요.'
+            }), 400
+
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [request.host_url.rstrip('/') + '/assistant/api/gsheets/callback']
+            }
+        }
+
+        # Calendar + Sheets 스코프 통합
+        scopes = [
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/spreadsheets.readonly'
+        ]
+
+        flow = Flow.from_client_config(client_config, scopes=scopes)
+        flow.redirect_uri = request.host_url.rstrip('/') + '/assistant/api/gsheets/callback'
+
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+
+        _gsheets_credentials['flow'] = flow
+
+        return jsonify({
+            'success': True,
+            'auth_url': authorization_url
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gsheets/callback', methods=['GET'])
+def gsheets_callback():
+    """Google Sheets OAuth 콜백"""
+    try:
+        flow = _gsheets_credentials.get('flow')
+        if not flow:
+            return '<script>alert("인증 세션이 만료되었습니다."); window.close();</script>'
+
+        flow.fetch_token(authorization_response=request.url)
+        credentials = flow.credentials
+
+        # Calendar 인증과 통합하여 저장
+        save_gcal_credentials({
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        })
+
+        return '''
+        <html>
+        <head><title>Google 연동 완료</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2>✅ Google Calendar + Sheets 연동 완료!</h2>
+            <p>이 창을 닫고 대시보드로 돌아가세요.</p>
+            <script>
+                setTimeout(function() {
+                    if (window.opener) window.opener.location.reload();
+                    window.close();
+                }, 2000);
+            </script>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        return f'<script>alert("인증 오류: {str(e)}"); window.close();</script>'
+
+
+@assistant_bp.route('/assistant/api/gsheets/read', methods=['GET'])
+def gsheets_read():
+    """Google Sheets 데이터 읽기"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        spreadsheet_id = request.args.get('spreadsheet_id')
+        range_name = request.args.get('range', 'Sheet1!A1:Z100')
+
+        if not spreadsheet_id:
+            return jsonify({'success': False, 'error': 'spreadsheet_id가 필요합니다.'}), 400
+
+        result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=range_name
+        ).execute()
+
+        values = result.get('values', [])
+
+        return jsonify({
+            'success': True,
+            'data': values,
+            'rows': len(values)
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gsheets/write', methods=['POST'])
+def gsheets_write():
+    """Google Sheets에 데이터 쓰기"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        data = request.get_json()
+        spreadsheet_id = data.get('spreadsheet_id')
+        range_name = data.get('range', 'Sheet1!A1')
+        values = data.get('values', [])
+
+        if not spreadsheet_id:
+            return jsonify({'success': False, 'error': 'spreadsheet_id가 필요합니다.'}), 400
+
+        body = {'values': values}
+
+        result = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption='USER_ENTERED',
+            body=body
+        ).execute()
+
+        return jsonify({
+            'success': True,
+            'updated_cells': result.get('updatedCells', 0),
+            'updated_range': result.get('updatedRange', '')
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gsheets/append', methods=['POST'])
+def gsheets_append():
+    """Google Sheets에 행 추가"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        data = request.get_json()
+        spreadsheet_id = data.get('spreadsheet_id')
+        range_name = data.get('range', 'Sheet1')
+        values = data.get('values', [])
+
+        if not spreadsheet_id:
+            return jsonify({'success': False, 'error': 'spreadsheet_id가 필요합니다.'}), 400
+
+        body = {'values': values}
+
+        result = service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption='USER_ENTERED',
+            insertDataOption='INSERT_ROWS',
+            body=body
+        ).execute()
+
+        return jsonify({
+            'success': True,
+            'updated_range': result.get('updates', {}).get('updatedRange', ''),
+            'updated_rows': result.get('updates', {}).get('updatedRows', 0)
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gsheets/export-people', methods=['POST'])
+def gsheets_export_people():
+    """인물 데이터를 Google Sheets로 내보내기"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        data = request.get_json() or {}
+        spreadsheet_id = data.get('spreadsheet_id')
+
+        if not spreadsheet_id:
+            return jsonify({'success': False, 'error': 'spreadsheet_id가 필요합니다.'}), 400
+
+        # DB에서 인물 데이터 가져오기
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('SELECT name, role, category, notes FROM people ORDER BY name')
+        else:
+            cursor.execute('SELECT name, role, category, notes FROM people ORDER BY name')
+
+        people = cursor.fetchall()
+        conn.close()
+
+        # 헤더 + 데이터 준비
+        values = [['이름', '직분/역할', '카테고리', '비고']]
+        for person in people:
+            values.append([
+                person['name'] or '',
+                person['role'] or '',
+                person['category'] or '',
+                person['notes'] or ''
+            ])
+
+        # Sheets에 쓰기
+        body = {'values': values}
+        result = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='인물!A1',
+            valueInputOption='USER_ENTERED',
+            body=body
+        ).execute()
+
+        return jsonify({
+            'success': True,
+            'exported_count': len(people),
+            'message': f'{len(people)}명의 인물 데이터를 내보냈습니다.'
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gsheets/export-events', methods=['POST'])
+def gsheets_export_events():
+    """일정 데이터를 Google Sheets로 내보내기"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        data = request.get_json() or {}
+        spreadsheet_id = data.get('spreadsheet_id')
+
+        if not spreadsheet_id:
+            return jsonify({'success': False, 'error': 'spreadsheet_id가 필요합니다.'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('SELECT title, start_time, end_time, category, location FROM events ORDER BY start_time')
+        else:
+            cursor.execute('SELECT title, start_time, end_time, category, location FROM events ORDER BY start_time')
+
+        events = cursor.fetchall()
+        conn.close()
+
+        values = [['제목', '시작', '종료', '카테고리', '장소']]
+        for event in events:
+            values.append([
+                event['title'] or '',
+                str(event['start_time'] or ''),
+                str(event['end_time'] or ''),
+                event['category'] or '',
+                event['location'] or ''
+            ])
+
+        body = {'values': values}
+        result = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='일정!A1',
+            valueInputOption='USER_ENTERED',
+            body=body
+        ).execute()
+
+        return jsonify({
+            'success': True,
+            'exported_count': len(events),
+            'message': f'{len(events)}개의 일정을 내보냈습니다.'
+        })
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
