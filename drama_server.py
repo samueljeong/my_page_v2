@@ -14119,38 +14119,67 @@ Style: {style}, comic/illustration, eye-catching, high contrast"""
 
         result = response.json()
 
-        # 이미지 추출
-        base64_image_data = None
+        # 디버그: 응답 구조 출력
+        print(f"[THUMBNAIL-AI] 응답 키: {list(result.keys())}")
         choices = result.get("choices", [])
         if choices:
             message = choices[0].get("message", {})
+            print(f"[THUMBNAIL-AI] message 키: {list(message.keys())}")
 
-            # images 필드 확인
+        # 이미지 추출 (다양한 형식 지원)
+        base64_image_data = None
+        if choices:
+            message = choices[0].get("message", {})
+
+            # 방법 1: images 필드 확인 (다양한 형식 지원)
             images = message.get("images")
             if images:
+                print(f"[THUMBNAIL-AI] images 발견: 타입={type(images)}")
                 if isinstance(images, list) and len(images) > 0:
                     img = images[0]
                     if isinstance(img, str):
                         base64_image_data = img.split(",", 1)[1] if img.startswith("data:") else img
                     elif isinstance(img, dict):
-                        base64_image_data = img.get("b64_json") or img.get("base64")
+                        base64_image_data = img.get("b64_json") or img.get("base64") or img.get("data")
                 elif isinstance(images, str):
                     base64_image_data = images.split(",", 1)[1] if images.startswith("data:") else images
 
-            # content 필드 확인 (이미지가 없는 경우)
+            # 방법 2: content 배열에서 image_url 추출
             if not base64_image_data:
                 content = message.get("content")
                 if isinstance(content, list):
                     for item in content:
                         if isinstance(item, dict):
-                            if item.get("type") == "image_url":
+                            item_type = item.get("type", "")
+                            if item_type == "image_url":
                                 url_data = item.get("image_url", {})
                                 if isinstance(url_data, dict):
                                     url = url_data.get("url", "")
                                     if url.startswith("data:image"):
                                         base64_image_data = url.split(",", 1)[1]
+                                        print(f"[THUMBNAIL-AI] content.image_url에서 추출 성공")
+                                        break
+                            elif item_type == "image":
+                                # Gemini 3 Pro 형식
+                                img_data = item.get("image", {})
+                                if isinstance(img_data, dict):
+                                    base64_image_data = img_data.get("data") or img_data.get("b64_json")
+                                    if base64_image_data:
+                                        print(f"[THUMBNAIL-AI] content.image에서 추출 성공")
+                                        break
+
+            # 방법 3: content가 문자열인 경우 (data:image 포함 여부 확인)
+            if not base64_image_data:
+                content = message.get("content", "")
+                if isinstance(content, str) and "data:image" in content:
+                    import re
+                    match = re.search(r'data:image/[^;]+;base64,([A-Za-z0-9+/=]+)', content)
+                    if match:
+                        base64_image_data = match.group(1)
+                        print(f"[THUMBNAIL-AI] content 문자열에서 추출 성공")
 
         if not base64_image_data:
+            print(f"[THUMBNAIL-AI] 이미지 추출 실패 - 전체 응답: {str(result)[:1000]}")
             return jsonify({"ok": False, "error": "이미지 데이터 추출 실패"})
 
         # 파일 저장
@@ -14769,9 +14798,9 @@ def run_automation_pipeline(row_data, row_index):
 
             job_id = video_data.get('job_id')
 
-            # 영상 생성 완료 대기 (폴링)
+            # 영상 생성 완료 대기 (폴링) - 20분 대기
             video_url_local = None
-            for _ in range(150):  # 최대 5분 대기
+            for _ in range(600):  # 600 * 2초 = 20분
                 time_module.sleep(2)
                 status_resp = req.get(f"{base_url}/api/image/video-status/{job_id}", timeout=30)
                 status_data = status_resp.json()
@@ -14783,7 +14812,7 @@ def run_automation_pipeline(row_data, row_index):
                     return {"ok": False, "error": f"영상 생성 실패: {status_data.get('error')}", "video_url": None, "cost": total_cost}
 
             if not video_url_local:
-                return {"ok": False, "error": "영상 생성 타임아웃", "video_url": None, "cost": total_cost}
+                return {"ok": False, "error": "영상 생성 타임아웃 (20분 초과)", "video_url": None, "cost": total_cost}
 
             print(f"[AUTOMATION] 5. 완료: {video_url_local} (영상 생성은 무료)")
         except Exception as e:
