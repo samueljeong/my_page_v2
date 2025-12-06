@@ -11360,27 +11360,28 @@ def _update_job_status(job_id, **kwargs):
 
 def _get_subtitle_style(lang):
     """언어별 자막 스타일 반환 (ASS 형식) - 폰트28 기준"""
-    # 유튜브 스타일: 흰색 텍스트 + 검은색 외곽선 + 약간의 그림자
+    # 유튜브 스타일: 흰색 텍스트 + 검은색 외곽선 + 그림자
     if lang == 'ko':
-        # NanumGothic Bold - 나눔고딕 굵은체 (한글 전용)
+        # NanumGothic - 나눔고딕 (한글 전용)
+        # Outline=2 (두꺼운 외곽선), MarginV=40 (하단 여백)
         return (
-            "FontName=NanumGothicBold,FontSize=28,PrimaryColour=&H00FFFFFF,"
+            "FontName=NanumGothic,FontSize=28,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
+            "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     elif lang == 'ja':
-        # 일본어 - NanumGothicBold 사용 (CJK 지원)
+        # 일본어 - NanumGothic 사용 (CJK 지원)
         return (
-            "FontName=NanumGothicBold,FontSize=26,PrimaryColour=&H00FFFFFF,"
+            "FontName=NanumGothic,FontSize=26,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
+            "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     else:
         # 영어/기타 언어
         return (
             "FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
-            "BorderStyle=1,Outline=1,Shadow=1,MarginV=35,Bold=1"
+            "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
 
 def _generate_video_worker(job_id, session_id, scenes, detected_lang):
@@ -14167,6 +14168,26 @@ Style: {style}, comic/illustration, eye-catching, high contrast"""
                                     if base64_image_data:
                                         print(f"[THUMBNAIL-AI] content.image에서 추출 성공")
                                         break
+                            # 방법 2-1: inline_data 형식 (Gemini 일반 형식)
+                            inline_data = item.get("inline_data")
+                            if inline_data and isinstance(inline_data, dict):
+                                base64_image_data = inline_data.get("data")
+                                if base64_image_data:
+                                    print(f"[THUMBNAIL-AI] inline_data에서 추출 성공")
+                                    break
+
+            # 방법 2-2: parts 배열 (네이티브 Gemini 형식)
+            if not base64_image_data:
+                parts = message.get("parts")
+                if isinstance(parts, list):
+                    for part in parts:
+                        if isinstance(part, dict):
+                            inline_data = part.get("inline_data") or part.get("inlineData")
+                            if inline_data and isinstance(inline_data, dict):
+                                base64_image_data = inline_data.get("data")
+                                if base64_image_data:
+                                    print(f"[THUMBNAIL-AI] parts.inline_data에서 추출 성공")
+                                    break
 
             # 방법 3: content가 문자열인 경우 (data:image 포함 여부 확인)
             if not base64_image_data:
@@ -14653,16 +14674,15 @@ def run_automation_pipeline(row_data, row_index):
         # ========== 1. 대본 분석 (/api/image/analyze-script) ==========
         print(f"[AUTOMATION] 1. 대본 분석 시작...")
         try:
-            # 1분당 1개 이미지 (한국어 약 150자 = 1분 분량)
-            # 최소 3개, 상한 없음 (대본 길이에 따라 동적)
-            calculated_image_count = max(3, len(script) // 150)
-            print(f"[AUTOMATION] 대본 길이: {len(script)}자 → 이미지 {calculated_image_count}개 (1분당 1개)")
+            # 이미지 개수 8개 고정 (추후 지시 있을때까지)
+            fixed_image_count = 8
+            print(f"[AUTOMATION] 이미지 {fixed_image_count}개 고정 생성")
 
             analyze_resp = req.post(f"{base_url}/api/image/analyze-script", json={
                 "script": script,
                 "content_type": "drama",
                 "image_style": "animation",  # 스틱맨 스타일
-                "image_count": calculated_image_count,
+                "image_count": fixed_image_count,
                 "audience": audience,
                 "output_language": "auto"
             }, timeout=120)
@@ -14698,31 +14718,53 @@ def run_automation_pipeline(row_data, row_index):
         parallel_errors = []
 
         def generate_images():
-            """이미지 생성 (병렬 작업 1)"""
+            """이미지 생성 (병렬 작업 1) - 4개씩 병렬 처리"""
             nonlocal total_cost
-            print(f"[AUTOMATION][IMAGE] 이미지 생성 시작 ({len(scenes)}개)...")
-            for i, scene in enumerate(scenes):
+            from concurrent.futures import ThreadPoolExecutor as ImgExecutor, as_completed as img_completed
+
+            print(f"[AUTOMATION][IMAGE] 이미지 생성 시작 ({len(scenes)}개, 4개씩 병렬)...")
+
+            def generate_single_image(idx, scene):
+                """단일 이미지 생성 (실패 시 3회 재시도)"""
                 prompt = scene.get('image_prompt', '')
                 if not prompt:
-                    continue
+                    return idx, None
 
-                try:
-                    img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
-                        "prompt": prompt,
-                        "size": "1792x1024",
-                        "imageProvider": "gemini"
-                    }, timeout=120)
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
+                            "prompt": prompt,
+                            "size": "1280x720",
+                            "imageProvider": "gemini"
+                        }, timeout=120)
 
-                    img_data = img_resp.json()
-                    if img_data.get('ok') and img_data.get('imageUrl'):
-                        scene['image_url'] = img_data['imageUrl']
-                        print(f"[AUTOMATION][IMAGE] {i+1}/{len(scenes)} 완료")
-                    else:
-                        print(f"[AUTOMATION][IMAGE] {i+1}/{len(scenes)} 실패")
-                except Exception as e:
-                    print(f"[AUTOMATION][IMAGE] {i+1} 오류: {e}")
+                        img_data = img_resp.json()
+                        if img_data.get('ok') and img_data.get('imageUrl'):
+                            print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 완료")
+                            return idx, img_data['imageUrl']
+                        else:
+                            print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries})")
+                    except Exception as e:
+                        print(f"[AUTOMATION][IMAGE] {idx+1} 오류 (시도 {attempt+1}/{max_retries}): {e}")
 
-                time_module.sleep(1)
+                    if attempt < max_retries - 1:
+                        time_module.sleep(2)  # 재시도 전 대기
+
+                print(f"[AUTOMATION][IMAGE] {idx+1} 최종 실패 (3회 시도)")
+                return idx, None
+
+            # 4개씩 병렬 처리
+            with ImgExecutor(max_workers=4) as img_executor:
+                futures = {
+                    img_executor.submit(generate_single_image, i, scene): i
+                    for i, scene in enumerate(scenes)
+                }
+
+                for future in img_completed(futures):
+                    idx, image_url = future.result()
+                    if image_url:
+                        scenes[idx]['image_url'] = image_url
 
             success_count = len([s for s in scenes if s.get('image_url')])
             image_cost = success_count * 0.02
@@ -14826,7 +14868,8 @@ def run_automation_pipeline(row_data, row_index):
         try:
             video_resp = req.post(f"{base_url}/api/image/generate-video", json={
                 "session_id": session_id,
-                "scenes": scenes
+                "scenes": scenes,
+                "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
             }, timeout=600)
 
             video_data = video_resp.json()
