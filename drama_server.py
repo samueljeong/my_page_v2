@@ -14829,6 +14829,7 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
             "messages": [{"role": "user", "content": [{"type": "text", "text": enhanced_prompt}]}]
         }
 
+        print(f"[AUTOMATION] OpenRouter API 호출 중... (scene {scene_index + 1})")
         response = req.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
@@ -14836,42 +14837,66 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
             timeout=120
         )
 
+        print(f"[AUTOMATION] OpenRouter 응답: {response.status_code}")
+
         if response.status_code != 200:
-            return {"ok": False, "error": f"API 오류: {response.status_code}"}
+            error_text = response.text[:500] if response.text else "No response body"
+            print(f"[AUTOMATION] OpenRouter 에러: {error_text}")
+            return {"ok": False, "error": f"API 오류: {response.status_code} - {error_text[:100]}"}
 
         result = response.json()
+        print(f"[AUTOMATION] OpenRouter 결과 키: {list(result.keys())}")
+
+        # 에러 체크
+        if result.get("error"):
+            error_msg = result.get("error", {})
+            print(f"[AUTOMATION] OpenRouter API 에러: {error_msg}")
+            return {"ok": False, "error": f"API 에러: {error_msg}"}
 
         # 이미지 추출
         choices = result.get("choices", [])
-        if choices:
-            message = choices[0].get("message", {})
-            content = message.get("content", [])
+        if not choices:
+            print(f"[AUTOMATION] choices가 비어있음. 전체 응답: {str(result)[:500]}")
+            return {"ok": False, "error": "응답에 choices 없음"}
 
-            for item in content:
-                if isinstance(item, dict):
-                    if item.get("type") == "image_url":
-                        image_data = item.get("image_url", {})
-                        url = image_data.get("url", "")
-                        if url.startswith("data:image"):
-                            # Base64 이미지 저장
-                            output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
-                            os.makedirs(output_dir, exist_ok=True)
+        message = choices[0].get("message", {})
+        content = message.get("content", [])
+        print(f"[AUTOMATION] content 타입: {type(content)}, 길이: {len(content) if isinstance(content, list) else 'N/A'}")
 
-                            filename = f"{episode_id}_scene_{scene_index}.png"
-                            filepath = os.path.join(output_dir, filename)
+        # content가 문자열인 경우 (텍스트만 반환된 경우)
+        if isinstance(content, str):
+            print(f"[AUTOMATION] content가 문자열임 (이미지 없음): {content[:200]}")
+            return {"ok": False, "error": "이미지 대신 텍스트 응답"}
 
-                            header, encoded = url.split(',', 1)
-                            import base64
-                            with open(filepath, 'wb') as f:
-                                f.write(base64.b64decode(encoded))
+        for item in content:
+            if isinstance(item, dict):
+                item_type = item.get("type", "unknown")
+                print(f"[AUTOMATION] content item type: {item_type}")
+                if item_type == "image_url":
+                    image_data = item.get("image_url", {})
+                    url = image_data.get("url", "")
+                    if url.startswith("data:image"):
+                        # Base64 이미지 저장
+                        output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
+                        os.makedirs(output_dir, exist_ok=True)
 
-                            return {
-                                "ok": True,
-                                "image_url": f"/output/{filename}",
-                                "image_path": filepath
-                            }
+                        filename = f"{episode_id}_scene_{scene_index}.png"
+                        filepath = os.path.join(output_dir, filename)
 
-        return {"ok": False, "error": "이미지 생성 실패"}
+                        header, encoded = url.split(',', 1)
+                        import base64
+                        with open(filepath, 'wb') as f:
+                            f.write(base64.b64decode(encoded))
+
+                        print(f"[AUTOMATION] 이미지 저장 완료: {filepath}")
+                        return {
+                            "ok": True,
+                            "image_url": f"/output/{filename}",
+                            "image_path": filepath
+                        }
+
+        print(f"[AUTOMATION] 이미지를 찾지 못함. content: {str(content)[:300]}")
+        return {"ok": False, "error": "응답에서 이미지를 찾지 못함"}
 
     except Exception as e:
         print(f"[AUTOMATION] 이미지 생성 오류: {e}")
