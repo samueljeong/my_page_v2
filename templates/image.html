@@ -512,6 +512,17 @@
       color: #666;
     }
 
+    .auto-count-badge {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: center;
+    }
+
     .image-count-input input {
       width: 60px;
       padding: 8px 10px;
@@ -2432,9 +2443,10 @@
               <button id="btn-analyze" class="btn-analyze" onclick="ImageMain.analyzeScript()">
                 🤖 AI 분석하기
               </button>
-              <div class="image-count-input">
-                <label>이미지 수</label>
-                <input type="number" id="image-count" value="4" min="1" max="20">
+              <div class="image-count-input" title="대본 길이에 따라 자동 계산 (1분당 1장)">
+                <label>예상 이미지</label>
+                <span id="image-count-display" class="auto-count-badge">-</span>
+                <input type="hidden" id="image-count" value="4">
               </div>
             </div>
           </div>
@@ -2593,36 +2605,6 @@
                 </div>
               </div>
 
-            </div>
-
-            <!-- YouTube 업로드 섹션 (전체 너비) -->
-            <div id="youtube-upload-section" class="section-card youtube-upload-section full-width hidden">
-              <h4>📺 YouTube 업로드</h4>
-              <div class="youtube-upload-grid">
-                <!-- 채널 선택 -->
-                <div class="upload-option-group">
-                  <label>채널 선택</label>
-                  <div id="channel-select-area" class="channel-select-area">
-                    <div class="channel-loading">채널 정보 로딩 중...</div>
-                  </div>
-                </div>
-                <!-- 공개 설정 -->
-                <div class="upload-option-group">
-                  <label>공개 설정</label>
-                  <div class="privacy-options">
-                    <button type="button" class="privacy-btn active" data-privacy="private" onclick="ImageMain.setPrivacy('private')">🔒 비공개</button>
-                    <button type="button" class="privacy-btn" data-privacy="unlisted" onclick="ImageMain.setPrivacy('unlisted')">🔗 일부공개</button>
-                    <button type="button" class="privacy-btn" data-privacy="public" onclick="ImageMain.setPrivacy('public')">🌐 공개</button>
-                  </div>
-                  <label style="margin-top: 8px;">
-                    <input type="checkbox" id="schedule-upload" onchange="ImageMain.toggleSchedule()"> 예약 업로드
-                  </label>
-                  <div id="schedule-datetime-wrapper" class="schedule-datetime-wrapper hidden">
-                    <input type="datetime-local" id="schedule-datetime" class="schedule-datetime-input">
-                  </div>
-                </div>
-              </div>
-              <button id="btn-youtube-upload" class="btn-youtube-upload" onclick="ImageMain.uploadToYouTube()">✅ 업로드 완료</button>
             </div>
 
           </div><!-- right-panel-grid 끝 -->

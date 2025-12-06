@@ -62,6 +62,12 @@ const ImageMain = {
     // ★★★ OpenRouter 크레딧 잔액 로드 ★★★
     this.loadOpenRouterCredits();
 
+    // ★★★ 대본 입력 시 이미지 수 자동 계산 ★★★
+    const scriptTextarea = document.getElementById('full-script');
+    if (scriptTextarea) {
+      scriptTextarea.addEventListener('input', () => this.updateAutoImageCount());
+    }
+
     console.log('[ImageMain] Ready. Session:', this.sessionId, restored ? '(복구됨)' : '(새 세션)');
   },
 
@@ -371,6 +377,39 @@ const ImageMain = {
       this.clearSession();  // 저장된 세션 삭제
       location.reload();
     }
+  },
+
+  /**
+   * 대본 길이 기반 이미지 수 자동 계산
+   * 한국어 기준: 약 250자 = 1분 = 1장
+   */
+  updateAutoImageCount() {
+    const scriptEl = document.getElementById('full-script');
+    const displayEl = document.getElementById('image-count-display');
+    const hiddenInput = document.getElementById('image-count');
+
+    if (!scriptEl || !displayEl || !hiddenInput) return;
+
+    const script = scriptEl.value.trim();
+    if (!script) {
+      displayEl.textContent = '-';
+      hiddenInput.value = '4';
+      return;
+    }
+
+    // 한국어 기준: 약 250자당 1분, 1분당 1장
+    // 최소 2장, 최대 15장
+    const charCount = script.length;
+    const estimatedMinutes = charCount / 250;
+    let imageCount = Math.round(estimatedMinutes);
+
+    // 범위 제한
+    imageCount = Math.max(2, Math.min(15, imageCount));
+
+    displayEl.textContent = `${imageCount}장`;
+    hiddenInput.value = imageCount;
+
+    console.log(`[ImageMain] 자동 이미지 수 계산: ${charCount}자 → ${estimatedMinutes.toFixed(1)}분 → ${imageCount}장`);
   },
 
   /**
