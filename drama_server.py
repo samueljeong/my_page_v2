@@ -9497,11 +9497,8 @@ def youtube_upload():
 
         # 영상 파일 경로 처리
         if video_path and not video_path.startswith('http'):
-            # 상대 경로를 절대 경로로 변환
-            if video_path.startswith('/static/'):
-                full_path = os.path.join(os.path.dirname(__file__), video_path.lstrip('/'))
-            else:
-                full_path = os.path.join(os.path.dirname(__file__), video_path)
+            # 상대 경로를 절대 경로로 변환 (앞에 /가 있으면 제거)
+            full_path = os.path.join(os.path.dirname(__file__), video_path.lstrip('/'))
 
             if not os.path.exists(full_path):
                 print(f"[YOUTUBE-UPLOAD][WARN] 영상 파일 없음: {full_path}")
@@ -9515,12 +9512,11 @@ def youtube_upload():
         # 썸네일 경로 처리
         full_thumbnail_path = None
         if thumbnail_path:
-            if thumbnail_path.startswith('/static/'):
-                full_thumbnail_path = os.path.join(os.path.dirname(__file__), thumbnail_path.lstrip('/'))
-            elif not thumbnail_path.startswith('http'):
-                full_thumbnail_path = os.path.join(os.path.dirname(__file__), thumbnail_path)
-            else:
+            if thumbnail_path.startswith('http'):
                 full_thumbnail_path = thumbnail_path
+            else:
+                # 상대 경로를 절대 경로로 변환 (앞에 /가 있으면 제거)
+                full_thumbnail_path = os.path.join(os.path.dirname(__file__), thumbnail_path.lstrip('/'))
 
         # 실제 업로드 시도 (DB 토큰 직접 사용)
         try:
