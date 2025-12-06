@@ -14830,12 +14830,47 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
         }
 
         print(f"[AUTOMATION] OpenRouter API 호출 중... (scene {scene_index + 1})")
-        response = req.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=120
-        )
+
+        # 재시도 로직 (최대 3회)
+        import time as time_module
+        max_retries = 3
+        retry_delay = 3
+        response = None
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                response = req.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=120
+                )
+
+                if response.status_code == 200:
+                    break
+                elif response.status_code in [429, 502, 503, 504]:
+                    last_error = f"HTTP {response.status_code}"
+                    print(f"[AUTOMATION] 재시도 {attempt + 1}/{max_retries}: {last_error}")
+                    time_module.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    break
+
+            except req.exceptions.Timeout:
+                last_error = "타임아웃"
+                print(f"[AUTOMATION] 재시도 {attempt + 1}/{max_retries}: {last_error}")
+                time_module.sleep(retry_delay)
+                continue
+            except Exception as e:
+                last_error = str(e)
+                print(f"[AUTOMATION] 재시도 {attempt + 1}/{max_retries}: {last_error}")
+                time_module.sleep(retry_delay)
+                continue
+
+        if response is None:
+            return {"ok": False, "error": f"API 호출 실패: {last_error}"}
 
         print(f"[AUTOMATION] OpenRouter 응답: {response.status_code}")
 
@@ -14846,6 +14881,7 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
 
         result = response.json()
         print(f"[AUTOMATION] OpenRouter 결과 키: {list(result.keys())}")
+        print(f"[AUTOMATION] 전체 응답 (500자): {json.dumps(result, ensure_ascii=False)[:500]}")
 
         # 에러 체크
         if result.get("error"):
@@ -14860,6 +14896,36 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
             return {"ok": False, "error": "응답에 choices 없음"}
 
         message = choices[0].get("message", {})
+
+        # 1. images 배열 먼저 확인 (OpenRouter 표준 형식)
+        images = message.get("images", [])
+        if images:
+            print(f"[AUTOMATION] images 배열 발견: {len(images)}개")
+            for img in images:
+                if isinstance(img, str):
+                    if img.startswith("data:"):
+                        base64_data = img.split(",", 1)[1] if "," in img else img
+                    else:
+                        base64_data = img
+
+                    # 이미지 저장
+                    output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
+                    os.makedirs(output_dir, exist_ok=True)
+                    filename = f"{episode_id}_scene_{scene_index}.png"
+                    filepath = os.path.join(output_dir, filename)
+
+                    import base64
+                    with open(filepath, 'wb') as f:
+                        f.write(base64.b64decode(base64_data))
+
+                    print(f"[AUTOMATION] 이미지 저장 완료 (images 배열): {filepath}")
+                    return {
+                        "ok": True,
+                        "image_url": f"/output/{filename}",
+                        "image_path": filepath
+                    }
+
+        # 2. content 확인
         content = message.get("content", [])
         print(f"[AUTOMATION] content 타입: {type(content)}, 길이: {len(content) if isinstance(content, list) else 'N/A'}")
 
