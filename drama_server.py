@@ -14493,7 +14493,7 @@ def run_automation_pipeline(row_data, row_index):
             for i, scene in enumerate(scenes):
                 scenes_for_tts.append({
                     "scene_number": i + 1,
-                    "narration": scene.get('narration', ''),
+                    "text": scene.get('narration', ''),  # API는 'text' 필드를 기대함
                     "image_url": scene.get('image_url', '')
                 })
 
