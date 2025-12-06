@@ -14582,16 +14582,16 @@ def run_automation_pipeline(row_data, row_index):
         print(f"[AUTOMATION] 6. YouTube 업로드 시작...")
         try:
             upload_payload = {
-                "video_url": video_url_local,
+                "videoPath": video_url_local,
                 "title": title,
                 "description": description,
-                "privacy_status": visibility,
-                "channel_id": channel_id
+                "privacyStatus": visibility,
+                "channelId": channel_id
             }
 
             # 썸네일이 있으면 추가
             if thumbnail_url:
-                upload_payload["thumbnail_url"] = thumbnail_url
+                upload_payload["thumbnailPath"] = thumbnail_url
 
             upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=600)
 
