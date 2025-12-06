@@ -14902,12 +14902,32 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
         if images:
             print(f"[AUTOMATION] images 배열 발견: {len(images)}개")
             for img in images:
+                base64_data = None
+
                 if isinstance(img, str):
+                    # 문자열 형식
                     if img.startswith("data:"):
                         base64_data = img.split(",", 1)[1] if "," in img else img
                     else:
                         base64_data = img
 
+                elif isinstance(img, dict):
+                    # 딕셔너리 형식: {"type": "image_url", "image_url": {"url": "data:..."}}
+                    if img.get("type") == "image_url":
+                        url = img.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            base64_data = url.split(",", 1)[1] if "," in url else url
+                        print(f"[AUTOMATION] image_url 형식에서 base64 추출 성공")
+                    elif "url" in img:
+                        url = img.get("url", "")
+                        if url.startswith("data:"):
+                            base64_data = url.split(",", 1)[1] if "," in url else url
+                    elif "data" in img:
+                        base64_data = img.get("data")
+                    elif "b64_json" in img:
+                        base64_data = img.get("b64_json")
+
+                if base64_data:
                     # 이미지 저장
                     output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
                     os.makedirs(output_dir, exist_ok=True)
@@ -14918,7 +14938,7 @@ NO realistic humans, NO elderly people. ONLY stickman character."""
                     with open(filepath, 'wb') as f:
                         f.write(base64.b64decode(base64_data))
 
-                    print(f"[AUTOMATION] 이미지 저장 완료 (images 배열): {filepath}")
+                    print(f"[AUTOMATION] 이미지 저장 완료: {filepath}")
                     return {
                         "ok": True,
                         "image_url": f"/output/{filename}",
