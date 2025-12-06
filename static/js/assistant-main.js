@@ -33,6 +33,7 @@ const AssistantMain = (() => {
     // Check Google integrations status
     checkGcalAuth();
     checkGsheetsAuth();
+    checkWebhookStatus();
   }
 
   function updateGreeting() {
@@ -888,6 +889,7 @@ const AssistantMain = (() => {
     const authBtn = document.getElementById('btn-gcal-auth');
     const syncBtn = document.getElementById('btn-gcal-sync');
     const statusBadge = document.getElementById('gcal-status');
+    const realtimeRow = document.getElementById('realtime-sync-row');
 
     if (gcalAuthStatus) {
       if (authBtn) authBtn.style.display = 'none';
@@ -896,6 +898,7 @@ const AssistantMain = (() => {
         statusBadge.textContent = '연결됨';
         statusBadge.className = 'status-badge connected';
       }
+      if (realtimeRow) realtimeRow.style.display = 'flex';
     } else {
       if (authBtn) authBtn.style.display = 'inline-flex';
       if (syncBtn) syncBtn.style.display = 'none';
@@ -903,6 +906,7 @@ const AssistantMain = (() => {
         statusBadge.textContent = '미연결';
         statusBadge.className = 'status-badge disconnected';
       }
+      if (realtimeRow) realtimeRow.style.display = 'none';
     }
   }
 
@@ -942,6 +946,96 @@ const AssistantMain = (() => {
       }
     } catch (error) {
       console.error('[Assistant] GCal sync error:', error);
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  // ===== Google Calendar Webhook (실시간 동기화) =====
+  let webhookStatus = { active: false };
+
+  async function checkWebhookStatus() {
+    try {
+      const response = await fetch('/assistant/api/gcal/webhook/status');
+      const data = await response.json();
+      webhookStatus = data;
+      updateWebhookUI();
+      return data;
+    } catch (error) {
+      console.error('[Assistant] Webhook status check error:', error);
+      return { active: false };
+    }
+  }
+
+  function updateWebhookUI() {
+    const statusBadge = document.getElementById('realtime-status');
+    const enableBtn = document.getElementById('btn-realtime-enable');
+    const disableBtn = document.getElementById('btn-realtime-disable');
+
+    if (webhookStatus.active) {
+      if (statusBadge) {
+        statusBadge.textContent = '활성';
+        statusBadge.className = 'status-badge connected';
+      }
+      if (enableBtn) enableBtn.style.display = 'none';
+      if (disableBtn) disableBtn.style.display = 'inline-flex';
+    } else {
+      if (statusBadge) {
+        statusBadge.textContent = '비활성';
+        statusBadge.className = 'status-badge disconnected';
+      }
+      if (enableBtn) enableBtn.style.display = 'inline-flex';
+      if (disableBtn) disableBtn.style.display = 'none';
+    }
+  }
+
+  async function enableRealtimeSync() {
+    const btn = document.getElementById('btn-realtime-enable');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch('/assistant/api/gcal/webhook/register', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`실시간 동기화 활성화!\n\n채널 만료: ${new Date(data.expiration).toLocaleString('ko-KR')}`);
+        await checkWebhookStatus();
+      } else {
+        alert('활성화 실패: ' + data.error);
+      }
+    } catch (error) {
+      console.error('[Assistant] Enable realtime error:', error);
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  async function disableRealtimeSync() {
+    if (!confirm('실시간 동기화를 비활성화하시겠습니까?')) return;
+
+    const btn = document.getElementById('btn-realtime-disable');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch('/assistant/api/gcal/webhook/stop', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        alert('실시간 동기화가 비활성화되었습니다.');
+        await checkWebhookStatus();
+      } else {
+        alert('비활성화 실패: ' + data.error);
+      }
+    } catch (error) {
+      console.error('[Assistant] Disable realtime error:', error);
       alert('네트워크 오류');
     } finally {
       btn.innerHTML = originalText;
@@ -2892,6 +2986,10 @@ const AssistantMain = (() => {
     checkGcalAuth,
     authGcal,
     syncGcal,
+    // Google Calendar Webhook (realtime sync)
+    checkWebhookStatus,
+    enableRealtimeSync,
+    disableRealtimeSync,
     // Google Sheets functions
     checkGsheetsAuth,
     authGsheets,

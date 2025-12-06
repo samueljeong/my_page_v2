@@ -2189,7 +2189,7 @@
           </div>
           <div class="card-body" style="padding: 0.75rem 1rem;">
             <!-- Google Calendar -->
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="font-size: 1.25rem;">📅</span>
                 <span style="font-weight: 500;">Google Calendar</span>
@@ -2200,7 +2200,23 @@
                   연결하기
                 </button>
                 <button id="btn-gcal-sync" class="btn btn-small btn-primary" onclick="AssistantMain.syncGcal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; display: none;">
-                  🔄 동기화
+                  🔄 수동 동기화
+                </button>
+              </div>
+            </div>
+            <!-- 실시간 동기화 토글 -->
+            <div id="realtime-sync-row" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-left: 2rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 0.9rem;">⚡</span>
+                <span style="font-size: 0.85rem; color: #64748b;">실시간 동기화</span>
+                <span id="realtime-status" class="status-badge disconnected">비활성</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-realtime-enable" class="btn btn-small" onclick="AssistantMain.enableRealtimeSync()" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; background: #8b5cf6; color: white; border: none;">
+                  활성화
+                </button>
+                <button id="btn-realtime-disable" class="btn btn-small" onclick="AssistantMain.disableRealtimeSync()" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; background: #ef4444; color: white; border: none; display: none;">
+                  비활성화
                 </button>
               </div>
             </div>

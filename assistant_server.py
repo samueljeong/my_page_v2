@@ -4077,6 +4077,292 @@ def gcal_list_calendars():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ===== Google Calendar Webhook (실시간 동기화) =====
+
+_gcal_webhook_channel = {}  # 채널 정보 저장
+
+def get_webhook_channel():
+    """저장된 Webhook 채널 정보 반환"""
+    global _gcal_webhook_channel
+    # 메모리에 없으면 DB에서 로드 시도
+    if not _gcal_webhook_channel:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            if USE_POSTGRES:
+                cursor.execute("SELECT key, value FROM settings WHERE key LIKE 'gcal_webhook_%'")
+            else:
+                cursor.execute("SELECT key, value FROM settings WHERE key LIKE 'gcal_webhook_%'")
+            rows = cursor.fetchall()
+            conn.close()
+            for row in rows:
+                key = row['key'].replace('gcal_webhook_', '')
+                _gcal_webhook_channel[key] = row['value']
+        except:
+            pass
+    return _gcal_webhook_channel
+
+def save_webhook_channel(channel_data):
+    """Webhook 채널 정보 저장"""
+    global _gcal_webhook_channel
+    _gcal_webhook_channel = channel_data
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for key, value in channel_data.items():
+            db_key = f'gcal_webhook_{key}'
+            if USE_POSTGRES:
+                cursor.execute('''
+                    INSERT INTO settings (key, value) VALUES (%s, %s)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                ''', (db_key, str(value)))
+            else:
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (db_key, str(value)))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[GCAL-WEBHOOK] 채널 저장 오류: {e}")
+
+
+@assistant_bp.route('/assistant/api/gcal/webhook/register', methods=['POST'])
+def gcal_webhook_register():
+    """Google Calendar Webhook 채널 등록"""
+    try:
+        import uuid
+
+        service = get_gcal_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google Calendar 인증이 필요합니다.'}), 401
+
+        data = request.get_json() or {}
+        calendar_id = data.get('calendar_id', 'primary')
+
+        # 기존 채널이 있으면 먼저 해제
+        existing_channel = get_webhook_channel()
+        if existing_channel.get('id') and existing_channel.get('resource_id'):
+            try:
+                service.channels().stop(body={
+                    'id': existing_channel['id'],
+                    'resourceId': existing_channel['resource_id']
+                }).execute()
+                print(f"[GCAL-WEBHOOK] 기존 채널 해제: {existing_channel['id']}")
+            except Exception as e:
+                print(f"[GCAL-WEBHOOK] 기존 채널 해제 실패 (무시): {e}")
+
+        # 새 채널 ID 생성
+        channel_id = str(uuid.uuid4())
+
+        # Webhook URL 설정
+        webhook_url = request.host_url.rstrip('/') + '/assistant/api/gcal/webhook'
+
+        # 채널 만료 시간 (최대 7일, 권장 1일)
+        expiration = int((datetime.utcnow() + timedelta(days=1)).timestamp() * 1000)
+
+        # Watch 요청
+        watch_request = {
+            'id': channel_id,
+            'type': 'web_hook',
+            'address': webhook_url,
+            'expiration': expiration
+        }
+
+        response = service.events().watch(
+            calendarId=calendar_id,
+            body=watch_request
+        ).execute()
+
+        # 채널 정보 저장
+        channel_data = {
+            'id': response['id'],
+            'resource_id': response['resourceId'],
+            'resource_uri': response.get('resourceUri', ''),
+            'expiration': response['expiration'],
+            'calendar_id': calendar_id,
+            'created_at': datetime.utcnow().isoformat()
+        }
+        save_webhook_channel(channel_data)
+
+        # 만료 시간 계산
+        expiration_dt = datetime.fromtimestamp(int(response['expiration']) / 1000)
+
+        return jsonify({
+            'success': True,
+            'channel_id': response['id'],
+            'expiration': expiration_dt.isoformat(),
+            'webhook_url': webhook_url,
+            'message': '실시간 동기화가 활성화되었습니다.'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/webhook', methods=['POST'])
+def gcal_webhook_callback():
+    """Google Calendar Webhook 콜백 (실시간 알림 수신)"""
+    try:
+        # Google에서 보내는 헤더 확인
+        channel_id = request.headers.get('X-Goog-Channel-ID')
+        resource_id = request.headers.get('X-Goog-Resource-ID')
+        resource_state = request.headers.get('X-Goog-Resource-State')
+
+        print(f"[GCAL-WEBHOOK] 알림 수신: state={resource_state}, channel={channel_id}")
+
+        # 채널 검증
+        saved_channel = get_webhook_channel()
+        if saved_channel.get('id') != channel_id:
+            print(f"[GCAL-WEBHOOK] 알 수 없는 채널: {channel_id}")
+            return '', 200  # Google에게는 항상 200 응답
+
+        # sync 또는 exists 상태일 때 동기화 실행
+        if resource_state in ['sync', 'exists']:
+            # 비동기로 동기화 실행 (응답 지연 방지)
+            import threading
+            def do_sync():
+                try:
+                    _sync_from_google_internal()
+                except Exception as e:
+                    print(f"[GCAL-WEBHOOK] 동기화 오류: {e}")
+
+            thread = threading.Thread(target=do_sync)
+            thread.start()
+
+        return '', 200
+
+    except Exception as e:
+        print(f"[GCAL-WEBHOOK] 콜백 오류: {e}")
+        return '', 200  # 오류 시에도 200 응답
+
+
+def _sync_from_google_internal():
+    """Google Calendar에서 변경된 이벤트 동기화 (내부 함수)"""
+    service = get_gcal_service()
+    if not service:
+        return
+
+    channel = get_webhook_channel()
+    calendar_id = channel.get('calendar_id', 'primary')
+
+    # 최근 30일 + 미래 60일
+    time_min = (datetime.utcnow() - timedelta(days=30)).isoformat() + 'Z'
+    time_max = (datetime.utcnow() + timedelta(days=60)).isoformat() + 'Z'
+
+    events_result = service.events().list(
+        calendarId=calendar_id,
+        timeMin=time_min,
+        timeMax=time_max,
+        maxResults=200,
+        singleEvents=True,
+        orderBy='startTime'
+    ).execute()
+
+    gcal_events = events_result.get('items', [])
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    synced_count = 0
+
+    for gcal_event in gcal_events:
+        gcal_id = gcal_event['id']
+
+        # 이미 동기화된 이벤트인지 확인
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM events WHERE gcal_id = %s", (gcal_id,))
+        else:
+            cursor.execute("SELECT id FROM events WHERE gcal_id = ?", (gcal_id,))
+
+        existing = cursor.fetchone()
+
+        if not existing:
+            title = gcal_event.get('summary', '(제목 없음)')
+            start = gcal_event['start'].get('dateTime', gcal_event['start'].get('date'))
+            end = gcal_event['end'].get('dateTime', gcal_event['end'].get('date'))
+            location = gcal_event.get('location')
+
+            if USE_POSTGRES:
+                cursor.execute('''
+                    INSERT INTO events (title, start_time, end_time, location, category, source, sync_status, gcal_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (title, start, end, location, '기타', 'google_calendar', 'synced', gcal_id))
+            else:
+                cursor.execute('''
+                    INSERT INTO events (title, start_time, end_time, location, category, source, sync_status, gcal_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (title, start, end, location, '기타', 'google_calendar', 'synced', gcal_id))
+
+            synced_count += 1
+
+    conn.commit()
+    conn.close()
+
+    print(f"[GCAL-WEBHOOK] 자동 동기화 완료: {synced_count}개 새 이벤트")
+
+
+@assistant_bp.route('/assistant/api/gcal/webhook/status', methods=['GET'])
+def gcal_webhook_status():
+    """Webhook 채널 상태 확인"""
+    try:
+        channel = get_webhook_channel()
+
+        if not channel.get('id'):
+            return jsonify({
+                'success': True,
+                'active': False,
+                'message': '실시간 동기화가 비활성화 상태입니다.'
+            })
+
+        # 만료 시간 확인
+        expiration_ms = int(channel.get('expiration', 0))
+        expiration_dt = datetime.fromtimestamp(expiration_ms / 1000)
+        is_expired = datetime.utcnow() > expiration_dt
+
+        return jsonify({
+            'success': True,
+            'active': not is_expired,
+            'channel_id': channel.get('id'),
+            'expiration': expiration_dt.isoformat(),
+            'is_expired': is_expired,
+            'calendar_id': channel.get('calendar_id', 'primary')
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/gcal/webhook/stop', methods=['POST'])
+def gcal_webhook_stop():
+    """Webhook 채널 해제"""
+    try:
+        service = get_gcal_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google Calendar 인증이 필요합니다.'}), 401
+
+        channel = get_webhook_channel()
+
+        if not channel.get('id') or not channel.get('resource_id'):
+            return jsonify({'success': True, 'message': '활성화된 채널이 없습니다.'})
+
+        # 채널 해제
+        service.channels().stop(body={
+            'id': channel['id'],
+            'resourceId': channel['resource_id']
+        }).execute()
+
+        # 저장된 채널 정보 삭제
+        save_webhook_channel({})
+
+        return jsonify({
+            'success': True,
+            'message': '실시간 동기화가 비활성화되었습니다.'
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ===== Google Sheets API 연동 =====
 
 _gsheets_credentials = {}
