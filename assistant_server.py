@@ -1153,13 +1153,13 @@ def sync_confirm():
     return mark_synced()
 
 
-# ===== AI 파싱 API (GPT-4o-mini) =====
+# ===== AI 통합 파싱 API (GPT-5.1) =====
 @assistant_bp.route('/assistant/api/parse', methods=['POST'])
 def parse_input():
     """
-    자유 형식 텍스트를 AI가 분석하여 이벤트/태스크로 구조화
+    자유 형식 텍스트를 AI가 분석하여 이벤트/태스크/인물/프로젝트로 구조화
     입력: { "text": "이번주 금요일 청년부 총회 오후 2시" }
-    출력: { "events": [...], "tasks": [...] }
+    출력: { "events": [...], "tasks": [...], "people": [...], "projects": [...] }
     """
     try:
         data = request.get_json()
@@ -1175,11 +1175,11 @@ def parse_input():
         today = date.today()
         default_category = data.get('default_category', None)
 
-        # 상세 GPT 파싱 프롬프트
+        # GPT-5.1 통합 파싱 프롬프트
         system_prompt = f"""[역할]
-너는 '개인 비서용 일정/할 일 파서'이다.
+너는 '개인 비서용 통합 파서'이다.
 사용자가 붙여넣은 한국어/영어 텍스트를 읽고,
-그 안에 있는 일정(events)과 할 일(tasks)을 구조화된 JSON으로 추출하는 것이 너의 유일한 역할이다.
+그 안에 있는 일정(events), 할 일(tasks), 인물(people), 프로젝트(projects)를 구조화된 JSON으로 추출한다.
 
 [입력 컨텍스트]
 - 오늘 날짜: {today.isoformat()} ({today.strftime('%A')})
@@ -1207,58 +1207,107 @@ def parse_input():
       "priority": "high | normal | low",
       "notes": "string or null"
     }}
+  ],
+  "people": [
+    {{
+      "name": "string (이름만, 직분 제외)",
+      "role": "string or null (권사, 집사, 장로, 목사 등 직분/직책)",
+      "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
+      "notes": "string or null (건강상태, 특이사항 등)"
+    }}
+  ],
+  "projects": [
+    {{
+      "name": "string (프로젝트명)",
+      "description": "string or null",
+      "status": "active | planning | completed",
+      "priority": "high | medium | low",
+      "start_date": "yyyy-MM-dd or null",
+      "end_date": "yyyy-MM-dd or null"
+    }}
   ]
 }}
 
-[규칙]
-1. 날짜/시간 처리
-   - 구체적인 날짜가 나오면 yyyy-MM-dd 형식으로 변환한다.
-   - "이번 주 금요일", "다음 주일" 등 상대적 표현은 오늘 날짜를 기준으로 실제 날짜를 계산한다.
-   - 시간이 없으면 time은 null로 둔다.
+[분류 규칙]
 
-2. title 작성
-   - 최대한 짧고 요약된 표현으로 작성한다.
-   - 한 텍스트 안에 여러 일정이 있으면 각각 별도의 event로 나눈다.
+1. events (일정)
+   - 특정 시간/날짜에 실제로 '열리는 모임/행사/예배/회의'
+   - 예: "12월 15일 청년부 총회 오후 2시"
 
-3. events vs tasks 판단
-   - 특정 시간/날짜에 실제로 '열리는 모임/행사/예배/회의'는 event로 처리한다.
-   - 그 행사를 준비하기 위한 "해야 할 일" (자료 준비, 문자 발송, 설교 작성 등)은 task로 처리한다.
+2. tasks (할 일)
+   - 행사를 준비하기 위한 "해야 할 일" (자료 준비, 문자 발송, 설교 작성 등)
+   - 예: "주일 설교 준비해야 함"
 
-4. category 분류
-   - 교회: 예배, 기도회, 총회, 구역모임, 출석, 심방, 교회 행사 등
-   - 사업: 무역, 스마트스토어, 재고, 배송, 세금, 광고, 클라이언트 미팅 등
-   - 유튜브: 촬영, 편집, 썸네일, 스크립트, 업로드 일정 등
-   - 가정: 가족 모임, 아이 일정, 개인 건강/가사 관련 등
-   - 공부: 코딩 공부, 강의 수강, 책 읽기 등의 학습 관련
-   - 기타: 위 분류에 명확히 속하지 않는 경우
+3. people (인물)
+   - 사람 이름 + 직분/직책이 함께 언급된 경우
+   - 이름 뒤에 권사, 집사, 장로, 목사, 사장, 부장 등이 붙은 경우
+   - 건강/수술/입원/사망 등 개인 상황이 언급된 경우
+   - 예: "홍길동 권사", "김영희 집사 12월 10일 수술 예정", "박철수 장로 심방 필요"
 
-5. priority 설정
-   - 남은 시간이 짧거나(3일 이내), 중요해 보이는 작업은 high로 설정한다.
-   - 일반적인 준비/보조 작업은 normal.
-   - 언제 해도 되는 장기적인 아이디어 수준이면 low.
+4. projects (프로젝트)
+   - "프로젝트", "사업", "계획" 등의 단어가 포함되거나
+   - 장기적인 목표/기간이 명시된 작업
+   - 예: "장기부진자 편지 발송 프로젝트", "바나바 교육 프로그램"
 
-6. 모호한 경우
-   - 날짜/시간이 전혀 없지만 분명히 '해야 할 일'이면 task로 추가하되, due_date는 null로 둔다.
-   - 이해가 불가능한 정보는 무시한다. 추측으로 일정이나 할 일을 만들어내지 마라.
+[날짜/시간 처리]
+- "이번 주 금요일", "다음 주일", "고난주간 전" 등 상대적 표현은 오늘 날짜를 기준으로 계산
+- 시간이 없으면 null
 
-JSON 외의 다른 텍스트(설명, 말투, 주석 등)는 절대로 출력하지 마라."""
+[category 분류]
+- 교회: 예배, 기도회, 총회, 구역모임, 출석, 심방, 교회 행사, 권사/집사/장로/목사 등
+- 사업: 무역, 스마트스토어, 재고, 배송, 세금, 광고 등
+- 유튜브: 촬영, 편집, 썸네일, 스크립트, 업로드 등
+- 가정: 가족 모임, 아이 일정, 개인 건강/가사 관련 등
+- 공부: 코딩 공부, 강의 수강, 책 읽기 등
+- 기타: 위 분류에 명확히 속하지 않는 경우
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
+[중요]
+- 하나의 텍스트에서 여러 유형의 항목을 동시에 추출할 수 있다
+- 인물 정보와 함께 일정이 언급되면 둘 다 추출 (예: "홍길동 권사 12월 10일 수술" → people + events)
+- 이해가 불가능한 정보는 무시한다
+- JSON 외의 다른 텍스트는 절대로 출력하지 마라"""
+
+        # GPT-5.1 Responses API 사용
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}]
+                }
             ],
-            temperature=0.3,
-            response_format={"type": "json_object"}
+            temperature=0.3
         )
 
-        result = json.loads(response.choices[0].message.content)
+        # 결과 추출
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
+
+        # JSON 파싱 (마크다운 코드블록 제거)
+        if result_text.startswith("```"):
+            result_text = result_text.split("```")[1]
+            if result_text.startswith("json"):
+                result_text = result_text[4:]
+        result_text = result_text.strip()
+        result = json.loads(result_text)
 
         # save_to_db 파라미터가 true면 DB에 저장
         save_to_db = data.get('save_to_db', False)
         saved_events = []
         saved_tasks = []
+        saved_people = []
+        saved_projects = []
 
         if save_to_db:
             conn = get_db_connection()
@@ -1337,6 +1386,66 @@ JSON 외의 다른 텍스트(설명, 말투, 주석 등)는 절대로 출력하�
 
                 saved_tasks.append({'id': task_id, 'title': task.get('title')})
 
+            # 인물 저장
+            for person in result.get('people', []):
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        INSERT INTO people (name, role, category, notes)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    ''', (
+                        person.get('name'),
+                        person.get('role'),
+                        person.get('category', '기타'),
+                        person.get('notes')
+                    ))
+                    person_id = cursor.fetchone()['id']
+                else:
+                    cursor.execute('''
+                        INSERT INTO people (name, role, category, notes)
+                        VALUES (?, ?, ?, ?)
+                    ''', (
+                        person.get('name'),
+                        person.get('role'),
+                        person.get('category', '기타'),
+                        person.get('notes')
+                    ))
+                    person_id = cursor.lastrowid
+
+                saved_people.append({'id': person_id, 'name': person.get('name')})
+
+            # 프로젝트 저장
+            for project in result.get('projects', []):
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        INSERT INTO projects (name, description, status, priority, start_date, end_date)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    ''', (
+                        project.get('name'),
+                        project.get('description'),
+                        project.get('status', 'active'),
+                        project.get('priority', 'medium'),
+                        project.get('start_date'),
+                        project.get('end_date')
+                    ))
+                    project_id = cursor.fetchone()['id']
+                else:
+                    cursor.execute('''
+                        INSERT INTO projects (name, description, status, priority, start_date, end_date)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        project.get('name'),
+                        project.get('description'),
+                        project.get('status', 'active'),
+                        project.get('priority', 'medium'),
+                        project.get('start_date'),
+                        project.get('end_date')
+                    ))
+                    project_id = cursor.lastrowid
+
+                saved_projects.append({'id': project_id, 'name': project.get('name')})
+
             conn.commit()
             conn.close()
 
@@ -1346,7 +1455,9 @@ JSON 외의 다른 텍스트(설명, 말투, 주석 등)는 절대로 출력하�
             'original_text': text,
             'saved_to_db': save_to_db,
             'saved_events': saved_events,
-            'saved_tasks': saved_tasks
+            'saved_tasks': saved_tasks,
+            'saved_people': saved_people,
+            'saved_projects': saved_projects
         })
     except json.JSONDecodeError as e:
         return jsonify({'success': False, 'error': f'JSON 파싱 오류: {str(e)}'}), 500

@@ -516,20 +516,22 @@ const AssistantMain = (() => {
     `;
   }
 
-  // ===== Input Analyzer =====
-  async function analyzeInput() {
+  // ===== 통합 AI 분석 (GPT-5.1) =====
+  async function analyzeUnified() {
     const inputBox = document.getElementById('input-box');
     const text = inputBox.value.trim();
+    const statusEl = document.getElementById('analyze-status');
 
     if (!text) {
-      alert('Please enter some text to analyze');
+      alert('분석할 텍스트를 입력해주세요');
       return;
     }
 
     const btn = document.getElementById('btn-analyze');
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<span class="loading"></span> Analyzing...';
+    btn.innerHTML = '<span class="loading"></span> 분석 중...';
     btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'GPT-5.1이 분석 중입니다...';
 
     try {
       const response = await fetch('/assistant/api/parse', {
@@ -542,116 +544,166 @@ const AssistantMain = (() => {
 
       if (data.success) {
         parsedData = data.parsed;
-        showParsedResult(data.parsed);
+        showUnifiedResult(data.parsed);
+        if (statusEl) statusEl.textContent = '분석 완료!';
       } else {
-        alert('Analysis failed: ' + data.error);
+        alert('분석 실패: ' + data.error);
+        if (statusEl) statusEl.textContent = '';
       }
     } catch (error) {
       console.error('[Assistant] Parse error:', error);
-      alert('Network error');
+      alert('네트워크 오류');
+      if (statusEl) statusEl.textContent = '';
     } finally {
       btn.innerHTML = originalText;
       btn.disabled = false;
     }
   }
 
-  function showParsedResult(parsed) {
+  function showUnifiedResult(parsed) {
     const resultDiv = document.getElementById('parsed-result');
     const eventsDiv = document.getElementById('parsed-events');
     const tasksDiv = document.getElementById('parsed-tasks');
+    const peopleDiv = document.getElementById('parsed-people');
+    const projectsDiv = document.getElementById('parsed-projects');
 
-    // Render parsed events
+    // 일정 (Events)
     if (parsed.events && parsed.events.length > 0) {
       eventsDiv.innerHTML = `
-        <h5>Events (${parsed.events.length})</h5>
-        ${parsed.events.map((e, i) => `
-          <div class="parsed-item">
-            <div>
-              <strong>${escapeHtml(e.title)}</strong>
-              <span class="item-meta">${e.date} ${e.time || ''}</span>
+        <div class="parsed-section">
+          <h5>📅 일정 (${parsed.events.length})</h5>
+          ${parsed.events.map((e, i) => `
+            <div class="parsed-item">
+              <div>
+                <strong>${escapeHtml(e.title)}</strong>
+                <span class="item-meta">${e.date || ''} ${e.time || ''}</span>
+              </div>
+              <span class="item-category">${e.category || ''}</span>
             </div>
-            <span class="item-category">${e.category || ''}</span>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       `;
     } else {
       eventsDiv.innerHTML = '';
     }
 
-    // Render parsed tasks
+    // 할일 (Tasks)
     if (parsed.tasks && parsed.tasks.length > 0) {
       tasksDiv.innerHTML = `
-        <h5 style="margin-top: 1rem;">Tasks (${parsed.tasks.length})</h5>
-        ${parsed.tasks.map((t, i) => `
-          <div class="parsed-item">
-            <div>
-              <strong>${escapeHtml(t.title)}</strong>
-              <span class="item-meta">${t.due_date || 'No due date'}</span>
+        <div class="parsed-section">
+          <h5>✅ 할일 (${parsed.tasks.length})</h5>
+          ${parsed.tasks.map((t, i) => `
+            <div class="parsed-item">
+              <div>
+                <strong>${escapeHtml(t.title)}</strong>
+                <span class="item-meta">${t.due_date || '기한 없음'}</span>
+              </div>
+              <span class="priority-badge ${t.priority || 'normal'}">${t.priority || 'normal'}</span>
             </div>
-            <span class="priority-${t.priority || 'medium'}">${t.priority || 'medium'}</span>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       `;
     } else {
       tasksDiv.innerHTML = '';
     }
 
+    // 인물 (People)
+    if (parsed.people && parsed.people.length > 0) {
+      peopleDiv.innerHTML = `
+        <div class="parsed-section">
+          <h5>👤 인물 (${parsed.people.length})</h5>
+          ${parsed.people.map((p, i) => `
+            <div class="parsed-item">
+              <div>
+                <strong>${escapeHtml(p.name)}</strong>
+                ${p.role ? `<span class="role-badge">${escapeHtml(p.role)}</span>` : ''}
+              </div>
+              <span class="item-meta">${escapeHtml(p.notes || '')}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      peopleDiv.innerHTML = '';
+    }
+
+    // 프로젝트 (Projects)
+    if (parsed.projects && parsed.projects.length > 0) {
+      projectsDiv.innerHTML = `
+        <div class="parsed-section">
+          <h5>📁 프로젝트 (${parsed.projects.length})</h5>
+          ${parsed.projects.map((pr, i) => `
+            <div class="parsed-item">
+              <div>
+                <strong>${escapeHtml(pr.name)}</strong>
+                ${pr.end_date ? `<span class="item-meta">~${pr.end_date}</span>` : ''}
+              </div>
+              <span class="project-status-badge ${pr.status || 'active'}">${pr.status || 'active'}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      projectsDiv.innerHTML = '';
+    }
+
     resultDiv.classList.add('show');
   }
 
-  async function saveParsedData() {
+  async function saveUnifiedData() {
     if (!parsedData) {
-      alert('No parsed data to save');
+      alert('저장할 데이터가 없습니다');
       return;
     }
 
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span> 저장 중...';
+    btn.disabled = true;
+
     try {
-      let savedEvents = 0;
-      let savedTasks = 0;
+      // save_to_db 옵션으로 한 번에 저장
+      const response = await fetch('/assistant/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: document.getElementById('input-box').value.trim(),
+          save_to_db: true
+        })
+      });
 
-      // Save events
-      for (const event of (parsedData.events || [])) {
-        const response = await fetch('/assistant/api/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: event.title,
-            start_time: `${event.date}T${event.time || '00:00'}:00`,
-            end_time: event.end_time ? `${event.date}T${event.end_time}:00` : null,
-            category: event.category
-          })
-        });
-        if ((await response.json()).success) savedEvents++;
+      const data = await response.json();
+
+      if (data.success) {
+        const counts = [];
+        if (data.saved_events?.length) counts.push(`일정 ${data.saved_events.length}개`);
+        if (data.saved_tasks?.length) counts.push(`할일 ${data.saved_tasks.length}개`);
+        if (data.saved_people?.length) counts.push(`인물 ${data.saved_people.length}개`);
+        if (data.saved_projects?.length) counts.push(`프로젝트 ${data.saved_projects.length}개`);
+
+        showToast(`저장 완료: ${counts.join(', ')}`, 'success');
+
+        // Clear and reload
+        document.getElementById('input-box').value = '';
+        document.getElementById('parsed-result').classList.remove('show');
+        document.getElementById('analyze-status').textContent = '';
+        parsedData = null;
+        await loadDashboard();
+      } else {
+        alert('저장 실패: ' + data.error);
       }
-
-      // Save tasks
-      for (const task of (parsedData.tasks || [])) {
-        const response = await fetch('/assistant/api/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: task.title,
-            due_date: task.due_date,
-            priority: task.priority,
-            category: task.category
-          })
-        });
-        if ((await response.json()).success) savedTasks++;
-      }
-
-      alert(`Saved ${savedEvents} events and ${savedTasks} tasks`);
-
-      // Clear and reload
-      document.getElementById('input-box').value = '';
-      document.getElementById('parsed-result').classList.remove('show');
-      parsedData = null;
-      await loadDashboard();
-
     } catch (error) {
       console.error('[Assistant] Save error:', error);
-      alert('Failed to save data');
+      alert('네트워크 오류');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
     }
   }
+
+  // 기존 함수 유지 (호환성)
+  async function analyzeInput() { return analyzeUnified(); }
+  async function saveParsedData() { return saveUnifiedData(); }
 
   // ===== Task Actions =====
   async function completeTask(taskId) {
@@ -2624,6 +2676,8 @@ const AssistantMain = (() => {
     loadDashboard,
     analyzeInput,
     saveParsedData,
+    analyzeUnified,
+    saveUnifiedData,
     completeTask,
     addTask,
     closeTaskModal,
