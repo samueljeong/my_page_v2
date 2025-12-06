@@ -11554,8 +11554,16 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
 
             # 폰트 디렉토리 절대 경로 설정 (NanumGothic 폰트 위치)
             fonts_dir = os.path.abspath("fonts")
-            vf_filter = f"subtitles={srt_path}:fontsdir={fonts_dir}:force_style='{subtitle_style}'"
 
+            # SRT 파일 절대 경로로 변환하고 FFmpeg용 이스케이프
+            srt_abs_path = os.path.abspath(srt_path)
+            # FFmpeg subtitle filter는 : \ ' 등을 이스케이프해야 함
+            srt_escaped = srt_abs_path.replace('\\', '/').replace(':', '\\:')
+            fonts_escaped = fonts_dir.replace('\\', '/').replace(':', '\\:')
+
+            vf_filter = f"subtitles={srt_escaped}:fontsdir={fonts_escaped}:force_style='{subtitle_style}'"
+
+            print(f"[VIDEO-WORKER] SRT path: {srt_abs_path}")
             print(f"[VIDEO-WORKER] Subtitle filter: {vf_filter}")
             print(f"[VIDEO-WORKER] Fonts directory: {fonts_dir}")
 
@@ -14039,6 +14047,137 @@ def api_thumbnail_ai_history():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route('/api/thumbnail-ai/generate-single', methods=['POST'])
+def api_thumbnail_ai_generate_single():
+    """
+    단일 썸네일 생성 (자동화 파이프라인용 - A 하나만 생성)
+    """
+    try:
+        import requests as req
+
+        data = request.get_json() or {}
+        prompt_data = data.get('prompt', {})
+        session_id = data.get('session_id', '')
+
+        if not prompt_data.get('prompt'):
+            return jsonify({"ok": False, "error": "prompt 필드가 필요합니다"}), 400
+
+        print(f"[THUMBNAIL-AI] 단일 썸네일 생성 - 세션: {session_id}")
+
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+        if not openrouter_api_key:
+            return jsonify({"ok": False, "error": "OpenRouter API 키가 설정되지 않았습니다"}), 200
+
+        prompt = prompt_data.get('prompt', '')
+        text_overlay = prompt_data.get('text_overlay', {})
+        style = prompt_data.get('style', 'comic')
+
+        main_text = text_overlay.get('main', '')
+        sub_text = text_overlay.get('sub', '')
+
+        text_instruction = ""
+        if main_text:
+            text_instruction = f"""
+IMPORTANT TEXT OVERLAY:
+- Add large, bold Korean text "{main_text}" prominently
+- High contrast (white text with black outline)
+"""
+            if sub_text:
+                text_instruction += f'- Subtitle: "{sub_text}"\n'
+
+        enhanced_prompt = f"""Create a YouTube thumbnail (16:9 landscape).
+
+{prompt}
+
+{text_instruction}
+
+Style: {style}, comic/illustration, eye-catching, high contrast"""
+
+        headers = {
+            "Authorization": f"Bearer {openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://drama-generator.app",
+            "X-Title": "Thumbnail AI"
+        }
+
+        payload = {
+            "model": "google/gemini-3-pro-image-preview",
+            "modalities": ["text", "image"],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": enhanced_prompt}]}]
+        }
+
+        response = req.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=120
+        )
+
+        if response.status_code != 200:
+            print(f"[THUMBNAIL-AI] API 오류: {response.status_code}")
+            return jsonify({"ok": False, "error": response.text[:200]})
+
+        result = response.json()
+
+        # 이미지 추출
+        base64_image_data = None
+        choices = result.get("choices", [])
+        if choices:
+            message = choices[0].get("message", {})
+
+            # images 필드 확인
+            images = message.get("images")
+            if images:
+                if isinstance(images, list) and len(images) > 0:
+                    img = images[0]
+                    if isinstance(img, str):
+                        base64_image_data = img.split(",", 1)[1] if img.startswith("data:") else img
+                    elif isinstance(img, dict):
+                        base64_image_data = img.get("b64_json") or img.get("base64")
+                elif isinstance(images, str):
+                    base64_image_data = images.split(",", 1)[1] if images.startswith("data:") else images
+
+            # content 필드 확인 (이미지가 없는 경우)
+            if not base64_image_data:
+                content = message.get("content")
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "image_url":
+                                url_data = item.get("image_url", {})
+                                if isinstance(url_data, dict):
+                                    url = url_data.get("url", "")
+                                    if url.startswith("data:image"):
+                                        base64_image_data = url.split(",", 1)[1]
+
+        if not base64_image_data:
+            return jsonify({"ok": False, "error": "이미지 데이터 추출 실패"})
+
+        # 파일 저장
+        import base64
+        upload_dir = "uploads/thumbnails"
+        os.makedirs(upload_dir, exist_ok=True)
+        filename = f"thumb_{session_id}.png"
+        filepath = os.path.join(upload_dir, filename)
+
+        with open(filepath, "wb") as f:
+            f.write(base64.b64decode(base64_image_data))
+
+        image_url = f"/uploads/thumbnails/{filename}"
+        print(f"[THUMBNAIL-AI] 썸네일 저장: {image_url}")
+
+        return jsonify({
+            "ok": True,
+            "image_url": image_url
+        })
+
+    except Exception as e:
+        print(f"[THUMBNAIL-AI][ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route('/api/thumbnail-ai/generate-both', methods=['POST'])
 @app.route('/api/thumbnail-ai/generate-all', methods=['POST'])
 def api_thumbnail_ai_generate_both():
@@ -14592,24 +14731,25 @@ def run_automation_pipeline(row_data, row_index):
             traceback.print_exc()
             return {"ok": False, "error": f"TTS 생성 오류: {str(e)}", "video_url": None, "cost": total_cost}
 
-        # ========== 4. 썸네일 생성 (/api/thumbnail-ai/generate-all) ==========
+        # ========== 4. 썸네일 생성 (/api/thumbnail-ai/generate-single) ==========
         print(f"[AUTOMATION] 4. 썸네일 생성 시작...")
         thumbnail_url = None
         try:
             if ai_prompts and ai_prompts.get('A'):
-                thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-all", json={
+                # 단일 썸네일 생성 (A 프롬프트만 사용)
+                thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
                     "session_id": f"thumb_{session_id}",
-                    "prompts": ai_prompts
+                    "prompt": ai_prompts.get('A')  # A 프롬프트만 전달
                 }, timeout=180)
 
                 thumb_data = thumb_resp.json()
-                if thumb_data.get('ok') and thumb_data.get('results', {}).get('A', {}).get('image_url'):
-                    thumbnail_url = thumb_data['results']['A']['image_url']
+                if thumb_data.get('ok') and thumb_data.get('image_url'):
+                    thumbnail_url = thumb_data['image_url']
                     # 비용: Gemini 썸네일 (~$0.03/장)
                     total_cost += 0.03
-                    print(f"[AUTOMATION] 4. 완료: 썸네일 생성 (비용: $0.03)")
+                    print(f"[AUTOMATION] 4. 완료: 썸네일 1개 생성 (비용: $0.03)")
                 else:
-                    print(f"[AUTOMATION] 4. 썸네일 생성 실패 (계속 진행)")
+                    print(f"[AUTOMATION] 4. 썸네일 생성 실패: {thumb_data.get('error', '알 수 없음')} (계속 진행)")
             else:
                 print(f"[AUTOMATION] 4. 썸네일 프롬프트 없음 (스킵)")
         except Exception as e:
