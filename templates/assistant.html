@@ -554,11 +554,21 @@
     /* Dashboard 2-Column Layout */
     .dashboard-layout {
       display: grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: 380px 1fr;
       gap: 1.25rem;
       margin-bottom: 1.5rem;
     }
 
+    .dashboard-schedule {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dashboard-news {
+      min-width: 0;
+    }
+
+    /* 기존 호환성을 위해 유지 */
     .dashboard-left {
       min-width: 0;
     }
@@ -844,6 +854,58 @@
       justify-content: space-between;
       align-items: center;
       font-size: 0.9rem;
+    }
+
+    .parsed-section {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: white;
+      border-radius: 8px;
+      border-left: 3px solid var(--primary-color);
+    }
+
+    .parsed-section h5 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .role-badge {
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-left: 0.5rem;
+    }
+
+    .priority-badge {
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .priority-badge.high { background: #fee2e2; color: #991b1b; }
+    .priority-badge.normal { background: #fef3c7; color: #92400e; }
+    .priority-badge.low { background: #e0e7ff; color: #3730a3; }
+
+    .item-category {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+
+    .item-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
     }
 
     /* Calendar Styles */
@@ -1461,10 +1523,12 @@
       .dashboard-layout {
         grid-template-columns: 1fr;
       }
-      .dashboard-right {
+      .dashboard-schedule {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
       }
+      .dashboard-schedule .card { margin-top: 0 !important; }
     }
 
     @media (max-width: 768px) {
@@ -1472,7 +1536,9 @@
       .mobile-nav { display: block; }
       .main-content { padding: 1rem; padding-bottom: 5rem; }
       .dashboard-grid { grid-template-columns: 1fr; }
-      .dashboard-right { grid-template-columns: 1fr; }
+      .dashboard-schedule { grid-template-columns: 1fr; }
+      .hide-mobile { display: none !important; }
+      .ai-input-top textarea { min-height: 100px; }
       .tasks-stats { grid-template-columns: repeat(2, 1fr); }
       .welcome-banner { padding: 1rem; }
       .welcome-banner h2 { font-size: 1.1rem; }
@@ -1552,6 +1618,22 @@
     .project-status-badge.active { background: #dcfce7; color: #16a34a; }
     .project-status-badge.completed { background: #dbeafe; color: #2563eb; }
     .project-status-badge.on-hold { background: #fef3c7; color: #d97706; }
+
+    /* Google integration status badges */
+    .status-badge {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .status-badge.connected {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+    .status-badge.disconnected {
+      background: #fee2e2;
+      color: #dc2626;
+    }
 
     .person-last-note, .project-last-note {
       font-size: 0.75rem;
@@ -2008,10 +2090,78 @@
           <div class="date" id="today-date" style="font-size: 0.85rem;"></div>
         </div>
 
-        <!-- 2-Column Layout: News Left, Schedule Right -->
+        <!-- AI 통합 입력 (최상단) -->
+        <div class="quick-input-section ai-input-top" style="padding: 1.25rem; margin-bottom: 1rem;">
+          <div class="quick-input-header" style="margin-bottom: 1rem;">
+            <h3 style="font-size: 1rem;">✨ AI 통합 입력</h3>
+            <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">GPT-5.1</span>
+          </div>
+          <textarea id="input-box" placeholder="무엇이든 입력하세요... (일정, 할일, 인물, 프로젝트 자동 분류)" style="min-height: 80px; font-size: 0.9rem;"></textarea>
+          <div class="quick-input-actions" style="margin-top: 0.75rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="AssistantMain.analyzeUnified()" id="btn-analyze" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+              🔍 AI 분석
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="document.getElementById('input-box').value = ''">
+              지우기
+            </button>
+            <span id="analyze-status" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+          </div>
+
+          <!-- Unified Parsed Results -->
+          <div class="parsed-result" id="parsed-result" style="margin-top: 1rem;">
+            <div id="parsed-events" style="margin-bottom: 0.75rem;"></div>
+            <div id="parsed-tasks" style="margin-bottom: 0.75rem;"></div>
+            <div id="parsed-people" style="margin-bottom: 0.75rem;"></div>
+            <div id="parsed-projects" style="margin-bottom: 0.75rem;"></div>
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary btn-small" onclick="AssistantMain.saveUnifiedData()">
+                💾 전체 저장
+              </button>
+              <button class="btn btn-secondary btn-small" onclick="document.getElementById('parsed-result').classList.remove('show')">
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2-Column Layout: Schedule Left, News Right (데스크탑) -->
         <div class="dashboard-layout">
-          <!-- Left: News Section -->
-          <div class="dashboard-left">
+          <!-- Left: Calendar & Schedule (모바일에서 먼저 표시) -->
+          <div class="dashboard-schedule">
+            <!-- Today's Schedule -->
+            <div class="card">
+              <div class="card-header" style="padding: 0.75rem 1rem;">
+                <h3 style="font-size: 0.875rem;">📅 Today</h3>
+              </div>
+              <div class="card-body" id="today-events" style="padding: 0.75rem 1rem; max-height: 180px; overflow-y: auto;">
+                <div class="empty">Loading...</div>
+              </div>
+            </div>
+
+            <!-- This Week -->
+            <div class="card" style="margin-top: 1rem;">
+              <div class="card-header" style="padding: 0.75rem 1rem;">
+                <h3 style="font-size: 0.875rem;">🗓 This Week</h3>
+              </div>
+              <div class="card-body" id="week-events" style="padding: 0.75rem 1rem; max-height: 180px; overflow-y: auto;">
+                <div class="empty">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Tasks -->
+            <div class="card" style="margin-top: 1rem;">
+              <div class="card-header" style="padding: 0.75rem 1rem;">
+                <h3 style="font-size: 0.875rem;">✅ Tasks</h3>
+                <button class="btn btn-small btn-secondary" onclick="AssistantMain.addTask()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">+ Add</button>
+              </div>
+              <div class="card-body" id="pending-tasks" style="padding: 0.75rem 1rem; max-height: 150px; overflow-y: auto;">
+                <div class="empty">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: News Section (모바일에서 숨김) -->
+          <div class="dashboard-news hide-mobile">
             <div class="news-section">
               <div class="news-header">
                 <h3>📰 Today's News & Issues</h3>
@@ -2030,110 +2180,67 @@
               </div>
             </div>
           </div>
-
-          <!-- Right: Calendar & Schedule -->
-          <div class="dashboard-right">
-            <!-- Today's Schedule -->
-            <div class="card">
-              <div class="card-header" style="padding: 0.75rem 1rem;">
-                <h3 style="font-size: 0.875rem;">📅 Today</h3>
-              </div>
-              <div class="card-body" id="today-events" style="padding: 0.75rem 1rem; max-height: 180px; overflow-y: auto;">
-                <div class="empty">Loading...</div>
-              </div>
-            </div>
-
-            <!-- This Week -->
-            <div class="card">
-              <div class="card-header" style="padding: 0.75rem 1rem;">
-                <h3 style="font-size: 0.875rem;">🗓 This Week</h3>
-              </div>
-              <div class="card-body" id="week-events" style="padding: 0.75rem 1rem; max-height: 180px; overflow-y: auto;">
-                <div class="empty">Loading...</div>
-              </div>
-            </div>
-
-            <!-- Tasks -->
-            <div class="card">
-              <div class="card-header" style="padding: 0.75rem 1rem;">
-                <h3 style="font-size: 0.875rem;">✅ Tasks</h3>
-                <button class="btn btn-small btn-secondary" onclick="AssistantMain.addTask()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">+ Add</button>
-              </div>
-              <div class="card-body" id="pending-tasks" style="padding: 0.75rem 1rem; max-height: 150px; overflow-y: auto;">
-                <div class="empty">Loading...</div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <!-- Quick Input Container (Two Areas) -->
-        <div class="quick-input-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-          <!-- Area 1: Schedule & Tasks -->
-          <div class="quick-input-section" style="padding: 1rem;">
-            <div class="quick-input-header" style="margin-bottom: 0.75rem;">
-              <h3 style="font-size: 0.9rem;">📅 Schedule & Tasks</h3>
-              <span class="badge">AI</span>
-            </div>
-            <textarea id="input-box" placeholder="Paste notice, image text, or schedule info..." style="min-height: 60px;"></textarea>
-            <div class="quick-input-actions" style="margin-top: 0.75rem;">
-              <button class="btn btn-primary btn-small" onclick="AssistantMain.analyzeInput()" id="btn-analyze">
-                Analyze & Save
-              </button>
-              <button class="btn btn-secondary btn-small" onclick="document.getElementById('input-box').value = ''">
-                Clear
-              </button>
-            </div>
-            <div class="parsed-result" id="parsed-result">
-              <h4>Parsed Results</h4>
-              <div id="parsed-events"></div>
-              <div id="parsed-tasks"></div>
-              <div style="margin-top: 0.75rem;">
-                <button class="btn btn-primary btn-small" onclick="AssistantMain.saveParsedData()">
-                  Save All
+        <!-- Google Integration -->
+        <div class="card" style="margin-top: 1rem;">
+          <div class="card-header" style="padding: 0.75rem 1rem;">
+            <h3 style="font-size: 0.875rem;">🔗 Google 연동</h3>
+          </div>
+          <div class="card-body" style="padding: 0.75rem 1rem;">
+            <!-- Google Calendar -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">📅</span>
+                <span style="font-weight: 500;">Google Calendar</span>
+                <span id="gcal-status" class="status-badge disconnected">미연결</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-gcal-auth" class="btn btn-small" onclick="AssistantMain.authGcal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: #4285f4; color: white; border: none;">
+                  연결하기
+                </button>
+                <button id="btn-gcal-sync" class="btn btn-small btn-primary" onclick="AssistantMain.syncGcal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; display: none;">
+                  🔄 수동 동기화
                 </button>
               </div>
             </div>
-          </div>
-
-          <!-- Area 2: People & Projects -->
-          <div class="quick-input-section" style="padding: 1rem;">
-            <div class="quick-input-header" style="margin-bottom: 0.75rem;">
-              <h3 style="font-size: 0.9rem;">👥 People & Projects</h3>
-              <span class="badge">AI</span>
+            <!-- 실시간 동기화 토글 -->
+            <div id="realtime-sync-row" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-left: 2rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 0.9rem;">⚡</span>
+                <span style="font-size: 0.85rem; color: #64748b;">실시간 동기화</span>
+                <span id="realtime-status" class="status-badge disconnected">비활성</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-realtime-enable" class="btn btn-small" onclick="AssistantMain.enableRealtimeSync()" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; background: #8b5cf6; color: white; border: none;">
+                  활성화
+                </button>
+                <button id="btn-realtime-disable" class="btn btn-small" onclick="AssistantMain.disableRealtimeSync()" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; background: #ef4444; color: white; border: none; display: none;">
+                  비활성화
+                </button>
+              </div>
             </div>
-            <div class="input-type-toggle" style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-              <button class="toggle-btn active" data-type="people" onclick="AssistantMain.setQuickInputType('people')" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--primary-light); color: var(--primary-dark); font-size: 0.8rem; font-weight: 500; cursor: pointer;">
-                👤 People
-              </button>
-              <button class="toggle-btn" data-type="project" onclick="AssistantMain.setQuickInputType('project')" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: white; color: var(--text-secondary); font-size: 0.8rem; font-weight: 500; cursor: pointer;">
-                📁 Project
-              </button>
+            <!-- Google Sheets -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">📊</span>
+                <span style="font-weight: 500;">Google Sheets</span>
+                <span id="gsheets-status" class="status-badge disconnected">미연결</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-gsheets-auth" class="btn btn-small" onclick="AssistantMain.authGsheets()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: #0f9d58; color: white; border: none;">
+                  연결하기
+                </button>
+                <div id="gsheets-export-btns" style="display: none; gap: 0.25rem;">
+                  <button class="btn btn-small" onclick="AssistantMain.exportPeopleToSheets()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #0f9d58; color: white; border: none;">
+                    👤 인물
+                  </button>
+                  <button class="btn btn-small" onclick="AssistantMain.exportEventsToSheets()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #0f9d58; color: white; border: none;">
+                    📅 일정
+                  </button>
+                </div>
+              </div>
             </div>
-            <textarea id="input-box-people" placeholder="예: 홍길동 집사 12월 10일 담낭암 수술 예정..." style="min-height: 60px;"></textarea>
-            <div class="quick-input-actions" style="margin-top: 0.75rem;">
-              <button class="btn btn-primary btn-small" onclick="AssistantMain.analyzeInputPeople()" id="btn-analyze-people">
-                📝 등록하기
-              </button>
-              <button class="btn btn-secondary btn-small" onclick="document.getElementById('input-box-people').value = ''">
-                지우기
-              </button>
-            </div>
-            <div class="parsed-result" id="parsed-result-people" style="display: none;">
-              <div id="parsed-people-info"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sync Status (Compact) -->
-        <div class="card" style="margin-top: 1rem;">
-          <div class="card-header" style="padding: 0.75rem 1rem;">
-            <h3 style="font-size: 0.875rem;">🔄 Sync Status</h3>
-            <button class="btn btn-small btn-primary" onclick="AssistantMain.syncToMac()" id="btn-sync" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
-              Sync to Mac
-            </button>
-          </div>
-          <div class="card-body" id="pending-sync" style="padding: 0.75rem 1rem;">
-            <div class="empty" style="padding: 1rem;">No pending sync</div>
           </div>
         </div>
       </div>
