@@ -14575,7 +14575,7 @@ The visual style is:
         "text": "썸네일에 들어갈 강렬한 한국어 문구 (8-12자, 클릭 유도)",
         "text_color": "#FFD700",
         "outline_color": "#000000",
-        "prompt": "YouTube thumbnail prompt in English - must be eye-catching, click-inducing, 16:9 aspect ratio, vibrant colors, high contrast, simple stickman character with exaggerated emotion, detailed anime background"
+        "prompt": "Korean webtoon manhwa style YouTube thumbnail, 16:9 aspect ratio. Cartoon character with EXAGGERATED facial expression (shock, surprise, anger, crying). Clean vector illustration style, bold outlines, vibrant saturated colors, dramatic lighting. NO stickman, NO realistic photo. Style reference: Korean YouTube thumbnail illustration, webtoon art style."
     },
     "scenes": [
         {
@@ -14588,10 +14588,12 @@ The visual style is:
 
 ## THUMBNAIL RULES (CRITICAL!)
 Generate ONE powerful thumbnail that maximizes YouTube CTR (Click-Through Rate):
-- Use shocking, curiosity-inducing, or emotional hook
+- Style: Korean webtoon/manhwa cartoon illustration (NOT stickman, NOT realistic photo)
+- Character: Cartoon person with exaggerated facial expression (shock, surprise, anger, crying, frustration)
 - Text should be 8-12 Korean characters, bold and impactful
 - Examples: "결국 터졌다", "이게 실화?", "소름 돋았다", "절대 하지 마세요"
-- Prompt must include: exaggerated stickman emotion (shock, surprise, crying, angry), vibrant contrasting colors, dramatic composition
+- Colors: Vibrant, saturated, high contrast (red, yellow, orange backgrounds work well)
+- Composition: Character on one side, bold text on the other
 
 ## CRITICAL RULES
 1. narration = 원본 대본의 정확한 문장을 그대로 복사. 요약하거나 줄이지 마세요!
