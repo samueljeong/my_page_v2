@@ -917,10 +917,14 @@ const AssistantMain = (() => {
       if (data.auth_url) {
         // Open auth window
         window.open(data.auth_url, 'gcal_auth', 'width=500,height=600');
+      } else if (data.error) {
+        alert('Google Calendar 연결 오류: ' + data.error);
+      } else {
+        alert('Google Calendar 연결에 실패했습니다.');
       }
     } catch (error) {
       console.error('[Assistant] GCal auth error:', error);
-      alert('Google Calendar 인증 오류');
+      alert('Google Calendar 인증 오류: ' + error.message);
     }
   }
 
@@ -1087,10 +1091,14 @@ const AssistantMain = (() => {
       const data = await response.json();
       if (data.auth_url) {
         window.open(data.auth_url, 'gsheets_auth', 'width=500,height=600');
+      } else if (data.error) {
+        alert('Google Sheets 연결 오류: ' + data.error);
+      } else {
+        alert('Google Sheets 연결에 실패했습니다.');
       }
     } catch (error) {
       console.error('[Assistant] GSheets auth error:', error);
-      alert('Google Sheets 인증 오류');
+      alert('Google Sheets 인증 오류: ' + error.message);
     }
   }
 
