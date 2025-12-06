@@ -14243,6 +14243,12 @@ Style: {style}, comic/illustration, eye-catching, high contrast"""
                         # url 형식 (data:image/... 포함)
                         if not base64_image_data:
                             url = img.get("url") or img.get("source") or img.get("src")
+                            # 중첩 형식: {"type": "image_url", "image_url": {"url": "..."}}
+                            if not url:
+                                image_url_obj = img.get("image_url")
+                                if isinstance(image_url_obj, dict):
+                                    url = image_url_obj.get("url")
+                                    print(f"[THUMBNAIL-AI] images[0].image_url.url 형식 발견")
                             if url and isinstance(url, str) and url.startswith("data:image"):
                                 base64_image_data = url.split(",", 1)[1]
                                 print(f"[THUMBNAIL-AI] images[0].url에서 추출 성공")
