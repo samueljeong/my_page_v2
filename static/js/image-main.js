@@ -1069,7 +1069,7 @@ const ImageMain = {
   },
 
   /**
-   * AI 썸네일 분석 (GPT-5.1)
+   * AI 썸네일 분석 - 초기 분석에서 생성된 ai_prompts 사용 (GPT-5.1 중복 호출 제거)
    */
   async analyzeForThumbnail() {
     if (!this.analyzedData) {
@@ -1084,44 +1084,32 @@ const ImageMain = {
     try {
       btn.disabled = true;
       loading.style.display = 'flex';
-      loadingText.textContent = 'GPT-5.1이 대본을 분석하고 있습니다...';
+      loadingText.textContent = 'AI 썸네일 프롬프트 로딩 중...';
 
-      // 대본 텍스트 수집
-      const scenes = this.analyzedData.scenes || [];
-      const script = scenes.map(s => s.narration || '').join('\n\n');
-      const title = document.getElementById('video-title')?.value || this.analyzedData.thumbnail?.title || '제목 없음';
+      // 초기 분석에서 이미 생성된 ai_prompts 사용 (중복 GPT 호출 제거!)
+      const aiPrompts = this.analyzedData?.thumbnail?.ai_prompts;
 
-      console.log('[ImageMain] AI Thumbnail analyze - title:', title, 'script length:', script.length);
-
-      const response = await fetch('/api/thumbnail-ai/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          script: script,
-          title: title,
-          genre: '일반'
-        })
-      });
-
-      const data = await response.json();
-
-      if (!data.ok) {
-        throw new Error(data.error || 'AI 분석 실패');
+      if (!aiPrompts || !aiPrompts.A) {
+        throw new Error('초기 분석에서 AI 썸네일 프롬프트가 생성되지 않았습니다. 대본을 다시 분석해주세요.');
       }
 
+      console.log('[ImageMain] AI Thumbnail - 초기 분석의 ai_prompts 사용');
+
       // 세션 및 프롬프트 저장
-      this.aiThumbnailSession = data.session_id;
-      this.aiThumbnailPrompts = data.prompts;
+      this.aiThumbnailSession = `thumb_${this.sessionId}`;
+      this.aiThumbnailPrompts = aiPrompts;
 
       // 컨셉 프리뷰 표시
-      document.getElementById('ai-script-summary').textContent = data.script_summary || '-';
-      document.getElementById('ai-thumbnail-concept').textContent = data.thumbnail_concept || '-';
-      document.getElementById('ai-learning-count').textContent = `${data.learning_examples_used || 0}개 활용됨`;
+      const title = document.getElementById('video-title')?.value || this.analyzedData.youtube?.title || '제목 없음';
+      document.getElementById('ai-script-summary').textContent = title;
+      document.getElementById('ai-thumbnail-concept').textContent =
+        `A: ${aiPrompts.A?.description || '-'}\nB: ${aiPrompts.B?.description || '-'}\nC: ${aiPrompts.C?.description || '-'}`;
+      document.getElementById('ai-learning-count').textContent = '초기 분석에서 로드됨';
 
       document.getElementById('ai-concept-preview').style.display = 'block';
       document.getElementById('btn-ai-generate').style.display = 'block';
 
-      this.showStatus('AI 분석 완료! 이제 썸네일을 생성하세요.', 'success');
+      this.showStatus('AI 프롬프트 준비 완료! 이제 썸네일을 생성하세요.', 'success');
 
     } catch (error) {
       console.error('[ImageMain] AI analyze error:', error);
