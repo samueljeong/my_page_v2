@@ -14978,40 +14978,61 @@ def run_automation_pipeline(row_data, row_index):
 
         # ========== 3. 영상 생성 (/api/image/generate-video) ==========
         print(f"[AUTOMATION] 3. 영상 생성 시작...")
-        try:
-            video_resp = req.post(f"{base_url}/api/image/generate-video", json={
-                "session_id": session_id,
-                "scenes": scenes,
-                "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
-            }, timeout=600)
 
-            video_data = video_resp.json()
-            if not video_data.get('ok') and not video_data.get('job_id'):
-                return {"ok": False, "error": f"영상 생성 시작 실패: {video_data.get('error')}", "video_url": None}
+        video_url_local = None
+        video_generation_error = None
+        max_video_retries = 2  # 최대 2번 시도 (실패 시 1회 재시도)
 
-            job_id = video_data.get('job_id')
+        for video_attempt in range(max_video_retries):
+            try:
+                if video_attempt > 0:
+                    print(f"[AUTOMATION] 3. 영상 생성 재시도 ({video_attempt + 1}/{max_video_retries})...")
+                    time_module.sleep(5)  # 재시도 전 5초 대기
 
-            # 영상 생성 완료 대기 (폴링) - 20분 대기
-            video_url_local = None
-            for _ in range(600):  # 600 * 2초 = 20분
-                time_module.sleep(2)
-                status_resp = req.get(f"{base_url}/api/image/video-status/{job_id}", timeout=30)
-                status_data = status_resp.json()
+                video_resp = req.post(f"{base_url}/api/image/generate-video", json={
+                    "session_id": session_id,
+                    "scenes": scenes,
+                    "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
+                }, timeout=600)
 
-                if status_data.get('status') == 'completed':
-                    video_url_local = status_data.get('video_url')
-                    break
-                elif status_data.get('status') == 'failed':
-                    return {"ok": False, "error": f"영상 생성 실패: {status_data.get('error')}", "video_url": None, "cost": total_cost}
+                video_data = video_resp.json()
+                if not video_data.get('ok') and not video_data.get('job_id'):
+                    video_generation_error = f"영상 생성 시작 실패: {video_data.get('error')}"
+                    print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 실패: {video_generation_error}")
+                    continue  # 재시도
 
-            if not video_url_local:
-                return {"ok": False, "error": "영상 생성 타임아웃 (20분 초과)", "video_url": None, "cost": total_cost}
+                job_id = video_data.get('job_id')
 
-            print(f"[AUTOMATION] 3. 완료: {video_url_local} (영상 생성은 무료)")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {"ok": False, "error": f"영상 생성 오류: {str(e)}", "video_url": None, "cost": total_cost}
+                # 영상 생성 완료 대기 (폴링) - 20분 대기
+                for _ in range(600):  # 600 * 2초 = 20분
+                    time_module.sleep(2)
+                    status_resp = req.get(f"{base_url}/api/image/video-status/{job_id}", timeout=30)
+                    status_data = status_resp.json()
+
+                    if status_data.get('status') == 'completed':
+                        video_url_local = status_data.get('video_url')
+                        break
+                    elif status_data.get('status') == 'failed':
+                        video_generation_error = f"영상 생성 실패: {status_data.get('error')}"
+                        print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 실패: {video_generation_error}")
+                        break  # 내부 루프 탈출, 재시도
+
+                if video_url_local:
+                    print(f"[AUTOMATION] 3. 완료: {video_url_local} (영상 생성은 무료)")
+                    break  # 성공, 루프 탈출
+                elif not video_generation_error:
+                    video_generation_error = "영상 생성 타임아웃 (20분 초과)"
+                    print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 실패: {video_generation_error}")
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                video_generation_error = f"영상 생성 오류: {str(e)}"
+                print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 예외: {video_generation_error}")
+
+        # 모든 시도 후에도 실패하면 에러 반환
+        if not video_url_local:
+            return {"ok": False, "error": video_generation_error or "영상 생성 실패", "video_url": None, "cost": total_cost}
 
         # ========== 4. YouTube 업로드 ==========
         print(f"[AUTOMATION] 4. YouTube 업로드 시작...")
