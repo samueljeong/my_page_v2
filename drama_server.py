@@ -15028,7 +15028,9 @@ def _automation_generate_video(scenes, episode_id, output_dir):
                 ]
 
                 print(f"[AUTOMATION] 클립 생성 중 {i+1}/{len(scenes)}: {duration:.1f}초")
-                subprocess.run(ffmpeg_cmd, capture_output=True, timeout=120)
+                # 타임아웃을 동적으로 설정 (최소 180초, 또는 duration + 60초)
+                clip_timeout = max(180, int(duration) + 60)
+                subprocess.run(ffmpeg_cmd, capture_output=True, timeout=clip_timeout)
 
                 if os.path.exists(clip_path):
                     clip_paths.append(clip_path)
