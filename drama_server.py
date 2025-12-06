@@ -14698,31 +14698,47 @@ def run_automation_pipeline(row_data, row_index):
         parallel_errors = []
 
         def generate_images():
-            """이미지 생성 (병렬 작업 1)"""
+            """이미지 생성 (병렬 작업 1) - 4개씩 병렬 처리"""
             nonlocal total_cost
-            print(f"[AUTOMATION][IMAGE] 이미지 생성 시작 ({len(scenes)}개)...")
-            for i, scene in enumerate(scenes):
+            from concurrent.futures import ThreadPoolExecutor as ImgExecutor, as_completed as img_completed
+
+            print(f"[AUTOMATION][IMAGE] 이미지 생성 시작 ({len(scenes)}개, 4개씩 병렬)...")
+
+            def generate_single_image(idx, scene):
+                """단일 이미지 생성"""
                 prompt = scene.get('image_prompt', '')
                 if not prompt:
-                    continue
+                    return idx, None
 
                 try:
                     img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
                         "prompt": prompt,
-                        "size": "1792x1024",
+                        "size": "1280x720",  # 용량 축소 (기존 1792x1024)
                         "imageProvider": "gemini"
                     }, timeout=120)
 
                     img_data = img_resp.json()
                     if img_data.get('ok') and img_data.get('imageUrl'):
-                        scene['image_url'] = img_data['imageUrl']
-                        print(f"[AUTOMATION][IMAGE] {i+1}/{len(scenes)} 완료")
+                        print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 완료")
+                        return idx, img_data['imageUrl']
                     else:
-                        print(f"[AUTOMATION][IMAGE] {i+1}/{len(scenes)} 실패")
+                        print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 실패")
+                        return idx, None
                 except Exception as e:
-                    print(f"[AUTOMATION][IMAGE] {i+1} 오류: {e}")
+                    print(f"[AUTOMATION][IMAGE] {idx+1} 오류: {e}")
+                    return idx, None
 
-                time_module.sleep(1)
+            # 4개씩 병렬 처리
+            with ImgExecutor(max_workers=4) as img_executor:
+                futures = {
+                    img_executor.submit(generate_single_image, i, scene): i
+                    for i, scene in enumerate(scenes)
+                }
+
+                for future in img_completed(futures):
+                    idx, image_url = future.result()
+                    if image_url:
+                        scenes[idx]['image_url'] = image_url
 
             success_count = len([s for s in scenes if s.get('image_url')])
             image_cost = success_count * 0.02
