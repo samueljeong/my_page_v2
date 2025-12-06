@@ -14652,7 +14652,7 @@ def run_automation_pipeline(row_data, row_index):
 
             upload_data = upload_resp.json()
             if upload_data.get('ok'):
-                youtube_url = upload_data.get('video_url', '')
+                youtube_url = upload_data.get('videoUrl', '')  # camelCase로 반환됨
                 print(f"[AUTOMATION] 6. 완료: {youtube_url}")
                 return {"ok": True, "video_url": youtube_url, "error": None}
             else:
