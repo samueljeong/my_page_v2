@@ -4807,6 +4807,66 @@ def gsheets_export_events():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ===== 영상 제작 일정 (Google Sheets 연동) =====
+
+# 영상 제작 스프레드시트 ID (환경변수 또는 하드코딩)
+VIDEO_SCHEDULE_SPREADSHEET_ID = os.getenv('VIDEO_SCHEDULE_SPREADSHEET_ID', '16yLy1LtSczIuOvo-Z0oLUjOCJtv2sklMycYdLMWec5E')
+
+@assistant_bp.route('/assistant/api/video-schedule', methods=['GET'])
+def get_video_schedule():
+    """영상 제작 일정 가져오기 (Google Sheets에서)"""
+    try:
+        service = get_gsheets_service()
+        if not service:
+            return jsonify({'success': False, 'error': 'Google 인증이 필요합니다.'}), 401
+
+        # A(상태), D(명칭), E(예약시간) 컬럼 가져오기
+        # A:A, D:E 범위로 가져오기
+        result_a = service.spreadsheets().values().get(
+            spreadsheetId=VIDEO_SCHEDULE_SPREADSHEET_ID,
+            range='A:A'
+        ).execute()
+
+        result_de = service.spreadsheets().values().get(
+            spreadsheetId=VIDEO_SCHEDULE_SPREADSHEET_ID,
+            range='D:E'
+        ).execute()
+
+        values_a = result_a.get('values', [])
+        values_de = result_de.get('values', [])
+
+        # 데이터 조합 (첫 번째 행은 헤더)
+        schedule = []
+        max_rows = max(len(values_a), len(values_de))
+
+        for i in range(1, max_rows):  # 헤더 스킵
+            status = values_a[i][0] if i < len(values_a) and len(values_a[i]) > 0 else ''
+            name = values_de[i][0] if i < len(values_de) and len(values_de[i]) > 0 else ''
+            scheduled_time = values_de[i][1] if i < len(values_de) and len(values_de[i]) > 1 else ''
+
+            # 빈 행 스킵
+            if not status and not name and not scheduled_time:
+                continue
+
+            schedule.append({
+                'row': i + 1,
+                'status': status,
+                'name': name,
+                'scheduled_time': scheduled_time
+            })
+
+        return jsonify({
+            'success': True,
+            'schedule': schedule,
+            'count': len(schedule)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # 모듈 로드 시 DB 초기화
 try:
     init_assistant_db()
