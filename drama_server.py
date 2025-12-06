@@ -14572,23 +14572,10 @@ The visual style is:
         "description": "Description in Korean (summary + hashtags, 500+ chars)"
     },
     "thumbnail": {
-        "text_options": ["썸네일 텍스트 1", "썸네일 텍스트 2", "썸네일 텍스트 3"],
+        "text": "썸네일에 들어갈 강렬한 한국어 문구 (8-12자, 클릭 유도)",
         "text_color": "#FFD700",
         "outline_color": "#000000",
-        "ai_prompts": {
-            "A": {
-                "description": "감정/표정 중심",
-                "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Simple white stickman with exaggerated emotional expression. Detailed anime background. Vibrant colors, high contrast."
-            },
-            "B": {
-                "description": "스토리/상황 중심",
-                "prompt": "Split screen composition YouTube thumbnail, 16:9 aspect ratio. Before/After contrast. Simple white stickman against detailed anime background."
-            },
-            "C": {
-                "description": "텍스트/타이포 중심",
-                "prompt": "Typography-focused YouTube thumbnail, 16:9 aspect ratio. Large bold Korean text. Gradient background with simple stickman illustration."
-            }
-        }
+        "prompt": "Korean webtoon manhwa style YouTube thumbnail, 16:9 aspect ratio. Cartoon character with EXAGGERATED facial expression (shock, surprise, anger, crying). Clean vector illustration style, bold outlines, vibrant saturated colors, dramatic lighting. NO stickman, NO realistic photo. Style reference: Korean YouTube thumbnail illustration, webtoon art style."
     },
     "scenes": [
         {
@@ -14598,6 +14585,15 @@ The visual style is:
         }
     ]
 }
+
+## THUMBNAIL RULES (CRITICAL!)
+Generate ONE powerful thumbnail that maximizes YouTube CTR (Click-Through Rate):
+- Style: Korean webtoon/manhwa cartoon illustration (NOT stickman, NOT realistic photo)
+- Character: Cartoon person with exaggerated facial expression (shock, surprise, anger, crying, frustration)
+- Text should be 8-12 Korean characters, bold and impactful
+- Examples: "결국 터졌다", "이게 실화?", "소름 돋았다", "절대 하지 마세요"
+- Colors: Vibrant, saturated, high contrast (red, yellow, orange backgrounds work well)
+- Composition: Character on one side, bold text on the other
 
 ## CRITICAL RULES
 1. narration = 원본 대본의 정확한 문장을 그대로 복사. 요약하거나 줄이지 마세요!
