@@ -10369,7 +10369,11 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     ],
     "lower_thirds": [
       {{"scene": 2, "text": "화자명 또는 출처", "position": "bottom-left"}}
-    ]
+    ],
+    "news_ticker": {{
+      "enabled": true,
+      "headlines": ["속보: 첫 번째 헤드라인", "이슈: 두 번째 헤드라인", "핵심: 세 번째 헤드라인"]
+    }}
   }},
   "scenes": [
     {{
@@ -10487,6 +10491,22 @@ Add source/speaker info when quoting or citing:
 - Use for: 전문가 발언, 뉴스 인용, 통계 출처
 - Format: "김OO 교수", "OO일보", "2024년 통계"
 - Position: bottom-left (default)
+
+### News Ticker (뉴스 티커) - 뉴스/시사 콘텐츠 전용
+화면 하단에 스크롤되는 뉴스 헤드라인을 추가합니다.
+⚠️ 뉴스, 시사, 정치, 경제 카테고리 영상에만 사용!
+
+**형식:**
+"news_ticker": {
+  "enabled": true,
+  "headlines": ["속보: 핵심 내용 1", "이슈: 핵심 내용 2", "핵심: 핵심 내용 3"]
+}
+
+**규칙:**
+- enabled: 뉴스 스타일 영상에만 true, 그 외 false
+- headlines: 3-5개의 짧은 헤드라인 (각 15-25자)
+- 대본의 핵심 포인트를 뉴스 헤드라인 스타일로 작성
+- 접두어 사용: "속보:", "이슈:", "핵심:", "주목:", "화제:"
 
 ### Ken Burns Effect (이미지 움직임)
 Each scene should have a different Ken Burns effect for visual variety:
@@ -12015,6 +12035,148 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
     return None
 
 
+def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
+    """로워서드(하단 자막) 오버레이용 FFmpeg drawtext 필터 생성
+
+    Args:
+        lower_thirds: [{"scene": 2, "text": "출처: OO일보", "position": "bottom-left"}, ...]
+        scenes: 씬 목록 (duration 계산용)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not lower_thirds:
+        return None
+
+    # 씬별 시작 시간 계산
+    scene_start_times = {}
+    scene_durations = {}
+    current_time = 0
+    for idx, scene in enumerate(scenes):
+        scene_start_times[idx + 1] = current_time  # 1-based index
+        scene_durations[idx + 1] = scene.get('duration', 0)
+        current_time += scene.get('duration', 0)
+
+    filters = []
+    font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    for lt in lower_thirds:
+        scene_num = lt.get('scene', 1)
+        text = lt.get('text', '')
+        position = lt.get('position', 'bottom-left')
+
+        if not text or scene_num not in scene_start_times:
+            continue
+
+        start_time = scene_start_times[scene_num]
+        # 로워서드는 씬 전체 동안 표시 (페이드인/아웃)
+        scene_duration = scene_durations.get(scene_num, 5)
+        end_time = start_time + scene_duration
+
+        # 위치별 좌표 설정
+        if position == 'bottom-left':
+            x_pos = "30"
+            y_pos = "h-th-80"  # 하단에서 80px 위
+        elif position == 'bottom-right':
+            x_pos = "w-tw-30"
+            y_pos = "h-th-80"
+        elif position == 'bottom-center':
+            x_pos = "(w-tw)/2"
+            y_pos = "h-th-80"
+        else:  # default: bottom-left
+            x_pos = "30"
+            y_pos = "h-th-80"
+
+        # 반투명 배경 박스 + 텍스트 (뉴스 스타일)
+        # 배경 박스 필터 (drawbox)
+        box_filter = (
+            f"drawbox=x={x_pos}-10:y={y_pos}-10:"
+            f"w=tw+20:h=th+20:"
+            f"color=black@0.7:t=fill:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        # 텍스트 필터
+        text_escaped = text.replace("'", "'\\''").replace(":", "\\:")
+        text_filter = (
+            f"drawtext=text='{text_escaped}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize=28:"
+            f"fontcolor=white:"
+            f"x={x_pos}:"
+            f"y={y_pos}:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        # drawbox는 text_w를 모르므로 대략적인 크기 사용
+        # 더 정확한 방법: 텍스트만 표시 (배경 없이)
+        # 또는 box=1:boxcolor=black@0.7:boxborderw=10 사용
+        text_with_bg = (
+            f"drawtext=text='{text_escaped}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize=28:"
+            f"fontcolor=white:"
+            f"box=1:"
+            f"boxcolor=black@0.7:"
+            f"boxborderw=10:"
+            f"x={x_pos}:"
+            f"y={y_pos}:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        filters.append(text_with_bg)
+
+    if filters:
+        return ",".join(filters)
+    return None
+
+
+def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
+    """뉴스 티커(스크롤 헤드라인) 필터 생성
+
+    Args:
+        news_ticker: {"enabled": true, "headlines": ["속보: ...", "이슈: ..."]}
+        total_duration: 전체 영상 길이 (초)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not news_ticker or not news_ticker.get('enabled'):
+        return None
+
+    headlines = news_ticker.get('headlines', [])
+    if not headlines:
+        return None
+
+    # 헤드라인을 하나의 긴 텍스트로 연결 (구분자: ●)
+    ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
+    ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
+
+    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
+    # x = w - (mod(t * speed, tw + w))
+    # speed = (tw + w) / (total_duration / scroll_cycles)
+    scroll_speed = 100  # 초당 100픽셀 이동
+
+    # 뉴스 티커 스타일: 하단에 빨간 배경 + 흰 텍스트
+    ticker_filter = (
+        f"drawbox=x=0:y=h-40:w=w:h=40:color=red@0.9:t=fill,"
+        f"drawtext=text='{ticker_text}':"
+        f"fontfile='{font_escaped}':"
+        f"fontsize=24:"
+        f"fontcolor=white:"
+        f"x=w-mod(t*{scroll_speed}\\,tw+w):"
+        f"y=h-35"
+    )
+
+    return ticker_filter
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -12280,6 +12442,22 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                 if overlay_filter:
                     vf_filter = f"{vf_filter},{overlay_filter}"
                     print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가")
+
+            # 로워서드 오버레이 추가 (lower_thirds)
+            lower_thirds = video_effects.get('lower_thirds', [])
+            if lower_thirds:
+                lt_filter = _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir)
+                if lt_filter:
+                    vf_filter = f"{vf_filter},{lt_filter}"
+                    print(f"[VIDEO-WORKER] 로워서드 {len(lower_thirds)}개 추가")
+
+            # 뉴스 티커 추가 (news_ticker)
+            news_ticker = video_effects.get('news_ticker', {})
+            if news_ticker and news_ticker.get('enabled'):
+                ticker_filter = _generate_news_ticker_filter(news_ticker, current_time, fonts_dir)
+                if ticker_filter:
+                    vf_filter = f"{vf_filter},{ticker_filter}"
+                    print(f"[VIDEO-WORKER] 뉴스 티커 추가 (헤드라인 {len(news_ticker.get('headlines', []))}개)")
 
             print(f"[VIDEO-WORKER] SRT path: {srt_abs_path}")
             print(f"[VIDEO-WORKER] VF filter 길이: {len(vf_filter)} chars")
