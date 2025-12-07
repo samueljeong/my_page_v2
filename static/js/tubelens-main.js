@@ -114,6 +114,7 @@
       }
 
       var regionCode = document.getElementById('trending-region').value;
+      var videoType = document.getElementById('trending-video-type').value;
 
       this.showLoading(true);
       this.updateStatus('인기 영상 로딩 중...');
@@ -134,6 +135,8 @@
         if (data.success) {
           // 제외 카테고리 필터링
           var results = self.filterExcludedCategories(data.data);
+          // 영상 타입 필터링
+          results = self.filterByVideoType(results, videoType);
           self.originalResults = results;
           self.currentResults = results.slice();
           self.displayResults(self.currentResults);
@@ -163,6 +166,7 @@
       var regionCode = document.getElementById('rising-region').value;
       var maxSubscribers = document.getElementById('rising-max-subs').value;
       var timeFrame = document.getElementById('rising-time').value;
+      var videoType = document.getElementById('rising-video-type').value;
 
       this.showLoading(true);
       this.updateStatus('급상승 영상 발굴 중... (시간이 좀 걸릴 수 있습니다)');
@@ -175,6 +179,7 @@
           maxSubscribers: parseInt(maxSubscribers),
           timeFrame: timeFrame,
           categoryId: this.risingCategory,
+          videoType: videoType,
           apiKeys: this.apiKeys,
           currentApiKeyIndex: this.currentApiKeyIndex
         })
@@ -184,6 +189,8 @@
         if (data.success) {
           // 제외 카테고리 필터링
           var results = self.filterExcludedCategories(data.data);
+          // 영상 타입 필터링 (API에서도 하지만 추가 보정)
+          results = self.filterByVideoType(results, videoType);
           self.originalResults = results;
           self.currentResults = results.slice();
           self.displayResults(self.currentResults);
@@ -198,6 +205,28 @@
         self.showLoading(false);
         self.updateStatus('발굴 실패: ' + error.message);
       });
+    },
+
+    // 영상 타입 필터링 (쇼츠/롱폼)
+    filterByVideoType: function(videos, videoType) {
+      if (!videoType || videoType === 'all') return videos;
+
+      var filtered = videos.filter(function(v) {
+        var duration = v.durationSeconds || 0;
+        if (videoType === 'shorts') {
+          return duration <= 60;
+        } else if (videoType === 'long') {
+          return duration > 60;
+        }
+        return true;
+      });
+
+      // 인덱스 재할당
+      filtered.forEach(function(v, i) {
+        v.index = i + 1;
+      });
+
+      return filtered;
     },
 
     // 제외 카테고리 필터링

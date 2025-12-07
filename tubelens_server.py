@@ -800,6 +800,7 @@ def api_rising():
         max_subscribers = int(data.get("maxSubscribers", 100000))  # 구독자 상한
         time_frame = data.get("timeFrame", "week")
         category_id = data.get("categoryId", "")
+        video_type = data.get("videoType", "all")  # all, shorts, long
         api_keys = data.get("apiKeys", [])
         current_api_key_index = data.get("currentApiKeyIndex", 0)
 
@@ -831,6 +832,12 @@ def api_rising():
 
         if category_id:
             search_params["videoCategoryId"] = category_id
+
+        # 영상 타입 필터
+        if video_type == "shorts":
+            search_params["videoDuration"] = "short"
+        elif video_type == "long":
+            search_params["videoDuration"] = "medium"  # medium 또는 long
 
         # 여러 페이지에서 영상 수집
         all_video_ids = []

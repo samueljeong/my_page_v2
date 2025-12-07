@@ -1298,6 +1298,14 @@
               <option value="GB">영국</option>
             </select>
           </div>
+          <div class="option-group">
+            <label>영상 타입</label>
+            <select class="option-select" id="trending-video-type">
+              <option value="all" selected>전체</option>
+              <option value="shorts">쇼츠 (1분 이하)</option>
+              <option value="long">롱폼 (1분 이상)</option>
+            </select>
+          </div>
           <button class="btn-trending" onclick="TubeLens.loadTrending()">인기 영상 보기</button>
         </div>
         <div class="category-pills" id="trending-categories">
@@ -1367,6 +1375,14 @@
               <option value="day">24시간</option>
               <option value="week" selected>7일</option>
               <option value="month">1개월</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>영상 타입</label>
+            <select class="option-select" id="rising-video-type">
+              <option value="all" selected>전체</option>
+              <option value="shorts">쇼츠</option>
+              <option value="long">롱폼</option>
             </select>
           </div>
           <button class="btn-rising" onclick="TubeLens.loadRising()">급상승 영상 발굴</button>
