@@ -621,13 +621,35 @@ const AssistantMain = (() => {
         <div class="parsed-section">
           <h5>👤 인물 (${parsed.people.length})</h5>
           ${parsed.people.map((p, i) => `
-            <div class="parsed-item ${p.is_update ? 'update-item' : ''}">
+            <div class="parsed-item ${p.is_update ? 'update-item' : ''} ${p.needs_confirmation ? 'confirmation-item' : ''}" data-person-index="${i}">
               <div>
                 <strong>${escapeHtml(p.name)}</strong>
                 ${p.role ? `<span class="role-badge">${escapeHtml(p.role)}</span>` : ''}
-                ${p.is_update ? `<span class="update-badge">업데이트</span>` : ''}
+                ${p.is_update && !p.needs_confirmation ? `<span class="update-badge">업데이트</span>` : ''}
+                ${p.needs_confirmation ? `<span class="confirmation-badge">확인 필요</span>` : ''}
               </div>
               <span class="item-meta">${escapeHtml(p.notes || '')}</span>
+              ${p.needs_confirmation ? `
+                <div class="confirmation-box" style="margin-top: 0.75rem; padding: 0.75rem; background: #fef3c7; border-radius: 8px; border: 1px solid #fbbf24;">
+                  <div style="font-size: 0.85rem; color: #92400e; margin-bottom: 0.5rem;">
+                    <strong>${escapeHtml(p.confirmation_reason || '동명이인 확인이 필요합니다')}</strong>
+                  </div>
+                  ${p.matched_person ? `
+                    <div style="font-size: 0.8rem; color: #78350f; margin-bottom: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">
+                      기존 정보: <strong>${escapeHtml(p.matched_person.name)} ${p.matched_person.role || ''}</strong>
+                      ${p.matched_person.notes ? `<br><span style="color: #a16207;">${escapeHtml(p.matched_person.notes)}</span>` : ''}
+                    </div>
+                  ` : ''}
+                  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-small" onclick="AssistantMain.confirmPerson(${i}, true)" style="background: #22c55e; color: white; border: none; padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                      같은 사람 (업데이트)
+                    </button>
+                    <button class="btn btn-small" onclick="AssistantMain.confirmPerson(${i}, false)" style="background: #3b82f6; color: white; border: none; padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                      다른 사람 (새로 추가)
+                    </button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
           `).join('')}
         </div>
@@ -705,9 +727,48 @@ const AssistantMain = (() => {
     resultDiv.classList.add('show');
   }
 
+  // 동명이인 확인 처리
+  function confirmPerson(index, isSamePerson) {
+    if (!parsedData || !parsedData.people || !parsedData.people[index]) {
+      console.error('Invalid person index:', index);
+      return;
+    }
+
+    const person = parsedData.people[index];
+
+    if (isSamePerson) {
+      // 같은 사람으로 확인 → 업데이트로 처리
+      person.is_update = true;
+      person.needs_confirmation = false;
+      // id는 이미 matched_person에서 가져온 값 유지
+      showToast(`${person.name} - 기존 정보 업데이트로 처리합니다`, 'success');
+    } else {
+      // 다른 사람으로 확인 → 새로 추가
+      person.is_update = false;
+      person.needs_confirmation = false;
+      person.id = null;  // 새 인물로 추가
+      showToast(`${person.name} - 새로운 인물로 추가합니다`, 'info');
+    }
+
+    // UI 업데이트
+    showUnifiedResult(parsedData);
+  }
+
+  // 저장 전 확인되지 않은 인물이 있는지 체크
+  function hasUnconfirmedPeople() {
+    if (!parsedData || !parsedData.people) return false;
+    return parsedData.people.some(p => p.needs_confirmation);
+  }
+
   async function saveUnifiedData() {
     if (!parsedData) {
       alert('저장할 데이터가 없습니다');
+      return;
+    }
+
+    // 확인되지 않은 인물이 있는지 체크
+    if (hasUnconfirmedPeople()) {
+      alert('동명이인 확인이 필요한 인물이 있습니다.\n위의 노란색 박스에서 "같은 사람" 또는 "다른 사람"을 선택해주세요.');
       return;
     }
 
@@ -3121,6 +3182,7 @@ const AssistantMain = (() => {
     saveParsedData,
     analyzeUnified,
     saveUnifiedData,
+    confirmPerson,
     completeTask,
     addTask,
     closeTaskModal,
