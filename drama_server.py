@@ -10359,6 +10359,10 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
       {{"keyword": "강조할 단어1", "color": "#FF0000"}},
       {{"keyword": "강조할 단어2", "color": "#FFFF00"}}
     ],
+    "screen_overlays": [
+      {{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}},
+      {{"scene": 7, "text": "반전", "duration": 2, "style": "dramatic"}}
+    ],
     "sound_effects": [
       {{"scene": 1, "type": "impact", "moment": "description of when to play"}},
       {{"scene": 3, "type": "emotional", "moment": "description of when to play"}}
@@ -10426,12 +10430,44 @@ Choose ONE mood that best fits the overall video tone:
 - mysterious: 미스터리, 의문
 - nostalgic: 회상, 추억
 
-### Subtitle Highlights (자막 강조)
-Identify 3-5 KEY WORDS from the script that should be highlighted:
-- Use #FF0000 (red) for shocking/important words: 충격, 실화, 경악, 폭로
-- Use #FFFF00 (yellow) for emphasis words: 결국, 드디어, 마침내
-- Use #00FFFF (cyan) for emotional words: 눈물, 감동, 사랑
-- Keywords should be EXACT matches from the narration text
+### Subtitle Highlights (자막 강조) - 자동 선정
+GPT가 대본 흐름을 분석하여 자동으로 강조할 키워드를 선정합니다.
+⚠️ 중요: 색상을 남발하면 조잡해 보입니다! 신중하게 선택하세요!
+
+**규칙:**
+- 전체 영상에서 **최대 3-5개** 키워드만 선정 (너무 많으면 효과 없음)
+- 정말 **임팩트 있는 순간**에만 사용
+- 키워드는 나레이션 텍스트에서 **정확히 일치**해야 함
+
+**색상 가이드:**
+- #FF0000 (빨강): 충격/반전 순간 - "충격", "실화", "경악", "폭로"
+- #FFFF00 (노랑): 강조/결론 - "결국", "드디어", "마침내", "바로"
+- #00FFFF (청록): 감정/감동 - "눈물", "감동", "사랑", "희망"
+
+**❌ 하지 마세요:**
+- 모든 문장에 색상 넣기
+- 한 씬에 여러 색상 사용
+- 일반적인 단어 강조 (그래서, 그런데, 하지만 등)
+
+### Screen Text Overlays (화면 텍스트 오버레이) - 새 기능!
+특정 순간에 화면에 큰 텍스트를 띄워 임팩트를 줍니다.
+예: "대박!" "충격!" "반전!" 같은 텍스트가 화면 중앙에 3초간 표시
+
+**규칙:**
+- 전체 영상에서 **최대 2-3개**만 사용 (과하면 유치해 보임)
+- 정말 **클라이맥스 순간**에만 사용
+- 텍스트는 **1-4글자** 짧게 (대박, 충격, 반전, 실화 등)
+
+**출력 형식:**
+"screen_overlays": [
+  {"scene": 3, "text": "대박!", "duration": 3, "style": "impact"},
+  {"scene": 7, "text": "반전", "duration": 2, "style": "dramatic"}
+]
+
+**스타일 옵션:**
+- impact: 빨간 테두리, 흰 텍스트, 펄스 효과
+- dramatic: 검정 배경, 노란 텍스트, 페이드인
+- emotional: 부드러운 그라데이션, 감성적
 
 ### Sound Effects (효과음)
 Add sound effects at dramatic moments (max 3-5 per video):
@@ -11781,6 +11817,87 @@ def _apply_subtitle_highlights(text, highlights):
     return result
 
 
+def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
+    """화면 텍스트 오버레이용 FFmpeg drawtext 필터 생성
+
+    Args:
+        screen_overlays: [{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}, ...]
+        scenes: 씬 목록 (duration 계산용)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not screen_overlays:
+        return None
+
+    # 씬별 시작 시간 계산
+    scene_start_times = {}
+    current_time = 0
+    for idx, scene in enumerate(scenes):
+        scene_start_times[idx + 1] = current_time  # 1-based index
+        current_time += scene.get('duration', 0)
+
+    filters = []
+    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    for overlay in screen_overlays:
+        scene_num = overlay.get('scene', 1)
+        text = overlay.get('text', '')
+        duration = overlay.get('duration', 3)
+        style = overlay.get('style', 'impact')
+
+        if not text or scene_num not in scene_start_times:
+            continue
+
+        start_time = scene_start_times[scene_num]
+        end_time = start_time + duration
+
+        # 스타일별 설정
+        if style == 'impact':
+            # 빨간 테두리, 흰 텍스트, 큰 글씨
+            fontcolor = "white"
+            bordercolor = "red"
+            fontsize = 80
+            borderw = 4
+        elif style == 'dramatic':
+            # 노란 텍스트, 검정 배경
+            fontcolor = "yellow"
+            bordercolor = "black"
+            fontsize = 70
+            borderw = 3
+        elif style == 'emotional':
+            # 부드러운 파란 텍스트
+            fontcolor = "cyan"
+            bordercolor = "darkblue"
+            fontsize = 60
+            borderw = 2
+        else:
+            fontcolor = "white"
+            bordercolor = "black"
+            fontsize = 70
+            borderw = 3
+
+        # drawtext 필터 생성 (화면 중앙에 표시)
+        drawtext = (
+            f"drawtext=text='{text}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize={fontsize}:"
+            f"fontcolor={fontcolor}:"
+            f"bordercolor={bordercolor}:"
+            f"borderw={borderw}:"
+            f"x=(w-text_w)/2:"
+            f"y=(h-text_h)/2:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+        filters.append(drawtext)
+
+    if filters:
+        return ",".join(filters)
+    return None
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -12021,8 +12138,8 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                     highlighted_text = _apply_subtitle_highlights(sub['text'], subtitle_highlights)
                     f.write(f"{i}\n{start_str} --> {end_str}\n{highlighted_text}\n\n")
 
-            # 4. 자막 burn-in
-            _update_job_status(job_id, progress=90, message='자막 삽입 중...')
+            # 4. 자막 burn-in + 화면 텍스트 오버레이
+            _update_job_status(job_id, progress=90, message='자막 및 효과 삽입 중...')
 
             subtitle_style = _get_subtitle_style(detected_lang)
             final_path = os.path.join(work_dir, "final.mp4")
@@ -12036,10 +12153,19 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             srt_escaped = srt_abs_path.replace('\\', '/').replace(':', '\\:')
             fonts_escaped = fonts_dir.replace('\\', '/').replace(':', '\\:')
 
+            # 기본 자막 필터
             vf_filter = f"subtitles={srt_escaped}:fontsdir={fonts_escaped}:force_style='{subtitle_style}'"
 
+            # 화면 텍스트 오버레이 추가 (screen_overlays)
+            screen_overlays = video_effects.get('screen_overlays', [])
+            if screen_overlays:
+                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir)
+                if overlay_filter:
+                    vf_filter = f"{vf_filter},{overlay_filter}"
+                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가")
+
             print(f"[VIDEO-WORKER] SRT path: {srt_abs_path}")
-            print(f"[VIDEO-WORKER] Subtitle filter: {vf_filter}")
+            print(f"[VIDEO-WORKER] VF filter 길이: {len(vf_filter)} chars")
             print(f"[VIDEO-WORKER] Fonts directory: {fonts_dir}")
 
             # IMPORTANT: stdout=DEVNULL, stderr=PIPE to avoid OOM from buffering FFmpeg output
