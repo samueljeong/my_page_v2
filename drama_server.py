@@ -17680,11 +17680,11 @@ def run_automation_pipeline(row_data, row_index):
 #Shorts #유튜브쇼츠"""
 
                             shorts_upload_payload = {
-                                "video_path": shorts_output_path,
+                                "videoPath": shorts_output_path,
                                 "title": shorts_title,
                                 "description": shorts_description,
-                                "visibility": visibility,
-                                "channel_id": channel_id
+                                "privacyStatus": visibility,
+                                "channelId": channel_id
                             }
 
                             shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
