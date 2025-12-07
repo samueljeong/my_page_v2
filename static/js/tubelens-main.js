@@ -101,6 +101,30 @@
       } else if (tabName === 'rising') {
         this.updateStatus('구독자 대비 고성과 영상을 발굴하세요');
       }
+
+      // Empty state 메시지 업데이트
+      this.updateEmptyState(tabName);
+    },
+
+    // Empty state 메시지 업데이트
+    updateEmptyState: function(tabName) {
+      var emptyState = document.querySelector('.empty-state');
+      if (!emptyState) return;
+
+      var h4 = emptyState.querySelector('h4');
+      var p = emptyState.querySelector('p');
+      if (!h4 || !p) return;
+
+      if (tabName === 'search') {
+        h4.textContent = '검색어를 입력해주세요';
+        p.textContent = 'YouTube 영상을 검색하고 분석해보세요';
+      } else if (tabName === 'trending') {
+        h4.textContent = '인기 영상 보기를 클릭하세요';
+        p.textContent = '지금 뜨고 있는 인기 영상을 확인해보세요';
+      } else if (tabName === 'rising') {
+        h4.textContent = '급상승 영상 발굴을 클릭하세요';
+        p.textContent = '구독자 대비 고성과 영상을 발굴해보세요';
+      }
     },
 
     // ===== 트렌딩 영상 =====
