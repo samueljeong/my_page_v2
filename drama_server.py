@@ -6282,7 +6282,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
 
             # 한글 폰트 확인 (ASS 자막은 폰트 이름만 사용)
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            project_font = os.path.join(base_dir, 'fonts', 'NanumGothicBold.ttf')
+            project_font = os.path.join(base_dir, 'fonts', 'Pretendard-Bold.ttf')
 
             font_found = False
             font_location = None
@@ -6292,8 +6292,9 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             else:
                 # 시스템 폰트 폴백
                 system_fonts = [
+                    os.path.join(base_dir, 'fonts', 'Pretendard-SemiBold.ttf'),
+                    os.path.join(base_dir, 'fonts', 'NanumGothicBold.ttf'),
                     '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
-                    '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
                 ]
                 for sf in system_fonts:
                     if os.path.exists(sf):
@@ -6302,7 +6303,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
                         break
 
             # ASS 자막에는 폰트 경로가 아닌 폰트 이름을 사용해야 함
-            subtitle_font = 'NanumGothic' if font_found else 'Arial'
+            subtitle_font = 'Pretendard' if font_found else 'Arial'
 
             print(f"[VIDEO-SUBTITLE] 자막 폰트: {subtitle_font} (found: {font_found}, location: {font_location if font_found else 'N/A'})")
 
@@ -7619,12 +7620,11 @@ FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple w
             font_size = int(height * 0.08)  # 이미지 높이의 8%
             font = None
             font_paths = [
+                os.path.join(static_dir, 'fonts', 'Pretendard-Bold.ttf'),
+                os.path.join(static_dir, 'fonts', 'Pretendard-SemiBold.ttf'),
                 os.path.join(static_dir, 'fonts', 'NanumSquareRoundB.ttf'),
                 os.path.join(static_dir, 'fonts', 'NanumGothicBold.ttf'),
-                os.path.join(static_dir, 'fonts', 'NanumBarunGothicBold.ttf'),
                 "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-                "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-                "C:/Windows/Fonts/malgunbd.ttf",
             ]
             for fp in font_paths:
                 if os.path.exists(fp):
@@ -8371,21 +8371,15 @@ def api_thumbnail_overlay():
         font = None
         base_dir = os_module.path.dirname(os_module.path.abspath(__file__))
         font_paths = [
-            # 프로젝트 로컬 폰트 (최우선)
+            # Pretendard (최우선)
+            os_module.path.join(base_dir, "fonts/Pretendard-Bold.ttf"),
+            os_module.path.join(base_dir, "fonts/Pretendard-SemiBold.ttf"),
+            # 프로젝트 로컬 폰트 (폴백)
             os_module.path.join(base_dir, "fonts/NanumSquareB.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumSquareRoundB.ttf"),
             os_module.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumBarunGothicBold.ttf"),
             # Linux (Render)
             "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            # Mac
-            "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-            "/Library/Fonts/NanumGothicBold.ttf",
-            # Windows
-            "C:/Windows/Fonts/malgunbd.ttf",
-            "C:/Windows/Fonts/malgun.ttf",
         ]
 
         for font_path in font_paths:
@@ -12351,24 +12345,24 @@ def _get_subtitle_style(lang):
     """언어별 자막 스타일 반환 (ASS 형식) - 폰트28 기준"""
     # 유튜브 스타일: 흰색 텍스트 + 검은색 외곽선 + 그림자
     if lang == 'ko':
-        # NanumGothic - 나눔고딕 (한글 전용)
+        # Pretendard - 프리텐다드 (한글 전용)
         # Outline=2 (두꺼운 외곽선), MarginV=40 (하단 여백)
         return (
-            "FontName=NanumGothic,FontSize=28,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=28,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     elif lang == 'ja':
-        # 일본어 - NanumGothic 사용 (CJK 지원)
+        # 일본어 - Pretendard 사용 (CJK 지원)
         return (
-            "FontName=NanumGothic,FontSize=26,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=26,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     else:
         # 영어/기타 언어
         return (
-            "FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=22,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
@@ -12434,10 +12428,10 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
     try:
         # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
         if lang == 'ko':
-            font_name = "NanumGothic"
+            font_name = "Pretendard"
             font_size = 48  # 24 → 48 (2배 크기)
         else:
-            font_name = "Arial"
+            font_name = "Pretendard"
             font_size = 44  # 22 → 44 (2배 크기)
 
         # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
@@ -12508,7 +12502,7 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
         current_time += scene.get('duration', 0)
 
     filters = []
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for overlay in screen_overlays:
@@ -12598,7 +12592,7 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
         current_time += scene.get('duration', 0)
 
     filters = []
-    font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-SemiBold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for lt in lower_thirds:
@@ -12694,7 +12688,7 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
@@ -13062,10 +13056,12 @@ def _generate_outro_video(output_path, duration=5, fonts_dir=None):
         print(f"[OUTRO] 폰트 디렉토리: {fonts_dir}")
         print(f"[OUTRO] 디렉토리 존재: {os.path.exists(fonts_dir)}")
 
-        # 폰트 우선순위: NanumGothicBold > NanumGothic
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        # 폰트 우선순위: Pretendard-Bold > Pretendard-SemiBold > NanumGothicBold
+        font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
         if not os.path.exists(font_path):
-            font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+            font_path = os.path.join(fonts_dir, "Pretendard-SemiBold.ttf")
+        if not os.path.exists(font_path):
+            font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
         if not os.path.exists(font_path):
             print(f"[OUTRO] 폰트 파일 없음: {fonts_dir}")
             return False
@@ -13292,7 +13288,7 @@ def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text,
 
             # 훅 텍스트 오버레이 추가 (처음 3초)
             if hook_text:
-                font_path = "static/fonts/NanumGothicBold.ttf"
+                font_path = "fonts/Pretendard-Bold.ttf"
                 font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
                 hook_filter = (
@@ -14891,34 +14887,33 @@ def generate_thumbnail_with_text():
         # 상품 이미지 합성
         bg_img.paste(product_img_resized, (img_x, img_y), product_img_resized)
 
-        # 폰트 로드
-        font_paths = {
-            'noto-black': '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
-            'noto-bold': '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
-            'gmarket': '/usr/share/fonts/truetype/gmarket/GmarketSansBold.ttf',
-            'pretendard': '/usr/share/fonts/truetype/pretendard/Pretendard-Bold.ttf'
-        }
-        font_path = font_paths.get(font_style, font_paths['noto-black'])
+        # 폰트 로드 (프로젝트 로컬 Pretendard 우선)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        font_candidates = [
+            os.path.join(base_dir, "fonts/Pretendard-Bold.ttf"),
+            os.path.join(base_dir, "fonts/Pretendard-SemiBold.ttf"),
+            os.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        ]
 
-        # 폰트가 없으면 기본 폰트 사용
+        font_path = None
+        for fp in font_candidates:
+            if os.path.exists(fp):
+                font_path = fp
+                break
+
+        # 폰트 로드
         try:
             font_large = ImageFont.truetype(font_path, 72)
             font_medium = ImageFont.truetype(font_path, 56)
             font_small = ImageFont.truetype(font_path, 40)
             font_tag = ImageFont.truetype(font_path, 36)
         except:
-            # 시스템 기본 폰트 시도
-            try:
-                font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-                font_large = ImageFont.truetype(font_path, 72)
-                font_medium = ImageFont.truetype(font_path, 56)
-                font_small = ImageFont.truetype(font_path, 40)
-                font_tag = ImageFont.truetype(font_path, 36)
-            except:
-                font_large = ImageFont.load_default()
-                font_medium = font_large
-                font_small = font_large
-                font_tag = font_large
+            font_large = ImageFont.load_default()
+            font_medium = font_large
+            font_small = font_large
+            font_tag = font_large
 
         draw = ImageDraw.Draw(bg_img)
 
