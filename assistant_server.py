@@ -1180,28 +1180,51 @@ def parse_input():
         today = date.today()
         default_category = data.get('default_category', None)
 
+        # 기존 인물 데이터 조회 (연동을 위해)
+        existing_people = []
+        try:
+            conn_check = get_db_connection()
+            cursor_check = conn_check.cursor()
+            if USE_POSTGRES:
+                cursor_check.execute('SELECT id, name, role, category, notes FROM people ORDER BY updated_at DESC LIMIT 100')
+            else:
+                cursor_check.execute('SELECT id, name, role, category, notes FROM people ORDER BY updated_at DESC LIMIT 100')
+            existing_people = [dict(row) for row in cursor_check.fetchall()]
+            conn_check.close()
+        except Exception as e:
+            print(f"[Parse] 기존 인물 조회 실패: {e}")
+
+        existing_people_text = ""
+        if existing_people:
+            existing_people_text = "\n[기존 등록된 인물 목록]\n"
+            for p in existing_people[:30]:  # 최대 30명만
+                existing_people_text += f"- ID:{p['id']} {p['name']} ({p.get('role') or '직분없음'}) - {p.get('notes') or ''}\n"
+
         # GPT-5.1 통합 파싱 프롬프트
         system_prompt = f"""[역할]
 너는 '개인 비서용 통합 파서'이다.
 사용자가 붙여넣은 한국어/영어 텍스트를 읽고,
 그 안에 있는 일정(events), 할 일(tasks), 인물(people), 프로젝트(projects)를 구조화된 JSON으로 추출한다.
+또한 AI 비서로서 해당 일정/상황에 맞는 제안(suggestions)도 함께 제공한다.
 
 [입력 컨텍스트]
 - 오늘 날짜: {today.isoformat()} ({today.strftime('%A')})
 - 기본 카테고리: {default_category or '없음'}
+{existing_people_text}
 
 [출력]
 반드시 다음 JSON 형식으로만 출력하라:
 {{
   "events": [
     {{
-      "title": "string",
+      "title": "string (반드시 '대상자 - 일정내용' 형식. 예: '김인식 권사 - 원자력병원 검사')",
       "date": "yyyy-MM-dd",
       "time": "HH:mm or null",
       "end_time": "HH:mm or null",
       "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
       "location": "string or null",
-      "notes": "string or null"
+      "notes": "string or null",
+      "person_name": "string or null (관련 인물 이름)"
     }}
   ],
   "tasks": [
@@ -1215,10 +1238,12 @@ def parse_input():
   ],
   "people": [
     {{
+      "id": "number or null (기존 인물이면 해당 ID, 신규면 null)",
       "name": "string (이름만, 직분 제외)",
       "role": "string or null (권사, 집사, 장로, 목사 등 직분/직책)",
       "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
-      "notes": "string or null (건강상태, 특이사항 등)"
+      "notes": "string or null (건강상태, 특이사항 등 - 기존 정보에 새 정보 추가/병합)",
+      "is_update": "boolean (기존 인물 정보 업데이트면 true)"
     }}
   ],
   "projects": [
@@ -1230,29 +1255,54 @@ def parse_input():
       "start_date": "yyyy-MM-dd or null",
       "end_date": "yyyy-MM-dd or null"
     }}
+  ],
+  "suggestions": [
+    {{
+      "title": "string (제안 내용)",
+      "type": "reminder | action | prayer | visit",
+      "due_date": "yyyy-MM-dd or null (제안 일정)",
+      "related_to": "string (관련 인물/일정)",
+      "priority": "high | normal | low"
+    }}
   ]
 }}
 
 [분류 규칙]
 
-1. events (일정)
-   - 특정 시간/날짜에 실제로 '열리는 모임/행사/예배/회의'
-   - 예: "12월 15일 청년부 총회 오후 2시"
+1. events (일정) - 중요: 제목에 반드시 대상자 포함!
+   - 특정 시간/날짜에 실제로 '열리는 모임/행사/예배/회의' 또는 '개인 일정(병원, 수술 등)'
+   - 제목 형식: "대상자명 직분 - 일정내용" (예: "김인식 권사 - 원자력병원 입원")
+   - 인물 관련 일정이면 person_name 필드에 해당 인물 이름 기록
+   - 예: "김인식 권사 12월 11일 입원" → title: "김인식 권사 - 원자력병원 입원"
 
 2. tasks (할 일)
    - 행사를 준비하기 위한 "해야 할 일" (자료 준비, 문자 발송, 설교 작성 등)
    - 예: "주일 설교 준비해야 함"
 
-3. people (인물)
-   - 사람 이름 + 직분/직책이 함께 언급된 경우
-   - 이름 뒤에 권사, 집사, 장로, 목사, 사장, 부장 등이 붙은 경우
-   - 건강/수술/입원/사망 등 개인 상황이 언급된 경우
-   - 예: "홍길동 권사", "김영희 집사 12월 10일 수술 예정", "박철수 장로 심방 필요"
+3. people (인물) - 기존 데이터 연동!
+   - [기존 등록된 인물 목록]에 있는 이름과 매칭되면:
+     * id 필드에 해당 ID 기록
+     * is_update: true
+     * notes에 기존 정보 + 새 정보 병합
+   - 새로운 인물이면: id: null, is_update: false
+   - 건강/수술/입원/퇴원/사망 등 상태 변화가 있으면 notes 업데이트
 
 4. projects (프로젝트)
    - "프로젝트", "사업", "계획" 등의 단어가 포함되거나
    - 장기적인 목표/기간이 명시된 작업
-   - 예: "장기부진자 편지 발송 프로젝트", "바나바 교육 프로그램"
+
+5. suggestions (AI 비서 제안) - 매우 중요!
+   - 입원/수술 일정이 있으면:
+     * 입원 1-2일 전: "병문안 준비" 또는 "위로 연락" 제안
+     * 수술 당일/전날: "기도 요청 공지" 제안
+     * 퇴원 예정일: "퇴원 축하 연락" 제안
+   - 검사 일정이 있으면: "결과 확인 연락" 제안 (검사 1주일 후)
+   - 생일/기념일: 축하 연락 제안
+   - type 분류:
+     * reminder: 알림/리마인더
+     * action: 해야 할 행동
+     * prayer: 기도 관련
+     * visit: 심방/방문
 
 [날짜/시간 처리]
 - "이번 주 금요일", "다음 주일", "고난주간 전" 등 상대적 표현은 오늘 날짜를 기준으로 계산
@@ -1268,8 +1318,10 @@ def parse_input():
 
 [중요]
 - 하나의 텍스트에서 여러 유형의 항목을 동시에 추출할 수 있다
-- 인물 정보와 함께 일정이 언급되면 둘 다 추출 (예: "홍길동 권사 12월 10일 수술" → people + events)
-- 이해가 불가능한 정보는 무시한다
+- 인물 정보와 함께 일정이 언급되면 둘 다 추출
+- 일정 제목에는 반드시 "누구의" 일정인지 대상자를 포함해야 한다
+- 기존 인물 목록과 매칭하여 중복 생성 방지, 정보 업데이트 수행
+- suggestions는 사용자가 놓치기 쉬운 후속 조치를 제안해야 한다
 - JSON 외의 다른 텍스트는 절대로 출력하지 마라"""
 
         # GPT-5.1 Responses API 사용
@@ -1391,33 +1443,68 @@ def parse_input():
 
                 saved_tasks.append({'id': task_id, 'title': task.get('title')})
 
-            # 인물 저장
+            # 인물 저장 (UPDATE 또는 INSERT)
             for person in result.get('people', []):
-                if USE_POSTGRES:
-                    cursor.execute('''
-                        INSERT INTO people (name, role, category, notes)
-                        VALUES (%s, %s, %s, %s)
-                        RETURNING id
-                    ''', (
-                        person.get('name'),
-                        person.get('role'),
-                        person.get('category', '기타'),
-                        person.get('notes')
-                    ))
-                    person_id = cursor.fetchone()['id']
-                else:
-                    cursor.execute('''
-                        INSERT INTO people (name, role, category, notes)
-                        VALUES (?, ?, ?, ?)
-                    ''', (
-                        person.get('name'),
-                        person.get('role'),
-                        person.get('category', '기타'),
-                        person.get('notes')
-                    ))
-                    person_id = cursor.lastrowid
+                person_id = person.get('id')
+                is_update = person.get('is_update', False)
 
-                saved_people.append({'id': person_id, 'name': person.get('name')})
+                if is_update and person_id:
+                    # 기존 인물 업데이트
+                    if USE_POSTGRES:
+                        cursor.execute('''
+                            UPDATE people
+                            SET role = COALESCE(%s, role),
+                                category = COALESCE(%s, category),
+                                notes = %s,
+                                updated_at = NOW()
+                            WHERE id = %s
+                        ''', (
+                            person.get('role'),
+                            person.get('category'),
+                            person.get('notes'),
+                            person_id
+                        ))
+                    else:
+                        cursor.execute('''
+                            UPDATE people
+                            SET role = COALESCE(?, role),
+                                category = COALESCE(?, category),
+                                notes = ?,
+                                updated_at = datetime('now')
+                            WHERE id = ?
+                        ''', (
+                            person.get('role'),
+                            person.get('category'),
+                            person.get('notes'),
+                            person_id
+                        ))
+                    saved_people.append({'id': person_id, 'name': person.get('name'), 'updated': True})
+                else:
+                    # 신규 인물 추가
+                    if USE_POSTGRES:
+                        cursor.execute('''
+                            INSERT INTO people (name, role, category, notes)
+                            VALUES (%s, %s, %s, %s)
+                            RETURNING id
+                        ''', (
+                            person.get('name'),
+                            person.get('role'),
+                            person.get('category', '기타'),
+                            person.get('notes')
+                        ))
+                        person_id = cursor.fetchone()['id']
+                    else:
+                        cursor.execute('''
+                            INSERT INTO people (name, role, category, notes)
+                            VALUES (?, ?, ?, ?)
+                        ''', (
+                            person.get('name'),
+                            person.get('role'),
+                            person.get('category', '기타'),
+                            person.get('notes')
+                        ))
+                        person_id = cursor.lastrowid
+                    saved_people.append({'id': person_id, 'name': person.get('name'), 'updated': False})
 
             # 프로젝트 저장
             for project in result.get('projects', []):
@@ -1451,6 +1538,45 @@ def parse_input():
 
                 saved_projects.append({'id': project_id, 'name': project.get('name')})
 
+            # AI 제안사항(suggestions)을 tasks로 저장
+            saved_suggestions = []
+            for suggestion in result.get('suggestions', []):
+                suggestion_title = f"💡 {suggestion.get('title')}"
+                if suggestion.get('related_to'):
+                    suggestion_title = f"💡 [{suggestion.get('related_to')}] {suggestion.get('title')}"
+
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        INSERT INTO tasks (title, due_date, priority, category, source, sync_status, notes)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    ''', (
+                        suggestion_title,
+                        suggestion.get('due_date'),
+                        suggestion.get('priority', 'normal'),
+                        '교회',  # 대부분 교회 관련 제안
+                        'ai_suggestion',
+                        'pending_to_mac',
+                        f"AI 제안 ({suggestion.get('type', 'action')})"
+                    ))
+                    suggestion_id = cursor.fetchone()['id']
+                else:
+                    cursor.execute('''
+                        INSERT INTO tasks (title, due_date, priority, category, source, sync_status, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        suggestion_title,
+                        suggestion.get('due_date'),
+                        suggestion.get('priority', 'normal'),
+                        '교회',
+                        'ai_suggestion',
+                        'pending_to_mac',
+                        f"AI 제안 ({suggestion.get('type', 'action')})"
+                    ))
+                    suggestion_id = cursor.lastrowid
+
+                saved_suggestions.append({'id': suggestion_id, 'title': suggestion.get('title')})
+
             conn.commit()
             conn.close()
 
@@ -1462,7 +1588,8 @@ def parse_input():
             'saved_events': saved_events,
             'saved_tasks': saved_tasks,
             'saved_people': saved_people,
-            'saved_projects': saved_projects
+            'saved_projects': saved_projects,
+            'saved_suggestions': saved_suggestions if save_to_db else []
         })
     except json.JSONDecodeError as e:
         return jsonify({'success': False, 'error': f'JSON 파싱 오류: {str(e)}'}), 500

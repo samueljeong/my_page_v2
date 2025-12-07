@@ -621,10 +621,11 @@ const AssistantMain = (() => {
         <div class="parsed-section">
           <h5>👤 인물 (${parsed.people.length})</h5>
           ${parsed.people.map((p, i) => `
-            <div class="parsed-item">
+            <div class="parsed-item ${p.is_update ? 'update-item' : ''}">
               <div>
                 <strong>${escapeHtml(p.name)}</strong>
                 ${p.role ? `<span class="role-badge">${escapeHtml(p.role)}</span>` : ''}
+                ${p.is_update ? `<span class="update-badge">업데이트</span>` : ''}
               </div>
               <span class="item-meta">${escapeHtml(p.notes || '')}</span>
             </div>
@@ -653,6 +654,52 @@ const AssistantMain = (() => {
       `;
     } else {
       projectsDiv.innerHTML = '';
+    }
+
+    // AI 제안 (Suggestions)
+    let suggestionsDiv = document.getElementById('parsed-suggestions');
+    if (!suggestionsDiv) {
+      // 동적으로 생성
+      suggestionsDiv = document.createElement('div');
+      suggestionsDiv.id = 'parsed-suggestions';
+      suggestionsDiv.style.marginBottom = '0.75rem';
+      projectsDiv.after(suggestionsDiv);
+    }
+
+    if (parsed.suggestions && parsed.suggestions.length > 0) {
+      const typeIcons = {
+        'reminder': '⏰',
+        'action': '✋',
+        'prayer': '🙏',
+        'visit': '🏠'
+      };
+      const typeLabels = {
+        'reminder': '리마인더',
+        'action': '액션',
+        'prayer': '기도',
+        'visit': '심방'
+      };
+
+      suggestionsDiv.innerHTML = `
+        <div class="parsed-section suggestions-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b;">
+          <h5 style="color: #92400e;">💡 AI 비서 제안 (${parsed.suggestions.length})</h5>
+          ${parsed.suggestions.map((s, i) => `
+            <div class="parsed-item suggestion-item" style="background: rgba(255,255,255,0.7);">
+              <div>
+                <span style="font-size: 1.1rem; margin-right: 0.5rem;">${typeIcons[s.type] || '💡'}</span>
+                <strong>${escapeHtml(s.title)}</strong>
+                ${s.due_date ? `<span class="item-meta" style="color: #b45309;">${s.due_date}</span>` : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                ${s.related_to ? `<span class="item-meta" style="font-size: 0.75rem;">${escapeHtml(s.related_to)}</span>` : ''}
+                <span class="suggestion-type-badge" style="background: #fbbf24; color: #78350f; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">${typeLabels[s.type] || s.type}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      suggestionsDiv.innerHTML = '';
     }
 
     resultDiv.classList.add('show');
@@ -686,8 +733,14 @@ const AssistantMain = (() => {
         const counts = [];
         if (data.saved_events?.length) counts.push(`일정 ${data.saved_events.length}개`);
         if (data.saved_tasks?.length) counts.push(`할일 ${data.saved_tasks.length}개`);
-        if (data.saved_people?.length) counts.push(`인물 ${data.saved_people.length}개`);
+        if (data.saved_people?.length) {
+          const updated = data.saved_people.filter(p => p.updated).length;
+          const newPeople = data.saved_people.length - updated;
+          if (newPeople > 0) counts.push(`인물 ${newPeople}명 추가`);
+          if (updated > 0) counts.push(`인물 ${updated}명 업데이트`);
+        }
         if (data.saved_projects?.length) counts.push(`프로젝트 ${data.saved_projects.length}개`);
+        if (data.saved_suggestions?.length) counts.push(`AI제안 ${data.saved_suggestions.length}개`);
 
         showToast(`저장 완료: ${counts.join(', ')}`, 'success');
 
