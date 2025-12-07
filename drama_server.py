@@ -14986,8 +14986,8 @@ def run_automation_pipeline(row_data, row_index):
         for video_attempt in range(max_video_retries):
             try:
                 if video_attempt > 0:
-                    print(f"[AUTOMATION] 3. 영상 생성 재시도 ({video_attempt + 1}/{max_video_retries})...")
-                    time_module.sleep(5)  # 재시도 전 5초 대기
+                    print(f"[AUTOMATION] 3. 영상 생성 재시도 ({video_attempt + 1}/{max_video_retries}) - 3분 후 시작...")
+                    time_module.sleep(180)  # 재시도 전 3분 대기
 
                 video_resp = req.post(f"{base_url}/api/image/generate-video", json={
                     "session_id": session_id,
