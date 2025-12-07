@@ -10115,6 +10115,7 @@ def api_image_analyze_script():
         image_style = data.get('image_style', 'realistic')
         image_count = data.get('image_count', 4)  # 기본 4개
         audience = data.get('audience', 'senior')  # 시니어/일반 타겟
+        category = data.get('category', '').strip()  # 카테고리 (뉴스 등)
         output_language = data.get('output_language', 'ko')  # 출력 언어 (ko/en/ja/auto)
 
         # 언어 설정 매핑
@@ -10176,6 +10177,9 @@ def api_image_analyze_script():
 
         style_desc = style_guides.get(image_style, 'photorealistic')
 
+        # 카테고리 기반 뉴스 스타일 여부 (기본값)
+        is_news_category = category.lower() in ['뉴스', 'news', '시사', '정치', '경제'] if category else False
+
         # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트 - audience 반영
         if image_style == 'animation':
             # audience별 썸네일 규칙 설정
@@ -10189,6 +10193,87 @@ def api_image_analyze_script():
                 thumb_color = "#FFD700"
                 thumb_outline = "#000000"
                 thumb_style = "회상형/후회형 (그날을 잊지 않는다, 하는게 아니었다, 늦게 알았다)"
+
+            # 뉴스 스타일 썸네일 프롬프트 (55세+ 시청자 대상)
+            if is_news_category:
+                ai_prompts_section = f'''    "ai_prompts": {{
+      "A": {{
+        "description": "뉴스 스타일 A: 멀티 패널 뉴스 콜라주 - TV 뉴스 화면 캡처 느낌",
+        "prompt": "Korean TV news broadcast style YouTube thumbnail, 16:9 aspect ratio. Multiple image panels collage layout (3-4 panels). News anchor desk, interview screenshots, documentary footage style. Professional news graphics, Korean news channel aesthetic. Red and blue accent colors, '실제상황' or '단독' badge. Clean professional layout, NOT cartoon style, realistic news broadcast look. Yellow and cyan highlighted Korean text overlays.",
+        "text_overlay": {{
+          "main": "뉴스 헤드라인 (8-15자, 인용문 스타일 '...')",
+          "sub": "부제목 또는 출처"
+        }},
+        "style": "news-broadcast, multi-panel, professional"
+      }},
+      "B": {{
+        "description": "뉴스 스타일 B: 인터뷰/증언 스타일 - 실제 발언 강조",
+        "prompt": "Korean news interview style YouTube thumbnail, 16:9 aspect ratio. Split screen with speaker on one side, related imagery on other. Korean news lower-third graphics style. Professional documentary aesthetic. Bold Korean quote text with quotation marks. Yellow highlight on key phrases. News channel logo placement area. Serious, credible journalism look.",
+        "text_overlay": {{
+          "main": "인용문 형식 ('...라고 말했다')",
+          "sub": "화자 또는 출처"
+        }},
+        "style": "interview, quote, documentary"
+      }},
+      "C": {{
+        "description": "뉴스 스타일 C: 속보/단독 스타일 - 긴급 뉴스 느낌",
+        "prompt": "Breaking news style Korean YouTube thumbnail, 16:9 aspect ratio. Urgent news banner design, red 'Breaking' or '속보' badge. Dark background with dramatic lighting. Bold white and yellow Korean headline text. News ticker style bottom bar. Professional broadcast graphics, high contrast. Sense of urgency and importance.",
+        "text_overlay": {{
+          "main": "속보 헤드라인 (8-12자)",
+          "sub": "상세 내용"
+        }},
+        "style": "breaking-news, urgent, headline"
+      }}
+    }}'''
+                ai_prompts_rules = """## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES (뉴스 스타일) ⚠️
+The "ai_prompts" field generates 3 different NEWS-STYLE thumbnails for senior audience (55+).
+⚠️ Use REALISTIC NEWS BROADCAST style, NOT cartoon/webtoon!
+- A: Multi-panel news collage - TV news screenshot compilation style
+- B: Interview/testimony style - quote emphasis with speaker
+- C: Breaking news style - urgent headline with news banner
+- All 3 prompts MUST look like Korean TV news broadcasts!
+- Use professional, credible journalism aesthetic
+- Include Korean text overlays with quotes ("...")
+- Yellow/cyan highlights for emphasis
+- '실제상황', '단독', '속보' badges where appropriate"""
+            else:
+                ai_prompts_section = f'''    "ai_prompts": {{
+      "A": {{
+        "description": "프롬프트 A ({lang_config['name']}): 감정/표정 중심 - 놀람, 충격, 기쁨 등 강렬한 감정",
+        "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression (shock, surprise, joy). Vibrant colors, high contrast. Bold composition suitable for thumbnail. NO realistic humans, comic/cartoon style only. Clean background with focus on character emotion.",
+        "text_overlay": {{
+          "main": "강렬한 감정 텍스트 ({lang_config['name']}, {thumb_length})",
+          "sub": "서브 텍스트 (optional)"
+        }},
+        "style": "emotional, expressive, cartoon"
+      }},
+      "B": {{
+        "description": "프롬프트 B ({lang_config['name']}): 스토리/상황 중심 - Before vs After, 대비 구도",
+        "prompt": "Split screen or contrast composition YouTube thumbnail, 16:9 aspect ratio. Before/After or comparison layout. Cartoon/illustration style, vibrant contrasting colors. Clear visual storytelling, dramatic difference shown. NO realistic photos, comic art style.",
+        "text_overlay": {{
+          "main": "대비 강조 텍스트 ({lang_config['name']})",
+          "sub": "서브 텍스트 (optional)"
+        }},
+        "style": "narrative, contrast, split-screen"
+      }},
+      "C": {{
+        "description": "프롬프트 C ({lang_config['name']}): 텍스트/타이포 중심 - 강렬한 문구, 큰 텍스트 강조",
+        "prompt": "Typography-focused YouTube thumbnail, 16:9 aspect ratio. Large bold Korean text as main element. Gradient or solid color background. Minimal illustration elements. High contrast colors (red/yellow/white on dark). Eye-catching graphic design style.",
+        "text_overlay": {{
+          "main": "강렬한 메인 문구 ({lang_config['name']}, {thumb_length})",
+          "sub": "서브 텍스트 (optional)"
+        }},
+        "style": "typography, bold, graphic-design"
+      }}
+    }}'''
+                ai_prompts_rules = """## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES ⚠️
+The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
+⚠️ THUMBNAILS ARE NOT STICKMAN! Use webtoon/manhwa cartoon style with expressive characters!
+- A: Emotion/expression focused - Korean webtoon style character with exaggerated emotion (surprise, shock, joy)
+- B: Story/situation focused - show before/after contrast or key scene moment in cartoon style
+- C: Typography focused - bold text with minimal background, graphic design style
+- All 3 prompts MUST use cartoon/webtoon/manhwa illustration style, NOT stickman!
+- All 3 prompts MUST be different styles/compositions!"""
 
             system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 
@@ -10266,53 +10351,42 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     "text_color": "{thumb_color}",
     "outline_color": "{thumb_outline}",
     "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [pose/action]. Character face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage style.",
-    "ai_prompts": {{
-      "A": {{
-        "description": "프롬프트 A ({lang_config['name']}): 감정/표정 중심 - 놀람, 충격, 기쁨 등 강렬한 감정",
-        "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression (shock, surprise, joy). Vibrant colors, high contrast. Bold composition suitable for thumbnail. NO realistic humans, comic/cartoon style only. Clean background with focus on character emotion.",
-        "text_overlay": {{
-          "main": "강렬한 감정 텍스트 ({lang_config['name']}, {thumb_length})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "emotional, expressive, cartoon"
-      }},
-      "B": {{
-        "description": "프롬프트 B ({lang_config['name']}): 스토리/상황 중심 - Before vs After, 대비 구도",
-        "prompt": "Split screen or contrast composition YouTube thumbnail, 16:9 aspect ratio. Before/After or comparison layout. Cartoon/illustration style, vibrant contrasting colors. Clear visual storytelling, dramatic difference shown. NO realistic photos, comic art style.",
-        "text_overlay": {{
-          "main": "대비 강조 텍스트 ({lang_config['name']})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "narrative, contrast, split-screen"
-      }},
-      "C": {{
-        "description": "프롬프트 C ({lang_config['name']}): 텍스트/타이포 중심 - 강렬한 문구, 큰 텍스트 강조",
-        "prompt": "Typography-focused YouTube thumbnail, 16:9 aspect ratio. Large bold Korean text as main element. Gradient or solid color background. Minimal illustration elements. High contrast colors (red/yellow/white on dark). Eye-catching graphic design style.",
-        "text_overlay": {{
-          "main": "강렬한 메인 문구 ({lang_config['name']}, {thumb_length})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "typography, bold, graphic-design"
-      }}
+{ai_prompts_section}
+  }},
+  "video_effects": {{
+    "bgm_mood": "ONE of: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic",
+    "subtitle_highlights": [
+      {{"keyword": "강조할 단어1", "color": "#FF0000"}},
+      {{"keyword": "강조할 단어2", "color": "#FFFF00"}}
+    ],
+    "screen_overlays": [
+      {{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}},
+      {{"scene": 7, "text": "반전", "duration": 2, "style": "dramatic"}}
+    ],
+    "sound_effects": [
+      {{"scene": 1, "type": "impact", "moment": "description of when to play"}},
+      {{"scene": 3, "type": "emotional", "moment": "description of when to play"}}
+    ],
+    "lower_thirds": [
+      {{"scene": 2, "text": "화자명 또는 출처", "position": "bottom-left"}}
+    ],
+    "news_ticker": {{
+      "enabled": true,
+      "headlines": ["속보: 첫 번째 헤드라인", "이슈: 두 번째 헤드라인", "핵심: 세 번째 헤드라인"]
     }}
   }},
   "scenes": [
     {{
       "scene_number": 1,
-      "narration": "⚠️ EXACT TEXT from the script - COPY-PASTE the original sentences, DO NOT summarize or paraphrase!",
-      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [action], face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage."
+      "chapter_title": "Short chapter title for YouTube (5-15 chars)",
+      "narration": "<speak>원본 대본의 정확한 문장.<break time='300ms'/><prosody rate='slow'>감정 표현이 필요한 부분</prosody>에 SSML 태그 추가.</speak>",
+      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [action], face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage.",
+      "ken_burns": "zoom_in / zoom_out / pan_left / pan_right / pan_up / pan_down"
     }}
   ]
 }}
 
-## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES ⚠️
-The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
-⚠️ THUMBNAILS ARE NOT STICKMAN! Use webtoon/manhwa cartoon style with expressive characters!
-- A: Emotion/expression focused - Korean webtoon style character with exaggerated emotion (surprise, shock, joy)
-- B: Story/situation focused - show before/after contrast or key scene moment in cartoon style
-- C: Typography focused - bold text with minimal background, graphic design style
-- All 3 prompts MUST use cartoon/webtoon/manhwa illustration style, NOT stickman!
-- All 3 prompts MUST be different styles/compositions!
+{ai_prompts_rules}
 
 ## ⚠️ CRITICAL: TEXT_OVERLAY RULES (한글 텍스트 규칙) ⚠️
 The "text_overlay" field contains Korean text that will be rendered ON the thumbnail image.
@@ -10341,11 +10415,168 @@ The "text_overlay" field contains Korean text that will be rendered ON the thumb
 - sub: "투자, 그 후의 이야..." ❌ (불완전한 문장)
 
 ## ⚠️ CRITICAL: NARRATION RULE ⚠️
-The "narration" field MUST contain the EXACT ORIGINAL TEXT from the script!
-- DO NOT summarize or paraphrase
-- DO NOT add your own words
+The "narration" field MUST contain the EXACT ORIGINAL TEXT from the script + SSML emotion tags!
+- DO NOT summarize or paraphrase the actual content
 - COPY-PASTE the exact sentences from the script that this scene covers
-- This helps the user know EXACTLY where to place each image in the video timeline
+- ADD SSML tags (<speak>, <prosody>, <emphasis>, <break>) for emotional expression
+- Wrap the entire narration in <speak>...</speak> tags
+- Use SSML sparingly (20-30% of text) for natural delivery
+
+**Example with SSML:**
+"narration": "<speak>그날 아침, 평소와 같은 하루가 시작될 줄 알았습니다.<break time='300ms'/><prosody rate='slow'>하지만</prosody>...<emphasis level='strong'>충격적인</emphasis> 소식이 전해졌습니다.</speak>"
+
+## ⚠️ VIDEO EFFECTS RULES ⚠️
+
+### BGM Mood (배경음악 분위기)
+Choose ONE mood that best fits the overall video tone:
+- hopeful: 희망적, 긍정적 결말
+- sad: 슬픔, 이별, 상실
+- tense: 긴장감, 위기
+- dramatic: 충격, 반전, 클라이맥스
+- calm: 평화, 일상
+- inspiring: 감동, 성공
+- mysterious: 미스터리, 의문
+- nostalgic: 회상, 추억
+
+### Subtitle Highlights (자막 강조) - 자동 선정
+GPT가 대본 흐름을 분석하여 자동으로 강조할 키워드를 선정합니다.
+⚠️ 중요: 색상을 남발하면 조잡해 보입니다! 신중하게 선택하세요!
+
+**규칙:**
+- 전체 영상에서 **최대 3-5개** 키워드만 선정 (너무 많으면 효과 없음)
+- 정말 **임팩트 있는 순간**에만 사용
+- 키워드는 나레이션 텍스트에서 **정확히 일치**해야 함
+
+**색상 가이드:**
+- #FF0000 (빨강): 충격/반전 순간 - "충격", "실화", "경악", "폭로"
+- #FFFF00 (노랑): 강조/결론 - "결국", "드디어", "마침내", "바로"
+- #00FFFF (청록): 감정/감동 - "눈물", "감동", "사랑", "희망"
+
+**❌ 하지 마세요:**
+- 모든 문장에 색상 넣기
+- 한 씬에 여러 색상 사용
+- 일반적인 단어 강조 (그래서, 그런데, 하지만 등)
+
+### Screen Text Overlays (화면 텍스트 오버레이) - 새 기능!
+특정 순간에 화면에 큰 텍스트를 띄워 임팩트를 줍니다.
+예: "대박!" "충격!" "반전!" 같은 텍스트가 화면 중앙에 3초간 표시
+
+**규칙:**
+- 전체 영상에서 **최대 2-3개**만 사용 (과하면 유치해 보임)
+- 정말 **클라이맥스 순간**에만 사용
+- 텍스트는 **1-4글자** 짧게 (대박, 충격, 반전, 실화 등)
+
+**출력 형식:**
+"screen_overlays": [
+  {"scene": 3, "text": "대박!", "duration": 3, "style": "impact"},
+  {"scene": 7, "text": "반전", "duration": 2, "style": "dramatic"}
+]
+
+**스타일 옵션:**
+- impact: 빨간 테두리, 흰 텍스트, 펄스 효과
+- dramatic: 검정 배경, 노란 텍스트, 페이드인
+- emotional: 부드러운 그라데이션, 감성적
+
+### Sound Effects (효과음)
+Add sound effects at dramatic moments (max 3-5 per video):
+- impact: 충격적 사실 공개, 반전 순간 (쿵/둥)
+- whoosh: 장면 전환, 시간 이동 (휙)
+- ding: 포인트 강조, 깨달음 (띵)
+- tension: 긴장감 고조 (드르르)
+- emotional: 감동/슬픔 포인트 (피아노)
+- success: 긍정적 결과, 해피엔딩 (짠)
+
+### Lower Thirds (하단 자막)
+Add source/speaker info when quoting or citing:
+- Use for: 전문가 발언, 뉴스 인용, 통계 출처
+- Format: "김OO 교수", "OO일보", "2024년 통계"
+- Position: bottom-left (default)
+
+### News Ticker (뉴스 티커) - 뉴스/시사 콘텐츠 전용
+화면 하단에 스크롤되는 뉴스 헤드라인을 추가합니다.
+⚠️ 뉴스, 시사, 정치, 경제 카테고리 영상에만 사용!
+
+**형식:**
+"news_ticker": {
+  "enabled": true,
+  "headlines": ["속보: 핵심 내용 1", "이슈: 핵심 내용 2", "핵심: 핵심 내용 3"]
+}
+
+**규칙:**
+- enabled: 뉴스 스타일 영상에만 true, 그 외 false
+- headlines: 3-5개의 짧은 헤드라인 (각 15-25자)
+- 대본의 핵심 포인트를 뉴스 헤드라인 스타일로 작성
+- 접두어 사용: "속보:", "이슈:", "핵심:", "주목:", "화제:"
+
+### Ken Burns Effect (이미지 움직임)
+Each scene should have a different Ken Burns effect for visual variety:
+- zoom_in: 서서히 확대 (감정적 순간, 클로즈업)
+- zoom_out: 서서히 축소 (전체 상황 보여줄 때)
+- pan_left: 왼쪽으로 이동
+- pan_right: 오른쪽으로 이동
+- pan_up: 위로 이동 (희망적)
+- pan_down: 아래로 이동 (슬픔, 실망)
+⚠️ Alternate effects between scenes for dynamic feel!
+
+### Chapter Titles (챕터 제목)
+Each scene needs a short chapter title for YouTube chapters:
+- Length: 5-15 characters in Korean
+- Style: 간결하고 흥미 유발
+- Examples: "충격적 발견", "반전의 시작", "눈물의 재회"
+
+### 🎭 SSML 감정 표현 (TTS 나레이션용) - 중요!
+나레이션 텍스트에 SSML 태그를 추가하여 TTS가 감정을 담아 읽도록 합니다.
+대본 텍스트는 그대로 유지하되, 감정 표현이 필요한 부분에 SSML 태그를 추가하세요.
+
+**사용 가능한 SSML 태그:**
+
+1. **<prosody> - 속도/높낮이 조절**
+   - rate: x-slow, slow, medium, fast, x-fast (또는 50%-200%)
+   - pitch: x-low, low, medium, high, x-high (또는 -20st~+20st)
+   ```
+   <prosody rate="slow" pitch="low">천천히 낮게</prosody>
+   <prosody rate="fast">빠르게 긴박하게</prosody>
+   <prosody pitch="high">높은 톤으로</prosody>
+   ```
+
+2. **<emphasis> - 강조**
+   - level: strong, moderate, reduced
+   ```
+   <emphasis level="strong">충격적인</emphasis> 사실이 밝혀졌습니다.
+   ```
+
+3. **<break> - 휴지(쉬기)**
+   - time: 100ms ~ 1000ms
+   ```
+   그리고...<break time="500ms"/>반전이 시작됩니다.
+   ```
+
+**감정별 SSML 패턴:**
+- 😨 긴장/충격: `<prosody rate="fast" pitch="high">긴박한 내용</prosody>`
+- 😢 슬픔: `<prosody rate="slow" pitch="low">슬픈 내용</prosody>`
+- 🎉 기쁨/희망: `<prosody rate="medium" pitch="high">밝은 내용</prosody>`
+- 🤔 생각/회상: `<prosody rate="slow">회상 내용</prosody><break time="300ms"/>`
+- ❗ 강조: `<emphasis level="strong">중요한 포인트</emphasis>`
+- 😲 반전: `<break time="500ms"/><prosody rate="slow" pitch="low">그런데...</prosody>`
+
+**⚠️ 주의사항:**
+- 모든 나레이션을 `<speak>` 태그로 감싸세요
+- 과도한 태그 사용 금지 - 자연스러움이 중요!
+- 매 문장마다 태그를 넣지 말고, 감정 변화가 필요한 핵심 순간에만 사용
+- 전체 나레이션의 20-30%에만 SSML 태그 적용
+
+**예시:**
+```
+<speak>
+그날 아침, 평소와 같은 하루가 시작될 줄 알았습니다.
+<break time="300ms"/>
+<prosody rate="slow">하지만</prosody>...
+<emphasis level="strong">충격적인</emphasis> 소식이 전해졌습니다.
+<prosody rate="fast" pitch="high">급히 달려간 그곳에서 본 것은</prosody>
+<break time="500ms"/>
+<prosody rate="slow" pitch="low">아무도 예상치 못한 광경이었습니다.</prosody>
+</speak>
+```
 
 ## EXAMPLE PROMPTS (스틱맨은 항상 동일한 얼굴: 점 눈 2개, 작은 입, 얇은 눈썹)
 
@@ -10646,7 +10877,8 @@ Rules:
 4. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
 5. ⚠️ ALL CHARACTERS = STICKMAN ONLY! No realistic humans (no grandfather, grandmother, elderly people). Use simple stickman with anime background."""
 
-        print(f"[IMAGE-ANALYZE] GPT-5.1 generating prompts... (style: {image_style}, content: {content_type}, audience: {audience}, language: {output_language})")
+        thumb_style_log = "뉴스" if (image_style == 'animation' and is_news_category) else "일반"
+        print(f"[IMAGE-ANALYZE] GPT-5.1 generating prompts... (style: {image_style}, content: {content_type}, audience: {audience}, language: {output_language}, 썸네일: {thumb_style_log})")
 
         # GPT-5.1은 Responses API 사용
         response = client.responses.create(
@@ -11131,22 +11363,56 @@ def api_image_generate_assets_zip():
             return text
 
         def generate_tts_for_sentence(text, voice_name, language_code, api_key):
-            """단일 문장에 대한 TTS 생성"""
-            # 숫자 → 한글 변환 (자연스러운 읽기)
-            if language_code.startswith('ko'):
-                text = convert_numbers_to_korean(text)
-                print(f"[TTS] 숫자 변환 후: {text[:50]}...")
+            """단일 문장에 대한 TTS 생성 (SSML 자동 감지)"""
+            # SSML 태그 감지
+            ssml_tags = ['<speak>', '<prosody', '<emphasis', '<break']
+            is_ssml = any(tag in text for tag in ssml_tags)
 
-            tts_url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
-            payload = {
-                "input": {"text": text},
-                "voice": {"languageCode": language_code, "name": voice_name},
-                "audioConfig": {"audioEncoding": "MP3", "speakingRate": 0.95, "pitch": 0}
-            }
+            if is_ssml:
+                # SSML 모드: <speak> 태그가 없으면 추가
+                if not text.strip().startswith('<speak>'):
+                    text = f"<speak>{text}</speak>"
+                # SSML 내부의 텍스트에서 숫자 변환 (태그 바깥만)
+                if language_code.startswith('ko'):
+                    # SSML 태그를 보존하면서 텍스트만 변환
+                    def convert_text_in_ssml(ssml_text):
+                        import re
+                        # 태그를 플레이스홀더로 대체
+                        tag_pattern = r'(<[^>]+>)'
+                        parts = re.split(tag_pattern, ssml_text)
+                        converted_parts = []
+                        for part in parts:
+                            if part.startswith('<'):
+                                converted_parts.append(part)  # 태그는 그대로
+                            else:
+                                converted_parts.append(convert_numbers_to_korean(part))  # 텍스트만 변환
+                        return ''.join(converted_parts)
+                    text = convert_text_in_ssml(text)
+                print(f"[TTS-SSML] 감정 표현 TTS: {text[:80]}...")
+                tts_url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
+                payload = {
+                    "input": {"ssml": text},  # SSML 입력
+                    "voice": {"languageCode": language_code, "name": voice_name},
+                    "audioConfig": {"audioEncoding": "MP3"}  # SSML은 prosody로 속도/피치 제어
+                }
+            else:
+                # 일반 텍스트 모드
+                if language_code.startswith('ko'):
+                    text = convert_numbers_to_korean(text)
+                    print(f"[TTS] 숫자 변환 후: {text[:50]}...")
+                tts_url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
+                payload = {
+                    "input": {"text": text},
+                    "voice": {"languageCode": language_code, "name": voice_name},
+                    "audioConfig": {"audioEncoding": "MP3", "speakingRate": 0.95, "pitch": 0}
+                }
+
             response = requests.post(tts_url, json=payload, timeout=60)
             if response.status_code == 200:
                 result = response.json()
                 return base64.b64decode(result.get("audioContent", ""))
+            else:
+                print(f"[TTS] 에러: {response.status_code} - {response.text[:200]}")
             return None
 
         data = request.get_json()
@@ -11172,6 +11438,20 @@ def api_image_generate_assets_zip():
         scene_metadata = []  # [{image_url, audio_url, duration, subtitles: [{start, end, text}], language}]
         detected_lang_global = 'ko'  # 전체 언어 (마지막 감지된 언어)
 
+        def strip_ssml_tags(text):
+            """SSML 태그를 제거하고 순수 텍스트만 추출"""
+            import re
+            # 모든 SSML 태그 제거
+            clean_text = re.sub(r'<[^>]+>', '', text)
+            # 연속 공백 정리
+            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+            return clean_text
+
+        def is_ssml_content(text):
+            """SSML 태그가 포함된 텍스트인지 확인"""
+            ssml_tags = ['<speak>', '<prosody', '<emphasis', '<break']
+            return any(tag in text for tag in ssml_tags)
+
         # 1. 각 씬의 문장별 TTS 생성
         for scene_idx, scene in enumerate(scenes):
             narration = scene.get('text', '')
@@ -11184,11 +11464,19 @@ def api_image_generate_assets_zip():
             voice_name = get_voice_for_language(detected_lang, base_voice)
             language_code = get_language_code(detected_lang)
 
-            sentences = split_sentences(narration, detected_lang)
-            if not sentences:
-                sentences = [narration]
+            # SSML 감지: SSML이면 문장 분리 없이 전체 처리
+            has_ssml = is_ssml_content(narration)
 
-            print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences, lang={detected_lang}")
+            if has_ssml:
+                # SSML 모드: 전체 나레이션을 한 번에 처리
+                sentences = [narration]  # 전체를 하나로
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: SSML 감정 표현 모드, lang={detected_lang}")
+            else:
+                # 일반 모드: 문장별 분리
+                sentences = split_sentences(narration, detected_lang)
+                if not sentences:
+                    sentences = [narration]
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences, lang={detected_lang}")
 
             scene_audios = []
             scene_start_time = current_time  # 씬 시작 시간
@@ -11196,7 +11484,7 @@ def api_image_generate_assets_zip():
             scene_relative_time = 0.0
 
             for sent_idx, sentence in enumerate(sentences):
-                # 문장별 TTS 생성
+                # 문장별 TTS 생성 (SSML 자동 감지됨)
                 audio_bytes = generate_tts_for_sentence(sentence, voice_name, language_code, api_key)
 
                 if audio_bytes:
@@ -11204,22 +11492,25 @@ def api_image_generate_assets_zip():
                     duration = get_mp3_duration(audio_bytes)
                     scene_audios.append(audio_bytes)
 
+                    # 자막용 텍스트 (SSML 태그 제거)
+                    subtitle_text = strip_ssml_tags(sentence) if has_ssml else sentence
+
                     # SRT 엔트리 생성 (전체 타임라인)
                     srt_entries.append({
                         'index': len(srt_entries) + 1,
                         'start': current_time,
                         'end': current_time + duration,
-                        'text': sentence
+                        'text': subtitle_text
                     })
 
                     # 씬 내 상대적 자막 (영상 생성용)
                     scene_subtitles.append({
                         'start': scene_relative_time,
                         'end': scene_relative_time + duration,
-                        'text': sentence
+                        'text': subtitle_text
                     })
 
-                    print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {sentence[:30]}...")
+                    print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {subtitle_text[:30]}...")
                     current_time += duration
                     scene_relative_time += duration
 
@@ -11626,12 +11917,312 @@ def _get_subtitle_style(lang):
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
 
-def _generate_video_worker(job_id, session_id, scenes, detected_lang):
-    """백그라운드 영상 생성 워커"""
+def _hex_to_ass_color(hex_color):
+    """HEX 색상을 ASS 포맷으로 변환 (#RRGGBB -> &HBBGGRR&)"""
+    if not hex_color or not hex_color.startswith('#'):
+        return "&H00FFFF&"  # 기본 노란색
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 6:
+        r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+        return f"&H{b}{g}{r}&"
+    return "&H00FFFF&"
+
+
+def _apply_subtitle_highlights(text, highlights):
+    """자막 텍스트에 키워드 색상 강조 적용
+
+    Args:
+        text: 원본 자막 텍스트
+        highlights: [{"keyword": "단어", "color": "#FF0000"}, ...]
+
+    Returns:
+        색상 태그가 적용된 텍스트
+    """
+    if not highlights:
+        return text
+
+    result = text
+    for h in highlights:
+        keyword = h.get('keyword', '')
+        color = h.get('color', '#FFFF00')
+        if keyword and keyword in result:
+            ass_color = _hex_to_ass_color(color)
+            # ASS 색상 태그 적용: {\c&HBBGGRR&}텍스트{\c&HFFFFFF&}
+            colored_keyword = f"{{\\c{ass_color}}}{keyword}{{\\c&HFFFFFF&}}"
+            result = result.replace(keyword, colored_keyword)
+
+    return result
+
+
+def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
+    """화면 텍스트 오버레이용 FFmpeg drawtext 필터 생성
+
+    Args:
+        screen_overlays: [{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}, ...]
+        scenes: 씬 목록 (duration 계산용)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not screen_overlays:
+        return None
+
+    # 씬별 시작 시간 계산
+    scene_start_times = {}
+    current_time = 0
+    for idx, scene in enumerate(scenes):
+        scene_start_times[idx + 1] = current_time  # 1-based index
+        current_time += scene.get('duration', 0)
+
+    filters = []
+    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    for overlay in screen_overlays:
+        scene_num = overlay.get('scene', 1)
+        text = overlay.get('text', '')
+        duration = overlay.get('duration', 3)
+        style = overlay.get('style', 'impact')
+
+        if not text or scene_num not in scene_start_times:
+            continue
+
+        start_time = scene_start_times[scene_num]
+        end_time = start_time + duration
+
+        # 스타일별 설정
+        if style == 'impact':
+            # 빨간 테두리, 흰 텍스트, 큰 글씨
+            fontcolor = "white"
+            bordercolor = "red"
+            fontsize = 80
+            borderw = 4
+        elif style == 'dramatic':
+            # 노란 텍스트, 검정 배경
+            fontcolor = "yellow"
+            bordercolor = "black"
+            fontsize = 70
+            borderw = 3
+        elif style == 'emotional':
+            # 부드러운 파란 텍스트
+            fontcolor = "cyan"
+            bordercolor = "darkblue"
+            fontsize = 60
+            borderw = 2
+        else:
+            fontcolor = "white"
+            bordercolor = "black"
+            fontsize = 70
+            borderw = 3
+
+        # drawtext 필터 생성 (화면 중앙에 표시)
+        drawtext = (
+            f"drawtext=text='{text}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize={fontsize}:"
+            f"fontcolor={fontcolor}:"
+            f"bordercolor={bordercolor}:"
+            f"borderw={borderw}:"
+            f"x=(w-text_w)/2:"
+            f"y=(h-text_h)/2:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+        filters.append(drawtext)
+
+    if filters:
+        return ",".join(filters)
+    return None
+
+
+def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
+    """로워서드(하단 자막) 오버레이용 FFmpeg drawtext 필터 생성
+
+    Args:
+        lower_thirds: [{"scene": 2, "text": "출처: OO일보", "position": "bottom-left"}, ...]
+        scenes: 씬 목록 (duration 계산용)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not lower_thirds:
+        return None
+
+    # 씬별 시작 시간 계산
+    scene_start_times = {}
+    scene_durations = {}
+    current_time = 0
+    for idx, scene in enumerate(scenes):
+        scene_start_times[idx + 1] = current_time  # 1-based index
+        scene_durations[idx + 1] = scene.get('duration', 0)
+        current_time += scene.get('duration', 0)
+
+    filters = []
+    font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    for lt in lower_thirds:
+        scene_num = lt.get('scene', 1)
+        text = lt.get('text', '')
+        position = lt.get('position', 'bottom-left')
+
+        if not text or scene_num not in scene_start_times:
+            continue
+
+        start_time = scene_start_times[scene_num]
+        # 로워서드는 씬 전체 동안 표시 (페이드인/아웃)
+        scene_duration = scene_durations.get(scene_num, 5)
+        end_time = start_time + scene_duration
+
+        # 위치별 좌표 설정
+        if position == 'bottom-left':
+            x_pos = "30"
+            y_pos = "h-th-80"  # 하단에서 80px 위
+        elif position == 'bottom-right':
+            x_pos = "w-tw-30"
+            y_pos = "h-th-80"
+        elif position == 'bottom-center':
+            x_pos = "(w-tw)/2"
+            y_pos = "h-th-80"
+        else:  # default: bottom-left
+            x_pos = "30"
+            y_pos = "h-th-80"
+
+        # 반투명 배경 박스 + 텍스트 (뉴스 스타일)
+        # 배경 박스 필터 (drawbox)
+        box_filter = (
+            f"drawbox=x={x_pos}-10:y={y_pos}-10:"
+            f"w=tw+20:h=th+20:"
+            f"color=black@0.7:t=fill:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        # 텍스트 필터
+        text_escaped = text.replace("'", "'\\''").replace(":", "\\:")
+        text_filter = (
+            f"drawtext=text='{text_escaped}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize=28:"
+            f"fontcolor=white:"
+            f"x={x_pos}:"
+            f"y={y_pos}:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        # drawbox는 text_w를 모르므로 대략적인 크기 사용
+        # 더 정확한 방법: 텍스트만 표시 (배경 없이)
+        # 또는 box=1:boxcolor=black@0.7:boxborderw=10 사용
+        text_with_bg = (
+            f"drawtext=text='{text_escaped}':"
+            f"fontfile='{font_escaped}':"
+            f"fontsize=28:"
+            f"fontcolor=white:"
+            f"box=1:"
+            f"boxcolor=black@0.7:"
+            f"boxborderw=10:"
+            f"x={x_pos}:"
+            f"y={y_pos}:"
+            f"enable='between(t,{start_time},{end_time})'"
+        )
+
+        filters.append(text_with_bg)
+
+    if filters:
+        return ",".join(filters)
+    return None
+
+
+def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
+    """뉴스 티커(스크롤 헤드라인) 필터 생성
+
+    Args:
+        news_ticker: {"enabled": true, "headlines": ["속보: ...", "이슈: ..."]}
+        total_duration: 전체 영상 길이 (초)
+        fonts_dir: 폰트 디렉토리 경로
+
+    Returns:
+        FFmpeg drawtext 필터 문자열 또는 None
+    """
+    if not news_ticker or not news_ticker.get('enabled'):
+        return None
+
+    headlines = news_ticker.get('headlines', [])
+    if not headlines:
+        return None
+
+    # 헤드라인을 하나의 긴 텍스트로 연결 (구분자: ●)
+    ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
+    ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
+
+    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+    # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
+    # x = w - (mod(t * speed, tw + w))
+    # speed = (tw + w) / (total_duration / scroll_cycles)
+    scroll_speed = 100  # 초당 100픽셀 이동
+
+    # 뉴스 티커 스타일: 하단에 빨간 배경 + 흰 텍스트
+    ticker_filter = (
+        f"drawbox=x=0:y=h-40:w=w:h=40:color=red@0.9:t=fill,"
+        f"drawtext=text='{ticker_text}':"
+        f"fontfile='{font_escaped}':"
+        f"fontsize=24:"
+        f"fontcolor=white:"
+        f"x=w-mod(t*{scroll_speed}\\,tw+w):"
+        f"y=h-35"
+    )
+
+    return ticker_filter
+
+
+def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
+    """Ken Burns 효과용 zoompan 필터 생성
+
+    Args:
+        effect_type: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
+        duration: 클립 길이 (초)
+        fps: 프레임 레이트
+        output_size: 출력 해상도
+
+    Returns:
+        FFmpeg vf filter string
+    """
+    total_frames = int(duration * fps)
+    w, h = map(int, output_size.split('x'))
+
+    # 각 효과별 zoompan 파라미터
+    effects = {
+        'zoom_in': f"zoompan=z='min(zoom+0.001,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'zoom_out': f"zoompan=z='if(lte(zoom,1.0),1.3,max(1.001,zoom-0.001))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_left': f"zoompan=z='1.1':x='iw*0.05+iw*0.05*(1-on/{total_frames})':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_right': f"zoompan=z='1.1':x='iw*0.05*on/{total_frames}':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_up': f"zoompan=z='1.1':x='iw/2-(iw/zoom/2)':y='ih*0.05+ih*0.05*(1-on/{total_frames})':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_down': f"zoompan=z='1.1':x='iw/2-(iw/zoom/2)':y='ih*0.05*on/{total_frames}':d={total_frames}:s={output_size}:fps={fps}",
+    }
+
+    return effects.get(effect_type, effects['zoom_in'])  # 기본값: zoom_in
+
+
+def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effects=None):
+    """백그라운드 영상 생성 워커
+
+    video_effects 구조:
+    {
+        "bgm_mood": "hopeful/sad/tense/dramatic/calm/inspiring/mysterious/nostalgic",
+        "subtitle_highlights": [{"keyword": "단어", "color": "#FF0000"}],
+        "sound_effects": [{"scene": 1, "type": "impact", "moment": "..."}],
+        "lower_thirds": [{"scene": 2, "text": "출처", "position": "bottom-left"}]
+    }
+    """
     import subprocess
     import shutil
     import urllib.request
     import gc  # 메모리 정리용
+
+    if video_effects is None:
+        video_effects = {}
 
     try:
         _update_job_status(job_id, status='processing', message='영상 생성 시작...')
@@ -11709,15 +12300,26 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
                     })
                 current_time += duration
 
-                # 씬 클립 생성
+                # Ken Burns 효과 가져오기 (씬별로 다른 효과 적용)
+                ken_burns_effect = scene.get('ken_burns', None)
+                if not ken_burns_effect:
+                    # 씬별로 다양한 효과 자동 배정 (다이나믹한 영상을 위해)
+                    effects_cycle = ['zoom_in', 'pan_right', 'zoom_out', 'pan_left', 'zoom_in', 'pan_up']
+                    ken_burns_effect = effects_cycle[idx % len(effects_cycle)]
+
+                ken_burns_filter = _get_ken_burns_filter(ken_burns_effect, duration)
+                print(f"[VIDEO-WORKER] Scene {idx + 1} Ken Burns: {ken_burns_effect}")
+
+                # 씬 클립 생성 (Ken Burns 효과 포함)
                 clip_path = os.path.join(work_dir, f"clip_{idx:03d}.mp4")
                 if audio_path and os.path.exists(audio_path):
                     cmd = [
                         "ffmpeg", "-y",
-                        "-loop", "1", "-i", img_path,
+                        "-i", img_path,
                         "-i", audio_path,
-                        "-c:v", "libx264", "-tune", "stillimage",
-                        "-c:a", "aac", "-b:a", "128k",
+                        "-vf", ken_burns_filter,
+                        "-c:v", "libx264", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                         "-pix_fmt", "yuv420p",
                         "-shortest", "-t", str(duration),
                         clip_path
@@ -11725,9 +12327,11 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
                 else:
                     cmd = [
                         "ffmpeg", "-y",
-                        "-loop", "1", "-i", img_path,
+                        "-i", img_path,
                         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-                        "-c:v", "libx264", "-tune", "stillimage",
+                        "-vf", ken_burns_filter,
+                        "-c:v", "libx264", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                         "-pix_fmt", "yuv420p",
                         "-t", str(duration), "-shortest",
                         clip_path
@@ -11796,18 +12400,25 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
             if not os.path.exists(merged_path):
                 raise Exception("merged.mp4 파일이 생성되지 않음")
 
-            # 3. SRT 자막 생성
+            # 3. SRT 자막 생성 (색상 강조 적용)
             _update_job_status(job_id, progress=85, message='자막 처리 중...')
+
+            # 자막 강조 키워드 가져오기
+            subtitle_highlights = video_effects.get('subtitle_highlights', [])
+            if subtitle_highlights:
+                print(f"[VIDEO-WORKER] 자막 강조 키워드: {[h.get('keyword') for h in subtitle_highlights]}")
 
             srt_path = os.path.join(work_dir, "subtitles.srt")
             with open(srt_path, 'w', encoding='utf-8') as f:
                 for i, sub in enumerate(all_subtitles, 1):
                     start_str = format_srt_time(sub['start'])
                     end_str = format_srt_time(sub['end'])
-                    f.write(f"{i}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+                    # 키워드 색상 강조 적용
+                    highlighted_text = _apply_subtitle_highlights(sub['text'], subtitle_highlights)
+                    f.write(f"{i}\n{start_str} --> {end_str}\n{highlighted_text}\n\n")
 
-            # 4. 자막 burn-in
-            _update_job_status(job_id, progress=90, message='자막 삽입 중...')
+            # 4. 자막 burn-in + 화면 텍스트 오버레이
+            _update_job_status(job_id, progress=90, message='자막 및 효과 삽입 중...')
 
             subtitle_style = _get_subtitle_style(detected_lang)
             final_path = os.path.join(work_dir, "final.mp4")
@@ -11821,10 +12432,35 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
             srt_escaped = srt_abs_path.replace('\\', '/').replace(':', '\\:')
             fonts_escaped = fonts_dir.replace('\\', '/').replace(':', '\\:')
 
+            # 기본 자막 필터
             vf_filter = f"subtitles={srt_escaped}:fontsdir={fonts_escaped}:force_style='{subtitle_style}'"
 
+            # 화면 텍스트 오버레이 추가 (screen_overlays)
+            screen_overlays = video_effects.get('screen_overlays', [])
+            if screen_overlays:
+                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir)
+                if overlay_filter:
+                    vf_filter = f"{vf_filter},{overlay_filter}"
+                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가")
+
+            # 로워서드 오버레이 추가 (lower_thirds)
+            lower_thirds = video_effects.get('lower_thirds', [])
+            if lower_thirds:
+                lt_filter = _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir)
+                if lt_filter:
+                    vf_filter = f"{vf_filter},{lt_filter}"
+                    print(f"[VIDEO-WORKER] 로워서드 {len(lower_thirds)}개 추가")
+
+            # 뉴스 티커 추가 (news_ticker)
+            news_ticker = video_effects.get('news_ticker', {})
+            if news_ticker and news_ticker.get('enabled'):
+                ticker_filter = _generate_news_ticker_filter(news_ticker, current_time, fonts_dir)
+                if ticker_filter:
+                    vf_filter = f"{vf_filter},{ticker_filter}"
+                    print(f"[VIDEO-WORKER] 뉴스 티커 추가 (헤드라인 {len(news_ticker.get('headlines', []))}개)")
+
             print(f"[VIDEO-WORKER] SRT path: {srt_abs_path}")
-            print(f"[VIDEO-WORKER] Subtitle filter: {vf_filter}")
+            print(f"[VIDEO-WORKER] VF filter 길이: {len(vf_filter)} chars")
             print(f"[VIDEO-WORKER] Fonts directory: {fonts_dir}")
 
             # IMPORTANT: stdout=DEVNULL, stderr=PIPE to avoid OOM from buffering FFmpeg output
@@ -11888,6 +12524,7 @@ def api_image_generate_video():
     session_id = data.get('session_id', str(uuid_module.uuid4())[:8])
     scenes = data.get('scenes', [])
     detected_lang = data.get('language', 'en')
+    video_effects = data.get('video_effects', {})  # 새 기능: BGM, 효과음, 자막 강조, Ken Burns 등
 
     if not scenes:
         return jsonify({"ok": False, "error": "씬 데이터가 없습니다"}), 400
@@ -11911,7 +12548,7 @@ def api_image_generate_video():
     # 백그라운드 스레드 시작
     thread = threading.Thread(
         target=_generate_video_worker,
-        args=(job_id, session_id, scenes, detected_lang),
+        args=(job_id, session_id, scenes, detected_lang, video_effects),
         daemon=True
     )
     thread.start()
@@ -14922,7 +15559,7 @@ def run_automation_pipeline(row_data, row_index):
         # E(4): 예약시간, F(5): 대본, G(6): 제목
         # H(7): 비용(출력), I(8): 공개설정
         # J(9): 영상URL(출력), K(10): 에러메시지(출력)
-        # L(11): 음성(선택), M(12): 타겟(선택)
+        # L(11): 음성(선택), M(12): 타겟(선택), N(13): 카테고리(선택)
         status = row_data[0] if len(row_data) > 0 else ''
         work_time = row_data[1] if len(row_data) > 1 else ''  # B: 작업시간 (파이프라인 실행용)
         channel_id = (row_data[2] if len(row_data) > 2 else '').strip()  # 공백 제거
@@ -14935,6 +15572,7 @@ def run_automation_pipeline(row_data, row_index):
         # J(9), K(10)은 출력 컬럼이므로 스킵
         voice = row_data[11] if len(row_data) > 11 else 'ko-KR-Neural2-C'  # L컬럼: 음성 (기본: 남성)
         audience = row_data[12] if len(row_data) > 12 else 'senior'  # M컬럼: 타겟 시청자
+        category = (row_data[13] if len(row_data) > 13 else '').strip()  # N컬럼: 카테고리 (뉴스 등)
 
         # 비용 추적 변수 초기화
         total_cost = 0.0
@@ -14949,6 +15587,7 @@ def run_automation_pipeline(row_data, row_index):
         print(f"  - 공개설정: {visibility}")
         print(f"  - 음성: {voice}")
         print(f"  - 타겟: {audience}")
+        print(f"  - 카테고리: {category or '(일반)'}")
 
         if not script or len(script.strip()) < 10:
             return {"ok": False, "error": "대본이 너무 짧습니다 (최소 10자)", "video_url": None}
@@ -14969,6 +15608,7 @@ def run_automation_pipeline(row_data, row_index):
                 "image_style": "animation",  # 스틱맨 스타일
                 "image_count": fixed_image_count,
                 "audience": audience,
+                "category": category,  # 뉴스 등 카테고리
                 "output_language": "auto"
             }, timeout=180)  # GPT-5.1 응답 대기 시간 증가 (120→180초)
 
@@ -14980,6 +15620,7 @@ def run_automation_pipeline(row_data, row_index):
             youtube_meta = analyze_data.get('youtube', {})
             thumbnail_data = analyze_data.get('thumbnail', {})
             ai_prompts = thumbnail_data.get('ai_prompts', {})
+            video_effects = analyze_data.get('video_effects', {})  # 새 기능: BGM, 효과음, 자막 강조 등
 
             generated_title = youtube_meta.get('title', '')
             description = youtube_meta.get('description', '')
@@ -15171,7 +15812,8 @@ def run_automation_pipeline(row_data, row_index):
                 video_resp = req.post(f"{base_url}/api/image/generate-video", json={
                     "session_id": session_id,
                     "scenes": scenes,
-                    "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
+                    "language": "ko",  # 한글 자막용 NanumGothic 폰트 적용
+                    "video_effects": video_effects  # 새 기능: BGM, 효과음, 자막 강조, Ken Burns 등
                 }, timeout=600)
 
                 video_data = video_resp.json()
@@ -15215,6 +15857,35 @@ def run_automation_pipeline(row_data, row_index):
 
         # ========== 4. YouTube 업로드 ==========
         print(f"[AUTOMATION] 4. YouTube 업로드 시작...")
+
+        # 자동 챕터 생성 (씬별 chapter_title과 duration 기반)
+        try:
+            chapters_text = "\n\n📑 챕터\n"
+            current_time = 0
+            has_chapters = False
+            for idx, scene in enumerate(scenes):
+                chapter_title = scene.get('chapter_title', '')
+                scene_duration = scene.get('duration', 0)
+                if chapter_title:
+                    has_chapters = True
+                    # 타임스탬프 형식: M:SS 또는 H:MM:SS
+                    minutes = int(current_time // 60)
+                    seconds = int(current_time % 60)
+                    if minutes >= 60:
+                        hours = minutes // 60
+                        minutes = minutes % 60
+                        timestamp = f"{hours}:{minutes:02d}:{seconds:02d}"
+                    else:
+                        timestamp = f"{minutes}:{seconds:02d}"
+                    chapters_text += f"{timestamp} {chapter_title}\n"
+                current_time += scene_duration
+
+            if has_chapters:
+                description = description + chapters_text
+                print(f"[AUTOMATION] 자동 챕터 생성 완료 ({len([s for s in scenes if s.get('chapter_title')])}개)")
+        except Exception as chapter_err:
+            print(f"[AUTOMATION] 챕터 생성 오류 (무시됨): {chapter_err}")
+
         try:
             upload_payload = {
                 "videoPath": video_url_local,
