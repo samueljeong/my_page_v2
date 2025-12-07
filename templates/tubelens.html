@@ -812,8 +812,277 @@
       color: #333;
     }
 
+    /* Main Tabs */
+    .main-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 16px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e1e5eb;
+    }
+
+    .main-tab {
+      padding: 12px 24px;
+      background: #f5f7fa;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-tab:hover {
+      background: #e1e5eb;
+      color: #333;
+    }
+
+    .main-tab.active {
+      background: #e53e3e;
+      color: #fff;
+    }
+
+    .main-tab.active.trending {
+      background: #ed8936;
+    }
+
+    .main-tab.active.rising {
+      background: #48bb78;
+    }
+
+    .main-tab svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Tab Panel */
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Trending Panel */
+    .trending-panel {
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid #fed7aa;
+    }
+
+    .trending-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .trending-header h2 {
+      font-size: 1.3rem;
+      color: #c2410c;
+      margin: 0;
+    }
+
+    .trending-header .fire-icon {
+      font-size: 1.5rem;
+    }
+
+    .trending-options {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .trending-options .option-group {
+      min-width: 150px;
+    }
+
+    .btn-trending {
+      padding: 12px 32px;
+      background: #ea580c;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-trending:hover {
+      background: #c2410c;
+    }
+
+    /* Rising Panel */
+    .rising-panel {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid #86efac;
+    }
+
+    .rising-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .rising-header h2 {
+      font-size: 1.3rem;
+      color: #166534;
+      margin: 0;
+    }
+
+    .rising-header .rocket-icon {
+      font-size: 1.5rem;
+    }
+
+    .rising-desc {
+      color: #15803d;
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+    }
+
+    .rising-options {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .rising-options .option-group {
+      min-width: 140px;
+    }
+
+    .btn-rising {
+      padding: 12px 32px;
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-rising:hover {
+      background: #15803d;
+    }
+
+    /* Category Pills */
+    .category-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .category-pill {
+      padding: 8px 16px;
+      background: #fff;
+      border: 1px solid #e1e5eb;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .category-pill:hover {
+      border-color: #e53e3e;
+      color: #e53e3e;
+    }
+
+    .category-pill.active {
+      background: #e53e3e;
+      border-color: #e53e3e;
+      color: #fff;
+    }
+
+    .trending-panel .category-pill.active {
+      background: #ea580c;
+      border-color: #ea580c;
+    }
+
+    .rising-panel .category-pill.active {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+
+    /* Exclude Categories */
+    .exclude-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px dashed rgba(0,0,0,0.1);
+    }
+
+    .exclude-label {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .exclude-label svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .exclude-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .exclude-pill {
+      padding: 6px 12px;
+      background: #fff;
+      border: 1px solid #e1e5eb;
+      border-radius: 16px;
+      font-size: 0.8rem;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .exclude-pill:hover {
+      border-color: #f56565;
+      color: #f56565;
+    }
+
+    .exclude-pill.excluded {
+      background: #fed7d7;
+      border-color: #f56565;
+      color: #c53030;
+      text-decoration: line-through;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
+      .main-tabs {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 16px;
+      }
+
+      .main-tab {
+        padding: 10px 16px;
+        font-size: 0.85rem;
+      }
+
       .search-row {
         flex-direction: column;
       }
@@ -825,6 +1094,11 @@
       .filter-grid {
         flex-direction: column;
         align-items: stretch;
+      }
+
+      .trending-options,
+      .rising-options {
+        flex-direction: column;
       }
 
       .results-table {
@@ -856,9 +1130,36 @@
     </div>
   </header>
 
+  <!-- Main Tabs -->
+  <div class="main-tabs">
+    <button class="main-tab active" id="tab-search" onclick="TubeLens.switchTab('search')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      키워드 검색
+    </button>
+    <button class="main-tab trending" id="tab-trending" onclick="TubeLens.switchTab('trending')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2c.5 4-2 6-2 10 0 3.5 2.5 6 6 6 1.5 0 3-.5 4-1.5-1 4-5 7.5-10 7.5-5.5 0-10-4.5-10-10C0 7 4 2 12 2z"/>
+      </svg>
+      지금 뜨는
+    </button>
+    <button class="main-tab rising" id="tab-rising" onclick="TubeLens.switchTab('rising')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+      </svg>
+      급상승 발굴
+    </button>
+  </div>
+
   <div class="main-container">
-    <!-- Search Panel -->
-    <div class="search-panel">
+    <!-- Search Tab Panel -->
+    <div class="tab-panel active" id="panel-search">
+      <!-- Search Panel -->
+      <div class="search-panel">
       <div class="search-row">
         <div class="search-input-wrap">
           <input type="text" class="search-input" id="search-keyword" placeholder="검색어를 입력하세요 (예: 먹방, ASMR, 브이로그...)" onkeypress="if(event.key==='Enter') TubeLens.search()">
@@ -972,11 +1273,151 @@
       </div>
     </div>
 
-    <!-- URL 분석 바 -->
-    <div class="url-bar">
-      <input type="text" class="url-input" id="youtube-url" placeholder="YouTube URL 입력" onkeypress="if(event.key==='Enter') TubeLens.analyzeUrl()">
-      <button class="btn-url-analyze" onclick="TubeLens.analyzeUrl()">URL 분석</button>
-    </div>
+      <!-- URL 분석 바 -->
+      <div class="url-bar">
+        <input type="text" class="url-input" id="youtube-url" placeholder="YouTube URL 입력" onkeypress="if(event.key==='Enter') TubeLens.analyzeUrl()">
+        <button class="btn-url-analyze" onclick="TubeLens.analyzeUrl()">URL 분석</button>
+      </div>
+    </div><!-- End Search Tab Panel -->
+
+    <!-- Trending Tab Panel -->
+    <div class="tab-panel" id="panel-trending">
+      <div class="trending-panel">
+        <div class="trending-header">
+          <span class="fire-icon">🔥</span>
+          <h2>지금 뜨는 영상</h2>
+        </div>
+        <div class="trending-options">
+          <div class="option-group">
+            <label>국가</label>
+            <select class="option-select" id="trending-region">
+              <option value="KR" selected>한국</option>
+              <option value="US">미국</option>
+              <option value="JP">일본</option>
+              <option value="TW">대만</option>
+              <option value="GB">영국</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>영상 타입</label>
+            <select class="option-select" id="trending-video-type">
+              <option value="all" selected>전체</option>
+              <option value="shorts">쇼츠 (1분 이하)</option>
+              <option value="long">롱폼 (1분 이상)</option>
+            </select>
+          </div>
+          <button class="btn-trending" onclick="TubeLens.loadTrending()">인기 영상 보기</button>
+        </div>
+        <div class="category-pills" id="trending-categories">
+          <button class="category-pill active" data-category="">전체</button>
+          <button class="category-pill" data-category="10">음악</button>
+          <button class="category-pill" data-category="20">게임</button>
+          <button class="category-pill" data-category="24">엔터테인먼트</button>
+          <button class="category-pill" data-category="22">인물/블로그</button>
+          <button class="category-pill" data-category="17">스포츠</button>
+          <button class="category-pill" data-category="25">뉴스</button>
+          <button class="category-pill" data-category="27">교육</button>
+          <button class="category-pill" data-category="28">과학기술</button>
+          <button class="category-pill" data-category="26">노하우/스타일</button>
+        </div>
+        <div class="exclude-section">
+          <div class="exclude-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            제외할 카테고리 (클릭하여 제외)
+          </div>
+          <div class="exclude-pills" id="trending-exclude">
+            <button class="exclude-pill" data-category="10" onclick="TubeLens.toggleExcludeCategory('10')">음악</button>
+            <button class="exclude-pill" data-category="20" onclick="TubeLens.toggleExcludeCategory('20')">게임</button>
+            <button class="exclude-pill" data-category="24" onclick="TubeLens.toggleExcludeCategory('24')">엔터테인먼트</button>
+            <button class="exclude-pill" data-category="22" onclick="TubeLens.toggleExcludeCategory('22')">인물/블로그</button>
+            <button class="exclude-pill" data-category="17" onclick="TubeLens.toggleExcludeCategory('17')">스포츠</button>
+            <button class="exclude-pill" data-category="25" onclick="TubeLens.toggleExcludeCategory('25')">뉴스</button>
+            <button class="exclude-pill" data-category="1" onclick="TubeLens.toggleExcludeCategory('1')">영화/애니</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- End Trending Tab Panel -->
+
+    <!-- Rising Tab Panel -->
+    <div class="tab-panel" id="panel-rising">
+      <div class="rising-panel">
+        <div class="rising-header">
+          <span class="rocket-icon">🚀</span>
+          <h2>급상승 발굴</h2>
+        </div>
+        <p class="rising-desc">구독자 대비 조회수가 폭발한 영상을 찾습니다. 아직 덜 알려졌지만 성과가 좋은 콘텐츠를 발굴하세요!</p>
+        <div class="rising-options">
+          <div class="option-group">
+            <label>국가</label>
+            <select class="option-select" id="rising-region">
+              <option value="KR" selected>한국</option>
+              <option value="US">미국</option>
+              <option value="JP">일본</option>
+              <option value="TW">대만</option>
+              <option value="GB">영국</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>구독자 상한</label>
+            <select class="option-select" id="rising-max-subs">
+              <option value="10000">1만 이하</option>
+              <option value="50000">5만 이하</option>
+              <option value="100000" selected>10만 이하</option>
+              <option value="500000">50만 이하</option>
+              <option value="1000000">100만 이하</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>기간</label>
+            <select class="option-select" id="rising-time">
+              <option value="day">24시간</option>
+              <option value="week" selected>7일</option>
+              <option value="month">1개월</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>영상 타입</label>
+            <select class="option-select" id="rising-video-type">
+              <option value="all" selected>전체</option>
+              <option value="shorts">쇼츠</option>
+              <option value="long">롱폼</option>
+            </select>
+          </div>
+          <button class="btn-rising" onclick="TubeLens.loadRising()">급상승 영상 발굴</button>
+        </div>
+        <div class="category-pills" id="rising-categories">
+          <button class="category-pill active" data-category="">전체</button>
+          <button class="category-pill" data-category="10">음악</button>
+          <button class="category-pill" data-category="20">게임</button>
+          <button class="category-pill" data-category="24">엔터테인먼트</button>
+          <button class="category-pill" data-category="22">인물/블로그</button>
+          <button class="category-pill" data-category="17">스포츠</button>
+          <button class="category-pill" data-category="25">뉴스</button>
+          <button class="category-pill" data-category="27">교육</button>
+          <button class="category-pill" data-category="28">과학기술</button>
+          <button class="category-pill" data-category="26">노하우/스타일</button>
+        </div>
+        <div class="exclude-section">
+          <div class="exclude-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            제외할 카테고리 (클릭하여 제외)
+          </div>
+          <div class="exclude-pills" id="rising-exclude">
+            <button class="exclude-pill" data-category="10" onclick="TubeLens.toggleExcludeCategory('10')">음악</button>
+            <button class="exclude-pill" data-category="20" onclick="TubeLens.toggleExcludeCategory('20')">게임</button>
+            <button class="exclude-pill" data-category="24" onclick="TubeLens.toggleExcludeCategory('24')">엔터테인먼트</button>
+            <button class="exclude-pill" data-category="22" onclick="TubeLens.toggleExcludeCategory('22')">인물/블로그</button>
+            <button class="exclude-pill" data-category="17" onclick="TubeLens.toggleExcludeCategory('17')">스포츠</button>
+            <button class="exclude-pill" data-category="25" onclick="TubeLens.toggleExcludeCategory('25')">뉴스</button>
+            <button class="exclude-pill" data-category="1" onclick="TubeLens.toggleExcludeCategory('1')">영화/애니</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- End Rising Tab Panel -->
 
     <!-- Results Panel -->
     <div class="results-panel">
