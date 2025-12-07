@@ -10353,11 +10353,27 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [pose/action]. Character face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage style.",
 {ai_prompts_section}
   }},
+  "video_effects": {{
+    "bgm_mood": "ONE of: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic",
+    "subtitle_highlights": [
+      {{"keyword": "강조할 단어1", "color": "#FF0000"}},
+      {{"keyword": "강조할 단어2", "color": "#FFFF00"}}
+    ],
+    "sound_effects": [
+      {{"scene": 1, "type": "impact", "moment": "description of when to play"}},
+      {{"scene": 3, "type": "emotional", "moment": "description of when to play"}}
+    ],
+    "lower_thirds": [
+      {{"scene": 2, "text": "화자명 또는 출처", "position": "bottom-left"}}
+    ]
+  }},
   "scenes": [
     {{
       "scene_number": 1,
+      "chapter_title": "Short chapter title for YouTube (5-15 chars)",
       "narration": "⚠️ EXACT TEXT from the script - COPY-PASTE the original sentences, DO NOT summarize or paraphrase!",
-      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [action], face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage."
+      "image_prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, soft lighting]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [action], face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage.",
+      "ken_burns": "zoom_in / zoom_out / pan_left / pan_right / pan_up / pan_down"
     }}
   ]
 }}
@@ -10396,6 +10412,57 @@ The "narration" field MUST contain the EXACT ORIGINAL TEXT from the script!
 - DO NOT add your own words
 - COPY-PASTE the exact sentences from the script that this scene covers
 - This helps the user know EXACTLY where to place each image in the video timeline
+
+## ⚠️ VIDEO EFFECTS RULES ⚠️
+
+### BGM Mood (배경음악 분위기)
+Choose ONE mood that best fits the overall video tone:
+- hopeful: 희망적, 긍정적 결말
+- sad: 슬픔, 이별, 상실
+- tense: 긴장감, 위기
+- dramatic: 충격, 반전, 클라이맥스
+- calm: 평화, 일상
+- inspiring: 감동, 성공
+- mysterious: 미스터리, 의문
+- nostalgic: 회상, 추억
+
+### Subtitle Highlights (자막 강조)
+Identify 3-5 KEY WORDS from the script that should be highlighted:
+- Use #FF0000 (red) for shocking/important words: 충격, 실화, 경악, 폭로
+- Use #FFFF00 (yellow) for emphasis words: 결국, 드디어, 마침내
+- Use #00FFFF (cyan) for emotional words: 눈물, 감동, 사랑
+- Keywords should be EXACT matches from the narration text
+
+### Sound Effects (효과음)
+Add sound effects at dramatic moments (max 3-5 per video):
+- impact: 충격적 사실 공개, 반전 순간 (쿵/둥)
+- whoosh: 장면 전환, 시간 이동 (휙)
+- ding: 포인트 강조, 깨달음 (띵)
+- tension: 긴장감 고조 (드르르)
+- emotional: 감동/슬픔 포인트 (피아노)
+- success: 긍정적 결과, 해피엔딩 (짠)
+
+### Lower Thirds (하단 자막)
+Add source/speaker info when quoting or citing:
+- Use for: 전문가 발언, 뉴스 인용, 통계 출처
+- Format: "김OO 교수", "OO일보", "2024년 통계"
+- Position: bottom-left (default)
+
+### Ken Burns Effect (이미지 움직임)
+Each scene should have a different Ken Burns effect for visual variety:
+- zoom_in: 서서히 확대 (감정적 순간, 클로즈업)
+- zoom_out: 서서히 축소 (전체 상황 보여줄 때)
+- pan_left: 왼쪽으로 이동
+- pan_right: 오른쪽으로 이동
+- pan_up: 위로 이동 (희망적)
+- pan_down: 아래로 이동 (슬픔, 실망)
+⚠️ Alternate effects between scenes for dynamic feel!
+
+### Chapter Titles (챕터 제목)
+Each scene needs a short chapter title for YouTube chapters:
+- Length: 5-15 characters in Korean
+- Style: 간결하고 흥미 유발
+- Examples: "충격적 발견", "반전의 시작", "눈물의 재회"
 
 ## EXAMPLE PROMPTS (스틱맨은 항상 동일한 얼굴: 점 눈 2개, 작은 입, 얇은 눈썹)
 
@@ -11677,12 +11744,89 @@ def _get_subtitle_style(lang):
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
 
-def _generate_video_worker(job_id, session_id, scenes, detected_lang):
-    """백그라운드 영상 생성 워커"""
+def _hex_to_ass_color(hex_color):
+    """HEX 색상을 ASS 포맷으로 변환 (#RRGGBB -> &HBBGGRR&)"""
+    if not hex_color or not hex_color.startswith('#'):
+        return "&H00FFFF&"  # 기본 노란색
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 6:
+        r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+        return f"&H{b}{g}{r}&"
+    return "&H00FFFF&"
+
+
+def _apply_subtitle_highlights(text, highlights):
+    """자막 텍스트에 키워드 색상 강조 적용
+
+    Args:
+        text: 원본 자막 텍스트
+        highlights: [{"keyword": "단어", "color": "#FF0000"}, ...]
+
+    Returns:
+        색상 태그가 적용된 텍스트
+    """
+    if not highlights:
+        return text
+
+    result = text
+    for h in highlights:
+        keyword = h.get('keyword', '')
+        color = h.get('color', '#FFFF00')
+        if keyword and keyword in result:
+            ass_color = _hex_to_ass_color(color)
+            # ASS 색상 태그 적용: {\c&HBBGGRR&}텍스트{\c&HFFFFFF&}
+            colored_keyword = f"{{\\c{ass_color}}}{keyword}{{\\c&HFFFFFF&}}"
+            result = result.replace(keyword, colored_keyword)
+
+    return result
+
+
+def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
+    """Ken Burns 효과용 zoompan 필터 생성
+
+    Args:
+        effect_type: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
+        duration: 클립 길이 (초)
+        fps: 프레임 레이트
+        output_size: 출력 해상도
+
+    Returns:
+        FFmpeg vf filter string
+    """
+    total_frames = int(duration * fps)
+    w, h = map(int, output_size.split('x'))
+
+    # 각 효과별 zoompan 파라미터
+    effects = {
+        'zoom_in': f"zoompan=z='min(zoom+0.001,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'zoom_out': f"zoompan=z='if(lte(zoom,1.0),1.3,max(1.001,zoom-0.001))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_left': f"zoompan=z='1.1':x='iw*0.05+iw*0.05*(1-on/{total_frames})':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_right': f"zoompan=z='1.1':x='iw*0.05*on/{total_frames}':y='ih/2-(ih/zoom/2)':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_up': f"zoompan=z='1.1':x='iw/2-(iw/zoom/2)':y='ih*0.05+ih*0.05*(1-on/{total_frames})':d={total_frames}:s={output_size}:fps={fps}",
+        'pan_down': f"zoompan=z='1.1':x='iw/2-(iw/zoom/2)':y='ih*0.05*on/{total_frames}':d={total_frames}:s={output_size}:fps={fps}",
+    }
+
+    return effects.get(effect_type, effects['zoom_in'])  # 기본값: zoom_in
+
+
+def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effects=None):
+    """백그라운드 영상 생성 워커
+
+    video_effects 구조:
+    {
+        "bgm_mood": "hopeful/sad/tense/dramatic/calm/inspiring/mysterious/nostalgic",
+        "subtitle_highlights": [{"keyword": "단어", "color": "#FF0000"}],
+        "sound_effects": [{"scene": 1, "type": "impact", "moment": "..."}],
+        "lower_thirds": [{"scene": 2, "text": "출처", "position": "bottom-left"}]
+    }
+    """
     import subprocess
     import shutil
     import urllib.request
     import gc  # 메모리 정리용
+
+    if video_effects is None:
+        video_effects = {}
 
     try:
         _update_job_status(job_id, status='processing', message='영상 생성 시작...')
@@ -11760,15 +11904,26 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
                     })
                 current_time += duration
 
-                # 씬 클립 생성
+                # Ken Burns 효과 가져오기 (씬별로 다른 효과 적용)
+                ken_burns_effect = scene.get('ken_burns', None)
+                if not ken_burns_effect:
+                    # 씬별로 다양한 효과 자동 배정 (다이나믹한 영상을 위해)
+                    effects_cycle = ['zoom_in', 'pan_right', 'zoom_out', 'pan_left', 'zoom_in', 'pan_up']
+                    ken_burns_effect = effects_cycle[idx % len(effects_cycle)]
+
+                ken_burns_filter = _get_ken_burns_filter(ken_burns_effect, duration)
+                print(f"[VIDEO-WORKER] Scene {idx + 1} Ken Burns: {ken_burns_effect}")
+
+                # 씬 클립 생성 (Ken Burns 효과 포함)
                 clip_path = os.path.join(work_dir, f"clip_{idx:03d}.mp4")
                 if audio_path and os.path.exists(audio_path):
                     cmd = [
                         "ffmpeg", "-y",
-                        "-loop", "1", "-i", img_path,
+                        "-i", img_path,
                         "-i", audio_path,
-                        "-c:v", "libx264", "-tune", "stillimage",
-                        "-c:a", "aac", "-b:a", "128k",
+                        "-vf", ken_burns_filter,
+                        "-c:v", "libx264", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                         "-pix_fmt", "yuv420p",
                         "-shortest", "-t", str(duration),
                         clip_path
@@ -11776,9 +11931,11 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
                 else:
                     cmd = [
                         "ffmpeg", "-y",
-                        "-loop", "1", "-i", img_path,
+                        "-i", img_path,
                         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-                        "-c:v", "libx264", "-tune", "stillimage",
+                        "-vf", ken_burns_filter,
+                        "-c:v", "libx264", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                         "-pix_fmt", "yuv420p",
                         "-t", str(duration), "-shortest",
                         clip_path
@@ -11847,15 +12004,22 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang):
             if not os.path.exists(merged_path):
                 raise Exception("merged.mp4 파일이 생성되지 않음")
 
-            # 3. SRT 자막 생성
+            # 3. SRT 자막 생성 (색상 강조 적용)
             _update_job_status(job_id, progress=85, message='자막 처리 중...')
+
+            # 자막 강조 키워드 가져오기
+            subtitle_highlights = video_effects.get('subtitle_highlights', [])
+            if subtitle_highlights:
+                print(f"[VIDEO-WORKER] 자막 강조 키워드: {[h.get('keyword') for h in subtitle_highlights]}")
 
             srt_path = os.path.join(work_dir, "subtitles.srt")
             with open(srt_path, 'w', encoding='utf-8') as f:
                 for i, sub in enumerate(all_subtitles, 1):
                     start_str = format_srt_time(sub['start'])
                     end_str = format_srt_time(sub['end'])
-                    f.write(f"{i}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+                    # 키워드 색상 강조 적용
+                    highlighted_text = _apply_subtitle_highlights(sub['text'], subtitle_highlights)
+                    f.write(f"{i}\n{start_str} --> {end_str}\n{highlighted_text}\n\n")
 
             # 4. 자막 burn-in
             _update_job_status(job_id, progress=90, message='자막 삽입 중...')
@@ -11939,6 +12103,7 @@ def api_image_generate_video():
     session_id = data.get('session_id', str(uuid_module.uuid4())[:8])
     scenes = data.get('scenes', [])
     detected_lang = data.get('language', 'en')
+    video_effects = data.get('video_effects', {})  # 새 기능: BGM, 효과음, 자막 강조, Ken Burns 등
 
     if not scenes:
         return jsonify({"ok": False, "error": "씬 데이터가 없습니다"}), 400
@@ -11962,7 +12127,7 @@ def api_image_generate_video():
     # 백그라운드 스레드 시작
     thread = threading.Thread(
         target=_generate_video_worker,
-        args=(job_id, session_id, scenes, detected_lang),
+        args=(job_id, session_id, scenes, detected_lang, video_effects),
         daemon=True
     )
     thread.start()
@@ -15034,6 +15199,7 @@ def run_automation_pipeline(row_data, row_index):
             youtube_meta = analyze_data.get('youtube', {})
             thumbnail_data = analyze_data.get('thumbnail', {})
             ai_prompts = thumbnail_data.get('ai_prompts', {})
+            video_effects = analyze_data.get('video_effects', {})  # 새 기능: BGM, 효과음, 자막 강조 등
 
             generated_title = youtube_meta.get('title', '')
             description = youtube_meta.get('description', '')
@@ -15225,7 +15391,8 @@ def run_automation_pipeline(row_data, row_index):
                 video_resp = req.post(f"{base_url}/api/image/generate-video", json={
                     "session_id": session_id,
                     "scenes": scenes,
-                    "language": "ko"  # 한글 자막용 NanumGothic 폰트 적용
+                    "language": "ko",  # 한글 자막용 NanumGothic 폰트 적용
+                    "video_effects": video_effects  # 새 기능: BGM, 효과음, 자막 강조, Ken Burns 등
                 }, timeout=600)
 
                 video_data = video_resp.json()
@@ -15269,6 +15436,35 @@ def run_automation_pipeline(row_data, row_index):
 
         # ========== 4. YouTube 업로드 ==========
         print(f"[AUTOMATION] 4. YouTube 업로드 시작...")
+
+        # 자동 챕터 생성 (씬별 chapter_title과 duration 기반)
+        try:
+            chapters_text = "\n\n📑 챕터\n"
+            current_time = 0
+            has_chapters = False
+            for idx, scene in enumerate(scenes):
+                chapter_title = scene.get('chapter_title', '')
+                scene_duration = scene.get('duration', 0)
+                if chapter_title:
+                    has_chapters = True
+                    # 타임스탬프 형식: M:SS 또는 H:MM:SS
+                    minutes = int(current_time // 60)
+                    seconds = int(current_time % 60)
+                    if minutes >= 60:
+                        hours = minutes // 60
+                        minutes = minutes % 60
+                        timestamp = f"{hours}:{minutes:02d}:{seconds:02d}"
+                    else:
+                        timestamp = f"{minutes}:{seconds:02d}"
+                    chapters_text += f"{timestamp} {chapter_title}\n"
+                current_time += scene_duration
+
+            if has_chapters:
+                description = description + chapters_text
+                print(f"[AUTOMATION] 자동 챕터 생성 완료 ({len([s for s in scenes if s.get('chapter_title')])}개)")
+        except Exception as chapter_err:
+            print(f"[AUTOMATION] 챕터 생성 오류 (무시됨): {chapter_err}")
+
         try:
             upload_payload = {
                 "videoPath": video_url_local,
