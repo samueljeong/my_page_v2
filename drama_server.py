@@ -5180,6 +5180,16 @@ def api_upload_bgm():
         file.save(filepath)
         print(f"[BGM-UPLOAD] 저장됨: {filepath}")
 
+        # Git에 자동 커밋 (배포 후에도 파일 유지)
+        try:
+            import subprocess
+            subprocess.run(["git", "add", filepath], cwd=script_dir, timeout=30)
+            subprocess.run(["git", "commit", "-m", f"Add BGM: {filename}"], cwd=script_dir, timeout=30)
+            subprocess.run(["git", "push"], cwd=script_dir, timeout=60)
+            print(f"[BGM-UPLOAD] Git 커밋 완료: {filename}")
+        except Exception as git_err:
+            print(f"[BGM-UPLOAD] Git 커밋 실패 (파일은 저장됨): {git_err}")
+
         return jsonify({
             "ok": True,
             "filename": filename,
@@ -5366,6 +5376,16 @@ def api_upload_sfx():
 
         file.save(filepath)
         print(f"[SFX-UPLOAD] 저장됨: {filepath}")
+
+        # Git에 자동 커밋 (배포 후에도 파일 유지)
+        try:
+            import subprocess
+            subprocess.run(["git", "add", filepath], cwd=script_dir, timeout=30)
+            subprocess.run(["git", "commit", "-m", f"Add SFX: {filename}"], cwd=script_dir, timeout=30)
+            subprocess.run(["git", "push"], cwd=script_dir, timeout=60)
+            print(f"[SFX-UPLOAD] Git 커밋 완료: {filename}")
+        except Exception as git_err:
+            print(f"[SFX-UPLOAD] Git 커밋 실패 (파일은 저장됨): {git_err}")
 
         return jsonify({
             "ok": True,
