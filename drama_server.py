@@ -12686,6 +12686,144 @@ def _get_sfx_file(sfx_type, sfx_dir="static/audio/sfx"):
     return selected
 
 
+def _trim_sfx(input_path, output_path, max_duration=2.5, fade_out=0.5):
+    """효과음을 지정 길이로 자르고 페이드아웃 적용
+
+    Args:
+        input_path: 원본 효과음 경로
+        output_path: 출력 경로
+        max_duration: 최대 길이 (초)
+        fade_out: 페이드아웃 길이 (초)
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        fade_start = max(0, max_duration - fade_out)
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-t", str(max_duration),
+            "-af", f"afade=t=out:st={fade_start}:d={fade_out}",
+            "-c:a", "libmp3lame", "-q:a", "2",
+            output_path
+        ]
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=30)
+        return result.returncode == 0
+    except Exception as e:
+        print(f"[SFX] 트림 오류: {e}")
+        return False
+
+
+def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir="static/audio/sfx"):
+    """비디오에 효과음 믹싱
+
+    Args:
+        video_path: 원본 비디오 경로
+        sound_effects: [{"scene": 1, "type": "impact"}, ...]
+        scenes: 씬 목록 (타이밍 계산용)
+        output_path: 출력 비디오 경로
+        sfx_dir: 효과음 디렉토리
+
+    Returns:
+        성공 여부 (bool)
+    """
+    if not sound_effects:
+        return False
+
+    try:
+        import tempfile
+
+        # 씬별 시작 시간 계산
+        scene_start_times = {}
+        current_time = 0
+        for idx, scene in enumerate(scenes):
+            scene_start_times[idx + 1] = current_time
+            current_time += scene.get('duration', 0)
+
+        # 효과음 파일 준비 및 타이밍 계산
+        sfx_inputs = []
+        adelay_filters = []
+
+        temp_dir = tempfile.mkdtemp()
+
+        for i, sfx in enumerate(sound_effects):
+            scene_num = sfx.get('scene', 1)
+            sfx_type = sfx.get('type', '')
+
+            if scene_num not in scene_start_times:
+                continue
+
+            # 효과음 파일 찾기
+            sfx_file = _get_sfx_file(sfx_type, sfx_dir)
+            if not sfx_file:
+                continue
+
+            # 효과음 트림 (2.5초로 자르기)
+            trimmed_path = os.path.join(temp_dir, f"sfx_{i}.mp3")
+            if not _trim_sfx(sfx_file, trimmed_path, max_duration=2.5, fade_out=0.5):
+                continue
+
+            # 딜레이 계산 (씬 시작 + 0.5초)
+            delay_ms = int((scene_start_times[scene_num] + 0.5) * 1000)
+
+            sfx_inputs.append(trimmed_path)
+            adelay_filters.append(f"[{i+1}:a]adelay={delay_ms}|{delay_ms},volume=0.8[sfx{i}]")
+
+        if not sfx_inputs:
+            print(f"[SFX] 사용 가능한 효과음 없음")
+            return False
+
+        # FFmpeg 명령 구성
+        input_args = ["-i", video_path]
+        for sfx_path in sfx_inputs:
+            input_args.extend(["-i", sfx_path])
+
+        # 필터 구성: 모든 효과음 + 원본 오디오 믹싱
+        filter_parts = adelay_filters.copy()
+
+        # amix로 모든 오디오 합치기
+        sfx_labels = "".join([f"[sfx{i}]" for i in range(len(sfx_inputs))])
+        mix_inputs = len(sfx_inputs) + 1  # 효과음 개수 + 원본 오디오
+        filter_parts.append(f"[0:a]{sfx_labels}amix=inputs={mix_inputs}:duration=first:dropout_transition=2[aout]")
+
+        filter_complex = ";".join(filter_parts)
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            *input_args,
+            "-filter_complex", filter_complex,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            output_path
+        ]
+
+        print(f"[SFX] 효과음 {len(sfx_inputs)}개 믹싱 중...")
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=600)
+
+        # 임시 파일 정리
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+        if result.returncode == 0:
+            print(f"[SFX] 효과음 믹싱 완료")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[SFX] 믹싱 실패: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"[SFX] 믹싱 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def _generate_outro_video(output_path, duration=5, fonts_dir="static/fonts"):
     """공용 아웃트로 영상 생성 (구독/좋아요 요청)
 
@@ -13102,7 +13240,18 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                 else:
                     print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
 
-            # 6. 아웃트로 추가 (옵션)
+            # 6. 효과음 믹싱 (옵션)
+            sound_effects = video_effects.get('sound_effects', [])
+            if sound_effects:
+                _update_job_status(job_id, progress=96, message='효과음 추가 중...')
+                sfx_output_path = os.path.join(work_dir, "with_sfx.mp4")
+                if _mix_sfx_into_video(final_path, sound_effects, scenes, sfx_output_path):
+                    final_path = sfx_output_path
+                    print(f"[VIDEO-WORKER] 효과음 {len(sound_effects)}개 추가 완료")
+                else:
+                    print(f"[VIDEO-WORKER] 효과음 믹싱 실패, 효과음 없이 진행")
+
+            # 7. 아웃트로 추가 (옵션)
             add_outro = video_effects.get('add_outro', True)  # 기본값: 추가
             if add_outro:
                 _update_job_status(job_id, progress=98, message='아웃트로 추가 중...')
@@ -13117,7 +13266,7 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                 else:
                     print(f"[VIDEO-WORKER] 아웃트로 생성 실패")
 
-            # 7. 결과 저장
+            # 8. 결과 저장
             output_filename = f"video_{session_id}.mp4"
             output_path = os.path.join(upload_dir, output_filename)
             shutil.copy(final_path, output_path)
