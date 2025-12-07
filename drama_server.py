@@ -10743,6 +10743,15 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     "news_ticker": {{
       "enabled": true,
       "headlines": ["속보: 첫 번째 헤드라인", "이슈: 두 번째 헤드라인", "핵심: 세 번째 헤드라인"]
+    }},
+    "shorts": {{
+      "highlight_scenes": [1, 2],
+      "hook_text": "충격적인 한 마디로 시작하는 훅 (15자 이내)",
+      "title": "쇼츠용 짧은 제목 #Shorts"
+    }},
+    "transitions": {{
+      "style": "crossfade",
+      "duration": 0.5
     }}
   }},
   "scenes": [
@@ -10877,6 +10886,45 @@ Add source/speaker info when quoting or citing:
 - headlines: 3-5개의 짧은 헤드라인 (각 15-25자)
 - 대본의 핵심 포인트를 뉴스 헤드라인 스타일로 작성
 - 접두어 사용: "속보:", "이슈:", "핵심:", "주목:", "화제:"
+
+### Shorts (YouTube 쇼츠 자동 생성) - 신규!
+메인 영상에서 가장 흥미로운 부분을 추출하여 60초 이하의 쇼츠를 자동 생성합니다.
+쇼츠 설명에 원본 영상 링크가 포함되어 본 영상으로 트래픽을 유도합니다.
+
+**형식:**
+"shorts": {
+  "highlight_scenes": [2, 3],
+  "hook_text": "이 한마디가 모든 걸 바꿨다",
+  "title": "충격적인 고백 #Shorts"
+}
+
+**규칙:**
+- highlight_scenes: 가장 임팩트 있는 1-3개 씬 번호 선택 (총 60초 이하가 되도록)
+- hook_text: 시청자를 사로잡는 첫 문장 (15자 이내, 궁금증 유발)
+- title: 쇼츠 전용 제목 (클릭 유도, 반드시 #Shorts 포함)
+
+**하이라이트 씬 선택 기준:**
+- 반전/충격 순간
+- 감정적 클라이맥스
+- 핵심 메시지가 담긴 씬
+- 시청자가 "더 보고 싶다"고 느낄 부분
+
+### Transitions (장면 전환 효과) - 신규!
+씬과 씬 사이에 부드러운 전환 효과를 적용합니다.
+
+**형식:**
+"transitions": {
+  "style": "crossfade",
+  "duration": 0.5
+}
+
+**스타일 옵션:**
+- crossfade: 페이드 인/아웃 (기본값, 가장 자연스러움)
+- fade_black: 검은 화면으로 페이드 (장면 전환)
+- fade_white: 흰 화면으로 페이드 (회상, 꿈)
+- none: 전환 효과 없음 (빠른 컷)
+
+**duration:** 0.3 ~ 1.0초 권장 (기본 0.5초)
 
 ### Ken Burns Effect (이미지 움직임)
 Each scene should have a different Ken Burns effect for visual variety:
@@ -12922,6 +12970,345 @@ def _append_outro_to_video(video_path, outro_path, output_path):
         return False
 
 
+def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text, output_path):
+    """메인 영상에서 쇼츠용 세로 영상(9:16) 생성
+
+    Args:
+        main_video_path: 원본 메인 영상 경로
+        scenes: 씬 정보 목록 (duration 포함)
+        highlight_scenes: 하이라이트 씬 번호 목록 [1, 2, 3]
+        hook_text: 쇼츠 시작 훅 텍스트
+        output_path: 출력 경로
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        import tempfile
+        import shutil
+
+        # 씬별 시작/종료 시간 계산
+        scene_times = []
+        current_time = 0
+        for idx, scene in enumerate(scenes):
+            duration = scene.get('duration', 5)
+            scene_times.append({
+                'scene_num': idx + 1,
+                'start': current_time,
+                'end': current_time + duration,
+                'duration': duration
+            })
+            current_time += duration
+
+        # 하이라이트 씬 추출 (60초 이하로 제한)
+        selected_clips = []
+        total_duration = 0
+        max_duration = 58  # 60초 제한 (여유 2초)
+
+        for scene_num in highlight_scenes:
+            if scene_num < 1 or scene_num > len(scene_times):
+                continue
+            scene_info = scene_times[scene_num - 1]
+            if total_duration + scene_info['duration'] <= max_duration:
+                selected_clips.append(scene_info)
+                total_duration += scene_info['duration']
+            else:
+                # 남은 시간만큼만 추가
+                remaining = max_duration - total_duration
+                if remaining > 3:  # 최소 3초 이상일 때만 추가
+                    selected_clips.append({
+                        **scene_info,
+                        'end': scene_info['start'] + remaining,
+                        'duration': remaining
+                    })
+                    total_duration += remaining
+                break
+
+        if not selected_clips:
+            print(f"[SHORTS] 선택된 클립 없음")
+            return False
+
+        print(f"[SHORTS] {len(selected_clips)}개 클립 선택, 총 {total_duration:.1f}초")
+
+        # 임시 디렉토리 생성
+        temp_dir = tempfile.mkdtemp()
+        concat_list = os.path.join(temp_dir, "concat.txt")
+
+        try:
+            # 각 하이라이트 클립 추출 및 세로 변환
+            clip_paths = []
+            for i, clip in enumerate(selected_clips):
+                clip_path = os.path.join(temp_dir, f"clip_{i:03d}.mp4")
+
+                # 가로(16:9) → 세로(9:16) 변환 + 클립 추출
+                # 중앙 크롭 + 블러 배경 방식
+                vf_filter = (
+                    # 원본을 1080x1920 세로 비율로 크롭 (중앙)
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    "crop=1080:1920,"
+                    # 자막 위치 조정 (하단)
+                    "setsar=1"
+                )
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(clip['start']),
+                    "-i", main_video_path,
+                    "-t", str(clip['duration']),
+                    "-vf", vf_filter,
+                    "-c:v", "libx264", "-preset", "fast",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                    "-pix_fmt", "yuv420p",
+                    clip_path
+                ]
+
+                result = subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.PIPE, timeout=120)
+                if result.returncode == 0 and os.path.exists(clip_path):
+                    clip_paths.append(clip_path)
+                    print(f"[SHORTS] 클립 {i+1}/{len(selected_clips)} 추출 완료")
+                else:
+                    stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+                    print(f"[SHORTS] 클립 {i+1} 추출 실패: {stderr}")
+
+            if not clip_paths:
+                print(f"[SHORTS] 클립 추출 실패")
+                return False
+
+            # concat 파일 생성
+            with open(concat_list, 'w') as f:
+                for clip_path in clip_paths:
+                    f.write(f"file '{os.path.abspath(clip_path)}'\n")
+
+            # 클립 병합
+            merged_path = os.path.join(temp_dir, "merged.mp4")
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", concat_list,
+                "-c", "copy",
+                merged_path
+            ]
+            result = subprocess.run(concat_cmd, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, timeout=120)
+
+            if result.returncode != 0:
+                stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+                print(f"[SHORTS] 클립 병합 실패: {stderr}")
+                return False
+
+            # 훅 텍스트 오버레이 추가 (처음 3초)
+            if hook_text:
+                font_path = "static/fonts/NanumGothicBold.ttf"
+                font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+                hook_filter = (
+                    f"drawtext=text='{hook_text}':"
+                    f"fontfile='{font_escaped}':fontsize=48:fontcolor=white:"
+                    f"borderw=3:bordercolor=black:"
+                    f"x=(w-text_w)/2:y=h*0.15:"
+                    f"enable='lt(t,3)'"  # 처음 3초만 표시
+                )
+
+                final_cmd = [
+                    "ffmpeg", "-y",
+                    "-i", merged_path,
+                    "-vf", hook_filter,
+                    "-c:v", "libx264", "-preset", "fast",
+                    "-c:a", "copy",
+                    output_path
+                ]
+            else:
+                final_cmd = ["cp", merged_path, output_path]
+
+            result = subprocess.run(final_cmd, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, timeout=120)
+
+            if result.returncode == 0 and os.path.exists(output_path):
+                print(f"[SHORTS] 쇼츠 생성 완료: {output_path}")
+                return True
+            else:
+                stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+                print(f"[SHORTS] 최종 생성 실패: {stderr}")
+                return False
+
+        finally:
+            # 임시 파일 정리
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        print(f"[SHORTS] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _apply_transitions(clip_paths, output_path, transition_style="crossfade", duration=0.5):
+    """클립들 사이에 전환 효과 적용
+
+    Args:
+        clip_paths: 클립 파일 경로 목록
+        output_path: 출력 파일 경로
+        transition_style: crossfade, fade_black, fade_white, none
+        duration: 전환 효과 길이 (초)
+
+    Returns:
+        성공 여부 (bool)
+    """
+    if not clip_paths or len(clip_paths) < 2:
+        # 클립이 1개 이하면 전환 효과 불필요
+        if clip_paths:
+            import shutil
+            shutil.copy(clip_paths[0], output_path)
+            return True
+        return False
+
+    try:
+        if transition_style == "none":
+            # 전환 효과 없이 단순 concat
+            import tempfile
+            concat_list = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+            for clip_path in clip_paths:
+                concat_list.write(f"file '{os.path.abspath(clip_path)}'\n")
+            concat_list.close()
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", concat_list.name,
+                "-c", "copy",
+                output_path
+            ]
+            result = subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, timeout=300)
+            os.unlink(concat_list.name)
+            return result.returncode == 0
+
+        # xfade 필터로 전환 효과 적용
+        n = len(clip_paths)
+
+        # 입력 파일 옵션
+        input_args = []
+        for clip_path in clip_paths:
+            input_args.extend(["-i", clip_path])
+
+        # xfade 필터 체인 구성
+        # fade 색상 설정
+        fade_color = "black" if transition_style == "fade_black" else "white" if transition_style == "fade_white" else None
+
+        if n == 2:
+            # 2개 클립: 단일 xfade
+            if fade_color:
+                filter_complex = f"[0:v]fade=t=out:st=0:d={duration}:color={fade_color}[v0];[1:v]fade=t=in:st=0:d={duration}:color={fade_color}[v1];[v0][v1]concat=n=2:v=1:a=0[outv];[0:a][1:a]concat=n=2:v=0:a=1[outa]"
+            else:
+                # crossfade
+                filter_complex = f"[0:v][1:v]xfade=transition=fade:duration={duration}:offset=0[outv];[0:a][1:a]acrossfade=d={duration}[outa]"
+        else:
+            # 3개 이상: 체인 xfade (복잡, 단순화)
+            # 간단하게 각 클립에 fade in/out 적용 후 concat
+            filter_parts = []
+            for i in range(n):
+                if fade_color:
+                    filter_parts.append(f"[{i}:v]fade=t=in:st=0:d={duration/2}:color={fade_color},fade=t=out:st=0:d={duration/2}:color={fade_color}[v{i}]")
+                else:
+                    filter_parts.append(f"[{i}:v]fade=t=in:st=0:d={duration/2},fade=t=out:st=0:d={duration/2}[v{i}]")
+
+            video_concat = "".join([f"[v{i}]" for i in range(n)]) + f"concat=n={n}:v=1:a=0[outv]"
+            audio_concat = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[outa]"
+
+            filter_complex = ";".join(filter_parts) + ";" + video_concat + ";" + audio_concat
+
+        cmd = [
+            "ffmpeg", "-y",
+            *input_args,
+            "-filter_complex", filter_complex,
+            "-map", "[outv]", "-map", "[outa]",
+            "-c:v", "libx264", "-preset", "fast",
+            "-c:a", "aac", "-b:a", "128k",
+            output_path
+        ]
+
+        print(f"[TRANSITIONS] {transition_style} 효과 적용 중 ({n}개 클립)...")
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=600)
+
+        if result.returncode == 0:
+            print(f"[TRANSITIONS] 전환 효과 적용 완료")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[TRANSITIONS] 실패: {stderr}")
+            # 실패 시 단순 concat으로 폴백
+            print(f"[TRANSITIONS] 단순 concat으로 폴백...")
+            return _apply_transitions(clip_paths, output_path, "none", 0)
+
+    except Exception as e:
+        print(f"[TRANSITIONS] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _upload_youtube_captions(video_id, srt_path, language="ko", credentials=None):
+    """YouTube에 자막 파일(.srt) 업로드
+
+    Args:
+        video_id: YouTube 비디오 ID
+        srt_path: SRT 자막 파일 경로
+        language: 자막 언어 코드 (ko, en, ja 등)
+        credentials: Google OAuth 자격 증명
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+
+        if not credentials:
+            print(f"[CAPTIONS] 자격 증명 없음")
+            return False
+
+        if not os.path.exists(srt_path):
+            print(f"[CAPTIONS] 자막 파일 없음: {srt_path}")
+            return False
+
+        youtube = build('youtube', 'v3', credentials=credentials)
+
+        # 자막 삽입 요청
+        caption_body = {
+            "snippet": {
+                "videoId": video_id,
+                "language": language,
+                "name": "Korean" if language == "ko" else language.upper(),
+                "isDraft": False
+            }
+        }
+
+        media = MediaFileUpload(srt_path, mimetype='application/x-subrip', resumable=True)
+
+        request = youtube.captions().insert(
+            part="snippet",
+            body=caption_body,
+            media_body=media
+        )
+
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"[CAPTIONS] 업로드 진행률: {int(status.progress() * 100)}%")
+
+        print(f"[CAPTIONS] 자막 업로드 완료: {response.get('id')}")
+        return True
+
+    except Exception as e:
+        print(f"[CAPTIONS] 업로드 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -13105,31 +13492,51 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             if not scene_videos:
                 raise Exception("영상 클립 생성 실패")
 
-            # 2. 클립 병합
+            # 2. 클립 병합 (전환 효과 옵션)
             _update_job_status(job_id, progress=75, message='클립 병합 중...')
 
-            concat_list = os.path.join(work_dir, "concat.txt")
-            with open(concat_list, 'w') as f:
-                for clip in scene_videos:
-                    # 절대 경로 사용
-                    abs_clip = os.path.abspath(clip)
-                    f.write(f"file '{abs_clip}'\n")
-
-            print(f"[VIDEO-WORKER] Concat list created with {len(scene_videos)} clips")
-
-            # 클립 파일 존재 확인
-            for clip in scene_videos:
-                if os.path.exists(clip):
-                    file_size = os.path.getsize(clip)
-                    print(f"[VIDEO-WORKER] Clip exists: {clip} ({file_size} bytes)")
-                else:
-                    print(f"[VIDEO-WORKER] Clip MISSING: {clip}")
-
             merged_path = os.path.join(work_dir, "merged.mp4")
-            # IMPORTANT: stdout=DEVNULL, stderr=PIPE to avoid OOM from buffering all FFmpeg output
-            concat_result = subprocess.run(
-                ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list, "-c", "copy", merged_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=600
+
+            # 전환 효과 설정 확인
+            transitions_config = video_effects.get('transitions', {})
+            transition_style = transitions_config.get('style', 'none')  # 기본값: none (빠른 처리)
+            transition_duration = transitions_config.get('duration', 0.5)
+
+            if transition_style and transition_style != 'none' and len(scene_videos) > 1:
+                # 전환 효과 적용
+                print(f"[VIDEO-WORKER] 전환 효과 적용: {transition_style}, {transition_duration}초")
+                _update_job_status(job_id, progress=76, message=f'전환 효과 적용 중 ({transition_style})...')
+
+                if _apply_transitions(scene_videos, merged_path, transition_style, transition_duration):
+                    print(f"[VIDEO-WORKER] 전환 효과 적용 완료")
+                else:
+                    # 전환 효과 실패 시 단순 concat으로 폴백
+                    print(f"[VIDEO-WORKER] 전환 효과 실패, 단순 concat으로 폴백")
+                    transition_style = 'none'
+
+            if transition_style == 'none' or not os.path.exists(merged_path):
+                # 전환 효과 없이 단순 concat
+                concat_list = os.path.join(work_dir, "concat.txt")
+                with open(concat_list, 'w') as f:
+                    for clip in scene_videos:
+                        # 절대 경로 사용
+                        abs_clip = os.path.abspath(clip)
+                        f.write(f"file '{abs_clip}'\n")
+
+                print(f"[VIDEO-WORKER] Concat list created with {len(scene_videos)} clips")
+
+                # 클립 파일 존재 확인
+                for clip in scene_videos:
+                    if os.path.exists(clip):
+                        file_size = os.path.getsize(clip)
+                        print(f"[VIDEO-WORKER] Clip exists: {clip} ({file_size} bytes)")
+                    else:
+                        print(f"[VIDEO-WORKER] Clip MISSING: {clip}")
+
+                # IMPORTANT: stdout=DEVNULL, stderr=PIPE to avoid OOM from buffering all FFmpeg output
+                concat_result = subprocess.run(
+                    ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list, "-c", "copy", merged_path],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=600
             )
 
             if concat_result.returncode != 0:
@@ -16741,14 +17148,68 @@ def run_automation_pipeline(row_data, row_index):
             upload_data = upload_resp.json()
             if upload_data.get('ok'):
                 youtube_url = upload_data.get('videoUrl', '')  # camelCase로 반환됨
+                video_id = upload_data.get('videoId', '')
                 print(f"[AUTOMATION] 4. 완료: {youtube_url} (총 비용: ${total_cost:.2f})")
-                return {"ok": True, "video_url": youtube_url, "error": None, "cost": total_cost}
+
+                # ========== 5. 쇼츠 자동 생성 및 업로드 (옵션) ==========
+                shorts_url = None
+                shorts_info = video_effects.get('shorts', {})
+                highlight_scenes = shorts_info.get('highlight_scenes', [])
+
+                if highlight_scenes and len(highlight_scenes) > 0:
+                    print(f"[AUTOMATION] 5. 쇼츠 생성 시작...")
+                    try:
+                        # 쇼츠 영상 생성
+                        shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
+                        hook_text = shorts_info.get('hook_text', '')
+                        shorts_title = shorts_info.get('title', f"{title} #Shorts")
+
+                        if _generate_shorts_video(video_url_local.lstrip('/'), scenes, highlight_scenes, hook_text, shorts_output_path):
+                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 완료: {shorts_output_path}")
+
+                            # 쇼츠 업로드 (원본 영상 링크 포함)
+                            shorts_description = f"""🎬 전체 영상 보기: {youtube_url}
+
+{description[:200]}...
+
+#Shorts #유튜브쇼츠"""
+
+                            shorts_upload_payload = {
+                                "video_path": shorts_output_path,
+                                "title": shorts_title,
+                                "description": shorts_description,
+                                "visibility": visibility,
+                                "channel_id": channel_id
+                            }
+
+                            shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
+                            shorts_data = shorts_resp.json()
+
+                            if shorts_data.get('ok'):
+                                shorts_url = shorts_data.get('videoUrl', '')
+                                print(f"[AUTOMATION] 5. 쇼츠 업로드 완료: {shorts_url}")
+                            else:
+                                print(f"[AUTOMATION] 5. 쇼츠 업로드 실패: {shorts_data.get('error')}")
+                        else:
+                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 실패")
+                    except Exception as shorts_err:
+                        print(f"[AUTOMATION] 5. 쇼츠 처리 오류: {shorts_err}")
+                        import traceback
+                        traceback.print_exc()
+
+                return {
+                    "ok": True,
+                    "video_url": youtube_url,
+                    "shorts_url": shorts_url,
+                    "error": None,
+                    "cost": total_cost
+                }
             else:
-                return {"ok": False, "error": f"YouTube 업로드 실패: {upload_data.get('error')}", "video_url": None, "cost": total_cost}
+                return {"ok": False, "error": f"YouTube 업로드 실패: {upload_data.get('error')}", "video_url": None, "shorts_url": None, "cost": total_cost}
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return {"ok": False, "error": f"YouTube 업로드 오류: {str(e)}", "video_url": None, "cost": total_cost}
+            return {"ok": False, "error": f"YouTube 업로드 오류: {str(e)}", "video_url": None, "shorts_url": None, "cost": total_cost}
 
     except Exception as e:
         print(f"[AUTOMATION] 파이프라인 오류: {e}")
@@ -17737,10 +18198,12 @@ def api_sheets_check_and_process():
                     sheets_update_cell(service, sheet_id, f'Sheet1!H{i}', f'${cost:.2f}')
 
                     if result.get('ok'):
-                        # 성공 - 상태: 완료, 영상URL 기록 (J열)
+                        # 성공 - 상태: 완료, 영상URL 기록 (J열), 쇼츠URL 기록 (O열)
                         sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '완료')
                         if result.get('video_url'):
                             sheets_update_cell(service, sheet_id, f'Sheet1!J{i}', result['video_url'])
+                        if result.get('shorts_url'):
+                            sheets_update_cell(service, sheet_id, f'Sheet1!O{i}', result['shorts_url'])
                     else:
                         # 실패 - 상태: 실패, 에러메시지 기록 (K열)
                         sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
