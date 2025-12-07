@@ -39,6 +39,14 @@ Google Sheets 기반 YouTube 영상 자동 생성 시스템
 │     - 썸네일 설정                                        │
 │     - 예약 공개 (있는 경우)                              │
 └─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  5. 쇼츠 자동 생성 (옵션)                                │
+│     - 하이라이트 씬 추출 (60초 이하)                     │
+│     - 세로 영상(9:16) 변환                               │
+│     - 원본 영상 링크 포함하여 업로드                     │
+└─────────────────────────────────────────────────────────┘
 ```
 
 **주의:** "Step1-6" 같은 UI 용어 사용 금지. 위 흐름이 자동화 파이프라인의 정확한 구조임.
@@ -63,6 +71,7 @@ Google Sheets 기반 YouTube 영상 자동 생성 시스템
 | L | 음성 | TTS 음성 선택 (선택) |
 | M | 타겟 | general/senior (선택) |
 | N | 카테고리 | 뉴스/시사/정치/경제 → 뉴스 스타일 썸네일 |
+| O | 쇼츠URL | 자동 생성된 쇼츠 URL (출력) |
 
 ---
 
@@ -222,3 +231,45 @@ else:
 - **클립 생성** (11714-11739행): 오디오 설정 통일
   - 모든 클립에 `-ar 44100` 추가
 - **Fallback 재인코딩**: 자막 burn-in 실패 시에도 YouTube 호환으로 재인코딩
+
+### 2025-12-07: 새로운 기능 추가
+
+**쇼츠 자동 생성 및 업로드**
+- GPT-5.1이 하이라이트 씬 선택 (`video_effects.shorts.highlight_scenes`)
+- 세로 영상(9:16) 자동 변환 (`_generate_shorts_video()`)
+- 원본 영상 링크 포함하여 업로드
+- Google Sheets O열에 쇼츠 URL 저장
+
+**전환 효과 (Transitions)**
+- 씬 사이에 crossfade/fade_black/fade_white 효과 적용
+- GPT-5.1이 자동 선택 (`video_effects.transitions`)
+- `_apply_transitions()` 함수로 FFmpeg xfade 필터 적용
+
+**YouTube 자막 자동 업로드**
+- `_upload_youtube_captions()` 함수 추가
+- SRT 파일을 YouTube Captions API로 직접 업로드
+
+---
+
+## video_effects 구조
+
+GPT-5.1이 대본 분석 시 자동 생성하는 영상 효과 설정:
+
+```json
+{
+  "bgm_mood": "hopeful/sad/tense/dramatic/calm/inspiring/mysterious/nostalgic",
+  "subtitle_highlights": [{"keyword": "충격", "color": "#FF0000"}],
+  "screen_overlays": [{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}],
+  "sound_effects": [{"scene": 1, "type": "impact", "moment": "반전 순간"}],
+  "lower_thirds": [{"scene": 2, "text": "출처", "position": "bottom-left"}],
+  "news_ticker": {"enabled": true, "headlines": ["속보: ..."]},
+  "shorts": {
+    "highlight_scenes": [2, 3],
+    "hook_text": "이 한마디가 모든 걸 바꿨다",
+    "title": "충격적인 고백 #Shorts"
+  },
+  "transitions": {
+    "style": "crossfade",
+    "duration": 0.5
+  }
+}
