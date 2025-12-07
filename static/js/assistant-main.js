@@ -22,21 +22,13 @@ const AssistantMain = (() => {
     // Load dashboard data
     await loadDashboard();
 
-    // Load news
-    await loadNews();
+    // Load news (sidebar)
+    await loadSidebarNews();
 
     // Initialize attendance section
     initUploadDate();
     initStyleButtons();
     initDragDrop();
-
-    // Check Google integrations status
-    checkGcalAuth();
-    checkGsheetsAuth();
-    checkWebhookStatus();
-
-    // Load video schedule from Google Sheets
-    loadVideoSchedule();
   }
 
   function updateGreeting() {
@@ -69,6 +61,45 @@ const AssistantMain = (() => {
   }
 
   // ===== News Functions =====
+  // 사이드바 뉴스 로딩
+  async function loadSidebarNews() {
+    const container = document.getElementById('sidebar-news-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #9ca3af; font-size: 0.7rem;">Loading...</div>';
+
+    try {
+      const response = await fetch('/assistant/api/news');
+      const data = await response.json();
+
+      if (data.success && data.news && data.news.length > 0) {
+        newsData = data.news;
+        renderSidebarNews(data.news);
+      } else {
+        container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #9ca3af; font-size: 0.7rem;">뉴스 없음</div>';
+      }
+    } catch (error) {
+      console.error('[Assistant] Sidebar news error:', error);
+      container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #f44336; font-size: 0.7rem;">로딩 실패</div>';
+    }
+  }
+
+  function renderSidebarNews(news) {
+    const container = document.getElementById('sidebar-news-container');
+    if (!container) return;
+
+    // 간단한 사이드바 형식 (최대 5개)
+    const topNews = news.slice(0, 5);
+    container.innerHTML = topNews.map((item, idx) => `
+      <div class="sidebar-news-item" style="padding: 0.4rem 0; border-bottom: 1px solid #e5e7eb; font-size: 0.75rem;">
+        <a href="${item.link || '#'}" target="_blank" style="color: #374151; text-decoration: none; display: block;">
+          <span style="color: ${item.category === '국내' ? '#059669' : '#2563eb'}; font-weight: 500;">${item.category === '국내' ? '🇰🇷' : '🌍'}</span>
+          ${escapeHtml(item.title.length > 30 ? item.title.substring(0, 30) + '...' : item.title)}
+        </a>
+      </div>
+    `).join('');
+  }
+
   async function loadNews() {
     const container = document.getElementById('news-container');
     const timeEl = document.getElementById('news-time');
@@ -168,47 +199,25 @@ const AssistantMain = (() => {
   }
 
   async function refreshNews() {
-    const container = document.getElementById('news-container');
-    const refreshIcon = document.getElementById('refresh-icon');
-    const timeEl = document.getElementById('news-time');
-
+    // 사이드바 뉴스 새로고침
+    const container = document.getElementById('sidebar-news-container');
     if (!container) return;
 
-    if (refreshIcon) refreshIcon.style.animation = 'spin 1s linear infinite';
-    container.innerHTML = `
-      <div class="news-loading">
-        <div class="spinner"></div>
-        <p>Refreshing news...</p>
-      </div>
-    `;
+    container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #9ca3af; font-size: 0.7rem;">🔄 새로고침...</div>';
 
     try {
       const response = await fetch('/assistant/api/news/refresh', { method: 'POST' });
       const data = await response.json();
 
       if (data.success && data.news) {
-        renderNewsTable(data.news);
-
-        if (timeEl && data.updated_at) {
-          const updateTime = new Date(data.updated_at);
-          timeEl.textContent = updateTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' Update';
-        }
+        newsData = data.news;
+        renderSidebarNews(data.news);
       } else {
-        container.innerHTML = `
-          <div class="news-empty">
-            <p>${data.error || 'Failed to refresh news'}</p>
-          </div>
-        `;
+        container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #9ca3af; font-size: 0.7rem;">새로고침 실패</div>';
       }
     } catch (error) {
       console.error('[Assistant] News refresh error:', error);
-      container.innerHTML = `
-        <div class="news-empty">
-          <p>Network error. Please try again.</p>
-        </div>
-      `;
-    } finally {
-      if (refreshIcon) refreshIcon.style.animation = '';
+      container.innerHTML = '<div style="padding: 0.5rem; text-align: center; color: #f44336; font-size: 0.7rem;">네트워크 오류</div>';
     }
   }
 
@@ -411,9 +420,6 @@ const AssistantMain = (() => {
 
     // 프로젝트 진행
     renderProjectTasks('project-tasks', data.active_projects || []);
-
-    // Pending Sync
-    renderPendingSync('pending-sync', data.pending_sync);
   }
 
   function renderPeopleToVisit(containerId, items) {
@@ -425,16 +431,62 @@ const AssistantMain = (() => {
       return;
     }
 
-    container.innerHTML = items.map(item => `
-      <div class="visit-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
-        <span style="font-size: 1.2rem;">${item.type === 'visit' ? '🏠' : item.type === 'prayer' ? '🙏' : '📞'}</span>
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 500; font-size: 0.85rem;">${escapeHtml(item.person_name || item.title)}</div>
-          <div style="font-size: 0.75rem; color: #6b7280;">${escapeHtml(item.reason || item.notes || '')}</div>
+    // 오늘/내일 계산
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    function getVisitIcon(title) {
+      // 타이틀에서 아이콘 결정
+      if (title.includes('🏠') || title.includes('심방') || title.includes('방문')) return '🏠';
+      if (title.includes('🙏') || title.includes('기도')) return '🙏';
+      if (title.includes('📞') || title.includes('전화') || title.includes('연락')) return '📞';
+      if (title.includes('🏥') || title.includes('병원') || title.includes('병문안')) return '🏥';
+      if (title.includes('✋') || title.includes('안수')) return '✋';
+      return '👤';
+    }
+
+    function formatDueDate(dueDate) {
+      if (!dueDate) return { text: '', style: '' };
+
+      const due = new Date(dueDate);
+      due.setHours(0, 0, 0, 0);
+
+      if (due.getTime() === today.getTime()) {
+        return { text: '오늘', style: 'color: #fff; background: #ef4444; font-weight: 600;' };
+      } else if (due.getTime() === tomorrow.getTime()) {
+        return { text: '내일', style: 'color: #fff; background: #f59e0b; font-weight: 600;' };
+      } else if (due < today) {
+        return { text: '지남', style: 'color: #fff; background: #6b7280;' };
+      } else {
+        // 이번주 내: 요일 표시
+        const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+        const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+        if (diffDays <= 7) {
+          return { text: weekdays[due.getDay()] + '요일', style: 'color: #059669; background: #d1fae5;' };
+        }
+        // 그 외: 월/일 표시
+        return { text: `${due.getMonth() + 1}/${due.getDate()}`, style: 'color: #3b82f6; background: #dbeafe;' };
+      }
+    }
+
+    container.innerHTML = items.map(item => {
+      const icon = getVisitIcon(item.title || '');
+      const dateInfo = formatDueDate(item.due_date);
+      // 제목에서 이모지 제거 (아이콘이 앞에 표시되므로)
+      const cleanTitle = (item.title || '').replace(/^[🏠🙏📞🏥✋👤]\s*/, '');
+
+      return `
+        <div class="visit-item" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+          <span style="font-size: 1.1rem; width: 1.5rem; text-align: center; flex-shrink: 0;">${icon}</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 500; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(cleanTitle)}</div>
+          </div>
+          ${dateInfo.text ? `<span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 4px; flex-shrink: 0; ${dateInfo.style}">${dateInfo.text}</span>` : ''}
         </div>
-        ${item.due_date ? `<span style="font-size: 0.7rem; color: #059669; background: #d1fae5; padding: 0.2rem 0.5rem; border-radius: 4px;">${item.due_date}</span>` : ''}
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   function renderProjectTasks(containerId, projects) {
@@ -2288,8 +2340,8 @@ const AssistantMain = (() => {
 
   function showError(message) {
     console.error('[Assistant] Error:', message);
-    // Show error in all containers
-    ['today-events', 'week-events', 'pending-tasks', 'pending-sync'].forEach(id => {
+    // Show error in all dashboard containers
+    ['today-events', 'week-events', 'pending-tasks', 'people-to-visit', 'project-tasks'].forEach(id => {
       const container = document.getElementById(id);
       if (container) {
         container.innerHTML = `<div class="empty" style="color: #f44336;">Error: ${message}</div>`;
