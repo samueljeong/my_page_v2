@@ -5147,6 +5147,189 @@ def api_generate_subtitle():
         return jsonify({"ok": False, "error": str(e)}), 200
 
 
+# ===== BGM 파일 업로드 API =====
+@app.route('/api/bgm/upload', methods=['POST'])
+def api_upload_bgm():
+    """BGM 파일 업로드 (MP3)"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"ok": False, "error": "파일이 없습니다"}), 400
+
+        file = request.files['file']
+        mood = request.form.get('mood', '')
+
+        if not file.filename:
+            return jsonify({"ok": False, "error": "파일명이 없습니다"}), 400
+
+        if not mood:
+            return jsonify({"ok": False, "error": "분위기(mood)를 선택하세요"}), 400
+
+        # BGM 디렉토리 확인/생성
+        bgm_dir = "static/audio/bgm"
+        os.makedirs(bgm_dir, exist_ok=True)
+
+        # 기존 파일 확인하여 번호 부여
+        import glob
+        existing = glob.glob(os.path.join(bgm_dir, f"{mood}*.mp3"))
+        num = len(existing) + 1
+        filename = f"{mood}_{num:02d}.mp3"
+        filepath = os.path.join(bgm_dir, filename)
+
+        file.save(filepath)
+        print(f"[BGM-UPLOAD] 저장됨: {filepath}")
+
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "path": filepath,
+            "mood": mood,
+            "count": num
+        })
+
+    except Exception as e:
+        print(f"[BGM-UPLOAD] 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/bgm/list', methods=['GET'])
+def api_list_bgm():
+    """업로드된 BGM 파일 목록"""
+    try:
+        import glob
+        bgm_dir = "static/audio/bgm"
+        os.makedirs(bgm_dir, exist_ok=True)
+
+        files = glob.glob(os.path.join(bgm_dir, "*.mp3"))
+        moods = {}
+
+        for f in files:
+            filename = os.path.basename(f)
+            # mood 추출: hopeful_01.mp3 -> hopeful
+            mood = filename.split('_')[0].split('.')[0].split(' ')[0]
+            if mood not in moods:
+                moods[mood] = []
+            moods[mood].append(filename)
+
+        return jsonify({"ok": True, "moods": moods, "total": len(files)})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/bgm-upload')
+def bgm_upload_page():
+    """BGM 업로드 페이지"""
+    return '''<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BGM 업로드</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+h1 { color: #00d4ff; }
+.upload-box { border: 2px dashed #444; padding: 40px; text-align: center; margin: 20px 0; border-radius: 10px; }
+.upload-box.dragover { border-color: #00d4ff; background: rgba(0,212,255,0.1); }
+select, button { padding: 12px 24px; font-size: 16px; margin: 10px 5px; border-radius: 5px; border: none; cursor: pointer; }
+select { background: #333; color: #fff; }
+button { background: #00d4ff; color: #000; font-weight: bold; }
+button:hover { background: #00b8e6; }
+.file-list { background: #2a2a4e; padding: 15px; border-radius: 10px; margin-top: 20px; }
+.file-item { padding: 8px; border-bottom: 1px solid #444; }
+.mood-tag { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; margin-right: 10px; }
+.hopeful { background: #4CAF50; } .sad { background: #2196F3; } .tense { background: #f44336; }
+.dramatic { background: #9C27B0; } .calm { background: #00BCD4; } .inspiring { background: #FF9800; }
+.mysterious { background: #607D8B; } .nostalgic { background: #795548; }
+#status { margin-top: 15px; padding: 10px; border-radius: 5px; }
+.success { background: #1b5e20; } .error { background: #b71c1c; }
+</style>
+</head><body>
+<h1>🎵 BGM 업로드</h1>
+<p>MP3 파일을 분위기별로 업로드하세요</p>
+
+<select id="mood">
+<option value="">-- 분위기 선택 --</option>
+<option value="hopeful">😊 hopeful (희망적)</option>
+<option value="sad">😢 sad (슬픔)</option>
+<option value="tense">😰 tense (긴장)</option>
+<option value="dramatic">🎭 dramatic (극적)</option>
+<option value="calm">😌 calm (평화)</option>
+<option value="inspiring">✨ inspiring (감동)</option>
+<option value="mysterious">🔮 mysterious (미스터리)</option>
+<option value="nostalgic">🌅 nostalgic (향수)</option>
+</select>
+
+<div class="upload-box" id="dropzone">
+<p>📁 MP3 파일을 여기에 드래그하거나 클릭하여 선택</p>
+<input type="file" id="fileInput" accept=".mp3,audio/mpeg" multiple style="display:none">
+</div>
+
+<div id="status"></div>
+
+<h3>📋 업로드된 BGM</h3>
+<div class="file-list" id="fileList">로딩 중...</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const moodSelect = document.getElementById('mood');
+const status = document.getElementById('status');
+
+dropzone.onclick = () => fileInput.click();
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('dragover'); };
+dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); };
+fileInput.onchange = () => handleFiles(fileInput.files);
+
+async function handleFiles(files) {
+    const mood = moodSelect.value;
+    if (!mood) { alert('분위기를 먼저 선택하세요!'); return; }
+
+    for (const file of files) {
+        if (!file.name.endsWith('.mp3')) { alert(file.name + ' - MP3 파일만 가능합니다'); continue; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('mood', mood);
+
+        status.innerHTML = '⏳ 업로드 중: ' + file.name;
+        status.className = '';
+
+        try {
+            const res = await fetch('/api/bgm/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                status.innerHTML = '✅ 업로드 완료: ' + data.filename;
+                status.className = 'success';
+                loadFileList();
+            } else {
+                status.innerHTML = '❌ 실패: ' + data.error;
+                status.className = 'error';
+            }
+        } catch (e) {
+            status.innerHTML = '❌ 오류: ' + e.message;
+            status.className = 'error';
+        }
+    }
+}
+
+async function loadFileList() {
+    try {
+        const res = await fetch('/api/bgm/list');
+        const data = await res.json();
+        if (data.ok) {
+            let html = '<p>총 ' + data.total + '개 파일</p>';
+            for (const [mood, files] of Object.entries(data.moods)) {
+                html += '<div class="file-item"><span class="mood-tag ' + mood + '">' + mood + '</span> ' + files.join(', ') + '</div>';
+            }
+            document.getElementById('fileList').innerHTML = html || '<p>업로드된 파일 없음</p>';
+        }
+    } catch (e) { document.getElementById('fileList').innerHTML = '로드 실패'; }
+}
+loadFileList();
+</script>
+</body></html>'''
+
+
 # ===== Step6: 이미지 업로드 API =====
 @app.route('/api/drama/upload-image', methods=['POST'])
 def api_upload_image():
@@ -12177,6 +12360,108 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     return ticker_filter
 
 
+def _get_bgm_file(mood, bgm_dir="static/audio/bgm"):
+    """분위기에 맞는 BGM 파일 선택 (여러 개면 랜덤)
+
+    Args:
+        mood: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic
+        bgm_dir: BGM 파일 디렉토리
+
+    Returns:
+        BGM 파일 경로 또는 None
+    """
+    import glob
+    import random
+
+    if not mood or not os.path.exists(bgm_dir):
+        return None
+
+    # 파일명 패턴: mood.mp3, mood_01.mp3, mood (1).mp3 등
+    patterns = [
+        os.path.join(bgm_dir, f"{mood}.mp3"),
+        os.path.join(bgm_dir, f"{mood}_*.mp3"),
+        os.path.join(bgm_dir, f"{mood} *.mp3"),  # 공백 포함
+        os.path.join(bgm_dir, f"{mood}*.mp3"),
+    ]
+
+    matching_files = []
+    for pattern in patterns:
+        matching_files.extend(glob.glob(pattern))
+
+    # 중복 제거
+    matching_files = list(set(matching_files))
+
+    if not matching_files:
+        print(f"[BGM] '{mood}' 분위기 BGM 파일 없음")
+        return None
+
+    # 랜덤 선택
+    selected = random.choice(matching_files)
+    print(f"[BGM] 선택된 BGM: {selected} (후보 {len(matching_files)}개 중)")
+    return selected
+
+
+def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
+    """비디오에 BGM 믹싱 (나레이션 유지, BGM은 작게)
+
+    Args:
+        video_path: 원본 비디오 경로
+        bgm_path: BGM 오디오 경로
+        output_path: 출력 비디오 경로
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        # 비디오 길이 확인
+        probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                     "-of", "default=noprint_wrappers=1:nokey=1", video_path]
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        video_duration = float(result.stdout.strip())
+
+        print(f"[BGM] 비디오 길이: {video_duration:.1f}초")
+
+        # FFmpeg 명령: BGM 루프 + 볼륨 조절 + 믹싱 + 페이드아웃
+        # -stream_loop -1: BGM 무한 루프
+        # volume: BGM 볼륨 낮춤
+        # amix: 오디오 믹싱
+        # afade: 마지막 3초 페이드아웃
+
+        fade_start = max(0, video_duration - 3)  # 마지막 3초
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,                          # 원본 비디오 (오디오 포함)
+            "-stream_loop", "-1", "-i", bgm_path,      # BGM 루프
+            "-filter_complex",
+            f"[1:a]volume={bgm_volume},afade=t=in:st=0:d=2,afade=t=out:st={fade_start}:d=3[bgm];"  # BGM 볼륨+페이드
+            f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",  # 믹싱
+            "-map", "0:v",                             # 비디오 스트림
+            "-map", "[aout]",                          # 믹싱된 오디오
+            "-c:v", "copy",                            # 비디오 재인코딩 안함
+            "-c:a", "aac", "-b:a", "128k",            # 오디오 인코딩
+            "-shortest",                               # 비디오 길이에 맞춤
+            output_path
+        ]
+
+        print(f"[BGM] 믹싱 시작...")
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=600)
+
+        if result.returncode == 0:
+            print(f"[BGM] 믹싱 완료: {output_path}")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[BGM] 믹싱 실패: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"[BGM] 믹싱 오류: {e}")
+        return False
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -12480,7 +12765,22 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             del result
             gc.collect()
 
-            # 5. 결과 저장
+            # 5. BGM 믹싱 (옵션)
+            bgm_mood = video_effects.get('bgm_mood', '')
+            if bgm_mood:
+                _update_job_status(job_id, progress=95, message='BGM 믹싱 중...')
+                bgm_file = _get_bgm_file(bgm_mood)
+                if bgm_file:
+                    bgm_output_path = os.path.join(work_dir, "with_bgm.mp4")
+                    if _mix_bgm_with_video(final_path, bgm_file, bgm_output_path):
+                        final_path = bgm_output_path
+                        print(f"[VIDEO-WORKER] BGM 믹싱 완료: {bgm_mood}")
+                    else:
+                        print(f"[VIDEO-WORKER] BGM 믹싱 실패, BGM 없이 진행")
+                else:
+                    print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
+
+            # 6. 결과 저장
             output_filename = f"video_{session_id}.mp4"
             output_path = os.path.join(upload_dir, output_filename)
             shutil.copy(final_path, output_path)
