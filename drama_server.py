@@ -17137,13 +17137,27 @@ def run_automation_pipeline(row_data, row_index):
             nonlocal thumbnail_url, total_cost
             print(f"[AUTOMATION][THUMB] 썸네일 생성 시작...")
             try:
-                if not ai_prompts or not ai_prompts.get('A'):
-                    print(f"[AUTOMATION][THUMB] 프롬프트 없음 (스킵)")
-                    return None
+                # 뉴스 카테고리 체크
+                is_news = category.lower() in ['뉴스', 'news', '시사', '정치', '경제'] if category else False
+
+                if is_news:
+                    # 뉴스 카테고리: 하드코딩된 뉴스 스타일 프롬프트 사용 (50대+ 시청자용)
+                    print(f"[AUTOMATION][THUMB] 뉴스 카테고리 감지 → 뉴스 스타일 썸네일 사용")
+                    news_prompt = {
+                        "prompt": "Korean TV news exclusive report style thumbnail, 16:9 aspect ratio. LARGE CLEAR TEXT for senior viewers (50+). Dark navy or black background with RED '단독' or '속보' badge. Simple clean layout - NOT cluttered. Single powerful image with bold Korean headline. High contrast white/yellow text on dark background. KBS/MBC/SBS news style professional look. NO cartoon style, realistic news broadcast aesthetic. Minimal elements, maximum readability. Breaking news feel with credible journalism aesthetic.",
+                        "text_overlay": thumbnail_data.get('text_overlay') if thumbnail_data else {}
+                    }
+                    thumb_prompt = news_prompt
+                else:
+                    # 일반 카테고리: GPT가 생성한 ai_prompts 사용
+                    if not ai_prompts or not ai_prompts.get('A'):
+                        print(f"[AUTOMATION][THUMB] 프롬프트 없음 (스킵)")
+                        return None
+                    thumb_prompt = ai_prompts.get('A')
 
                 thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
                     "session_id": f"thumb_{session_id}",
-                    "prompt": ai_prompts.get('A')
+                    "prompt": thumb_prompt
                 }, timeout=180)
 
                 thumb_data = thumb_resp.json()
