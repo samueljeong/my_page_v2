@@ -5164,9 +5164,11 @@ def api_upload_bgm():
         if not mood:
             return jsonify({"ok": False, "error": "분위기(mood)를 선택하세요"}), 400
 
-        # BGM 디렉토리 확인/생성
-        bgm_dir = "static/audio/bgm"
+        # BGM 디렉토리 확인/생성 (스크립트 위치 기준 절대 경로)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        bgm_dir = os.path.join(script_dir, "static", "audio", "bgm")
         os.makedirs(bgm_dir, exist_ok=True)
+        print(f"[BGM-UPLOAD] 디렉토리: {bgm_dir}")
 
         # 기존 파일 확인하여 번호 부여
         import glob
@@ -5196,10 +5198,12 @@ def api_list_bgm():
     """업로드된 BGM 파일 목록"""
     try:
         import glob
-        bgm_dir = "static/audio/bgm"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        bgm_dir = os.path.join(script_dir, "static", "audio", "bgm")
         os.makedirs(bgm_dir, exist_ok=True)
 
         files = glob.glob(os.path.join(bgm_dir, "*.mp3"))
+        print(f"[BGM-LIST] 디렉토리: {bgm_dir}, 파일 수: {len(files)}")
         moods = {}
 
         for f in files:
@@ -5347,9 +5351,11 @@ def api_upload_sfx():
         if not sfx_type:
             return jsonify({"ok": False, "error": "효과음 타입을 선택하세요"}), 400
 
-        # 효과음 디렉토리 확인/생성
-        sfx_dir = "static/audio/sfx"
+        # 효과음 디렉토리 확인/생성 (스크립트 위치 기준 절대 경로)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        sfx_dir = os.path.join(script_dir, "static", "audio", "sfx")
         os.makedirs(sfx_dir, exist_ok=True)
+        print(f"[SFX-UPLOAD] 디렉토리: {sfx_dir}")
 
         # 기존 파일 확인하여 번호 부여
         import glob
@@ -5379,10 +5385,12 @@ def api_list_sfx():
     """업로드된 효과음 파일 목록"""
     try:
         import glob
-        sfx_dir = "static/audio/sfx"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        sfx_dir = os.path.join(script_dir, "static", "audio", "sfx")
         os.makedirs(sfx_dir, exist_ok=True)
 
         files = glob.glob(os.path.join(sfx_dir, "*.mp3"))
+        print(f"[SFX-LIST] 디렉토리: {sfx_dir}, 파일 수: {len(files)}")
         types = {}
 
         for f in files:
