@@ -9778,6 +9778,56 @@ def youtube_upload():
                 video_id = response.get('id')
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
 
+                print(f"[YOUTUBE-UPLOAD] 업로드 완료, 영상 상태 확인 중...")
+
+                # 업로드 후 영상 상태 확인 (YouTube가 영상을 거부했는지)
+                try:
+                    video_check = youtube.videos().list(
+                        part='status,processingDetails',
+                        id=video_id
+                    ).execute()
+
+                    if video_check.get('items'):
+                        item = video_check['items'][0]
+                        upload_status = item.get('status', {}).get('uploadStatus', 'unknown')
+                        rejection_reason = item.get('status', {}).get('rejectionReason', '')
+                        failure_reason = item.get('status', {}).get('failureReason', '')
+                        processing_status = item.get('processingDetails', {}).get('processingStatus', 'unknown')
+
+                        print(f"[YOUTUBE-UPLOAD] 상태: uploadStatus={upload_status}, processingStatus={processing_status}")
+
+                        if rejection_reason:
+                            print(f"[YOUTUBE-UPLOAD][ERROR] 거부됨: {rejection_reason}")
+                            return jsonify({
+                                "ok": False,
+                                "error": f"YouTube가 영상을 거부했습니다: {rejection_reason}"
+                            }), 200
+
+                        if failure_reason:
+                            print(f"[YOUTUBE-UPLOAD][ERROR] 실패: {failure_reason}")
+                            return jsonify({
+                                "ok": False,
+                                "error": f"YouTube 처리 실패: {failure_reason}"
+                            }), 200
+
+                        if upload_status == 'rejected':
+                            print(f"[YOUTUBE-UPLOAD][ERROR] 영상이 거부됨")
+                            return jsonify({
+                                "ok": False,
+                                "error": "YouTube가 영상을 거부했습니다. 영상 형식을 확인해주세요."
+                            }), 200
+
+                        if upload_status == 'failed':
+                            print(f"[YOUTUBE-UPLOAD][ERROR] 업로드 실패 상태")
+                            return jsonify({
+                                "ok": False,
+                                "error": "YouTube 업로드가 실패했습니다. 영상 파일을 확인해주세요."
+                            }), 200
+                    else:
+                        print(f"[YOUTUBE-UPLOAD][WARN] 영상 정보 조회 실패 - items 없음")
+                except Exception as check_error:
+                    print(f"[YOUTUBE-UPLOAD][WARN] 상태 확인 실패 (계속 진행): {check_error}")
+
                 print(f"[YOUTUBE-UPLOAD] 업로드 성공: {video_url}")
 
                 # 썸네일 업로드 (썸네일 경로가 있는 경우)
@@ -15100,6 +15150,13 @@ def run_automation_pipeline(row_data, row_index):
         # TTS 실패 시 중단
         if not any(s.get('audio_url') for s in scenes):
             return {"ok": False, "error": f"TTS 생성 실패: {'; '.join(parallel_errors)}", "video_url": None, "cost": total_cost}
+
+        # 이미지 실패 시 중단 (최소 1개 이상 필요)
+        image_success_count = len([s for s in scenes if s.get('image_url')])
+        if image_success_count == 0:
+            return {"ok": False, "error": f"이미지 생성 실패: 모든 이미지 생성에 실패했습니다", "video_url": None, "cost": total_cost}
+        elif image_success_count < len(scenes):
+            print(f"[AUTOMATION] 경고: 이미지 {image_success_count}/{len(scenes)}개만 생성됨")
 
         print(f"[AUTOMATION] 2. 병렬 처리 완료")
 
