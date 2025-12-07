@@ -652,6 +652,246 @@ def api_filter():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+# YouTube 카테고리 목록 (한국 기준)
+YOUTUBE_CATEGORIES = {
+    "1": "영화/애니메이션",
+    "2": "자동차",
+    "10": "음악",
+    "15": "동물",
+    "17": "스포츠",
+    "19": "여행/이벤트",
+    "20": "게임",
+    "22": "인물/블로그",
+    "23": "코미디",
+    "24": "엔터테인먼트",
+    "25": "뉴스/정치",
+    "26": "노하우/스타일",
+    "27": "교육",
+    "28": "과학기술",
+    "29": "비영리/사회운동"
+}
+
+
+@tubelens_bp.route('/api/tubelens/trending', methods=['POST'])
+def api_trending():
+    """트렌딩(인기) 영상 가져오기"""
+    try:
+        data = request.get_json()
+        region_code = data.get("regionCode", "KR")
+        category_id = data.get("categoryId", "")
+        max_results = min(int(data.get("maxResults", 50)), 50)
+        api_keys = data.get("apiKeys", [])
+        current_api_key_index = data.get("currentApiKeyIndex", 0)
+
+        # API 키 선택
+        api_key = None
+        if api_keys and len(api_keys) > current_api_key_index:
+            api_key = api_keys[current_api_key_index]
+
+        if not api_key:
+            api_key = get_youtube_api_key()
+
+        if not api_key:
+            return jsonify({"success": False, "message": "API 키가 필요합니다."}), 400
+
+        # 트렌딩 영상 가져오기
+        params = {
+            "part": "snippet,statistics,contentDetails",
+            "chart": "mostPopular",
+            "regionCode": region_code,
+            "maxResults": max_results
+        }
+
+        if category_id:
+            params["videoCategoryId"] = category_id
+
+        videos_data = make_youtube_request("videos", params, api_key)
+
+        # 채널 정보 일괄 조회
+        channel_ids = list(set([
+            item["snippet"]["channelId"]
+            for item in videos_data.get("items", [])
+        ]))
+
+        channel_map = {}
+        if channel_ids:
+            for i in range(0, len(channel_ids), 50):
+                batch_ids = channel_ids[i:i+50]
+                channels_data = make_youtube_request("channels", {
+                    "part": "statistics",
+                    "id": ",".join(batch_ids)
+                }, api_key)
+
+                for ch in channels_data.get("items", []):
+                    channel_map[ch["id"]] = {
+                        "subscriberCount": int(ch["statistics"].get("subscriberCount", 0)),
+                        "videoCount": int(ch["statistics"].get("videoCount", 0))
+                    }
+
+        # 결과 가공
+        videos = []
+        for idx, item in enumerate(videos_data.get("items", [])):
+            video_id = item["id"]
+            snippet = item.get("snippet", {})
+            statistics = item.get("statistics", {})
+            content_details = item.get("contentDetails", {})
+
+            channel_id = snippet.get("channelId", "")
+            channel_info = channel_map.get(channel_id, {"subscriberCount": 0, "videoCount": 0})
+
+            duration_seconds = parse_duration(content_details.get("duration", ""))
+            view_count = int(statistics.get("viewCount", 0))
+            like_count = int(statistics.get("likeCount", 0))
+            comment_count = int(statistics.get("commentCount", 0))
+            subscriber_count = channel_info["subscriberCount"]
+
+            cii_data = calculate_cii(view_count, subscriber_count, like_count, comment_count)
+
+            videos.append({
+                "index": idx + 1,
+                "videoId": video_id,
+                "title": snippet.get("title", ""),
+                "description": snippet.get("description", ""),
+                "thumbnail": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
+                "channelId": channel_id,
+                "channelTitle": snippet.get("channelTitle", ""),
+                "publishedAt": snippet.get("publishedAt", "")[:10],
+                "duration": format_duration(duration_seconds),
+                "durationSeconds": duration_seconds,
+                "viewCount": view_count,
+                "likeCount": like_count,
+                "commentCount": comment_count,
+                "subscriberCount": subscriber_count,
+                "totalVideos": channel_info["videoCount"],
+                "categoryId": snippet.get("categoryId", ""),
+                **cii_data
+            })
+
+        return jsonify({
+            "success": True,
+            "data": videos,
+            "message": f"인기 영상 {len(videos)}개를 가져왔습니다."
+        })
+
+    except Exception as e:
+        print(f"트렌딩 영상 가져오기 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/categories', methods=['GET'])
+def api_categories():
+    """YouTube 카테고리 목록 반환"""
+    categories = [
+        {"id": k, "name": v}
+        for k, v in YOUTUBE_CATEGORIES.items()
+    ]
+    return jsonify({
+        "success": True,
+        "data": categories
+    })
+
+
+@tubelens_bp.route('/api/tubelens/rising', methods=['POST'])
+def api_rising():
+    """급상승 영상 발굴 (구독자 대비 고성과 영상)"""
+    try:
+        data = request.get_json()
+        region_code = data.get("regionCode", "KR")
+        max_subscribers = int(data.get("maxSubscribers", 100000))  # 구독자 상한
+        time_frame = data.get("timeFrame", "week")
+        category_id = data.get("categoryId", "")
+        api_keys = data.get("apiKeys", [])
+        current_api_key_index = data.get("currentApiKeyIndex", 0)
+
+        # API 키 선택
+        api_key = None
+        if api_keys and len(api_keys) > current_api_key_index:
+            api_key = api_keys[current_api_key_index]
+
+        if not api_key:
+            api_key = get_youtube_api_key()
+
+        if not api_key:
+            return jsonify({"success": False, "message": "API 키가 필요합니다."}), 400
+
+        # 시간 필터 계산
+        published_after = get_time_filter(time_frame)
+
+        # 검색 파라미터
+        search_params = {
+            "part": "snippet",
+            "type": "video",
+            "maxResults": 50,
+            "regionCode": region_code,
+            "order": "viewCount",
+        }
+
+        if published_after:
+            search_params["publishedAfter"] = published_after
+
+        if category_id:
+            search_params["videoCategoryId"] = category_id
+
+        # 여러 페이지에서 영상 수집
+        all_video_ids = []
+        next_page_token = None
+
+        for _ in range(4):  # 최대 200개 수집
+            if next_page_token:
+                search_params["pageToken"] = next_page_token
+
+            search_data = make_youtube_request("search", search_params, api_key)
+
+            video_ids = [
+                item["id"]["videoId"]
+                for item in search_data.get("items", [])
+                if item.get("id", {}).get("videoId")
+            ]
+            all_video_ids.extend(video_ids)
+
+            next_page_token = search_data.get("nextPageToken")
+            if not next_page_token:
+                break
+
+        # 비디오 상세 정보 가져오기
+        videos = get_video_details(all_video_ids, api_key)
+
+        # 급상승 필터링: 구독자 상한 이하 + CII Good 이상
+        rising_videos = []
+        for video in videos:
+            subscriber_count = video.get("subscriberCount", 0)
+            cii = video.get("cii", "")
+            performance_value = video.get("performanceValue", 0)
+
+            # 구독자 상한 체크
+            if subscriber_count > max_subscribers:
+                continue
+
+            # 성과도 배율 1.5 이상 (Good 이상)
+            if performance_value >= 1.5:
+                rising_videos.append(video)
+
+        # 성과도 배율 기준 정렬
+        rising_videos.sort(key=lambda x: x.get("performanceValue", 0), reverse=True)
+
+        # 상위 50개만
+        rising_videos = rising_videos[:50]
+
+        # 인덱스 재할당
+        for idx, video in enumerate(rising_videos):
+            video["index"] = idx + 1
+
+        return jsonify({
+            "success": True,
+            "data": rising_videos,
+            "message": f"급상승 영상 {len(rising_videos)}개를 발굴했습니다."
+        })
+
+    except Exception as e:
+        print(f"급상승 영상 발굴 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @tubelens_bp.route('/api/tubelens/comments', methods=['POST'])
 def api_comments():
     """영상 댓글 가져오기"""

@@ -19,6 +19,9 @@
     currentVideoId: null,
     currentComments: [],
     currentDescription: '',
+    currentTab: 'search',
+    trendingCategory: '',
+    risingCategory: '',
     filters: {
       ciiGreat: false,
       ciiGood: false,
@@ -30,7 +33,222 @@
       this.loadApiKeys();
       this.updateApiKeysList();
       this.updateStatus();
+      this.initCategoryPills();
+      this.initExcludePills();
       console.log('[TubeLens] Initialized with', this.apiKeys.length, 'API keys');
+    },
+
+    // 제외 카테고리 필 초기화
+    initExcludePills: function() {
+      var excluded = this.getExcludedCategories();
+      var pills = document.querySelectorAll('.exclude-pill');
+      pills.forEach(function(pill) {
+        var catId = pill.getAttribute('data-category');
+        if (excluded.indexOf(catId) !== -1) {
+          pill.classList.add('excluded');
+        }
+      });
+    },
+
+    // 카테고리 필 초기화
+    initCategoryPills: function() {
+      var self = this;
+
+      // 트렌딩 카테고리
+      var trendingPills = document.querySelectorAll('#trending-categories .category-pill');
+      trendingPills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+          trendingPills.forEach(function(p) { p.classList.remove('active'); });
+          this.classList.add('active');
+          self.trendingCategory = this.getAttribute('data-category') || '';
+        });
+      });
+
+      // 급상승 카테고리
+      var risingPills = document.querySelectorAll('#rising-categories .category-pill');
+      risingPills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+          risingPills.forEach(function(p) { p.classList.remove('active'); });
+          this.classList.add('active');
+          self.risingCategory = this.getAttribute('data-category') || '';
+        });
+      });
+    },
+
+    // 탭 전환
+    switchTab: function(tabName) {
+      this.currentTab = tabName;
+
+      // 탭 버튼 업데이트
+      var tabs = document.querySelectorAll('.main-tab');
+      tabs.forEach(function(tab) {
+        tab.classList.remove('active');
+      });
+      document.getElementById('tab-' + tabName).classList.add('active');
+
+      // 패널 업데이트
+      var panels = document.querySelectorAll('.tab-panel');
+      panels.forEach(function(panel) {
+        panel.classList.remove('active');
+      });
+      document.getElementById('panel-' + tabName).classList.add('active');
+
+      // 상태 업데이트
+      if (tabName === 'search') {
+        this.updateStatus('키워드 또는 채널을 검색하세요');
+      } else if (tabName === 'trending') {
+        this.updateStatus('지금 뜨는 인기 영상을 확인하세요');
+      } else if (tabName === 'rising') {
+        this.updateStatus('구독자 대비 고성과 영상을 발굴하세요');
+      }
+    },
+
+    // ===== 트렌딩 영상 =====
+    loadTrending: function() {
+      var self = this;
+
+      if (this.apiKeys.length === 0) {
+        alert('먼저 API 키를 설정해주세요.');
+        this.openSettings();
+        return;
+      }
+
+      var regionCode = document.getElementById('trending-region').value;
+
+      this.showLoading(true);
+      this.updateStatus('인기 영상 로딩 중...');
+
+      fetch('/api/tubelens/trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regionCode: regionCode,
+          categoryId: this.trendingCategory,
+          maxResults: 50,
+          apiKeys: this.apiKeys,
+          currentApiKeyIndex: this.currentApiKeyIndex
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          // 제외 카테고리 필터링
+          var results = self.filterExcludedCategories(data.data);
+          self.originalResults = results;
+          self.currentResults = results.slice();
+          self.displayResults(self.currentResults);
+          self.updateStatus('🔥 인기 영상 ' + self.currentResults.length + '개 로드됨');
+        } else {
+          throw new Error(data.message);
+        }
+      })
+      .catch(function(error) {
+        console.error('[TubeLens] Trending error:', error);
+        alert('인기 영상 로드 실패: ' + error.message);
+        self.showLoading(false);
+        self.updateStatus('로드 실패: ' + error.message);
+      });
+    },
+
+    // ===== 급상승 발굴 =====
+    loadRising: function() {
+      var self = this;
+
+      if (this.apiKeys.length === 0) {
+        alert('먼저 API 키를 설정해주세요.');
+        this.openSettings();
+        return;
+      }
+
+      var regionCode = document.getElementById('rising-region').value;
+      var maxSubscribers = document.getElementById('rising-max-subs').value;
+      var timeFrame = document.getElementById('rising-time').value;
+
+      this.showLoading(true);
+      this.updateStatus('급상승 영상 발굴 중... (시간이 좀 걸릴 수 있습니다)');
+
+      fetch('/api/tubelens/rising', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regionCode: regionCode,
+          maxSubscribers: parseInt(maxSubscribers),
+          timeFrame: timeFrame,
+          categoryId: this.risingCategory,
+          apiKeys: this.apiKeys,
+          currentApiKeyIndex: this.currentApiKeyIndex
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          // 제외 카테고리 필터링
+          var results = self.filterExcludedCategories(data.data);
+          self.originalResults = results;
+          self.currentResults = results.slice();
+          self.displayResults(self.currentResults);
+          self.updateStatus('🚀 급상승 영상 ' + self.currentResults.length + '개 발굴됨');
+        } else {
+          throw new Error(data.message);
+        }
+      })
+      .catch(function(error) {
+        console.error('[TubeLens] Rising error:', error);
+        alert('급상승 영상 발굴 실패: ' + error.message);
+        self.showLoading(false);
+        self.updateStatus('발굴 실패: ' + error.message);
+      });
+    },
+
+    // 제외 카테고리 필터링
+    filterExcludedCategories: function(videos) {
+      var excluded = this.getExcludedCategories();
+      if (excluded.length === 0) return videos;
+
+      var filtered = videos.filter(function(v) {
+        var categoryId = v.categoryId ? v.categoryId.toString() : '';
+        return excluded.indexOf(categoryId) === -1;
+      });
+
+      // 인덱스 재할당
+      filtered.forEach(function(v, i) {
+        v.index = i + 1;
+      });
+
+      return filtered;
+    },
+
+    getExcludedCategories: function() {
+      var saved = localStorage.getItem('tubelens_excluded_categories');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          return [];
+        }
+      }
+      return [];
+    },
+
+    setExcludedCategories: function(categories) {
+      localStorage.setItem('tubelens_excluded_categories', JSON.stringify(categories));
+    },
+
+    toggleExcludeCategory: function(categoryId) {
+      var excluded = this.getExcludedCategories();
+      var index = excluded.indexOf(categoryId);
+      if (index === -1) {
+        excluded.push(categoryId);
+      } else {
+        excluded.splice(index, 1);
+      }
+      this.setExcludedCategories(excluded);
+
+      // UI 업데이트
+      var pills = document.querySelectorAll('.exclude-pill[data-category="' + categoryId + '"]');
+      pills.forEach(function(pill) {
+        pill.classList.toggle('excluded');
+      });
     },
 
     // ===== API 키 관리 =====
