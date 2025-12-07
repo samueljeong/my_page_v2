@@ -44,6 +44,7 @@ def init_brandpipe_db():
     cursor = conn.cursor()
 
     if USE_POSTGRES:
+        # brandpipe_searches 테이블
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS brandpipe_searches (
                 id SERIAL PRIMARY KEY,
@@ -53,10 +54,37 @@ def init_brandpipe_db():
                 product_title VARCHAR(300),
                 product_brand VARCHAR(200),
                 product_price INTEGER,
-                result_json TEXT
+                result_json TEXT,
+                is_favorite BOOLEAN DEFAULT FALSE,
+                note VARCHAR(500)
+            )
+        ''')
+
+        # 기존 테이블에 컬럼 추가 (마이그레이션)
+        try:
+            cursor.execute("ALTER TABLE brandpipe_searches ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE")
+            cursor.execute("ALTER TABLE brandpipe_searches ADD COLUMN IF NOT EXISTS note VARCHAR(500)")
+        except Exception as e:
+            print(f"[Brandpipe] 컬럼 추가 스킵 (이미 존재할 수 있음): {e}")
+
+        # brandpipe_watchlist 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS brandpipe_watchlist (
+                id SERIAL PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                search_id INTEGER REFERENCES brandpipe_searches(id),
+                product_title VARCHAR(300) NOT NULL,
+                product_url VARCHAR(500),
+                platform VARCHAR(50),
+                target_margin_rate FLOAT,
+                target_margin_amount INTEGER,
+                last_checked_at TIMESTAMP,
+                last_best_margin_rate FLOAT,
+                last_best_margin_amount INTEGER
             )
         ''')
     else:
+        # SQLite: brandpipe_searches 테이블
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS brandpipe_searches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +94,37 @@ def init_brandpipe_db():
                 product_title TEXT,
                 product_brand TEXT,
                 product_price INTEGER,
-                result_json TEXT
+                result_json TEXT,
+                is_favorite INTEGER DEFAULT 0,
+                note TEXT
+            )
+        ''')
+
+        # SQLite 마이그레이션: 기존 테이블에 컬럼 추가
+        try:
+            cursor.execute("ALTER TABLE brandpipe_searches ADD COLUMN is_favorite INTEGER DEFAULT 0")
+        except Exception:
+            pass  # 이미 존재
+        try:
+            cursor.execute("ALTER TABLE brandpipe_searches ADD COLUMN note TEXT")
+        except Exception:
+            pass  # 이미 존재
+
+        # SQLite: brandpipe_watchlist 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS brandpipe_watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                search_id INTEGER,
+                product_title TEXT NOT NULL,
+                product_url TEXT,
+                platform TEXT,
+                target_margin_rate REAL,
+                target_margin_amount INTEGER,
+                last_checked_at TIMESTAMP,
+                last_best_margin_rate REAL,
+                last_best_margin_amount INTEGER,
+                FOREIGN KEY (search_id) REFERENCES brandpipe_searches(id)
             )
         ''')
 
@@ -1081,8 +1139,9 @@ def analyze_product():
         }
 
         # DB에 검색 기록 저장
+        search_id = None
         try:
-            save_search_history(
+            search_id = save_search_history(
                 input_url=product_url,
                 input_keyword=keyword,
                 product_title=product.get('title'),
@@ -1090,6 +1149,8 @@ def analyze_product():
                 product_price=product.get('price'),
                 result_json=json.dumps(result, ensure_ascii=False)
             )
+            # 응답에 search_id 추가
+            result["search_id"] = search_id
         except Exception as e:
             print(f"[Brandpipe] 검색 기록 저장 오류: {e}")
 
@@ -1115,34 +1176,60 @@ def get_search_history():
 
     Query Params:
         limit: 조회할 개수 (기본 20)
+        favorites_only: 즐겨찾기만 조회 (선택)
 
     Response JSON:
         ok: True
-        history: 검색 기록 리스트
+        history: 검색 기록 리스트 (is_favorite, note 포함)
     """
     try:
         limit = request.args.get('limit', 20, type=int)
         limit = min(limit, 100)  # 최대 100개
+        favorites_only = request.args.get('favorites_only', 'false').lower() == 'true'
 
         conn = get_brandpipe_db()
         cursor = conn.cursor()
 
         if USE_POSTGRES:
-            cursor.execute('''
-                SELECT id, created_at, input_url, input_keyword,
-                       product_title, product_brand, product_price, result_json
-                FROM brandpipe_searches
-                ORDER BY created_at DESC
-                LIMIT %s
-            ''', (limit,))
+            if favorites_only:
+                cursor.execute('''
+                    SELECT id, created_at, input_url, input_keyword,
+                           product_title, product_brand, product_price, result_json,
+                           is_favorite, note
+                    FROM brandpipe_searches
+                    WHERE is_favorite = TRUE
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                ''', (limit,))
+            else:
+                cursor.execute('''
+                    SELECT id, created_at, input_url, input_keyword,
+                           product_title, product_brand, product_price, result_json,
+                           is_favorite, note
+                    FROM brandpipe_searches
+                    ORDER BY is_favorite DESC, created_at DESC
+                    LIMIT %s
+                ''', (limit,))
         else:
-            cursor.execute('''
-                SELECT id, created_at, input_url, input_keyword,
-                       product_title, product_brand, product_price, result_json
-                FROM brandpipe_searches
-                ORDER BY created_at DESC
-                LIMIT ?
-            ''', (limit,))
+            if favorites_only:
+                cursor.execute('''
+                    SELECT id, created_at, input_url, input_keyword,
+                           product_title, product_brand, product_price, result_json,
+                           is_favorite, note
+                    FROM brandpipe_searches
+                    WHERE is_favorite = 1
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                ''', (limit,))
+            else:
+                cursor.execute('''
+                    SELECT id, created_at, input_url, input_keyword,
+                           product_title, product_brand, product_price, result_json,
+                           is_favorite, note
+                    FROM brandpipe_searches
+                    ORDER BY is_favorite DESC, created_at DESC
+                    LIMIT ?
+                ''', (limit,))
 
         rows = cursor.fetchall()
         conn.close()
@@ -1161,7 +1248,9 @@ def get_search_history():
                     'product_title': row[4],
                     'product_brand': row[5],
                     'product_price': row[6],
-                    'result_json': row[7]
+                    'result_json': row[7],
+                    'is_favorite': row[8],
+                    'note': row[9]
                 }
 
             # 마진 요약 추출
@@ -1180,6 +1269,11 @@ def get_search_history():
                 except:
                     pass
 
+            # is_favorite 변환 (SQLite는 0/1, Postgres는 bool)
+            is_fav = row_dict.get('is_favorite')
+            if isinstance(is_fav, int):
+                is_fav = bool(is_fav)
+
             history.append({
                 "id": row_dict['id'],
                 "created_at": str(row_dict['created_at']),
@@ -1188,7 +1282,9 @@ def get_search_history():
                 "product_title": row_dict['product_title'],
                 "product_brand": row_dict['product_brand'],
                 "product_price": row_dict['product_price'],
-                "margin_summary": margin_summary
+                "margin_summary": margin_summary,
+                "is_favorite": is_fav,
+                "note": row_dict.get('note')
             })
 
         return jsonify({
@@ -1205,8 +1301,8 @@ def get_search_history():
 
 
 def save_search_history(input_url: str, input_keyword: str, product_title: str,
-                       product_brand: str, product_price: int, result_json: str):
-    """검색 기록 저장"""
+                       product_brand: str, product_price: int, result_json: str) -> int:
+    """검색 기록 저장 및 ID 반환"""
     conn = get_brandpipe_db()
     cursor = conn.cursor()
 
@@ -1215,16 +1311,20 @@ def save_search_history(input_url: str, input_keyword: str, product_title: str,
             INSERT INTO brandpipe_searches
             (input_url, input_keyword, product_title, product_brand, product_price, result_json)
             VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (input_url, input_keyword, product_title, product_brand, product_price, result_json))
+        search_id = cursor.fetchone()[0]
     else:
         cursor.execute('''
             INSERT INTO brandpipe_searches
             (input_url, input_keyword, product_title, product_brand, product_price, result_json)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (input_url, input_keyword, product_title, product_brand, product_price, result_json))
+        search_id = cursor.lastrowid
 
     conn.commit()
     conn.close()
+    return search_id
 
 
 @brandpipe_bp.route('/api/brandpipe/test', methods=['GET'])
@@ -1233,11 +1333,426 @@ def test_endpoint():
     return jsonify({
         "ok": True,
         "message": "Brandpipe API is working!",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "features": [
             "og_meta_parsing",
             "json_ld_parsing",
             "naver_shopping_search",
-            "margin_calculation"
+            "margin_calculation",
+            "favorites",
+            "watchlist"
         ]
     })
+
+
+# ===== 즐겨찾기 / 메모 API =====
+
+@brandpipe_bp.route('/api/brandpipe/search/favorite', methods=['POST'])
+def toggle_favorite():
+    """
+    검색 기록 즐겨찾기 토글
+
+    Request JSON:
+        search_id: 검색 기록 ID
+        is_favorite: True/False
+
+    Response JSON:
+        ok: True
+    """
+    try:
+        data = request.get_json() or {}
+        search_id = data.get('search_id')
+        is_favorite = data.get('is_favorite', False)
+
+        if not search_id:
+            return jsonify({"ok": False, "error": "search_id가 필요합니다."}), 400
+
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                UPDATE brandpipe_searches
+                SET is_favorite = %s
+                WHERE id = %s
+            ''', (is_favorite, search_id))
+        else:
+            cursor.execute('''
+                UPDATE brandpipe_searches
+                SET is_favorite = ?
+                WHERE id = ?
+            ''', (1 if is_favorite else 0, search_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        print(f"[Brandpipe] 즐겨찾기 토글 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@brandpipe_bp.route('/api/brandpipe/search/note', methods=['POST'])
+def update_note():
+    """
+    검색 기록 메모 업데이트
+
+    Request JSON:
+        search_id: 검색 기록 ID
+        note: 메모 내용
+
+    Response JSON:
+        ok: True
+    """
+    try:
+        data = request.get_json() or {}
+        search_id = data.get('search_id')
+        note = data.get('note', '')
+
+        if not search_id:
+            return jsonify({"ok": False, "error": "search_id가 필요합니다."}), 400
+
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                UPDATE brandpipe_searches
+                SET note = %s
+                WHERE id = %s
+            ''', (note[:500] if note else None, search_id))
+        else:
+            cursor.execute('''
+                UPDATE brandpipe_searches
+                SET note = ?
+                WHERE id = ?
+            ''', (note[:500] if note else None, search_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        print(f"[Brandpipe] 메모 업데이트 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ===== 워치리스트 API =====
+
+@brandpipe_bp.route('/api/brandpipe/watchlist/add', methods=['POST'])
+def add_to_watchlist():
+    """
+    워치리스트에 상품 추가
+
+    Request JSON:
+        search_id: 연결할 검색 기록 ID (선택)
+        product_title: 상품명 (필수)
+        product_url: 상품 URL (선택)
+        platform: 플랫폼 (선택)
+        target_margin_rate: 목표 마진율 (선택, 기본 0.2)
+        target_margin_amount: 목표 마진액 (선택, 기본 5000)
+
+    Response JSON:
+        ok: True
+        id: 생성된 워치리스트 ID
+    """
+    try:
+        data = request.get_json() or {}
+        product_title = data.get('product_title', '').strip()
+
+        if not product_title:
+            return jsonify({"ok": False, "error": "product_title이 필요합니다."}), 400
+
+        search_id = data.get('search_id')
+        product_url = data.get('product_url', '').strip() or None
+        platform = data.get('platform', '').strip() or None
+        target_margin_rate = data.get('target_margin_rate', 0.2)
+        target_margin_amount = data.get('target_margin_amount', 5000)
+
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                INSERT INTO brandpipe_watchlist
+                (search_id, product_title, product_url, platform, target_margin_rate, target_margin_amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (search_id, product_title, product_url, platform, target_margin_rate, target_margin_amount))
+            new_id = cursor.fetchone()[0]
+        else:
+            cursor.execute('''
+                INSERT INTO brandpipe_watchlist
+                (search_id, product_title, product_url, platform, target_margin_rate, target_margin_amount)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (search_id, product_title, product_url, platform, target_margin_rate, target_margin_amount))
+            new_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True, "id": new_id})
+
+    except Exception as e:
+        print(f"[Brandpipe] 워치리스트 추가 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@brandpipe_bp.route('/api/brandpipe/watchlist/remove', methods=['POST'])
+def remove_from_watchlist():
+    """
+    워치리스트에서 상품 삭제
+
+    Request JSON:
+        id: 워치리스트 ID
+
+    Response JSON:
+        ok: True
+    """
+    try:
+        data = request.get_json() or {}
+        watchlist_id = data.get('id')
+
+        if not watchlist_id:
+            return jsonify({"ok": False, "error": "id가 필요합니다."}), 400
+
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('DELETE FROM brandpipe_watchlist WHERE id = %s', (watchlist_id,))
+        else:
+            cursor.execute('DELETE FROM brandpipe_watchlist WHERE id = ?', (watchlist_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        print(f"[Brandpipe] 워치리스트 삭제 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@brandpipe_bp.route('/api/brandpipe/watchlist', methods=['GET'])
+def get_watchlist():
+    """
+    워치리스트 조회
+
+    Query Params:
+        limit: 조회할 개수 (기본 50)
+
+    Response JSON:
+        ok: True
+        items: 워치리스트 항목 리스트
+    """
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 100)
+
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                SELECT id, created_at, search_id, product_title, product_url, platform,
+                       target_margin_rate, target_margin_amount,
+                       last_checked_at, last_best_margin_rate, last_best_margin_amount
+                FROM brandpipe_watchlist
+                ORDER BY created_at DESC
+                LIMIT %s
+            ''', (limit,))
+        else:
+            cursor.execute('''
+                SELECT id, created_at, search_id, product_title, product_url, platform,
+                       target_margin_rate, target_margin_amount,
+                       last_checked_at, last_best_margin_rate, last_best_margin_amount
+                FROM brandpipe_watchlist
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        items = []
+        for row in rows:
+            if hasattr(row, 'keys'):
+                row_dict = dict(row)
+            else:
+                row_dict = {
+                    'id': row[0],
+                    'created_at': row[1],
+                    'search_id': row[2],
+                    'product_title': row[3],
+                    'product_url': row[4],
+                    'platform': row[5],
+                    'target_margin_rate': row[6],
+                    'target_margin_amount': row[7],
+                    'last_checked_at': row[8],
+                    'last_best_margin_rate': row[9],
+                    'last_best_margin_amount': row[10]
+                }
+
+            items.append({
+                "id": row_dict['id'],
+                "created_at": str(row_dict['created_at']) if row_dict['created_at'] else None,
+                "search_id": row_dict['search_id'],
+                "product_title": row_dict['product_title'],
+                "product_url": row_dict['product_url'],
+                "platform": row_dict['platform'],
+                "target_margin_rate": row_dict['target_margin_rate'],
+                "target_margin_amount": row_dict['target_margin_amount'],
+                "last_checked_at": str(row_dict['last_checked_at']) if row_dict['last_checked_at'] else None,
+                "last_best_margin_rate": row_dict['last_best_margin_rate'],
+                "last_best_margin_amount": row_dict['last_best_margin_amount']
+            })
+
+        return jsonify({"ok": True, "items": items})
+
+    except Exception as e:
+        print(f"[Brandpipe] 워치리스트 조회 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@brandpipe_bp.route('/api/brandpipe/watchlist/analyze', methods=['POST'])
+def analyze_watchlist_item():
+    """
+    워치리스트 항목 재분석
+
+    Request JSON:
+        id: 워치리스트 ID
+
+    Response JSON:
+        analyze API와 동일한 형식
+    """
+    try:
+        data = request.get_json() or {}
+        watchlist_id = data.get('id')
+
+        if not watchlist_id:
+            return jsonify({"ok": False, "error": "id가 필요합니다."}), 400
+
+        # 워치리스트 항목 조회
+        conn = get_brandpipe_db()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                SELECT id, product_title, product_url, platform
+                FROM brandpipe_watchlist
+                WHERE id = %s
+            ''', (watchlist_id,))
+        else:
+            cursor.execute('''
+                SELECT id, product_title, product_url, platform
+                FROM brandpipe_watchlist
+                WHERE id = ?
+            ''', (watchlist_id,))
+
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"ok": False, "error": "워치리스트 항목을 찾을 수 없습니다."}), 404
+
+        if hasattr(row, 'keys'):
+            row_dict = dict(row)
+        else:
+            row_dict = {
+                'id': row[0],
+                'product_title': row[1],
+                'product_url': row[2],
+                'platform': row[3]
+            }
+
+        product_url = row_dict['product_url']
+        product_title = row_dict['product_title']
+
+        # 분석 수행 (기존 로직 재사용)
+        start_time = time.time()
+
+        if product_url:
+            product = parse_product_info(product_url, None)
+        else:
+            product = parse_product_info(None, product_title)
+
+        search_keywords = build_search_keywords(product)
+        suppliers = search_suppliers(search_keywords, include_overseas=False)
+
+        # 마진 계산
+        platform_price = product.get('price') or 0
+        for supplier in suppliers:
+            unit_price = supplier.get('unit_price', 0)
+            currency = supplier.get('currency', 'KRW')
+
+            if currency != 'KRW':
+                unit_price_krw = convert_currency(unit_price, currency, 'KRW')
+                shipping_krw = convert_currency(supplier.get('shipping_fee', 0), currency, 'KRW')
+            else:
+                unit_price_krw = unit_price
+                shipping_krw = supplier.get('shipping_fee', 0)
+
+            margin = estimate_margin(platform_price, unit_price_krw, shipping_krw)
+            supplier['estimated_margin_rate'] = margin['margin_rate']
+            supplier['estimated_margin_amount'] = margin['margin_amount']
+            supplier['unit_price_krw'] = round(unit_price_krw)
+            supplier['similarity_score'] = compute_similarity_score(product, supplier)
+
+        # 정렬
+        suppliers.sort(
+            key=lambda x: (x.get('similarity_score', 0), x.get('estimated_margin_amount', 0)),
+            reverse=True
+        )
+
+        # 최고 마진 정보 업데이트
+        best_margin_rate = None
+        best_margin_amount = None
+        if suppliers:
+            best_margin_rate = suppliers[0].get('estimated_margin_rate')
+            best_margin_amount = suppliers[0].get('estimated_margin_amount')
+
+        if USE_POSTGRES:
+            cursor.execute('''
+                UPDATE brandpipe_watchlist
+                SET last_checked_at = CURRENT_TIMESTAMP,
+                    last_best_margin_rate = %s,
+                    last_best_margin_amount = %s
+                WHERE id = %s
+            ''', (best_margin_rate, best_margin_amount, watchlist_id))
+        else:
+            cursor.execute('''
+                UPDATE brandpipe_watchlist
+                SET last_checked_at = CURRENT_TIMESTAMP,
+                    last_best_margin_rate = ?,
+                    last_best_margin_amount = ?
+                WHERE id = ?
+            ''', (best_margin_rate, best_margin_amount, watchlist_id))
+
+        conn.commit()
+        conn.close()
+
+        analysis_time_ms = int((time.time() - start_time) * 1000)
+
+        return jsonify({
+            "ok": True,
+            "watchlist_id": watchlist_id,
+            "product": {
+                "title": product.get('title'),
+                "brand": product.get('brand'),
+                "platform": product.get('platform'),
+                "platform_url": product.get('platform_url'),
+                "price": product.get('price'),
+                "image_url": product.get('image_url')
+            },
+            "suppliers": suppliers,
+            "meta": {
+                "search_keywords": search_keywords,
+                "analysis_time_ms": analysis_time_ms
+            }
+        })
+
+    except Exception as e:
+        print(f"[Brandpipe] 워치리스트 재분석 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
