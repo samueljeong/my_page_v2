@@ -1243,7 +1243,10 @@ def parse_input():
       "role": "string or null (권사, 집사, 장로, 목사 등 직분/직책)",
       "category": "교회 | 사업 | 유튜브 | 가정 | 공부 | 기타",
       "notes": "string or null (건강상태, 특이사항 등 - 기존 정보에 새 정보 추가/병합)",
-      "is_update": "boolean (기존 인물 정보 업데이트면 true)"
+      "is_update": "boolean (기존 인물 정보 업데이트면 true)",
+      "needs_confirmation": "boolean (동명이인 가능성이 있어 사용자 확인 필요시 true)",
+      "confirmation_reason": "string or null (확인이 필요한 이유. 예: '기존 김영희 권사와 동일인인지 확인 필요')",
+      "matched_person": "object or null (매칭된 기존 인물 정보 {{id, name, role, notes}})"
     }}
   ],
   "projects": [
@@ -1279,13 +1282,21 @@ def parse_input():
    - 행사를 준비하기 위한 "해야 할 일" (자료 준비, 문자 발송, 설교 작성 등)
    - 예: "주일 설교 준비해야 함"
 
-3. people (인물) - 기존 데이터 연동!
+3. people (인물) - 기존 데이터 연동 + 동명이인 확인!
    - [기존 등록된 인물 목록]에 있는 이름과 매칭되면:
      * id 필드에 해당 ID 기록
      * is_update: true
      * notes에 기존 정보 + 새 정보 병합
+     * matched_person에 기존 인물 정보 포함
    - 새로운 인물이면: id: null, is_update: false
    - 건강/수술/입원/퇴원/사망 등 상태 변화가 있으면 notes 업데이트
+
+   ★ 동명이인 확인 필요한 경우 (needs_confirmation: true):
+     * 이름은 같지만 직분/직책이 다른 경우 (예: 기존 "김영희 권사" vs 새 "김영희 집사")
+     * 이름은 같지만 카테고리가 다른 경우 (예: 기존 "교회" vs 새 "사업")
+     * 이름은 같지만 기존 정보와 맥락이 충돌하는 경우
+     * confirmation_reason에 왜 확인이 필요한지 구체적으로 작성
+     * 예: "기존에 '김영희 권사(교회)'가 있습니다. 같은 분인가요?"
 
 4. projects (프로젝트)
    - "프로젝트", "사업", "계획" 등의 단어가 포함되거나
