@@ -1,5 +1,5 @@
 /**
- * Brandpipe - AI 공급처 탐색기 프론트엔드
+ * Brandpipe - AI 공급처 탐색기 프론트엔드 v2.0
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +37,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const historyList = document.getElementById('historyList');
   const refreshHistory = document.getElementById('refreshHistory');
 
+  // 판매가 시뮬레이터
+  const priceSimulator = document.getElementById('priceSimulator');
+  const customPriceInput = document.getElementById('customPrice');
+  const resetPriceBtn = document.getElementById('resetPrice');
+
+  // 필터 배너
+  const filterBanner = document.getElementById('filterBanner');
+  const filterRate = document.getElementById('filterRate');
+  const filterAmount = document.getElementById('filterAmount');
+  const filteredCount = document.getElementById('filteredCount');
+  const totalCount = document.getElementById('totalCount');
+
+  // 테스트 URL 버튼
+  const testUrlBtns = document.querySelectorAll('.test-url-btn[data-type]');
+
+  // 상태 저장
+  let currentData = null;
+  let originalPlatformPrice = 0;
+
   // 초기 로드
   loadHistory();
 
@@ -55,9 +74,44 @@ document.addEventListener('DOMContentLoaded', () => {
     await analyzeProduct(productUrl, keyword);
   });
 
+  // 테스트 URL 버튼 핸들러
+  testUrlBtns.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const type = btn.dataset.type;
+      const value = btn.dataset.value;
+
+      if (type === 'keyword') {
+        keywordInput.value = value;
+        productUrlInput.value = '';
+      } else if (type === 'url') {
+        productUrlInput.value = value;
+        keywordInput.value = '';
+      }
+
+      // 바로 분석 실행
+      await analyzeProduct(productUrlInput.value.trim(), keywordInput.value.trim());
+    });
+  });
+
   // 검색 기록 새로고침
   refreshHistory.addEventListener('click', () => {
     loadHistory();
+  });
+
+  // 판매가 시뮬레이터: 가격 변경 시 재계산
+  customPriceInput.addEventListener('input', () => {
+    if (currentData && currentData.suppliers) {
+      const customPrice = parseInt(customPriceInput.value) || 0;
+      recalcMarginForCustomPrice(customPrice);
+    }
+  });
+
+  // 초기화 버튼
+  resetPriceBtn.addEventListener('click', () => {
+    customPriceInput.value = originalPlatformPrice;
+    if (currentData) {
+      recalcMarginForCustomPrice(originalPlatformPrice);
+    }
   });
 
   /**
@@ -89,6 +143,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // 상태 저장
+      currentData = data;
+      originalPlatformPrice = data.product?.price || 0;
+
       displayResult(data);
       loadHistory(); // 기록 갱신
 
@@ -103,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * 결과 표시
    */
   function displayResult(data) {
-    const { product, suppliers, meta } = data;
+    const { product, suppliers, filters, meta } = data;
 
     // 상품 정보 표시
     if (product) {
@@ -141,45 +199,130 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       productCard.classList.add('visible');
+
+      // 판매가 시뮬레이터 초기화
+      if (product.price) {
+        customPriceInput.value = product.price;
+        priceSimulator.classList.add('visible');
+      }
+    }
+
+    // 필터 정보 표시
+    if (filters) {
+      filterRate.textContent = Math.round(filters.min_margin_rate * 100);
+      filterAmount.textContent = formatNumber(filters.min_margin_amount);
+      filteredCount.textContent = filters.filtered_count;
+      totalCount.textContent = filters.total_count;
+      filterBanner.classList.add('visible');
     }
 
     // 공급처 테이블 표시
-    if (suppliers && suppliers.length > 0) {
-      supplierCount.textContent = suppliers.length;
-      suppliersBody.innerHTML = '';
-
-      suppliers.forEach(supplier => {
-        const row = document.createElement('tr');
-
-        // 마진 클래스
-        const marginClass = supplier.estimated_margin_rate >= 0 ? 'margin-positive' : 'margin-negative';
-
-        row.innerHTML = `
-          <td>
-            <div class="supplier-name">${escapeHtml(supplier.name)}</div>
-            <div class="supplier-source">${escapeHtml(supplier.source)}</div>
-          </td>
-          <td>${formatPrice(supplier.unit_price_krw || supplier.unit_price)}</td>
-          <td>${formatPrice(supplier.shipping_fee)}</td>
-          <td>${supplier.moq || '-'}개</td>
-          <td class="${marginClass} margin-rate">${formatPercent(supplier.estimated_margin_rate)}</td>
-          <td class="${marginClass}">${formatPrice(supplier.estimated_margin_amount)}</td>
-          <td>
-            <a href="${escapeHtml(supplier.url)}" target="_blank" class="supplier-link">보기 →</a>
-          </td>
-        `;
-
-        suppliersBody.appendChild(row);
-      });
-
-      suppliersCard.classList.add('visible');
-    }
+    renderSuppliersTable(suppliers);
 
     // 메타 정보
     if (meta) {
       metaTime.textContent = `분석 시간: ${meta.analysis_time_ms}ms`;
       metaProviders.textContent = `검색 소스: ${meta.search_providers.join(', ')}`;
       metaInfo.classList.add('visible');
+    }
+  }
+
+  /**
+   * 공급처 테이블 렌더링
+   */
+  function renderSuppliersTable(suppliers, customPrice = null) {
+    if (!suppliers || suppliers.length === 0) {
+      suppliersCard.classList.remove('visible');
+      return;
+    }
+
+    supplierCount.textContent = suppliers.length;
+    suppliersBody.innerHTML = '';
+
+    suppliers.forEach(supplier => {
+      const row = document.createElement('tr');
+
+      // 마진 계산 (커스텀 가격 사용 시)
+      let marginRate = supplier.estimated_margin_rate;
+      let marginAmount = supplier.estimated_margin_amount;
+
+      if (customPrice !== null && customPrice > 0) {
+        const totalCost = (supplier.unit_price_krw || supplier.unit_price) +
+                         (supplier.shipping_fee || 0) +
+                         (customPrice * 0.13);
+        marginAmount = Math.round(customPrice - totalCost);
+        marginRate = marginAmount / customPrice;
+      }
+
+      // 마진 클래스
+      const marginClass = marginRate >= 0 ? 'margin-positive' : 'margin-negative';
+
+      // 유사도 배지
+      const simScore = supplier.similarity_score || 0;
+      let simClass = 'similarity-low';
+      let simLabel = '낮음';
+      if (simScore >= 0.7) {
+        simClass = 'similarity-high';
+        simLabel = '높음';
+      } else if (simScore >= 0.4) {
+        simClass = 'similarity-medium';
+        simLabel = '보통';
+      }
+
+      row.innerHTML = `
+        <td>
+          <div class="supplier-name">${escapeHtml(supplier.name)}</div>
+          <div class="supplier-source">${escapeHtml(supplier.source)}</div>
+        </td>
+        <td>
+          <span class="similarity-badge ${simClass}">${simLabel} ${Math.round(simScore * 100)}%</span>
+        </td>
+        <td>${formatPrice(supplier.unit_price_krw || supplier.unit_price)}</td>
+        <td>${formatPrice(supplier.shipping_fee)}</td>
+        <td>${supplier.moq || '-'}개</td>
+        <td class="${marginClass} margin-rate">${formatPercent(marginRate)}</td>
+        <td class="${marginClass}">${formatPrice(marginAmount)}</td>
+        <td>
+          <a href="${escapeHtml(supplier.url)}" target="_blank" class="supplier-link">보기 →</a>
+        </td>
+      `;
+
+      // 유사도 낮으면 행 스타일 변경
+      if (simScore < 0.4) {
+        row.style.opacity = '0.6';
+      }
+
+      suppliersBody.appendChild(row);
+    });
+
+    suppliersCard.classList.add('visible');
+  }
+
+  /**
+   * 커스텀 가격으로 마진 재계산
+   */
+  function recalcMarginForCustomPrice(customPrice) {
+    if (!currentData || !currentData.suppliers) return;
+
+    // 테이블 다시 렌더링
+    renderSuppliersTable(currentData.suppliers, customPrice);
+
+    // 필터 카운트 업데이트
+    if (currentData.filters) {
+      let passCount = 0;
+      currentData.suppliers.forEach(s => {
+        const totalCost = (s.unit_price_krw || s.unit_price) +
+                         (s.shipping_fee || 0) +
+                         (customPrice * 0.13);
+        const marginAmount = customPrice - totalCost;
+        const marginRate = marginAmount / customPrice;
+
+        if (marginRate >= currentData.filters.min_margin_rate &&
+            marginAmount >= currentData.filters.min_margin_amount) {
+          passCount++;
+        }
+      });
+      filteredCount.textContent = passCount;
     }
   }
 
@@ -202,9 +345,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.className = 'history-item';
 
-        const marginText = item.margin_summary
-          ? `${formatPercent(item.margin_summary.best_margin_rate)} (${item.margin_summary.supplier_count}개)`
-          : '-';
+        // 최고 마진 표시
+        let marginText = '-';
+        if (item.margin_summary) {
+          const rate = formatPercent(item.margin_summary.best_margin_rate);
+          const amount = formatPrice(item.margin_summary.best_margin_amount);
+          marginText = `${rate} / ${amount}`;
+        }
 
         div.innerHTML = `
           <div class="history-title">${escapeHtml(item.product_title || item.input_keyword || '(제목 없음)')}</div>
@@ -261,7 +408,9 @@ document.addEventListener('DOMContentLoaded', () => {
     productCard.classList.remove('visible');
     suppliersCard.classList.remove('visible');
     metaInfo.classList.remove('visible');
-    initialState.style.display = 'none';
+    priceSimulator.classList.remove('visible');
+    filterBanner.classList.remove('visible');
+    if (initialState) initialState.style.display = 'none';
   }
 
   function formatPrice(price) {
@@ -271,6 +420,11 @@ document.addEventListener('DOMContentLoaded', () => {
       currency: 'KRW',
       maximumFractionDigits: 0
     }).format(price);
+  }
+
+  function formatNumber(num) {
+    if (num === null || num === undefined) return '-';
+    return new Intl.NumberFormat('ko-KR').format(num);
   }
 
   function formatPercent(rate) {

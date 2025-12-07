@@ -464,6 +464,132 @@ def parse_naver_product(url: str) -> dict:
         }
 
 
+# ===== 마진 필터 설정 =====
+DEFAULT_MIN_MARGIN_RATE = 0.15    # 15% 이상
+DEFAULT_MIN_MARGIN_AMOUNT = 3000  # 3,000원 이상
+
+
+def extract_volume_info(text: str) -> tuple:
+    """
+    텍스트에서 용량/수량 정보 추출
+
+    Args:
+        text: 상품명 등 텍스트
+
+    Returns:
+        (숫자, 단위) 튜플. 없으면 (None, None)
+    """
+    if not text:
+        return (None, None)
+
+    # 용량 패턴: 100ml, 500g, 1L, 50매, 30개, 1kg 등
+    patterns = [
+        r'(\d+(?:\.\d+)?)\s*(ml|ML|mL|g|G|kg|KG|Kg|l|L|매|개|정|캡슐|포|입|ea|EA|pack|PACK)',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            num = float(match.group(1))
+            unit = match.group(2).lower()
+            return (num, unit)
+
+    return (None, None)
+
+
+def extract_keywords(text: str) -> set:
+    """
+    텍스트에서 핵심 키워드(명사) 추출
+
+    Args:
+        text: 상품명 등 텍스트
+
+    Returns:
+        키워드 set
+    """
+    if not text:
+        return set()
+
+    # 불용어 제거
+    stopwords = {'의', '를', '을', '이', '가', '에', '도', '로', '와', '과', '한', '및',
+                 '더', '등', '용', '형', '무료배송', '특가', '할인', '세일', '정품'}
+
+    # 특수문자 제거 후 단어 분리
+    cleaned = re.sub(r'[^\w\s가-힣]', ' ', text)
+    words = cleaned.split()
+
+    # 2글자 이상, 불용어 아닌 것만
+    keywords = {w.lower() for w in words if len(w) >= 2 and w not in stopwords}
+
+    return keywords
+
+
+def compute_similarity_score(product: dict, candidate: dict) -> float:
+    """
+    상품과 공급처 후보 간 유사도 점수 계산
+
+    Args:
+        product: 원본 상품 정보 (title, brand 등)
+        candidate: 공급처 후보 (name 등)
+
+    Returns:
+        0.0 ~ 1.0 사이 점수
+    """
+    score = 0.0
+
+    product_title = (product.get('title') or '').lower()
+    product_brand = (product.get('brand') or '').lower()
+    candidate_name = (candidate.get('name') or '').lower()
+
+    if not product_title or not candidate_name:
+        return 0.0
+
+    # 1. 브랜드명 포함 여부 (+0.3)
+    if product_brand and product_brand in candidate_name:
+        score += 0.3
+    elif product_brand:
+        # 브랜드명 일부만 포함되어도 부분 점수
+        brand_words = product_brand.split()
+        matching_brand_words = sum(1 for w in brand_words if w in candidate_name)
+        if brand_words:
+            score += 0.15 * (matching_brand_words / len(brand_words))
+
+    # 2. 용량/수량 일치 여부 (+0.3)
+    prod_vol, prod_unit = extract_volume_info(product_title)
+    cand_vol, cand_unit = extract_volume_info(candidate_name)
+
+    if prod_vol and cand_vol and prod_unit and cand_unit:
+        # 단위 정규화
+        unit_map = {'ml': 'ml', 'l': 'l', 'g': 'g', 'kg': 'kg',
+                    '매': '매', '개': '개', '정': '정', '캡슐': '캡슐',
+                    '포': '포', '입': '입', 'ea': '개', 'pack': '팩'}
+        p_unit = unit_map.get(prod_unit, prod_unit)
+        c_unit = unit_map.get(cand_unit, cand_unit)
+
+        if p_unit == c_unit:
+            # 같은 단위면 수량 비교
+            ratio = min(prod_vol, cand_vol) / max(prod_vol, cand_vol)
+            if ratio >= 0.95:  # 거의 동일
+                score += 0.3
+            elif ratio >= 0.8:  # 비슷
+                score += 0.2
+            elif ratio >= 0.5:
+                score += 0.1
+
+    # 3. 핵심 키워드 겹치는 비율 (+0.4)
+    prod_keywords = extract_keywords(product_title)
+    cand_keywords = extract_keywords(candidate_name)
+
+    if prod_keywords and cand_keywords:
+        # 교집합 / 원본 키워드 수
+        overlap = prod_keywords & cand_keywords
+        overlap_ratio = len(overlap) / len(prod_keywords) if prod_keywords else 0
+
+        score += 0.4 * overlap_ratio
+
+    return round(min(score, 1.0), 2)
+
+
 def parse_product_info(product_url: str = None, keyword: str = None) -> dict:
     """
     상품 정보 파싱
@@ -882,7 +1008,7 @@ def analyze_product():
         # 3. 공급처 검색
         suppliers = search_suppliers(search_keywords, include_overseas)
 
-        # 4. 마진 계산 추가
+        # 4. 마진 계산 + 유사도 점수 추가
         platform_price = product.get('price') or 0
         for supplier in suppliers:
             # 통화 변환 (해외 도매의 경우)
@@ -901,8 +1027,26 @@ def analyze_product():
             supplier['estimated_margin_amount'] = margin['margin_amount']
             supplier['unit_price_krw'] = round(unit_price_krw)
 
-        # 마진율 높은 순으로 정렬
-        suppliers.sort(key=lambda x: x.get('estimated_margin_rate', 0), reverse=True)
+            # 유사도 점수 계산
+            supplier['similarity_score'] = compute_similarity_score(product, supplier)
+
+        # 5. 필터링: 마진 기준 충족하는 것만 (전체 + 필터링된 목록 둘 다 반환)
+        filtered_suppliers = []
+        for s in suppliers:
+            margin_rate = s.get('estimated_margin_rate') or 0
+            margin_amount = s.get('estimated_margin_amount') or 0
+            if margin_rate >= DEFAULT_MIN_MARGIN_RATE and margin_amount >= DEFAULT_MIN_MARGIN_AMOUNT:
+                filtered_suppliers.append(s)
+
+        # 정렬: 유사도 → 마진액 순
+        suppliers.sort(
+            key=lambda x: (x.get('similarity_score', 0), x.get('estimated_margin_amount', 0)),
+            reverse=True
+        )
+        filtered_suppliers.sort(
+            key=lambda x: (x.get('similarity_score', 0), x.get('estimated_margin_amount', 0)),
+            reverse=True
+        )
 
         # 응답 구성
         analysis_time_ms = int((time.time() - start_time) * 1000)
@@ -919,7 +1063,14 @@ def analyze_product():
                 "image_url": product.get('image_url'),
                 "raw": product
             },
-            "suppliers": suppliers,
+            "suppliers": suppliers,  # 전체 목록
+            "filtered_suppliers": filtered_suppliers,  # 마진 기준 충족하는 것만
+            "filters": {
+                "min_margin_rate": DEFAULT_MIN_MARGIN_RATE,
+                "min_margin_amount": DEFAULT_MIN_MARGIN_AMOUNT,
+                "filtered_count": len(filtered_suppliers),
+                "total_count": len(suppliers)
+            },
             "meta": {
                 "keyword_used": keyword or product.get('title'),
                 "search_keywords": search_keywords,

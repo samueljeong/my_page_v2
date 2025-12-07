@@ -317,6 +317,112 @@
       text-decoration: underline;
     }
 
+    /* 유사도 점수 배지 */
+    .similarity-badge {
+      display: inline-block;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .similarity-high {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .similarity-medium {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .similarity-low {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
+    /* 테스트 URL 버튼들 */
+    .test-urls {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    .test-urls h4 {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin: 0 0 0.5rem 0;
+    }
+    .test-url-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .test-url-btn {
+      padding: 0.4rem 0.6rem;
+      background: #f1f5f9;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: #475569;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .test-url-btn:hover {
+      background: #e2e8f0;
+    }
+
+    /* 판매가 시뮬레이터 */
+    .price-simulator {
+      background: #faf5ff;
+      border: 1px solid #e9d5ff;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .price-simulator.visible {
+      display: block;
+    }
+    .price-simulator h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #6d28d9;
+    }
+    .simulator-input {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .simulator-input input {
+      width: 120px;
+      padding: 0.5rem;
+      border: 1px solid #d8b4fe;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      text-align: right;
+    }
+    .simulator-input span {
+      font-size: 0.85rem;
+      color: #475569;
+    }
+
+    /* 필터 정보 배너 */
+    .filter-banner {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      display: none;
+      font-size: 0.85rem;
+      color: #166534;
+    }
+    .filter-banner.visible {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .filter-banner .filter-stats {
+      font-weight: 600;
+    }
+
     /* 검색 기록 */
     .history-card {
       background: white;
@@ -452,7 +558,7 @@
   <header class="header">
     <h1>🔗 브랜드 파이프 - AI 공급처 탐색기</h1>
     <div class="header-actions">
-      <span class="version-badge">MVP v1.0</span>
+      <span class="version-badge">v2.0</span>
       <a href="/" class="home-link">🏠</a>
     </div>
   </header>
@@ -484,6 +590,18 @@
           🔍 분석하기
         </button>
       </form>
+
+      <!-- 테스트 URL 버튼들 -->
+      <div class="test-urls">
+        <h4>🧪 테스트용 URL</h4>
+        <div class="test-url-btns">
+          <button class="test-url-btn" data-type="keyword" data-value="무선 이어폰">무선 이어폰</button>
+          <button class="test-url-btn" data-type="keyword" data-value="비타민C 1000mg">비타민C</button>
+          <button class="test-url-btn" data-type="keyword" data-value="립밤 보습">립밤</button>
+          <button class="test-url-btn" data-type="keyword" data-value="텀블러 보온">텀블러</button>
+          <button class="test-url-btn" data-type="keyword" data-value="마스크팩 10매">마스크팩</button>
+        </div>
+      </div>
 
       <!-- 검색 기록 -->
       <div class="history-card" style="margin-top: 1.5rem;">
@@ -522,6 +640,24 @@
         </div>
       </div>
 
+      <!-- 판매가 시뮬레이터 -->
+      <div class="price-simulator" id="priceSimulator">
+        <h4>💰 판매가 시뮬레이터</h4>
+        <div class="simulator-input">
+          <span>내 판매가:</span>
+          <input type="number" id="customPrice" min="0" step="100">
+          <span>원</span>
+          <button class="test-url-btn" id="resetPrice" style="margin-left: 0.5rem;">초기화</button>
+        </div>
+        <div class="hint" style="margin-top: 0.5rem;">판매가를 변경하면 마진이 실시간 재계산됩니다</div>
+      </div>
+
+      <!-- 필터 정보 배너 -->
+      <div class="filter-banner" id="filterBanner">
+        <span>📊 현재 필터: 마진율 ≥ <span id="filterRate">15</span>%, 마진액 ≥ <span id="filterAmount">3,000</span>원</span>
+        <span class="filter-stats"><span id="filteredCount">0</span>/<span id="totalCount">0</span>개 통과</span>
+      </div>
+
       <!-- 공급처 테이블 -->
       <div class="suppliers-card" id="suppliersCard">
         <h3>
@@ -532,6 +668,7 @@
           <thead>
             <tr>
               <th>공급처</th>
+              <th>유사도</th>
               <th>단가</th>
               <th>배송비</th>
               <th>MOQ</th>
