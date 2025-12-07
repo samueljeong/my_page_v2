@@ -13335,8 +13335,389 @@ def _append_outro_to_video(video_path, outro_path, output_path):
         return False
 
 
+def _analyze_shorts_content_gpt(highlight_narrations, title, detected_category, audience="general", duration_target=45):
+    """GPT-5.1로 쇼츠 전용 콘텐츠 분석 및 beats 구조 생성
+
+    Args:
+        highlight_narrations: 하이라이트 씬들의 나레이션 목록
+        title: 원본 영상 제목
+        detected_category: news 또는 story
+        audience: general 또는 senior
+        duration_target: 목표 길이 (초)
+
+    Returns:
+        dict: beats 구조, meta, design_guide 등
+    """
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        # 나레이션에서 핵심 포인트 추출
+        combined_narration = "\n".join(highlight_narrations)
+        main_points = highlight_narrations[:3] if len(highlight_narrations) >= 3 else highlight_narrations
+
+        # short_type 결정
+        short_type = "해설" if detected_category == "news" else "사례소개"
+
+        # audience_needs 설정
+        if audience == "senior":
+            audience_desc = "50-70대 시니어"
+            audience_needs = ["짧은 시간에 핵심만 알고 싶다", "복잡한 설명 없이 요점만"]
+        else:
+            audience_desc = "20-40대 직장인"
+            audience_needs = ["출퇴근 1분 안에 핵심만", "지금 당장 뭘 해야 하는지"]
+
+        system_prompt = f'''너는 "유튜브 쇼츠 전담 PD + 편집 디렉터 + 각본가"다.
+뉴스·시사·경제·정보 콘텐츠를 쇼츠 포맷(60초 이하)으로 최적화하는 전문가다.
+
+목표:
+1) 1.5초 안에 스크롤을 멈추는 강력한 훅
+2) 완주율 80-90% 목표의 구조 설계
+3) 편집자가 그대로 따라 만들 수 있는 씬 단위 설계서(JSON)
+
+## 포맷 규격
+- 방향: 세로 9:16 (1080x1920)
+- 길이: 35-60초 (정보/해설형)
+- 첫 1.5-3초 안에 스크롤 멈추는 훅 필수
+
+## 입력값
+- short_topic: "{title}"
+- short_type: "{short_type}"
+- main_audience: "{audience_desc}"
+- audience_needs: {audience_needs}
+- main_point_1: "{main_points[0] if len(main_points) > 0 else ''}"
+- main_point_2: "{main_points[1] if len(main_points) > 1 else ''}"
+- main_point_3: "{main_points[2] if len(main_points) > 2 else ''}"
+- duration_target_sec: {duration_target}
+- hook_angle_preference: "숫자, 솔루션"
+
+## beats 설계 규칙
+- 1.0-3.0초 단위의 beat를 연속 설계
+- 기본 구조:
+  - Beat 1: hook (0-2초) - 12-18자, 3초 이내 낭독
+  - Beat 2: 상황/문제 제기 (2-6초)
+  - Beat 3-4: 핵심 포인트 1,2 (6-18초)
+  - Beat 5-6: 핵심 포인트 3 + 반전/경고 (18-35초)
+  - Beat 7: 요약 + CTA or loop (마지막 3-5초)
+
+## 각 beat 필수 포함
+- voiceover: TTS용 자연스러운 구어체
+- on_screen_text: 핵심 1-2줄 (16자 내외)
+- visual_type: A-roll_talking_head / B-roll / infographic / text_only
+- visual_direction: 화면 구성 설명
+- broll_idea_or_prompt: AI 이미지 생성용 영어 프롬프트
+- caption_style: {{ use_captions, emphasis_words, position }}
+- sound_direction: {{ bgm_mood, sfx, pause_hint }}
+
+## 출력 형식 (JSON ONLY)
+JSON 외부에 어떤 텍스트도 쓰지 말 것.'''
+
+        user_prompt = f'''원본 영상의 하이라이트 나레이션:
+{combined_narration}
+
+위 내용을 기반으로 {duration_target}초 쇼츠를 설계해줘.
+훅은 "숫자 + 위험/기회 + 타깃"을 조합해서 강력하게 만들어.
+
+JSON 형식으로만 출력해. 다른 텍스트 없이 순수 JSON만.'''
+
+        print(f"[SHORTS-GPT] 쇼츠 콘텐츠 분석 시작...")
+
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]}
+            ],
+            temperature=0.7
+        )
+
+        # 결과 추출
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
+
+        # JSON 파싱
+        if result_text.startswith("```"):
+            result_text = result_text.split("```")[1]
+            if result_text.startswith("json"):
+                result_text = result_text[4:]
+        result_text = result_text.strip()
+
+        import re
+        result_text = re.sub(r',\s*\]', ']', result_text)
+        result_text = re.sub(r',\s*\}', '}', result_text)
+
+        result = json.loads(result_text)
+
+        beats = result.get("structure", {}).get("beats", [])
+        print(f"[SHORTS-GPT] 분석 완료: {len(beats)}개 beats 생성")
+
+        return result
+
+    except Exception as e:
+        print(f"[SHORTS-GPT] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url="http://localhost:5000"):
+    """쇼츠 전용 영상 생성 (새 TTS + 새 9:16 이미지 + 세로 자막)
+
+    Args:
+        shorts_analysis: GPT-5.1 쇼츠 분석 결과 (beats 포함)
+        voice_name: TTS 음성 이름
+        output_path: 출력 파일 경로
+        base_url: API 서버 URL
+
+    Returns:
+        dict: {ok, shorts_path, duration, cost}
+    """
+    import requests as req
+    import tempfile
+    import shutil
+
+    print(f"[SHORTS-V2] 쇼츠 영상 생성 시작 (방법 2: 새 TTS + 새 이미지)")
+
+    try:
+        beats = shorts_analysis.get("structure", {}).get("beats", [])
+        if not beats:
+            return {"ok": False, "error": "beats 데이터 없음"}
+
+        print(f"[SHORTS-V2] {len(beats)}개 beats 처리 시작")
+
+        temp_dir = tempfile.mkdtemp()
+        total_cost = 0.0
+        beat_data = []  # [{audio_path, image_path, duration, subtitles, on_screen_text}]
+
+        try:
+            # ========== 1. 각 beat별 TTS + 이미지 생성 ==========
+            for idx, beat in enumerate(beats):
+                beat_id = beat.get("id", idx + 1)
+                voiceover = beat.get("voiceover", "")
+                on_screen_text = beat.get("on_screen_text", "")
+                visual_direction = beat.get("visual_direction", "")
+                broll_prompt = beat.get("broll_idea_or_prompt", "")
+                caption_style = beat.get("caption_style", {})
+
+                print(f"[SHORTS-V2] Beat {beat_id}: {voiceover[:30]}...")
+
+                # 1-1. TTS 생성
+                audio_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_audio.mp3")
+                try:
+                    tts_resp = req.post(f"{base_url}/api/tts/generate", json={
+                        "text": voiceover,
+                        "voice": voice_name,
+                        "language": "ko"
+                    }, timeout=60)
+
+                    if tts_resp.status_code == 200:
+                        tts_data = tts_resp.json()
+                        if tts_data.get("ok"):
+                            # 오디오 URL에서 다운로드
+                            audio_url = tts_data.get("audio_url", "")
+                            if audio_url:
+                                audio_resp = req.get(f"{base_url}{audio_url}", timeout=30)
+                                with open(audio_path, "wb") as f:
+                                    f.write(audio_resp.content)
+                                total_cost += len(voiceover) * 0.000004
+                                print(f"[SHORTS-V2] Beat {beat_id} TTS 완료")
+                except Exception as tts_err:
+                    print(f"[SHORTS-V2] Beat {beat_id} TTS 실패: {tts_err}")
+                    # TTS 실패 시 무음 생성
+                    subprocess.run([
+                        "ffmpeg", "-y", "-f", "lavfi",
+                        "-i", f"anullsrc=r=44100:cl=mono",
+                        "-t", "3", audio_path
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # 오디오 길이 측정
+                duration = 3.0  # 기본값
+                if os.path.exists(audio_path):
+                    probe_result = subprocess.run([
+                        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                        "-of", "default=noprint_wrappers=1:nokey=1", audio_path
+                    ], capture_output=True, text=True)
+                    if probe_result.returncode == 0:
+                        try:
+                            duration = float(probe_result.stdout.strip())
+                        except:
+                            pass
+
+                # 1-2. 9:16 세로 이미지 생성
+                image_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_image.png")
+                try:
+                    # 세로 이미지용 프롬프트 구성
+                    image_prompt = broll_prompt if broll_prompt else f"Vertical 9:16 background for: {visual_direction}"
+                    image_prompt += ", vertical 9:16 aspect ratio, 1080x1920, mobile-optimized, high contrast"
+
+                    img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
+                        "prompt": image_prompt,
+                        "size": "1080x1920",  # 세로 크기
+                        "imageProvider": "gemini"
+                    }, timeout=120)
+
+                    if img_resp.status_code == 200:
+                        img_data = img_resp.json()
+                        if img_data.get("ok"):
+                            img_url = img_data.get("image_url", "")
+                            if img_url:
+                                if img_url.startswith("http"):
+                                    img_download = req.get(img_url, timeout=30)
+                                else:
+                                    img_download = req.get(f"{base_url}{img_url}", timeout=30)
+                                with open(image_path, "wb") as f:
+                                    f.write(img_download.content)
+                                total_cost += 0.02
+                                print(f"[SHORTS-V2] Beat {beat_id} 이미지 완료")
+                except Exception as img_err:
+                    print(f"[SHORTS-V2] Beat {beat_id} 이미지 실패: {img_err}")
+                    # 이미지 실패 시 단색 배경 생성
+                    subprocess.run([
+                        "ffmpeg", "-y", "-f", "lavfi",
+                        "-i", "color=c=0x1a1a2e:s=1080x1920:d=1",
+                        "-frames:v", "1", image_path
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # 자막 정보 저장
+                emphasis_words = caption_style.get("emphasis_words", [])
+
+                beat_data.append({
+                    "beat_id": beat_id,
+                    "audio_path": audio_path,
+                    "image_path": image_path,
+                    "duration": duration,
+                    "voiceover": voiceover,
+                    "on_screen_text": on_screen_text,
+                    "emphasis_words": emphasis_words
+                })
+
+            # ========== 2. 각 beat를 클립으로 합성 ==========
+            print(f"[SHORTS-V2] 클립 합성 시작...")
+            clip_paths = []
+
+            for bd in beat_data:
+                clip_path = os.path.join(temp_dir, f"clip_{bd['beat_id']:02d}.mp4")
+
+                # 이미지 + 오디오 + 자막 합성
+                # 자막 필터 (하단 safe zone)
+                voiceover_escaped = bd['voiceover'].replace("'", "'\\''").replace(":", "\\:")
+
+                # 폰트 경로
+                font_path = "fonts/Pretendard-Bold.ttf"
+                if not os.path.exists(font_path):
+                    font_path = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
+                font_escaped = font_path.replace("\\", "/").replace(":", "\\:")
+
+                # 자막 필터 (하단 20% 영역)
+                subtitle_filter = (
+                    f"drawtext=text='{voiceover_escaped}':"
+                    f"fontfile='{font_escaped}':fontsize=42:fontcolor=white:"
+                    f"borderw=3:bordercolor=black:"
+                    f"x=(w-text_w)/2:y=h*0.82:"
+                    f"line_spacing=10"
+                )
+
+                # on_screen_text 오버레이 (상단 15% 영역)
+                if bd['on_screen_text']:
+                    text_escaped = bd['on_screen_text'].replace("'", "'\\''").replace(":", "\\:")
+                    subtitle_filter += (
+                        f",drawtext=text='{text_escaped}':"
+                        f"fontfile='{font_escaped}':fontsize=56:fontcolor=yellow:"
+                        f"borderw=4:bordercolor=black:"
+                        f"x=(w-text_w)/2:y=h*0.08"
+                    )
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-loop", "1", "-i", bd['image_path'],
+                    "-i", bd['audio_path'],
+                    "-vf", subtitle_filter,
+                    "-c:v", "libx264", "-preset", "fast",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                    "-pix_fmt", "yuv420p",
+                    "-t", str(bd['duration']),
+                    "-shortest",
+                    clip_path
+                ]
+
+                result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
+                if result.returncode == 0 and os.path.exists(clip_path):
+                    clip_paths.append(clip_path)
+                    print(f"[SHORTS-V2] 클립 {bd['beat_id']} 완료 ({bd['duration']:.1f}초)")
+                else:
+                    stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+                    print(f"[SHORTS-V2] 클립 {bd['beat_id']} 실패: {stderr}")
+
+            if not clip_paths:
+                return {"ok": False, "error": "클립 생성 실패"}
+
+            # ========== 3. 클립 병합 ==========
+            print(f"[SHORTS-V2] {len(clip_paths)}개 클립 병합...")
+            concat_list = os.path.join(temp_dir, "concat.txt")
+            with open(concat_list, 'w') as f:
+                for clip_path in clip_paths:
+                    f.write(f"file '{os.path.abspath(clip_path)}'\n")
+
+            # 병합
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", concat_list,
+                "-c:v", "libx264", "-preset", "fast",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_path
+            ]
+
+            result = subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=180)
+
+            if result.returncode == 0 and os.path.exists(output_path):
+                # 최종 영상 길이 확인
+                probe_result = subprocess.run([
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1", output_path
+                ], capture_output=True, text=True)
+
+                final_duration = 0
+                if probe_result.returncode == 0:
+                    try:
+                        final_duration = float(probe_result.stdout.strip())
+                    except:
+                        pass
+
+                print(f"[SHORTS-V2] 쇼츠 생성 완료: {output_path} ({final_duration:.1f}초)")
+
+                return {
+                    "ok": True,
+                    "shorts_path": output_path,
+                    "duration": final_duration,
+                    "cost": total_cost,
+                    "beats_count": len(beats)
+                }
+            else:
+                stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+                return {"ok": False, "error": f"병합 실패: {stderr}"}
+
+        finally:
+            # 임시 파일 정리
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        print(f"[SHORTS-V2] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
 def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text, output_path):
-    """메인 영상에서 쇼츠용 세로 영상(9:16) 생성
+    """메인 영상에서 쇼츠용 세로 영상(9:16) 생성 [레거시 - 크롭 방식]
 
     Args:
         main_video_path: 원본 메인 영상 경로
@@ -17641,62 +18022,105 @@ def run_automation_pipeline(row_data, row_index):
                 video_id = upload_data.get('videoId', '')
                 print(f"[AUTOMATION] 4. 완료: {youtube_url} (총 비용: ${total_cost:.2f})")
 
-                # ========== 5. 쇼츠 자동 생성 및 업로드 (옵션) ==========
+                # ========== 5. 쇼츠 자동 생성 및 업로드 (방법 2: 새 TTS + 새 이미지) ==========
                 shorts_url = None
+                shorts_cost = 0.0
                 shorts_info = video_effects.get('shorts', {})
-                highlight_scenes = shorts_info.get('highlight_scenes', [])
+                highlight_scenes_nums = shorts_info.get('highlight_scenes', [])
 
                 # highlight_scenes가 비어있으면 기본값으로 처음 2-3개 씬 선택
-                if not highlight_scenes or len(highlight_scenes) == 0:
-                    total_scenes = len(scenes) if scenes else 0
-                    if total_scenes >= 3:
-                        # 첫 번째, 중간, 마지막 씬 선택
-                        mid = total_scenes // 2
-                        highlight_scenes = [1, mid, total_scenes]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
-                    elif total_scenes >= 2:
-                        highlight_scenes = [1, total_scenes]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
-                    elif total_scenes == 1:
-                        highlight_scenes = [1]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
+                if not highlight_scenes_nums or len(highlight_scenes_nums) == 0:
+                    total_scenes_count = len(scenes) if scenes else 0
+                    if total_scenes_count >= 3:
+                        mid = total_scenes_count // 2
+                        highlight_scenes_nums = [1, mid, total_scenes_count]
+                    elif total_scenes_count >= 2:
+                        highlight_scenes_nums = [1, total_scenes_count]
+                    elif total_scenes_count == 1:
+                        highlight_scenes_nums = [1]
+                    print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes_nums}")
 
-                if highlight_scenes and len(highlight_scenes) > 0:
-                    print(f"[AUTOMATION] 5. 쇼츠 생성 시작...")
+                if highlight_scenes_nums and len(highlight_scenes_nums) > 0:
+                    print(f"[AUTOMATION] 5. 쇼츠 생성 시작 (방법 2: 새 TTS + 새 이미지)...")
                     try:
-                        # 쇼츠 영상 생성
-                        shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
-                        hook_text = shorts_info.get('hook_text', '')
-                        shorts_title = shorts_info.get('title', f"{title} #Shorts")
+                        # 5-1. 하이라이트 씬들의 나레이션 추출
+                        highlight_narrations = []
+                        for scene_num in highlight_scenes_nums:
+                            if 1 <= scene_num <= len(scenes):
+                                narration = scenes[scene_num - 1].get('narration', '')
+                                if narration:
+                                    # SSML 태그 제거
+                                    import re
+                                    clean_narration = re.sub(r'<[^>]+>', '', narration)
+                                    highlight_narrations.append(clean_narration)
 
-                        if _generate_shorts_video(video_url_local.lstrip('/'), scenes, highlight_scenes, hook_text, shorts_output_path):
-                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 완료: {shorts_output_path}")
+                        if not highlight_narrations:
+                            print(f"[AUTOMATION] 5. 하이라이트 나레이션 없음, 쇼츠 생성 스킵")
+                        else:
+                            print(f"[AUTOMATION] 5-1. 하이라이트 나레이션 {len(highlight_narrations)}개 추출")
 
-                            # 쇼츠 업로드 (원본 영상 링크 포함)
-                            shorts_description = f"""🎬 전체 영상 보기: {youtube_url}
+                            # 5-2. GPT-5.1로 쇼츠 콘텐츠 분석
+                            shorts_analysis = _analyze_shorts_content_gpt(
+                                highlight_narrations=highlight_narrations,
+                                title=title,
+                                detected_category=detected_category,
+                                audience=audience,
+                                duration_target=45
+                            )
+
+                            if shorts_analysis:
+                                shorts_cost += 0.03  # GPT-5.1 비용
+                                beats = shorts_analysis.get("structure", {}).get("beats", [])
+                                print(f"[AUTOMATION] 5-2. 쇼츠 분석 완료: {len(beats)}개 beats")
+
+                                # 쇼츠 제목 및 해시태그 추출
+                                platform_info = shorts_analysis.get("platform_specific", {}).get("youtube_shorts", {})
+                                shorts_title = platform_info.get("title_suggestion", "") or shorts_info.get('title', f"{title} #Shorts")
+                                shorts_hashtags = platform_info.get("hashtags_hint", ["#Shorts", "#유튜브쇼츠"])
+
+                                # 5-3. 쇼츠 영상 생성 (새 TTS + 새 이미지)
+                                shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
+                                shorts_result = _generate_shorts_video_v2(
+                                    shorts_analysis=shorts_analysis,
+                                    voice_name=voice,
+                                    output_path=shorts_output_path,
+                                    base_url=base_url
+                                )
+
+                                if shorts_result.get("ok"):
+                                    shorts_cost += shorts_result.get("cost", 0)
+                                    shorts_duration = shorts_result.get("duration", 0)
+                                    print(f"[AUTOMATION] 5-3. 쇼츠 영상 생성 완료: {shorts_duration:.1f}초 (비용: ${shorts_cost:.2f})")
+
+                                    # 5-4. 쇼츠 업로드
+                                    shorts_description = f"""🎬 전체 영상 보기: {youtube_url}
 
 {description[:200]}...
 
-#Shorts #유튜브쇼츠"""
+{' '.join(shorts_hashtags)}"""
 
-                            shorts_upload_payload = {
-                                "videoPath": shorts_output_path,
-                                "title": shorts_title,
-                                "description": shorts_description,
-                                "privacyStatus": visibility,
-                                "channelId": channel_id
-                            }
+                                    shorts_upload_payload = {
+                                        "videoPath": shorts_output_path,
+                                        "title": shorts_title,
+                                        "description": shorts_description,
+                                        "privacyStatus": visibility,
+                                        "channelId": channel_id
+                                    }
 
-                            shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
-                            shorts_data = shorts_resp.json()
+                                    shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
+                                    shorts_data = shorts_resp.json()
 
-                            if shorts_data.get('ok'):
-                                shorts_url = shorts_data.get('videoUrl', '')
-                                print(f"[AUTOMATION] 5. 쇼츠 업로드 완료: {shorts_url}")
+                                    if shorts_data.get('ok'):
+                                        shorts_url = shorts_data.get('videoUrl', '')
+                                        total_cost += shorts_cost
+                                        print(f"[AUTOMATION] 5-4. 쇼츠 업로드 완료: {shorts_url}")
+                                    else:
+                                        print(f"[AUTOMATION] 5-4. 쇼츠 업로드 실패: {shorts_data.get('error')}")
+                                else:
+                                    print(f"[AUTOMATION] 5-3. 쇼츠 영상 생성 실패: {shorts_result.get('error')}")
                             else:
-                                print(f"[AUTOMATION] 5. 쇼츠 업로드 실패: {shorts_data.get('error')}")
-                        else:
-                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 실패")
+                                print(f"[AUTOMATION] 5-2. 쇼츠 분석 실패")
+
                     except Exception as shorts_err:
                         print(f"[AUTOMATION] 5. 쇼츠 처리 오류: {shorts_err}")
                         import traceback
