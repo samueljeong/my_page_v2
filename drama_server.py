@@ -12435,15 +12435,18 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
         성공 여부
     """
     try:
-        # 언어별 폰트 설정
+        # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
         if lang == 'ko':
             font_name = "NanumGothic"
-            font_size = 24
+            font_size = 48  # 24 → 48 (2배 크기)
         else:
             font_name = "Arial"
-            font_size = 22
+            font_size = 44  # 22 → 44 (2배 크기)
 
-        # ASS 헤더
+        # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
+        # Outline: 2 → 4 (더 두꺼운 테두리)
+        # Shadow: 1 → 2 (더 진한 그림자)
+        # MarginV: 40 → 50 (하단 여백)
         ass_header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1280
@@ -12452,7 +12455,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,2,30,30,40,1
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,30,30,50,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -12716,18 +12719,23 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     return ticker_filter
 
 
-def _get_bgm_file(mood, bgm_dir="static/audio/bgm"):
+def _get_bgm_file(mood, bgm_dir=None):
     """분위기에 맞는 BGM 파일 선택 (여러 개면 랜덤)
 
     Args:
         mood: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic
-        bgm_dir: BGM 파일 디렉토리
+        bgm_dir: BGM 파일 디렉토리 (없으면 스크립트 위치 기준)
 
     Returns:
         BGM 파일 경로 또는 None
     """
     import glob
     import random
+
+    # 스크립트 위치 기준 절대 경로 사용
+    if bgm_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        bgm_dir = os.path.join(script_dir, "static", "audio", "bgm")
 
     print(f"[BGM] 검색 시작: mood='{mood}', dir='{bgm_dir}'")
 
@@ -12832,18 +12840,23 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
         return False
 
 
-def _get_sfx_file(sfx_type, sfx_dir="static/audio/sfx"):
+def _get_sfx_file(sfx_type, sfx_dir=None):
     """효과음 타입에 맞는 파일 선택 (여러 개면 랜덤)
 
     Args:
         sfx_type: impact, whoosh, ding, tension, emotional, success
-        sfx_dir: 효과음 파일 디렉토리
+        sfx_dir: 효과음 파일 디렉토리 (없으면 스크립트 위치 기준)
 
     Returns:
         효과음 파일 경로 또는 None
     """
     import glob
     import random
+
+    # 스크립트 위치 기준 절대 경로 사용
+    if sfx_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        sfx_dir = os.path.join(script_dir, "static", "audio", "sfx")
 
     print(f"[SFX] 검색 시작: type='{sfx_type}', dir='{sfx_dir}'")
 
@@ -12912,7 +12925,7 @@ def _trim_sfx(input_path, output_path, max_duration=2.5, fade_out=0.5):
         return False
 
 
-def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir="static/audio/sfx"):
+def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=None):
     """비디오에 효과음 믹싱
 
     Args:
@@ -12920,7 +12933,7 @@ def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=
         sound_effects: [{"scene": 1, "type": "impact"}, ...]
         scenes: 씬 목록 (타이밍 계산용)
         output_path: 출력 비디오 경로
-        sfx_dir: 효과음 디렉토리
+        sfx_dir: 효과음 디렉토리 (없으면 스크립트 위치 기준)
 
     Returns:
         성공 여부 (bool)
@@ -12930,6 +12943,18 @@ def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=
 
     try:
         import tempfile
+
+        # 스크립트 위치 기준 절대 경로 사용
+        if sfx_dir is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            sfx_dir = os.path.join(script_dir, "static", "audio", "sfx")
+
+        print(f"[SFX] 효과음 디렉토리: {sfx_dir}")
+        print(f"[SFX] 디렉토리 존재 여부: {os.path.exists(sfx_dir)}")
+        if os.path.exists(sfx_dir):
+            import glob
+            all_sfx = glob.glob(os.path.join(sfx_dir, "*.mp3"))
+            print(f"[SFX] 디렉토리 내 전체 파일: {[os.path.basename(f) for f in all_sfx]}")
 
         # 씬별 시작 시간 계산
         scene_start_times = {}
@@ -12951,8 +12976,8 @@ def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=
             if scene_num not in scene_start_times:
                 continue
 
-            # 효과음 파일 찾기
-            sfx_file = _get_sfx_file(sfx_type, sfx_dir)
+            # 효과음 파일 찾기 (None 전달 시 절대 경로 사용)
+            sfx_file = _get_sfx_file(sfx_type)
             if not sfx_file:
                 continue
 
@@ -13020,19 +13045,35 @@ def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=
         return False
 
 
-def _generate_outro_video(output_path, duration=5, fonts_dir="static/fonts"):
+def _generate_outro_video(output_path, duration=5, fonts_dir=None):
     """공용 아웃트로 영상 생성 (구독/좋아요 요청)
 
     Args:
         output_path: 출력 파일 경로
         duration: 아웃트로 길이 (초)
-        fonts_dir: 폰트 디렉토리
+        fonts_dir: 폰트 디렉토리 (없으면 스크립트 위치 기준)
 
     Returns:
         성공 여부 (bool)
     """
     try:
+        # 스크립트 위치 기준 절대 경로 사용
+        if fonts_dir is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            fonts_dir = os.path.join(script_dir, "fonts")
+
+        print(f"[OUTRO] 폰트 디렉토리: {fonts_dir}")
+        print(f"[OUTRO] 디렉토리 존재: {os.path.exists(fonts_dir)}")
+
+        # 폰트 우선순위: NanumGothicBold > NanumGothic
         font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        if not os.path.exists(font_path):
+            font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+        if not os.path.exists(font_path):
+            print(f"[OUTRO] 폰트 파일 없음: {fonts_dir}")
+            return False
+
+        print(f"[OUTRO] 사용 폰트: {font_path}")
         font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
         # 그라데이션 배경 + 텍스트 아웃트로
@@ -13131,6 +13172,13 @@ def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text,
     Returns:
         성공 여부 (bool)
     """
+    print(f"[SHORTS] 쇼츠 생성 시작")
+    print(f"[SHORTS] 메인 영상: {main_video_path}, 존재: {os.path.exists(main_video_path)}")
+    print(f"[SHORTS] 씬 수: {len(scenes) if scenes else 0}")
+    print(f"[SHORTS] 하이라이트 씬: {highlight_scenes}")
+    print(f"[SHORTS] 훅 텍스트: {hook_text}")
+    print(f"[SHORTS] 출력 경로: {output_path}")
+
     try:
         import tempfile
         import shutil
@@ -13481,43 +13529,44 @@ def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720")
     fade_out = min(0.5, duration * 0.1)  # 페이드아웃 (최대 0.5초)
     fade_out_start = max(0, duration - fade_out)
 
-    # 각 효과별 설정 (sin/cos로 부드러운 움직임)
+    # 각 효과별 설정 (sin/cos로 매우 부드러운 움직임)
     # on: 현재 프레임 번호, total_frames: 전체 프레임 수
+    # ★ 느린 움직임: sin/cos 주기 2배, 움직임 범위 1/2
     if effect_type == 'zoom_in':
-        # 천천히 줌인 + 미세한 패닝
-        zoom_expr = f"1.0+0.15*on/{total_frames}"  # 1.0 → 1.15로 부드럽게
-        x_expr = f"(iw-{w})/2+20*sin(on/60)"  # 좌우 미세 흔들림
-        y_expr = f"(ih-{h})/2+15*cos(on/80)"  # 상하 미세 흔들림
+        # 천천히 줌인 + 아주 미세한 패닝
+        zoom_expr = f"1.0+0.08*on/{total_frames}"  # 1.0 → 1.08로 (더 작은 줌)
+        x_expr = f"(iw-{w})/2+8*sin(on/120)"  # 좌우 아주 미세 (주기 120)
+        y_expr = f"(ih-{h})/2+6*cos(on/150)"  # 상하 아주 미세 (주기 150)
     elif effect_type == 'zoom_out':
-        # 천천히 줌아웃 + 미세한 패닝
-        zoom_expr = f"1.15-0.15*on/{total_frames}"  # 1.15 → 1.0으로 부드럽게
-        x_expr = f"(iw-{w})/2-20*sin(on/60)"
-        y_expr = f"(ih-{h})/2-15*cos(on/80)"
+        # 천천히 줌아웃 + 아주 미세한 패닝
+        zoom_expr = f"1.08-0.08*on/{total_frames}"  # 1.08 → 1.0으로
+        x_expr = f"(iw-{w})/2-8*sin(on/120)"
+        y_expr = f"(ih-{h})/2-6*cos(on/150)"
     elif effect_type == 'pan_left':
-        # 오른쪽에서 왼쪽으로 천천히 패닝
-        zoom_expr = "1.05"  # 약간 줌인 상태 유지
-        x_expr = f"(iw-{w})*0.7*(1-on/{total_frames})+10*sin(on/50)"  # 오른쪽→왼쪽
-        y_expr = f"(ih-{h})/2+10*cos(on/70)"
+        # 오른쪽에서 왼쪽으로 아주 천천히 패닝
+        zoom_expr = "1.03"  # 줌 거의 없음
+        x_expr = f"(iw-{w})*0.6*(1-on/{total_frames})+5*sin(on/100)"  # 부드러운 패닝
+        y_expr = f"(ih-{h})/2+4*cos(on/140)"
     elif effect_type == 'pan_right':
-        # 왼쪽에서 오른쪽으로 천천히 패닝
-        zoom_expr = "1.05"
-        x_expr = f"(iw-{w})*0.3+(iw-{w})*0.4*on/{total_frames}+10*sin(on/50)"  # 왼쪽→오른쪽
-        y_expr = f"(ih-{h})/2+10*cos(on/70)"
+        # 왼쪽에서 오른쪽으로 아주 천천히 패닝
+        zoom_expr = "1.03"
+        x_expr = f"(iw-{w})*0.4+(iw-{w})*0.2*on/{total_frames}+5*sin(on/100)"
+        y_expr = f"(ih-{h})/2+4*cos(on/140)"
     elif effect_type == 'pan_up':
-        # 아래에서 위로 천천히 패닝
-        zoom_expr = "1.05"
-        x_expr = f"(iw-{w})/2+10*sin(on/60)"
-        y_expr = f"(ih-{h})*0.7*(1-on/{total_frames})+10*cos(on/50)"  # 아래→위
+        # 아래에서 위로 아주 천천히 패닝
+        zoom_expr = "1.03"
+        x_expr = f"(iw-{w})/2+5*sin(on/120)"
+        y_expr = f"(ih-{h})*0.6*(1-on/{total_frames})+4*cos(on/100)"
     elif effect_type == 'pan_down':
-        # 위에서 아래로 천천히 패닝
-        zoom_expr = "1.05"
-        x_expr = f"(iw-{w})/2+10*sin(on/60)"
-        y_expr = f"(ih-{h})*0.3+(ih-{h})*0.4*on/{total_frames}+10*cos(on/50)"  # 위→아래
+        # 위에서 아래로 아주 천천히 패닝
+        zoom_expr = "1.03"
+        x_expr = f"(iw-{w})/2+5*sin(on/120)"
+        y_expr = f"(ih-{h})*0.4+(ih-{h})*0.2*on/{total_frames}+4*cos(on/100)"
     else:
-        # 기본: 줌인 + 미세한 움직임
-        zoom_expr = f"1.0+0.15*on/{total_frames}"
-        x_expr = f"(iw-{w})/2+20*sin(on/60)"
-        y_expr = f"(ih-{h})/2+15*cos(on/80)"
+        # 기본: 줌인 + 아주 미세한 움직임
+        zoom_expr = f"1.0+0.08*on/{total_frames}"
+        x_expr = f"(iw-{w})/2+8*sin(on/120)"
+        y_expr = f"(ih-{h})/2+6*cos(on/150)"
 
     # 필터 체인: scale(크게) → zoompan(부드러운 움직임) → fade(페이드인/아웃)
     vf_filter = (
@@ -13775,8 +13824,10 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
 
             final_path = os.path.join(work_dir, "final.mp4")
 
-            # 폰트 디렉토리 절대 경로 설정 (NanumGothic 폰트 위치)
-            fonts_dir = os.path.abspath("fonts")
+            # 폰트 디렉토리 절대 경로 설정 (스크립트 위치 기준)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            fonts_dir = os.path.join(script_dir, "fonts")
+            print(f"[VIDEO-WORKER] 폰트 디렉토리: {fonts_dir}, 존재: {os.path.exists(fonts_dir)}")
 
             # ASS 파일 절대 경로로 변환하고 FFmpeg용 이스케이프
             ass_abs_path = os.path.abspath(ass_path)
@@ -17137,13 +17188,30 @@ def run_automation_pipeline(row_data, row_index):
             nonlocal thumbnail_url, total_cost
             print(f"[AUTOMATION][THUMB] 썸네일 생성 시작...")
             try:
-                if not ai_prompts or not ai_prompts.get('A'):
-                    print(f"[AUTOMATION][THUMB] 프롬프트 없음 (스킵)")
-                    return None
+                # 뉴스 카테고리 체크
+                is_news = category.lower() in ['뉴스', 'news', '시사', '정치', '경제'] if category else False
+
+                if is_news:
+                    # 뉴스 카테고리: 하드코딩된 뉴스 스타일 프롬프트 사용 (50대+ 시청자용)
+                    print(f"[AUTOMATION][THUMB] 뉴스 카테고리 감지 → 뉴스 스타일 썸네일 사용")
+                    # text_overlay는 ai_prompts.A에서 가져옴 (GPT가 생성한 텍스트)
+                    text_overlay_data = ai_prompts.get('A', {}).get('text_overlay', {}) if ai_prompts else {}
+                    print(f"[AUTOMATION][THUMB] text_overlay: {text_overlay_data}")
+                    news_prompt = {
+                        "prompt": "Korean TV news exclusive report style thumbnail, 16:9 aspect ratio. LARGE CLEAR TEXT for senior viewers (50+). Dark navy or black background with RED '단독' or '속보' badge. Simple clean layout - NOT cluttered. Single powerful image with bold Korean headline. High contrast white/yellow text on dark background. KBS/MBC/SBS news style professional look. NO cartoon style, realistic news broadcast aesthetic. Minimal elements, maximum readability. Breaking news feel with credible journalism aesthetic.",
+                        "text_overlay": text_overlay_data
+                    }
+                    thumb_prompt = news_prompt
+                else:
+                    # 일반 카테고리: GPT가 생성한 ai_prompts 사용
+                    if not ai_prompts or not ai_prompts.get('A'):
+                        print(f"[AUTOMATION][THUMB] 프롬프트 없음 (스킵)")
+                        return None
+                    thumb_prompt = ai_prompts.get('A')
 
                 thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
                     "session_id": f"thumb_{session_id}",
-                    "prompt": ai_prompts.get('A')
+                    "prompt": thumb_prompt
                 }, timeout=180)
 
                 thumb_data = thumb_resp.json()
@@ -17355,6 +17423,21 @@ def run_automation_pipeline(row_data, row_index):
                 shorts_url = None
                 shorts_info = video_effects.get('shorts', {})
                 highlight_scenes = shorts_info.get('highlight_scenes', [])
+
+                # highlight_scenes가 비어있으면 기본값으로 처음 2-3개 씬 선택
+                if not highlight_scenes or len(highlight_scenes) == 0:
+                    total_scenes = len(scenes) if scenes else 0
+                    if total_scenes >= 3:
+                        # 첫 번째, 중간, 마지막 씬 선택
+                        mid = total_scenes // 2
+                        highlight_scenes = [1, mid, total_scenes]
+                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
+                    elif total_scenes >= 2:
+                        highlight_scenes = [1, total_scenes]
+                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
+                    elif total_scenes == 1:
+                        highlight_scenes = [1]
+                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
 
                 if highlight_scenes and len(highlight_scenes) > 0:
                     print(f"[AUTOMATION] 5. 쇼츠 생성 시작...")
