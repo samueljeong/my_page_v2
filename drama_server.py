@@ -11393,11 +11393,26 @@ Rules:
 
         result = json.loads(result_text)
 
+        # video_effects 추출 및 로깅
+        video_effects = result.get("video_effects", {})
+        detected_category = result.get("detected_category", "story")
+
+        print(f"[IMAGE-ANALYZE] detected_category: {detected_category}")
+        print(f"[IMAGE-ANALYZE] video_effects keys: {list(video_effects.keys())}")
+        if video_effects:
+            print(f"[IMAGE-ANALYZE] bgm_mood: {video_effects.get('bgm_mood', '(없음)')}")
+            print(f"[IMAGE-ANALYZE] subtitle_highlights: {len(video_effects.get('subtitle_highlights', []))}개")
+            print(f"[IMAGE-ANALYZE] screen_overlays: {len(video_effects.get('screen_overlays', []))}개")
+            print(f"[IMAGE-ANALYZE] sound_effects: {len(video_effects.get('sound_effects', []))}개")
+            print(f"[IMAGE-ANALYZE] shorts highlight_scenes: {video_effects.get('shorts', {}).get('highlight_scenes', [])}")
+
         return jsonify({
             "ok": True,
             "youtube": result.get("youtube", {}),
             "thumbnail": result.get("thumbnail", {}),
             "scenes": result.get("scenes", []),
+            "video_effects": video_effects,
+            "detected_category": detected_category,
             "settings": {
                 "content_type": content_type,
                 "image_style": image_style,
