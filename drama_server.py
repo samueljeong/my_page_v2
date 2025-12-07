@@ -5330,6 +5330,193 @@ loadFileList();
 </body></html>'''
 
 
+# ===== 효과음 파일 업로드 API =====
+@app.route('/api/sfx/upload', methods=['POST'])
+def api_upload_sfx():
+    """효과음 파일 업로드 (MP3)"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"ok": False, "error": "파일이 없습니다"}), 400
+
+        file = request.files['file']
+        sfx_type = request.form.get('type', '')
+
+        if not file.filename:
+            return jsonify({"ok": False, "error": "파일명이 없습니다"}), 400
+
+        if not sfx_type:
+            return jsonify({"ok": False, "error": "효과음 타입을 선택하세요"}), 400
+
+        # 효과음 디렉토리 확인/생성
+        sfx_dir = "static/audio/sfx"
+        os.makedirs(sfx_dir, exist_ok=True)
+
+        # 기존 파일 확인하여 번호 부여
+        import glob
+        existing = glob.glob(os.path.join(sfx_dir, f"{sfx_type}*.mp3"))
+        num = len(existing) + 1
+        filename = f"{sfx_type}_{num:02d}.mp3"
+        filepath = os.path.join(sfx_dir, filename)
+
+        file.save(filepath)
+        print(f"[SFX-UPLOAD] 저장됨: {filepath}")
+
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "path": filepath,
+            "type": sfx_type,
+            "count": num
+        })
+
+    except Exception as e:
+        print(f"[SFX-UPLOAD] 오류: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/sfx/list', methods=['GET'])
+def api_list_sfx():
+    """업로드된 효과음 파일 목록"""
+    try:
+        import glob
+        sfx_dir = "static/audio/sfx"
+        os.makedirs(sfx_dir, exist_ok=True)
+
+        files = glob.glob(os.path.join(sfx_dir, "*.mp3"))
+        types = {}
+
+        for f in files:
+            filename = os.path.basename(f)
+            sfx_type = filename.split('_')[0].split('.')[0]
+            if sfx_type not in types:
+                types[sfx_type] = []
+            types[sfx_type].append(filename)
+
+        return jsonify({"ok": True, "types": types, "total": len(files)})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/sfx-upload')
+def sfx_upload_page():
+    """효과음 업로드 페이지"""
+    return '''<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>효과음 업로드</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+h1 { color: #ff6b6b; }
+.upload-box { border: 2px dashed #444; padding: 40px; text-align: center; margin: 20px 0; border-radius: 10px; }
+.upload-box.dragover { border-color: #ff6b6b; background: rgba(255,107,107,0.1); }
+select, button { padding: 12px 24px; font-size: 16px; margin: 10px 5px; border-radius: 5px; border: none; cursor: pointer; }
+select { background: #333; color: #fff; }
+button { background: #ff6b6b; color: #fff; font-weight: bold; }
+button:hover { background: #ee5a5a; }
+.file-list { background: #2a2a4e; padding: 15px; border-radius: 10px; margin-top: 20px; }
+.file-item { padding: 8px; border-bottom: 1px solid #444; }
+.type-tag { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; margin-right: 10px; background: #ff6b6b; }
+#status { margin-top: 15px; padding: 10px; border-radius: 5px; }
+.success { background: #1b5e20; } .error { background: #b71c1c; }
+.info { background: #2a2a4e; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; }
+</style>
+</head><body>
+<h1>🔊 효과음 업로드</h1>
+
+<div class="info">
+<strong>필요한 효과음 6종류:</strong><br>
+• impact - 충격/반전 (쿵!)<br>
+• whoosh - 장면전환 (휙~)<br>
+• ding - 강조/깨달음 (띵!)<br>
+• tension - 긴장감 (드르르)<br>
+• emotional - 감동 (피아노)<br>
+• success - 성공/해피엔딩 (짠!)
+</div>
+
+<select id="sfxType">
+<option value="">-- 효과음 타입 선택 --</option>
+<option value="impact">💥 impact (충격/반전)</option>
+<option value="whoosh">💨 whoosh (장면전환)</option>
+<option value="ding">🔔 ding (강조/깨달음)</option>
+<option value="tension">😰 tension (긴장감)</option>
+<option value="emotional">🎹 emotional (감동)</option>
+<option value="success">🎉 success (성공)</option>
+</select>
+
+<div class="upload-box" id="dropzone">
+<p>📁 MP3 파일을 여기에 드래그하거나 클릭하여 선택</p>
+<input type="file" id="fileInput" accept=".mp3,audio/mpeg" multiple style="display:none">
+</div>
+
+<div id="status"></div>
+
+<h3>📋 업로드된 효과음</h3>
+<div class="file-list" id="fileList">로딩 중...</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const typeSelect = document.getElementById('sfxType');
+const status = document.getElementById('status');
+
+dropzone.onclick = () => fileInput.click();
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('dragover'); };
+dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); };
+fileInput.onchange = () => handleFiles(fileInput.files);
+
+async function handleFiles(files) {
+    const sfxType = typeSelect.value;
+    if (!sfxType) { alert('효과음 타입을 먼저 선택하세요!'); return; }
+
+    for (const file of files) {
+        if (!file.name.endsWith('.mp3')) { alert(file.name + ' - MP3 파일만 가능합니다'); continue; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', sfxType);
+
+        status.innerHTML = '⏳ 업로드 중: ' + file.name;
+        status.className = '';
+
+        try {
+            const res = await fetch('/api/sfx/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                status.innerHTML = '✅ 업로드 완료: ' + data.filename;
+                status.className = 'success';
+                loadFileList();
+            } else {
+                status.innerHTML = '❌ 실패: ' + data.error;
+                status.className = 'error';
+            }
+        } catch (e) {
+            status.innerHTML = '❌ 오류: ' + e.message;
+            status.className = 'error';
+        }
+    }
+}
+
+async function loadFileList() {
+    try {
+        const res = await fetch('/api/sfx/list');
+        const data = await res.json();
+        if (data.ok) {
+            let html = '<p>총 ' + data.total + '개 파일</p>';
+            for (const [type, files] of Object.entries(data.types)) {
+                html += '<div class="file-item"><span class="type-tag">' + type + '</span> ' + files.join(', ') + '</div>';
+            }
+            document.getElementById('fileList').innerHTML = html || '<p>업로드된 파일 없음</p>';
+        }
+    } catch (e) { document.getElementById('fileList').innerHTML = '로드 실패'; }
+}
+loadFileList();
+</script>
+</body></html>'''
+
+
 # ===== Step6: 이미지 업로드 API =====
 @app.route('/api/drama/upload-image', methods=['POST'])
 def api_upload_image():
@@ -12462,6 +12649,141 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
         return False
 
 
+def _get_sfx_file(sfx_type, sfx_dir="static/audio/sfx"):
+    """효과음 타입에 맞는 파일 선택 (여러 개면 랜덤)
+
+    Args:
+        sfx_type: impact, whoosh, ding, tension, emotional, success
+        sfx_dir: 효과음 파일 디렉토리
+
+    Returns:
+        효과음 파일 경로 또는 None
+    """
+    import glob
+    import random
+
+    if not sfx_type or not os.path.exists(sfx_dir):
+        return None
+
+    patterns = [
+        os.path.join(sfx_dir, f"{sfx_type}.mp3"),
+        os.path.join(sfx_dir, f"{sfx_type}_*.mp3"),
+        os.path.join(sfx_dir, f"{sfx_type}*.mp3"),
+    ]
+
+    matching_files = []
+    for pattern in patterns:
+        matching_files.extend(glob.glob(pattern))
+
+    matching_files = list(set(matching_files))
+
+    if not matching_files:
+        print(f"[SFX] '{sfx_type}' 효과음 파일 없음")
+        return None
+
+    selected = random.choice(matching_files)
+    print(f"[SFX] 선택된 효과음: {selected}")
+    return selected
+
+
+def _generate_outro_video(output_path, duration=5, fonts_dir="static/fonts"):
+    """공용 아웃트로 영상 생성 (구독/좋아요 요청)
+
+    Args:
+        output_path: 출력 파일 경로
+        duration: 아웃트로 길이 (초)
+        fonts_dir: 폰트 디렉토리
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+
+        # 그라데이션 배경 + 텍스트 아웃트로
+        # 검정 배경에 흰색/노란색 텍스트
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi",
+            "-i", f"color=c=0x1a1a2e:s=1280x720:d={duration}",
+            "-f", "lavfi",
+            "-i", f"anullsrc=r=44100:cl=stereo:d={duration}",
+            "-vf", (
+                f"drawtext=text='시청해 주셔서 감사합니다':"
+                f"fontfile='{font_escaped}':fontsize=48:fontcolor=white:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2-60,"
+                f"drawtext=text='👍 좋아요와 구독 부탁드려요!':"
+                f"fontfile='{font_escaped}':fontsize=40:fontcolor=yellow:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2+20,"
+                f"drawtext=text='🔔 알림 설정도 잊지 마세요':"
+                f"fontfile='{font_escaped}':fontsize=32:fontcolor=#aaaaaa:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2+80,"
+                f"fade=t=in:st=0:d=0.5,fade=t=out:st={duration-0.5}:d=0.5"
+            ),
+            "-c:v", "libx264", "-preset", "fast",
+            "-c:a", "aac", "-b:a", "128k",
+            "-t", str(duration),
+            output_path
+        ]
+
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=60)
+
+        if result.returncode == 0:
+            print(f"[OUTRO] 아웃트로 생성 완료: {output_path}")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[OUTRO] 생성 실패: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"[OUTRO] 오류: {e}")
+        return False
+
+
+def _append_outro_to_video(video_path, outro_path, output_path):
+    """비디오에 아웃트로 연결
+
+    Args:
+        video_path: 원본 비디오 경로
+        outro_path: 아웃트로 비디오 경로
+        output_path: 출력 비디오 경로
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        # concat 필터 사용
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-i", outro_path,
+            "-filter_complex",
+            "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
+            "-map", "[outv]", "-map", "[outa]",
+            "-c:v", "libx264", "-preset", "fast",
+            "-c:a", "aac", "-b:a", "128k",
+            output_path
+        ]
+
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=600)
+
+        if result.returncode == 0:
+            print(f"[OUTRO] 아웃트로 연결 완료: {output_path}")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[OUTRO] 연결 실패: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"[OUTRO] 연결 오류: {e}")
+        return False
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -12780,7 +13102,22 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                 else:
                     print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
 
-            # 6. 결과 저장
+            # 6. 아웃트로 추가 (옵션)
+            add_outro = video_effects.get('add_outro', True)  # 기본값: 추가
+            if add_outro:
+                _update_job_status(job_id, progress=98, message='아웃트로 추가 중...')
+                outro_path = os.path.join(work_dir, "outro.mp4")
+                if _generate_outro_video(outro_path, duration=5, fonts_dir=fonts_dir):
+                    outro_output_path = os.path.join(work_dir, "with_outro.mp4")
+                    if _append_outro_to_video(final_path, outro_path, outro_output_path):
+                        final_path = outro_output_path
+                        print(f"[VIDEO-WORKER] 아웃트로 추가 완료")
+                    else:
+                        print(f"[VIDEO-WORKER] 아웃트로 연결 실패, 아웃트로 없이 진행")
+                else:
+                    print(f"[VIDEO-WORKER] 아웃트로 생성 실패")
+
+            # 7. 결과 저장
             output_filename = f"video_{session_id}.mp4"
             output_path = os.path.join(upload_dir, output_filename)
             shutil.copy(final_path, output_path)
