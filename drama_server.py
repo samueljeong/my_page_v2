@@ -12177,6 +12177,108 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     return ticker_filter
 
 
+def _get_bgm_file(mood, bgm_dir="static/audio/bgm"):
+    """분위기에 맞는 BGM 파일 선택 (여러 개면 랜덤)
+
+    Args:
+        mood: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic
+        bgm_dir: BGM 파일 디렉토리
+
+    Returns:
+        BGM 파일 경로 또는 None
+    """
+    import glob
+    import random
+
+    if not mood or not os.path.exists(bgm_dir):
+        return None
+
+    # 파일명 패턴: mood.mp3, mood_01.mp3, mood (1).mp3 등
+    patterns = [
+        os.path.join(bgm_dir, f"{mood}.mp3"),
+        os.path.join(bgm_dir, f"{mood}_*.mp3"),
+        os.path.join(bgm_dir, f"{mood} *.mp3"),  # 공백 포함
+        os.path.join(bgm_dir, f"{mood}*.mp3"),
+    ]
+
+    matching_files = []
+    for pattern in patterns:
+        matching_files.extend(glob.glob(pattern))
+
+    # 중복 제거
+    matching_files = list(set(matching_files))
+
+    if not matching_files:
+        print(f"[BGM] '{mood}' 분위기 BGM 파일 없음")
+        return None
+
+    # 랜덤 선택
+    selected = random.choice(matching_files)
+    print(f"[BGM] 선택된 BGM: {selected} (후보 {len(matching_files)}개 중)")
+    return selected
+
+
+def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
+    """비디오에 BGM 믹싱 (나레이션 유지, BGM은 작게)
+
+    Args:
+        video_path: 원본 비디오 경로
+        bgm_path: BGM 오디오 경로
+        output_path: 출력 비디오 경로
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
+
+    Returns:
+        성공 여부 (bool)
+    """
+    try:
+        # 비디오 길이 확인
+        probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                     "-of", "default=noprint_wrappers=1:nokey=1", video_path]
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        video_duration = float(result.stdout.strip())
+
+        print(f"[BGM] 비디오 길이: {video_duration:.1f}초")
+
+        # FFmpeg 명령: BGM 루프 + 볼륨 조절 + 믹싱 + 페이드아웃
+        # -stream_loop -1: BGM 무한 루프
+        # volume: BGM 볼륨 낮춤
+        # amix: 오디오 믹싱
+        # afade: 마지막 3초 페이드아웃
+
+        fade_start = max(0, video_duration - 3)  # 마지막 3초
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,                          # 원본 비디오 (오디오 포함)
+            "-stream_loop", "-1", "-i", bgm_path,      # BGM 루프
+            "-filter_complex",
+            f"[1:a]volume={bgm_volume},afade=t=in:st=0:d=2,afade=t=out:st={fade_start}:d=3[bgm];"  # BGM 볼륨+페이드
+            f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",  # 믹싱
+            "-map", "0:v",                             # 비디오 스트림
+            "-map", "[aout]",                          # 믹싱된 오디오
+            "-c:v", "copy",                            # 비디오 재인코딩 안함
+            "-c:a", "aac", "-b:a", "128k",            # 오디오 인코딩
+            "-shortest",                               # 비디오 길이에 맞춤
+            output_path
+        ]
+
+        print(f"[BGM] 믹싱 시작...")
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=600)
+
+        if result.returncode == 0:
+            print(f"[BGM] 믹싱 완료: {output_path}")
+            return True
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+            print(f"[BGM] 믹싱 실패: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"[BGM] 믹싱 오류: {e}")
+        return False
+
+
 def _get_ken_burns_filter(effect_type, duration, fps=24, output_size="1280x720"):
     """Ken Burns 효과용 zoompan 필터 생성
 
@@ -12480,7 +12582,22 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             del result
             gc.collect()
 
-            # 5. 결과 저장
+            # 5. BGM 믹싱 (옵션)
+            bgm_mood = video_effects.get('bgm_mood', '')
+            if bgm_mood:
+                _update_job_status(job_id, progress=95, message='BGM 믹싱 중...')
+                bgm_file = _get_bgm_file(bgm_mood)
+                if bgm_file:
+                    bgm_output_path = os.path.join(work_dir, "with_bgm.mp4")
+                    if _mix_bgm_with_video(final_path, bgm_file, bgm_output_path):
+                        final_path = bgm_output_path
+                        print(f"[VIDEO-WORKER] BGM 믹싱 완료: {bgm_mood}")
+                    else:
+                        print(f"[VIDEO-WORKER] BGM 믹싱 실패, BGM 없이 진행")
+                else:
+                    print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
+
+            # 6. 결과 저장
             output_filename = f"video_{session_id}.mp4"
             output_path = os.path.join(upload_dir, output_filename)
             shutil.copy(final_path, output_path)
