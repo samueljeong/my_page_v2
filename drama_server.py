@@ -6282,7 +6282,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
 
             # 한글 폰트 확인 (ASS 자막은 폰트 이름만 사용)
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            project_font = os.path.join(base_dir, 'fonts', 'NanumGothicBold.ttf')
+            project_font = os.path.join(base_dir, 'fonts', 'Pretendard-Bold.ttf')
 
             font_found = False
             font_location = None
@@ -6292,8 +6292,9 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             else:
                 # 시스템 폰트 폴백
                 system_fonts = [
+                    os.path.join(base_dir, 'fonts', 'Pretendard-SemiBold.ttf'),
+                    os.path.join(base_dir, 'fonts', 'NanumGothicBold.ttf'),
                     '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
-                    '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
                 ]
                 for sf in system_fonts:
                     if os.path.exists(sf):
@@ -6302,7 +6303,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
                         break
 
             # ASS 자막에는 폰트 경로가 아닌 폰트 이름을 사용해야 함
-            subtitle_font = 'NanumGothic' if font_found else 'Arial'
+            subtitle_font = 'Pretendard' if font_found else 'Arial'
 
             print(f"[VIDEO-SUBTITLE] 자막 폰트: {subtitle_font} (found: {font_found}, location: {font_location if font_found else 'N/A'})")
 
@@ -7619,12 +7620,11 @@ FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple w
             font_size = int(height * 0.08)  # 이미지 높이의 8%
             font = None
             font_paths = [
+                os.path.join(static_dir, 'fonts', 'Pretendard-Bold.ttf'),
+                os.path.join(static_dir, 'fonts', 'Pretendard-SemiBold.ttf'),
                 os.path.join(static_dir, 'fonts', 'NanumSquareRoundB.ttf'),
                 os.path.join(static_dir, 'fonts', 'NanumGothicBold.ttf'),
-                os.path.join(static_dir, 'fonts', 'NanumBarunGothicBold.ttf'),
                 "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-                "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-                "C:/Windows/Fonts/malgunbd.ttf",
             ]
             for fp in font_paths:
                 if os.path.exists(fp):
@@ -8371,21 +8371,15 @@ def api_thumbnail_overlay():
         font = None
         base_dir = os_module.path.dirname(os_module.path.abspath(__file__))
         font_paths = [
-            # 프로젝트 로컬 폰트 (최우선)
+            # Pretendard (최우선)
+            os_module.path.join(base_dir, "fonts/Pretendard-Bold.ttf"),
+            os_module.path.join(base_dir, "fonts/Pretendard-SemiBold.ttf"),
+            # 프로젝트 로컬 폰트 (폴백)
             os_module.path.join(base_dir, "fonts/NanumSquareB.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumSquareRoundB.ttf"),
             os_module.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumBarunGothicBold.ttf"),
             # Linux (Render)
             "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            # Mac
-            "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-            "/Library/Fonts/NanumGothicBold.ttf",
-            # Windows
-            "C:/Windows/Fonts/malgunbd.ttf",
-            "C:/Windows/Fonts/malgun.ttf",
         ]
 
         for font_path in font_paths:
@@ -10575,8 +10569,8 @@ def api_image_analyze_script():
 
         style_desc = style_guides.get(image_style, 'photorealistic')
 
-        # 카테고리 기반 뉴스 스타일 여부 (기본값)
-        is_news_category = category.lower() in ['뉴스', 'news', '시사', '정치', '경제'] if category else False
+        # GPT-5.1이 대본 내용을 분석해서 카테고리를 자동 감지하도록 함
+        # (더 이상 Google Sheets의 category 컬럼에 의존하지 않음)
 
         # 애니메이션(스틱맨) 스타일 전용 시스템 프롬프트 - audience 반영
         if image_style == 'animation':
@@ -10592,92 +10586,94 @@ def api_image_analyze_script():
                 thumb_outline = "#000000"
                 thumb_style = "회상형/후회형 (그날을 잊지 않는다, 하는게 아니었다, 늦게 알았다)"
 
-            # 뉴스 스타일 썸네일 프롬프트 (50대+ 시청자 대상 - 실제 뉴스 방송 스타일)
-            if is_news_category:
-                ai_prompts_section = f'''    "ai_prompts": {{
+            # GPT가 자동으로 카테고리를 감지하고 적절한 썸네일 스타일을 선택하도록 함
+            # 뉴스/시사 vs 일반 스토리 두 가지 스타일 모두 제공
+            ai_prompts_section = f'''    "detected_category": "news 또는 story 중 하나 선택 (대본 분석 결과)",
+    "ai_prompts": {{
+      // ★ detected_category가 "news"일 때 사용 (정치, 경제, 시사, 사회 이슈, 뉴스 보도 형식의 대본)
+      // 뉴스 스타일: KBS/MBC/SBS 뉴스 방송 썸네일처럼 실제 사진 + 뉴스 그래픽
       "A": {{
         "description": "뉴스 스타일 A: 실제 한국 뉴스 방송 썸네일 - KBS/MBC/SBS 스타일",
-        "prompt": "Korean TV news broadcast YouTube thumbnail exactly like KBS MBC SBS news. 16:9 aspect ratio. Real photo of news anchor or reporter in professional attire on one side. Large bold Korean headline text in WHITE or YELLOW with quotation marks. Dark blue or navy gradient background. RED accent bar with '단독' or '속보' badge at top. Multiple text layers - main headline + sub headline. News ticker style bar at bottom. Professional broadcast journalism aesthetic. Photorealistic news studio look. High contrast text readable at small size.",
-        "text_overlay": {{
-          "main": "큰 따옴표 헤드라인 (예: '충격 발언...')",
-          "sub": "핵심 내용 요약"
-        }},
+        "prompt": "Korean TV news broadcast YouTube thumbnail exactly like KBS MBC SBS news. 16:9 aspect ratio. Real photo of news anchor or reporter in professional attire on one side. Large bold Korean headline text in WHITE or YELLOW with quotation marks. Dark blue or navy gradient background. RED accent bar with '단독' or '속보' badge at top. Multiple text layers - main headline + sub headline. News ticker style bar at bottom. Professional broadcast journalism aesthetic. Photorealistic news studio look.",
+        "text_overlay": {{"main": "따옴표 헤드라인", "sub": "핵심 요약"}},
         "style": "korean-tv-news, broadcast, photorealistic"
       }},
       "B": {{
-        "description": "뉴스 스타일 B: 인터뷰/발언 강조 - 인물 사진 + 따옴표 인용문",
-        "prompt": "Korean news interview thumbnail with real person photo. 16:9 aspect ratio. Split layout - interviewee photo on left, large Korean quote text on right in quotation marks. White/yellow bold text on dark navy background. Red or orange accent color. Lower-third name tag showing speaker name and title. Professional credible broadcast news look like actual Korean TV news YouTube thumbnails. NO cartoon, photorealistic only.",
-        "text_overlay": {{
-          "main": "따옴표 인용문 ('...라고 말했다')",
-          "sub": "발언자 이름/직책"
-        }},
-        "style": "interview-quote, split-layout, broadcast"
+        "description": "뉴스 스타일 B: 인터뷰/발언 강조",
+        "prompt": "Korean news interview thumbnail with real person photo. 16:9 aspect ratio. Split layout - interviewee photo on left, large Korean quote text on right in quotation marks. White/yellow bold text on dark navy background. Red accent. Lower-third name tag. Professional broadcast news look. NO cartoon, photorealistic only.",
+        "text_overlay": {{"main": "인용문", "sub": "발언자"}},
+        "style": "interview-quote, broadcast"
       }},
       "C": {{
-        "description": "뉴스 스타일 C: 이슈/사건 중심 - 관련 사진 + 대형 헤드라인",
-        "prompt": "Korean breaking news style thumbnail with relevant event photo. 16:9 aspect ratio. Background photo related to news story (blurred or darkened). VERY LARGE white/yellow Korean headline text overlay. Red '속보' or '단독' badge prominent. News channel style graphics and borders. Multiple text sizes - big headline + smaller details. Exactly like Korean TV news channel YouTube thumbnails. Professional photojournalism aesthetic.",
-        "text_overlay": {{
-          "main": "대형 헤드라인 (핵심 사실)",
-          "sub": "추가 정보 또는 출처"
-        }},
-        "style": "breaking-news, event-photo, headline"
+        "description": "뉴스 스타일 C: 속보/이슈 중심",
+        "prompt": "Korean breaking news style thumbnail with event photo. 16:9 aspect ratio. Background photo (blurred/darkened). VERY LARGE white/yellow Korean headline. Red '속보' badge prominent. News channel style graphics. Photojournalism aesthetic.",
+        "text_overlay": {{"main": "대형 헤드라인", "sub": "추가 정보"}},
+        "style": "breaking-news, headline"
       }}
-    }}'''
-                ai_prompts_rules = """## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES (실제 한국 뉴스 방송 스타일) ⚠️
-The "ai_prompts" field generates thumbnails that look EXACTLY like Korean TV news YouTube thumbnails.
 
-🎯 **실제 뉴스 방송 썸네일 필수 요소:**
-- 실제 뉴스 앵커/기자 사진 또는 관련 인물/사건 사진
-- 큰 따옴표("") 안에 핵심 발언/헤드라인
-- 빨간색 '단독' 또는 '속보' 배지
-- 진한 남색/검정 배경 + 흰색/노란색 텍스트
-- 하단 뉴스 티커 스타일 바
-- 여러 겹의 텍스트 (메인 헤드라인 + 서브)
-
-⚠️ 절대 만화/일러스트 스타일 금지! 실제 사진 + 뉴스 그래픽만!
-- A: 뉴스 앵커 + 헤드라인 (가장 일반적인 뉴스 썸네일)
-- B: 인터뷰 발언 + 인물 사진 (따옴표 인용문 강조)
-- C: 사건 사진 + 속보 스타일 (이슈/사건 중심)
-
-**참고 채널:** KBS 뉴스, MBC 뉴스, SBS 뉴스 유튜브 썸네일 스타일 그대로!"""
-            else:
-                ai_prompts_section = f'''    "ai_prompts": {{
+      // ★ detected_category가 "story"일 때 사용 (드라마, 감성, 인간관계, 일상 이야기)
+      // 스토리 스타일: 웹툰/만화 일러스트 + 감정 표현
       "A": {{
-        "description": "프롬프트 A ({lang_config['name']}): 감정/표정 중심 - 놀람, 충격, 기쁨 등 강렬한 감정",
-        "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression (shock, surprise, joy). Vibrant colors, high contrast. Bold composition suitable for thumbnail. NO realistic humans, comic/cartoon style only. Clean background with focus on character emotion.",
-        "text_overlay": {{
-          "main": "강렬한 감정 텍스트 ({lang_config['name']}, {thumb_length})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "emotional, expressive, cartoon"
+        "description": "스토리 스타일 A: 감정/표정 중심",
+        "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression (shock, surprise, joy). Vibrant colors, high contrast. NO realistic humans, comic/cartoon style only.",
+        "text_overlay": {{"main": "{thumb_length} 감정 텍스트", "sub": "optional"}},
+        "style": "emotional, cartoon"
       }},
       "B": {{
-        "description": "프롬프트 B ({lang_config['name']}): 스토리/상황 중심 - Before vs After, 대비 구도",
-        "prompt": "Split screen or contrast composition YouTube thumbnail, 16:9 aspect ratio. Before/After or comparison layout. Cartoon/illustration style, vibrant contrasting colors. Clear visual storytelling, dramatic difference shown. NO realistic photos, comic art style.",
-        "text_overlay": {{
-          "main": "대비 강조 텍스트 ({lang_config['name']})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "narrative, contrast, split-screen"
+        "description": "스토리 스타일 B: Before/After 대비",
+        "prompt": "Split screen YouTube thumbnail, 16:9 aspect ratio. Before/After comparison layout. Cartoon style, vibrant contrasting colors. Clear visual storytelling. NO realistic photos.",
+        "text_overlay": {{"main": "대비 텍스트", "sub": "optional"}},
+        "style": "narrative, contrast"
       }},
       "C": {{
-        "description": "프롬프트 C ({lang_config['name']}): 텍스트/타이포 중심 - 강렬한 문구, 큰 텍스트 강조",
-        "prompt": "Typography-focused YouTube thumbnail, 16:9 aspect ratio. Large bold Korean text as main element. Gradient or solid color background. Minimal illustration elements. High contrast colors (red/yellow/white on dark). Eye-catching graphic design style.",
-        "text_overlay": {{
-          "main": "강렬한 메인 문구 ({lang_config['name']}, {thumb_length})",
-          "sub": "서브 텍스트 (optional)"
-        }},
-        "style": "typography, bold, graphic-design"
+        "description": "스토리 스타일 C: 타이포그래피 중심",
+        "prompt": "Typography-focused YouTube thumbnail, 16:9 aspect ratio. Large bold Korean text. Gradient background. Minimal illustration. High contrast colors.",
+        "text_overlay": {{"main": "{thumb_length} 메인 문구", "sub": "optional"}},
+        "style": "typography, bold"
       }}
     }}'''
-                ai_prompts_rules = """## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES ⚠️
-The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
-⚠️ THUMBNAILS ARE NOT STICKMAN! Use webtoon/manhwa cartoon style with expressive characters!
-- A: Emotion/expression focused - Korean webtoon style character with exaggerated emotion (surprise, shock, joy)
-- B: Story/situation focused - show before/after contrast or key scene moment in cartoon style
-- C: Typography focused - bold text with minimal background, graphic design style
-- All 3 prompts MUST use cartoon/webtoon/manhwa illustration style, NOT stickman!
-- All 3 prompts MUST be different styles/compositions!"""
+
+            ai_prompts_rules = f"""## ⚠️ CRITICAL: 카테고리 자동 감지 및 썸네일 스타일 선택 ⚠️
+
+### 1단계: 대본 내용 분석하여 카테고리 감지
+대본을 읽고 아래 기준으로 "detected_category"를 결정하세요:
+
+**"news" 선택 기준** (하나라도 해당되면 news):
+- 정치인, 대통령, 국회, 정당 언급
+- 경제 지표, 주가, 환율, 부동산 언급
+- 사건/사고 보도 형식 (누가, 언제, 어디서, 무엇을)
+- 사회 이슈, 논쟁, 갈등 다룸
+- 인터뷰, 발언, 기자회견 형식
+- 법원, 검찰, 재판 관련
+
+**"story" 선택 기준**:
+- 개인의 감정, 경험, 회고
+- 인간관계, 가족, 사랑 이야기
+- 일상적인 에피소드
+- 교훈, 깨달음, 감동 스토리
+- 드라마/영화 같은 서사 구조
+
+### 2단계: 카테고리에 맞는 썸네일 생성
+
+**detected_category = "news"일 때:**
+- ai_prompts에 뉴스 스타일 A/B/C 사용
+- 실제 사진 + 뉴스 그래픽 (KBS/MBC/SBS 스타일)
+- 따옴표 헤드라인, 빨간 '속보' 배지
+- ⚠️ 절대 만화/일러스트 금지!
+
+**detected_category = "story"일 때:**
+- ai_prompts에 스토리 스타일 A/B/C 사용
+- 웹툰/만화 일러스트 스타일
+- 감정 표현, 캐릭터 중심
+- ⚠️ 실사 사진 금지!
+
+### 출력 형식 (중요!)
+"detected_category": "news" 또는 "story",
+"ai_prompts": {{
+  "A": {{ ... 선택된 스타일의 A ... }},
+  "B": {{ ... 선택된 스타일의 B ... }},
+  "C": {{ ... 선택된 스타일의 C ... }}
+}}"""
 
             system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 
@@ -10744,18 +10740,112 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 - 놀람: open small mouth, raised eyebrows, arms up, leaning back
 - 중립: small neutral mouth, relaxed thin eyebrows, standing calmly
 
+## 🎯 유튜브 제목 생성 규칙 (중요!)
+
+### 기본 규칙
+- 길이: **18-32자** (공백 포함, 모바일에서 잘리지 않도록)
+- **숫자 1개 이상 필수** (연도, 개수, 기간, 금액 등)
+- 심리 트리거 **2개 이상** 사용
+- 낚시성/과장/선정성 **절대 금지** ("충격", "소름", "멸망", "난리" 금지)
+
+### 타겟별 스타일
+- **시니어 (50-70대)**: 회상형, 감성적, 신뢰감
+  - 예: "그때 알았더라면...", "60년 인생이 가르쳐준 3가지"
+- **일반 (20-40대)**: 정보형, 해결형, 구체적
+  - 예: "2025년 꼭 알아야 할 변화 3가지", "5분 만에 정리하는 핵심"
+
+### 심리 트리거 (2개 이상 조합)
+1. **호기심 갭**: "대부분이 놓치는", "뉴스에 안 나온"
+2. **긴급성/시의성**: "2025년 전에 알아야 할", "지금 바로"
+3. **구체적 숫자**: "3가지 변화", "7일 안에"
+4. **타깃 명시**: "직장인이라면", "40대 필수"
+5. **결과/이득**: "한 번에 정리", "헷갈림 끝"
+
+### 3가지 스타일 제목 생성
+1. **curiosity** (호기심형): 숨겨진 핵심/반전 느낌
+2. **solution** (해결형): 혼란을 정리해주는 느낌
+3. **authority** (권위형): 데이터/전문성 기반 느낌
+
+## 🎯 유튜브 설명란 생성 규칙 (중요!)
+
+### 목표
+- 검색·추천 노출에 유리한 설명란 작성
+- 알고리즘 정책 준수
+- 조회수와 시청 유지율 동시 향상
+- 낚시성, 과장, 허위 정보, 키워드 스팸 절대 금지
+
+### 첫 2-3줄 (프리뷰 영역 - 가장 중요!)
+- 검색 결과·추천 피드에 노출되는 구간
+- 반드시 포함할 내용:
+  - 이 영상이 다루는 핵심 주제
+  - 시청자가 얻는 "이득/결과" 한 줄
+  - main_keywords 중 1-2개를 자연스럽게 포함
+- 외부 링크 넣지 말고, 오직 내용과 후킹에만 집중
+
+### 본문 요약 (핵심 내용 설명)
+- 3-6문단, 한국어 기준 **600-1200자**
+- 영상에서 다루는 핵심 쟁점·데이터·결론을 정리·해석
+- 키워드를 자연스럽게 섞되 스팸처럼 반복 금지
+- "누가 보면 좋은지(타깃) + 어떤 상황에 유용한지" 언급
+- 감정 과장보다 **사실 + 해석 + 인사이트**에 집중
+- 출처가 있으면 짧게 명시
+
+### 타임스탬프·챕터 (5분 이상 영상)
+- 각 씬의 chapter_title을 활용해 자동 생성
+- "00:00 형식 타임스탬프 + 짧은 제목" 구조
+- 챕터 제목에 키워드 자연스럽게 포함
+
+### 톤 & 스타일
+- 과도한 유머, 속어, 자극적 표현 피함
+- "팩트 → 의미 → 시청자 액션" 순서
+- 마지막에 질문 1개 (댓글 유도용)
+
+### 해시태그 규칙 (3-5개)
+- 채널/브랜드 태그: 예) #채널명
+- 주제 태그: 예) #부동산세금, #세제개편
+- 카테고리 태그: 예) #경제뉴스, #시사해설
+- 영상 내용과 직접 관련 없는 태그 금지
+
+### 태그(Tags) 규칙 (5-12개)
+- broad_tags (넓은 키워드): 예) "부동산 세금", "경제 뉴스"
+- specific_tags (구체 키워드): 예) "2025 부동산 세제 개편"
+- variant_tags (표기/철자 변형): 예) "부동산세금", "부동산 세금 2025"
+- channel_tags (채널 고유 태그): 예) 채널명, 시리즈명
+- 영상과 무관한 인기 키워드 넣기 금지
+
 ## OUTPUT FORMAT (MUST BE JSON)
 {{
+  "detected_category": "news 또는 story (대본 분석 결과 - 반드시 먼저 결정!)",
   "youtube": {{
-    "title": "ONE SEO-optimized YouTube title in {lang_config['name']} (click-inducing, 30-50 chars, include keywords for searchability)",
-    "description": "Description in {lang_config['name']} (video summary + hashtags, 500+ chars)"
+    "title": "메인 제목 (18-32자, 숫자 포함, 심리 트리거 2개 이상)",
+    "title_options": [
+      {{"style": "curiosity", "title": "호기심형 제목 (18-32자)"}},
+      {{"style": "solution", "title": "해결형 제목 (18-32자)"}},
+      {{"style": "authority", "title": "권위형 제목 (18-32자)"}}
+    ],
+    "description": {{
+      "full_text": "유튜브 설명란 전체 텍스트 (600-1200자, 프리뷰 + 본문 + 타임스탬프 + CTA)",
+      "preview_2_lines": "검색 결과에 노출되는 첫 2줄 요약",
+      "chapters": [
+        {{"time": "00:00", "title": "인트로 · 핵심 한 줄"}},
+        {{"time": "01:30", "title": "첫 번째 포인트"}},
+        {{"time": "03:00", "title": "두 번째 포인트"}}
+      ]
+    }},
+    "hashtags": ["#주제태그1", "#주제태그2", "#카테고리태그"],
+    "tags": ["넓은 키워드", "구체 키워드", "변형 키워드", "채널 태그"],
+    "pin_comment": "고정 댓글 문구 (핵심 요약 + 질문 1개)"
   }},
   "thumbnail": {{
     "text_options": ["Thumbnail text 1 in {lang_config['name']}", "Thumbnail text 2 in {lang_config['name']}", "Thumbnail text 3 in {lang_config['name']}"],
     "text_color": "{thumb_color}",
     "outline_color": "{thumb_outline}",
-    "prompt": "[Detailed anime background, slice-of-life style, Ghibli-inspired, warm colors]. Simple white stickman character with round head, two black dot eyes, small mouth, thin eyebrows, black outline body, [pose/action]. Character face clearly visible. NO anime characters, NO realistic humans, NO elderly, NO grandpa, NO grandma, ONLY stickman. Contrast collage style.",
-{ai_prompts_section}
+    "prompt": "[detected_category에 따라 뉴스 스타일 또는 스토리 스타일 프롬프트 작성]",
+    "ai_prompts": {{
+      "A": {{"description": "...", "prompt": "...", "text_overlay": {{}}, "style": "..."}},
+      "B": {{"description": "...", "prompt": "...", "text_overlay": {{}}, "style": "..."}},
+      "C": {{"description": "...", "prompt": "...", "text_overlay": {{}}, "style": "..."}}
+    }}
   }},
   "video_effects": {{
     "bgm_mood": "ONE of: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic",
@@ -11180,11 +11270,39 @@ Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-7
 ## Image Style
 {style_desc}
 
+## 🎯 유튜브 제목 생성 규칙
+- 길이: **18-32자** (공백 포함)
+- **숫자 1개 이상 필수**
+- 심리 트리거 **2개 이상**: 호기심갭, 긴급성, 숫자, 타깃명시, 결과제시
+- 낚시성/과장 **금지** ("충격", "소름" 등 금지)
+- 타겟별: 시니어=회상형/감성적, 일반=정보형/해결형
+- **3가지 스타일**: curiosity(호기심), solution(해결), authority(권위)
+
+## 🎯 유튜브 설명란 생성 규칙
+- **첫 2줄**: 검색 노출 구간 - 핵심 주제 + 시청자 이득 + 키워드 포함
+- **본문**: 600-1200자, 사실 + 해석 + 인사이트 중심
+- **챕터**: 씬별 chapter_title 활용, "00:00 제목" 형식
+- **해시태그**: 3-5개 (주제태그 + 카테고리태그)
+- **태그**: 5-12개 (넓은/구체/변형/채널 키워드)
+- **톤**: 과장 금지, 팩트 → 의미 → 액션 순서
+
 ## Output Format (MUST be valid JSON)
 {{
   "youtube": {{
-    "title": "ONE SEO-optimized YouTube title in {lang_config['name']} (click-inducing, 30-50 chars, include keywords for searchability)",
-    "description": "Description in {lang_config['name']} (summary + hashtags, 500+ chars)"
+    "title": "메인 제목 (18-32자, 숫자 포함, 심리 트리거 2개 이상)",
+    "title_options": [
+      {{"style": "curiosity", "title": "호기심형 제목"}},
+      {{"style": "solution", "title": "해결형 제목"}},
+      {{"style": "authority", "title": "권위형 제목"}}
+    ],
+    "description": {{
+      "full_text": "유튜브 설명란 전체 텍스트 (600-1200자)",
+      "preview_2_lines": "검색 결과에 노출되는 첫 2줄 요약",
+      "chapters": [{{"time": "00:00", "title": "챕터 제목"}}]
+    }},
+    "hashtags": ["#주제태그1", "#주제태그2", "#카테고리태그"],
+    "tags": ["넓은 키워드", "구체 키워드", "변형 키워드"],
+    "pin_comment": "고정 댓글 (핵심 요약 + 질문)"
   }},
   "thumbnail": {{
     "text_options": [
@@ -11392,11 +11510,36 @@ Rules:
 
         result = json.loads(result_text)
 
+        # video_effects 추출 및 로깅
+        video_effects = result.get("video_effects", {})
+        detected_category = result.get("detected_category", "story")
+
+        print(f"[IMAGE-ANALYZE] detected_category: {detected_category}")
+        print(f"[IMAGE-ANALYZE] video_effects keys: {list(video_effects.keys())}")
+        if video_effects:
+            print(f"[IMAGE-ANALYZE] bgm_mood: {video_effects.get('bgm_mood', '(없음)')}")
+            print(f"[IMAGE-ANALYZE] subtitle_highlights: {len(video_effects.get('subtitle_highlights', []))}개")
+            print(f"[IMAGE-ANALYZE] screen_overlays: {len(video_effects.get('screen_overlays', []))}개")
+            print(f"[IMAGE-ANALYZE] sound_effects: {len(video_effects.get('sound_effects', []))}개")
+            print(f"[IMAGE-ANALYZE] shorts highlight_scenes: {video_effects.get('shorts', {}).get('highlight_scenes', [])}")
+
+        # 유튜브 메타데이터 로깅
+        youtube_meta = result.get("youtube", {})
+        desc = youtube_meta.get("description", {})
+        if isinstance(desc, dict):
+            print(f"[IMAGE-ANALYZE] description.full_text 길이: {len(desc.get('full_text', ''))}자")
+            print(f"[IMAGE-ANALYZE] description.chapters: {len(desc.get('chapters', []))}개")
+        print(f"[IMAGE-ANALYZE] hashtags: {youtube_meta.get('hashtags', [])}")
+        print(f"[IMAGE-ANALYZE] tags: {len(youtube_meta.get('tags', []))}개")
+        print(f"[IMAGE-ANALYZE] pin_comment: {'있음' if youtube_meta.get('pin_comment') else '없음'}")
+
         return jsonify({
             "ok": True,
             "youtube": result.get("youtube", {}),
             "thumbnail": result.get("thumbnail", {}),
             "scenes": result.get("scenes", []),
+            "video_effects": video_effects,
+            "detected_category": detected_category,
             "settings": {
                 "content_type": content_type,
                 "image_style": image_style,
@@ -11921,7 +12064,7 @@ def api_image_generate_assets_zip():
             voice_name = get_voice_for_language(detected_lang, base_voice)
             language_code = get_language_code(detected_lang)
 
-            # SSML 감지: SSML이면 TTS는 전체로 처리하지만, 자막은 분할
+            # SSML 감지: SSML이면 TTS는 전체로 처리하여 감정 표현 유지
             has_ssml = is_ssml_content(narration)
 
             # 자막용 텍스트 분할 (SSML 태그 제거 후)
@@ -11930,47 +12073,81 @@ def api_image_generate_assets_zip():
             if not subtitle_sentences:
                 subtitle_sentences = [plain_narration]
 
-            # ★ 항상 문장별 TTS 생성 (정확한 싱크를 위해)
-            # SSML 모드에서도 문장별로 처리하여 실제 오디오 길이 측정
-            sentences = subtitle_sentences
-            print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences, lang={detected_lang}, SSML={has_ssml}")
-
             scene_audios = []
             scene_start_time = current_time  # 씬 시작 시간
             scene_subtitles = []  # 씬 내 상대적 자막 타이밍
             scene_relative_time = 0.0
 
-            # 문장별 TTS 생성 (정확한 싱크)
-            for sent_idx, sentence in enumerate(sentences):
-                # SSML이 있었다면 문장에도 기본 SSML 래핑 적용
-                tts_text = sentence
-                if has_ssml and not is_ssml_content(sentence):
-                    # 문장을 간단한 SSML로 래핑 (자연스러운 읽기)
-                    tts_text = f"<speak>{sentence}</speak>"
+            if has_ssml:
+                # ★ SSML 모드: 전체 나레이션을 하나의 TTS로 처리 (감정 표현 유지!)
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: SSML 감정 표현 TTS (전체 처리)")
 
-                audio_bytes = generate_tts_for_sentence(tts_text, voice_name, language_code, api_key)
+                # 전체 SSML 나레이션으로 TTS 생성
+                audio_bytes = generate_tts_for_sentence(narration, voice_name, language_code, api_key)
 
                 if audio_bytes:
-                    duration = get_mp3_duration(audio_bytes)
+                    total_duration = get_mp3_duration(audio_bytes)
                     scene_audios.append(audio_bytes)
+                    all_sentence_audios.append((scene_idx, 0, audio_bytes))
 
-                    srt_entries.append({
-                        'index': len(srt_entries) + 1,
-                        'start': current_time,
-                        'end': current_time + duration,
-                        'text': sentence
-                    })
-                    scene_subtitles.append({
-                        'start': scene_relative_time,
-                        'end': scene_relative_time + duration,
-                        'text': sentence
-                    })
+                    # 자막 타이밍: 문장 글자 수 비율로 분배
+                    total_chars = sum(len(s) for s in subtitle_sentences)
+                    if total_chars == 0:
+                        total_chars = 1
 
-                    print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {sentence[:30]}...")
-                    current_time += duration
-                    scene_relative_time += duration
+                    for sent_idx, sentence in enumerate(subtitle_sentences):
+                        # 글자 수 비율로 duration 계산
+                        char_ratio = len(sentence) / total_chars
+                        sent_duration = total_duration * char_ratio
 
-                    all_sentence_audios.append((scene_idx, sent_idx, audio_bytes))
+                        srt_entries.append({
+                            'index': len(srt_entries) + 1,
+                            'start': current_time,
+                            'end': current_time + sent_duration,
+                            'text': sentence
+                        })
+                        scene_subtitles.append({
+                            'start': scene_relative_time,
+                            'end': scene_relative_time + sent_duration,
+                            'text': sentence
+                        })
+
+                        print(f"  Sent {sent_idx + 1}: {sent_duration:.2f}s (비례) - {sentence[:30]}...")
+                        current_time += sent_duration
+                        scene_relative_time += sent_duration
+                else:
+                    print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: SSML TTS 실패, 문장별 폴백")
+                    has_ssml = False  # 폴백하여 아래 문장별 처리로
+
+            if not has_ssml:
+                # 일반 모드: 문장별 TTS 생성 (정확한 싱크)
+                sentences = subtitle_sentences
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences, lang={detected_lang}")
+
+                for sent_idx, sentence in enumerate(sentences):
+                    audio_bytes = generate_tts_for_sentence(sentence, voice_name, language_code, api_key)
+
+                    if audio_bytes:
+                        duration = get_mp3_duration(audio_bytes)
+                        scene_audios.append(audio_bytes)
+
+                        srt_entries.append({
+                            'index': len(srt_entries) + 1,
+                            'start': current_time,
+                            'end': current_time + duration,
+                            'text': sentence
+                        })
+                        scene_subtitles.append({
+                            'start': scene_relative_time,
+                            'end': scene_relative_time + duration,
+                            'text': sentence
+                        })
+
+                        print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {sentence[:30]}...")
+                        current_time += duration
+                        scene_relative_time += duration
+
+                        all_sentence_audios.append((scene_idx, sent_idx, audio_bytes))
 
             # 씬 메타데이터 저장
             scene_duration = current_time - scene_start_time
@@ -12351,24 +12528,24 @@ def _get_subtitle_style(lang):
     """언어별 자막 스타일 반환 (ASS 형식) - 폰트28 기준"""
     # 유튜브 스타일: 흰색 텍스트 + 검은색 외곽선 + 그림자
     if lang == 'ko':
-        # NanumGothic - 나눔고딕 (한글 전용)
+        # Pretendard - 프리텐다드 (한글 전용)
         # Outline=2 (두꺼운 외곽선), MarginV=40 (하단 여백)
         return (
-            "FontName=NanumGothic,FontSize=28,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=28,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     elif lang == 'ja':
-        # 일본어 - NanumGothic 사용 (CJK 지원)
+        # 일본어 - Pretendard 사용 (CJK 지원)
         return (
-            "FontName=NanumGothic,FontSize=26,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=26,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
     else:
         # 영어/기타 언어
         return (
-            "FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,"
+            "FontName=Pretendard,FontSize=22,PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=2,Shadow=1,MarginV=40,Bold=1"
         )
@@ -12434,10 +12611,10 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
     try:
         # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
         if lang == 'ko':
-            font_name = "NanumGothic"
+            font_name = "Pretendard"
             font_size = 48  # 24 → 48 (2배 크기)
         else:
-            font_name = "Arial"
+            font_name = "Pretendard"
             font_size = 44  # 22 → 44 (2배 크기)
 
         # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
@@ -12508,7 +12685,7 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
         current_time += scene.get('duration', 0)
 
     filters = []
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for overlay in screen_overlays:
@@ -12598,7 +12775,7 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
         current_time += scene.get('duration', 0)
 
     filters = []
-    font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-SemiBold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for lt in lower_thirds:
@@ -12694,7 +12871,7 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
@@ -13062,10 +13239,12 @@ def _generate_outro_video(output_path, duration=5, fonts_dir=None):
         print(f"[OUTRO] 폰트 디렉토리: {fonts_dir}")
         print(f"[OUTRO] 디렉토리 존재: {os.path.exists(fonts_dir)}")
 
-        # 폰트 우선순위: NanumGothicBold > NanumGothic
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        # 폰트 우선순위: Pretendard-Bold > Pretendard-SemiBold > NanumGothicBold
+        font_path = os.path.join(fonts_dir, "Pretendard-Bold.ttf")
         if not os.path.exists(font_path):
-            font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
+            font_path = os.path.join(fonts_dir, "Pretendard-SemiBold.ttf")
+        if not os.path.exists(font_path):
+            font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
         if not os.path.exists(font_path):
             print(f"[OUTRO] 폰트 파일 없음: {fonts_dir}")
             return False
@@ -13074,27 +13253,28 @@ def _generate_outro_video(output_path, duration=5, fonts_dir=None):
         font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
         # 그라데이션 배경 + 텍스트 아웃트로
-        # 검정 배경에 흰색/노란색 텍스트
+        # 메인 영상과 동일한 1920x1080 해상도 사용 (concat 호환성)
+        # 이모지 제거 (FFmpeg drawtext 호환성 문제)
         ffmpeg_cmd = [
             "ffmpeg", "-y",
             "-f", "lavfi",
-            "-i", f"color=c=0x1a1a2e:s=1280x720:d={duration}",
+            "-i", f"color=c=0x1a1a2e:s=1920x1080:d={duration}",
             "-f", "lavfi",
             "-i", f"anullsrc=r=44100:cl=stereo:d={duration}",
             "-vf", (
                 f"drawtext=text='시청해 주셔서 감사합니다':"
-                f"fontfile='{font_escaped}':fontsize=48:fontcolor=white:"
-                f"x=(w-text_w)/2:y=(h-text_h)/2-60,"
-                f"drawtext=text='👍 좋아요와 구독 부탁드려요!':"
-                f"fontfile='{font_escaped}':fontsize=40:fontcolor=yellow:"
+                f"fontfile='{font_escaped}':fontsize=72:fontcolor=white:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2-100,"
+                f"drawtext=text='좋아요와 구독 부탁드려요':"
+                f"fontfile='{font_escaped}':fontsize=56:fontcolor=yellow:"
                 f"x=(w-text_w)/2:y=(h-text_h)/2+20,"
-                f"drawtext=text='🔔 알림 설정도 잊지 마세요':"
-                f"fontfile='{font_escaped}':fontsize=32:fontcolor=#aaaaaa:"
-                f"x=(w-text_w)/2:y=(h-text_h)/2+80,"
+                f"drawtext=text='알림 설정도 잊지 마세요':"
+                f"fontfile='{font_escaped}':fontsize=44:fontcolor=#aaaaaa:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2+120,"
                 f"fade=t=in:st=0:d=0.5,fade=t=out:st={duration-0.5}:d=0.5"
             ),
             "-c:v", "libx264", "-preset", "fast",
-            "-c:a", "aac", "-b:a", "128k",
+            "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
             "-t", str(duration),
             output_path
         ]
@@ -13156,8 +13336,389 @@ def _append_outro_to_video(video_path, outro_path, output_path):
         return False
 
 
+def _analyze_shorts_content_gpt(highlight_narrations, title, detected_category, audience="general", duration_target=45):
+    """GPT-5.1로 쇼츠 전용 콘텐츠 분석 및 beats 구조 생성
+
+    Args:
+        highlight_narrations: 하이라이트 씬들의 나레이션 목록
+        title: 원본 영상 제목
+        detected_category: news 또는 story
+        audience: general 또는 senior
+        duration_target: 목표 길이 (초)
+
+    Returns:
+        dict: beats 구조, meta, design_guide 등
+    """
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+
+        # 나레이션에서 핵심 포인트 추출
+        combined_narration = "\n".join(highlight_narrations)
+        main_points = highlight_narrations[:3] if len(highlight_narrations) >= 3 else highlight_narrations
+
+        # short_type 결정
+        short_type = "해설" if detected_category == "news" else "사례소개"
+
+        # audience_needs 설정
+        if audience == "senior":
+            audience_desc = "50-70대 시니어"
+            audience_needs = ["짧은 시간에 핵심만 알고 싶다", "복잡한 설명 없이 요점만"]
+        else:
+            audience_desc = "20-40대 직장인"
+            audience_needs = ["출퇴근 1분 안에 핵심만", "지금 당장 뭘 해야 하는지"]
+
+        system_prompt = f'''너는 "유튜브 쇼츠 전담 PD + 편집 디렉터 + 각본가"다.
+뉴스·시사·경제·정보 콘텐츠를 쇼츠 포맷(60초 이하)으로 최적화하는 전문가다.
+
+목표:
+1) 1.5초 안에 스크롤을 멈추는 강력한 훅
+2) 완주율 80-90% 목표의 구조 설계
+3) 편집자가 그대로 따라 만들 수 있는 씬 단위 설계서(JSON)
+
+## 포맷 규격
+- 방향: 세로 9:16 (1080x1920)
+- 길이: 35-60초 (정보/해설형)
+- 첫 1.5-3초 안에 스크롤 멈추는 훅 필수
+
+## 입력값
+- short_topic: "{title}"
+- short_type: "{short_type}"
+- main_audience: "{audience_desc}"
+- audience_needs: {audience_needs}
+- main_point_1: "{main_points[0] if len(main_points) > 0 else ''}"
+- main_point_2: "{main_points[1] if len(main_points) > 1 else ''}"
+- main_point_3: "{main_points[2] if len(main_points) > 2 else ''}"
+- duration_target_sec: {duration_target}
+- hook_angle_preference: "숫자, 솔루션"
+
+## beats 설계 규칙
+- 1.0-3.0초 단위의 beat를 연속 설계
+- 기본 구조:
+  - Beat 1: hook (0-2초) - 12-18자, 3초 이내 낭독
+  - Beat 2: 상황/문제 제기 (2-6초)
+  - Beat 3-4: 핵심 포인트 1,2 (6-18초)
+  - Beat 5-6: 핵심 포인트 3 + 반전/경고 (18-35초)
+  - Beat 7: 요약 + CTA or loop (마지막 3-5초)
+
+## 각 beat 필수 포함
+- voiceover: TTS용 자연스러운 구어체
+- on_screen_text: 핵심 1-2줄 (16자 내외)
+- visual_type: A-roll_talking_head / B-roll / infographic / text_only
+- visual_direction: 화면 구성 설명
+- broll_idea_or_prompt: AI 이미지 생성용 영어 프롬프트
+- caption_style: {{ use_captions, emphasis_words, position }}
+- sound_direction: {{ bgm_mood, sfx, pause_hint }}
+
+## 출력 형식 (JSON ONLY)
+JSON 외부에 어떤 텍스트도 쓰지 말 것.'''
+
+        user_prompt = f'''원본 영상의 하이라이트 나레이션:
+{combined_narration}
+
+위 내용을 기반으로 {duration_target}초 쇼츠를 설계해줘.
+훅은 "숫자 + 위험/기회 + 타깃"을 조합해서 강력하게 만들어.
+
+JSON 형식으로만 출력해. 다른 텍스트 없이 순수 JSON만.'''
+
+        print(f"[SHORTS-GPT] 쇼츠 콘텐츠 분석 시작...")
+
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]}
+            ],
+            temperature=0.7
+        )
+
+        # 결과 추출
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
+
+        # JSON 파싱
+        if result_text.startswith("```"):
+            result_text = result_text.split("```")[1]
+            if result_text.startswith("json"):
+                result_text = result_text[4:]
+        result_text = result_text.strip()
+
+        import re
+        result_text = re.sub(r',\s*\]', ']', result_text)
+        result_text = re.sub(r',\s*\}', '}', result_text)
+
+        result = json.loads(result_text)
+
+        beats = result.get("structure", {}).get("beats", [])
+        print(f"[SHORTS-GPT] 분석 완료: {len(beats)}개 beats 생성")
+
+        return result
+
+    except Exception as e:
+        print(f"[SHORTS-GPT] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url="http://localhost:5000"):
+    """쇼츠 전용 영상 생성 (새 TTS + 새 9:16 이미지 + 세로 자막)
+
+    Args:
+        shorts_analysis: GPT-5.1 쇼츠 분석 결과 (beats 포함)
+        voice_name: TTS 음성 이름
+        output_path: 출력 파일 경로
+        base_url: API 서버 URL
+
+    Returns:
+        dict: {ok, shorts_path, duration, cost}
+    """
+    import requests as req
+    import tempfile
+    import shutil
+
+    print(f"[SHORTS-V2] 쇼츠 영상 생성 시작 (방법 2: 새 TTS + 새 이미지)")
+
+    try:
+        beats = shorts_analysis.get("structure", {}).get("beats", [])
+        if not beats:
+            return {"ok": False, "error": "beats 데이터 없음"}
+
+        print(f"[SHORTS-V2] {len(beats)}개 beats 처리 시작")
+
+        temp_dir = tempfile.mkdtemp()
+        total_cost = 0.0
+        beat_data = []  # [{audio_path, image_path, duration, subtitles, on_screen_text}]
+
+        try:
+            # ========== 1. 각 beat별 TTS + 이미지 생성 ==========
+            for idx, beat in enumerate(beats):
+                beat_id = beat.get("id", idx + 1)
+                voiceover = beat.get("voiceover", "")
+                on_screen_text = beat.get("on_screen_text", "")
+                visual_direction = beat.get("visual_direction", "")
+                broll_prompt = beat.get("broll_idea_or_prompt", "")
+                caption_style = beat.get("caption_style", {})
+
+                print(f"[SHORTS-V2] Beat {beat_id}: {voiceover[:30]}...")
+
+                # 1-1. TTS 생성
+                audio_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_audio.mp3")
+                try:
+                    tts_resp = req.post(f"{base_url}/api/tts/generate", json={
+                        "text": voiceover,
+                        "voice": voice_name,
+                        "language": "ko"
+                    }, timeout=60)
+
+                    if tts_resp.status_code == 200:
+                        tts_data = tts_resp.json()
+                        if tts_data.get("ok"):
+                            # 오디오 URL에서 다운로드
+                            audio_url = tts_data.get("audio_url", "")
+                            if audio_url:
+                                audio_resp = req.get(f"{base_url}{audio_url}", timeout=30)
+                                with open(audio_path, "wb") as f:
+                                    f.write(audio_resp.content)
+                                total_cost += len(voiceover) * 0.000004
+                                print(f"[SHORTS-V2] Beat {beat_id} TTS 완료")
+                except Exception as tts_err:
+                    print(f"[SHORTS-V2] Beat {beat_id} TTS 실패: {tts_err}")
+                    # TTS 실패 시 무음 생성
+                    subprocess.run([
+                        "ffmpeg", "-y", "-f", "lavfi",
+                        "-i", f"anullsrc=r=44100:cl=mono",
+                        "-t", "3", audio_path
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # 오디오 길이 측정
+                duration = 3.0  # 기본값
+                if os.path.exists(audio_path):
+                    probe_result = subprocess.run([
+                        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                        "-of", "default=noprint_wrappers=1:nokey=1", audio_path
+                    ], capture_output=True, text=True)
+                    if probe_result.returncode == 0:
+                        try:
+                            duration = float(probe_result.stdout.strip())
+                        except:
+                            pass
+
+                # 1-2. 9:16 세로 이미지 생성
+                image_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_image.png")
+                try:
+                    # 세로 이미지용 프롬프트 구성
+                    image_prompt = broll_prompt if broll_prompt else f"Vertical 9:16 background for: {visual_direction}"
+                    image_prompt += ", vertical 9:16 aspect ratio, 1080x1920, mobile-optimized, high contrast"
+
+                    img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
+                        "prompt": image_prompt,
+                        "size": "1080x1920",  # 세로 크기
+                        "imageProvider": "gemini"
+                    }, timeout=120)
+
+                    if img_resp.status_code == 200:
+                        img_data = img_resp.json()
+                        if img_data.get("ok"):
+                            img_url = img_data.get("image_url", "")
+                            if img_url:
+                                if img_url.startswith("http"):
+                                    img_download = req.get(img_url, timeout=30)
+                                else:
+                                    img_download = req.get(f"{base_url}{img_url}", timeout=30)
+                                with open(image_path, "wb") as f:
+                                    f.write(img_download.content)
+                                total_cost += 0.02
+                                print(f"[SHORTS-V2] Beat {beat_id} 이미지 완료")
+                except Exception as img_err:
+                    print(f"[SHORTS-V2] Beat {beat_id} 이미지 실패: {img_err}")
+                    # 이미지 실패 시 단색 배경 생성
+                    subprocess.run([
+                        "ffmpeg", "-y", "-f", "lavfi",
+                        "-i", "color=c=0x1a1a2e:s=1080x1920:d=1",
+                        "-frames:v", "1", image_path
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # 자막 정보 저장
+                emphasis_words = caption_style.get("emphasis_words", [])
+
+                beat_data.append({
+                    "beat_id": beat_id,
+                    "audio_path": audio_path,
+                    "image_path": image_path,
+                    "duration": duration,
+                    "voiceover": voiceover,
+                    "on_screen_text": on_screen_text,
+                    "emphasis_words": emphasis_words
+                })
+
+            # ========== 2. 각 beat를 클립으로 합성 ==========
+            print(f"[SHORTS-V2] 클립 합성 시작...")
+            clip_paths = []
+
+            for bd in beat_data:
+                clip_path = os.path.join(temp_dir, f"clip_{bd['beat_id']:02d}.mp4")
+
+                # 이미지 + 오디오 + 자막 합성
+                # 자막 필터 (하단 safe zone)
+                voiceover_escaped = bd['voiceover'].replace("'", "'\\''").replace(":", "\\:")
+
+                # 폰트 경로
+                font_path = "fonts/Pretendard-Bold.ttf"
+                if not os.path.exists(font_path):
+                    font_path = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
+                font_escaped = font_path.replace("\\", "/").replace(":", "\\:")
+
+                # 자막 필터 (하단 20% 영역)
+                subtitle_filter = (
+                    f"drawtext=text='{voiceover_escaped}':"
+                    f"fontfile='{font_escaped}':fontsize=42:fontcolor=white:"
+                    f"borderw=3:bordercolor=black:"
+                    f"x=(w-text_w)/2:y=h*0.82:"
+                    f"line_spacing=10"
+                )
+
+                # on_screen_text 오버레이 (상단 15% 영역)
+                if bd['on_screen_text']:
+                    text_escaped = bd['on_screen_text'].replace("'", "'\\''").replace(":", "\\:")
+                    subtitle_filter += (
+                        f",drawtext=text='{text_escaped}':"
+                        f"fontfile='{font_escaped}':fontsize=56:fontcolor=yellow:"
+                        f"borderw=4:bordercolor=black:"
+                        f"x=(w-text_w)/2:y=h*0.08"
+                    )
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-loop", "1", "-i", bd['image_path'],
+                    "-i", bd['audio_path'],
+                    "-vf", subtitle_filter,
+                    "-c:v", "libx264", "-preset", "fast",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                    "-pix_fmt", "yuv420p",
+                    "-t", str(bd['duration']),
+                    "-shortest",
+                    clip_path
+                ]
+
+                result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
+                if result.returncode == 0 and os.path.exists(clip_path):
+                    clip_paths.append(clip_path)
+                    print(f"[SHORTS-V2] 클립 {bd['beat_id']} 완료 ({bd['duration']:.1f}초)")
+                else:
+                    stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+                    print(f"[SHORTS-V2] 클립 {bd['beat_id']} 실패: {stderr}")
+
+            if not clip_paths:
+                return {"ok": False, "error": "클립 생성 실패"}
+
+            # ========== 3. 클립 병합 ==========
+            print(f"[SHORTS-V2] {len(clip_paths)}개 클립 병합...")
+            concat_list = os.path.join(temp_dir, "concat.txt")
+            with open(concat_list, 'w') as f:
+                for clip_path in clip_paths:
+                    f.write(f"file '{os.path.abspath(clip_path)}'\n")
+
+            # 병합
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", concat_list,
+                "-c:v", "libx264", "-preset", "fast",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_path
+            ]
+
+            result = subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=180)
+
+            if result.returncode == 0 and os.path.exists(output_path):
+                # 최종 영상 길이 확인
+                probe_result = subprocess.run([
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1", output_path
+                ], capture_output=True, text=True)
+
+                final_duration = 0
+                if probe_result.returncode == 0:
+                    try:
+                        final_duration = float(probe_result.stdout.strip())
+                    except:
+                        pass
+
+                print(f"[SHORTS-V2] 쇼츠 생성 완료: {output_path} ({final_duration:.1f}초)")
+
+                return {
+                    "ok": True,
+                    "shorts_path": output_path,
+                    "duration": final_duration,
+                    "cost": total_cost,
+                    "beats_count": len(beats)
+                }
+            else:
+                stderr = result.stderr.decode('utf-8', errors='ignore')[:300]
+                return {"ok": False, "error": f"병합 실패: {stderr}"}
+
+        finally:
+            # 임시 파일 정리
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        print(f"[SHORTS-V2] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
 def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text, output_path):
-    """메인 영상에서 쇼츠용 세로 영상(9:16) 생성
+    """메인 영상에서 쇼츠용 세로 영상(9:16) 생성 [레거시 - 크롭 방식]
 
     Args:
         main_video_path: 원본 메인 영상 경로
@@ -13292,7 +13853,7 @@ def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text,
 
             # 훅 텍스트 오버레이 추가 (처음 3초)
             if hook_text:
-                font_path = "static/fonts/NanumGothicBold.ttf"
+                font_path = "fonts/Pretendard-Bold.ttf"
                 font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
                 hook_filter = (
@@ -14891,34 +15452,33 @@ def generate_thumbnail_with_text():
         # 상품 이미지 합성
         bg_img.paste(product_img_resized, (img_x, img_y), product_img_resized)
 
-        # 폰트 로드
-        font_paths = {
-            'noto-black': '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
-            'noto-bold': '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
-            'gmarket': '/usr/share/fonts/truetype/gmarket/GmarketSansBold.ttf',
-            'pretendard': '/usr/share/fonts/truetype/pretendard/Pretendard-Bold.ttf'
-        }
-        font_path = font_paths.get(font_style, font_paths['noto-black'])
+        # 폰트 로드 (프로젝트 로컬 Pretendard 우선)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        font_candidates = [
+            os.path.join(base_dir, "fonts/Pretendard-Bold.ttf"),
+            os.path.join(base_dir, "fonts/Pretendard-SemiBold.ttf"),
+            os.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        ]
 
-        # 폰트가 없으면 기본 폰트 사용
+        font_path = None
+        for fp in font_candidates:
+            if os.path.exists(fp):
+                font_path = fp
+                break
+
+        # 폰트 로드
         try:
             font_large = ImageFont.truetype(font_path, 72)
             font_medium = ImageFont.truetype(font_path, 56)
             font_small = ImageFont.truetype(font_path, 40)
             font_tag = ImageFont.truetype(font_path, 36)
         except:
-            # 시스템 기본 폰트 시도
-            try:
-                font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-                font_large = ImageFont.truetype(font_path, 72)
-                font_medium = ImageFont.truetype(font_path, 56)
-                font_small = ImageFont.truetype(font_path, 40)
-                font_tag = ImageFont.truetype(font_path, 36)
-            except:
-                font_large = ImageFont.load_default()
-                font_medium = font_large
-                font_small = font_large
-                font_tag = font_large
+            font_large = ImageFont.load_default()
+            font_medium = font_large
+            font_small = font_large
+            font_tag = font_large
 
         draw = ImageDraw.Draw(bg_img)
 
@@ -17066,8 +17626,39 @@ def run_automation_pipeline(row_data, row_index):
             ai_prompts = thumbnail_data.get('ai_prompts', {})
             video_effects = analyze_data.get('video_effects', {})  # 새 기능: BGM, 효과음, 자막 강조 등
 
+            # GPT-5.1이 대본 분석으로 자동 감지한 카테고리 (news 또는 story)
+            detected_category = analyze_data.get('detected_category', 'story')
+            print(f"[AUTOMATION] GPT 감지 카테고리: {detected_category}")
+
             generated_title = youtube_meta.get('title', '')
-            description = youtube_meta.get('description', '')
+            title_options = youtube_meta.get('title_options', [])
+
+            # description 처리: 새 구조(객체) 또는 기존 구조(문자열) 지원
+            desc_raw = youtube_meta.get('description', '')
+            if isinstance(desc_raw, dict):
+                description = desc_raw.get('full_text', '')
+                description_chapters = desc_raw.get('chapters', [])
+                description_preview = desc_raw.get('preview_2_lines', '')
+            else:
+                description = desc_raw
+                description_chapters = []
+                description_preview = ''
+
+            # 해시태그, 태그, 고정댓글 추출
+            hashtags = youtube_meta.get('hashtags', [])
+            tags = youtube_meta.get('tags', [])
+            pin_comment = youtube_meta.get('pin_comment', '')
+
+            # 로깅
+            print(f"[AUTOMATION] 설명란: {len(description)}자, 챕터: {len(description_chapters)}개")
+            print(f"[AUTOMATION] 해시태그: {hashtags}")
+            print(f"[AUTOMATION] 태그: {len(tags)}개")
+
+            # title_options 로깅 (3가지 스타일 제목)
+            if title_options:
+                print(f"[AUTOMATION] 제목 옵션 (3가지 스타일):")
+                for opt in title_options:
+                    print(f"  - [{opt.get('style', '?')}] {opt.get('title', '')}")
 
             if not title:
                 title = generated_title or f"자동 생성 영상 #{row_index}"
@@ -17188,30 +17779,28 @@ def run_automation_pipeline(row_data, row_index):
             nonlocal thumbnail_url, total_cost
             print(f"[AUTOMATION][THUMB] 썸네일 생성 시작...")
             try:
-                # 뉴스 카테고리 체크
-                is_news = category.lower() in ['뉴스', 'news', '시사', '정치', '경제'] if category else False
+                # GPT-5.1이 대본 분석으로 자동 감지한 카테고리 사용 (Google Sheets 의존 제거)
+                is_news = detected_category == 'news'
+                print(f"[AUTOMATION][THUMB] GPT 감지 카테고리: {detected_category} → {'뉴스' if is_news else '스토리'} 스타일")
 
-                if is_news:
-                    # 뉴스 카테고리: 하드코딩된 뉴스 스타일 프롬프트 사용 (50대+ 시청자용)
-                    print(f"[AUTOMATION][THUMB] 뉴스 카테고리 감지 → 뉴스 스타일 썸네일 사용")
-                    # 뉴스 카테고리: GPT가 생성한 ai_prompts.A 사용 (이미 뉴스 스타일로 생성됨)
-                    # 만약 ai_prompts가 없으면 하드코딩된 프롬프트 사용
-                    if ai_prompts and ai_prompts.get('A'):
-                        print(f"[AUTOMATION][THUMB] GPT 생성 뉴스 스타일 프롬프트 사용")
-                        thumb_prompt = ai_prompts.get('A')
-                    else:
-                        # 폴백: 하드코딩된 뉴스 스타일 프롬프트
-                        print(f"[AUTOMATION][THUMB] 하드코딩된 뉴스 스타일 프롬프트 사용 (폴백)")
-                        thumb_prompt = {
-                            "prompt": "Korean TV news broadcast YouTube thumbnail exactly like KBS MBC SBS news. 16:9 aspect ratio. Real photo of news anchor or reporter in professional attire on one side. Large bold Korean headline text in WHITE or YELLOW with quotation marks. Dark blue or navy gradient background. RED accent bar with '단독' or '속보' badge at top. Multiple text layers - main headline + sub headline. News ticker style bar at bottom. Professional broadcast journalism aesthetic. Photorealistic news studio look. High contrast text readable at small size.",
-                            "text_overlay": {"main": "뉴스 헤드라인", "sub": ""}
-                        }
-                else:
-                    # 일반 카테고리: GPT가 생성한 ai_prompts 사용
-                    if not ai_prompts or not ai_prompts.get('A'):
-                        print(f"[AUTOMATION][THUMB] 프롬프트 없음 (스킵)")
-                        return None
+                # GPT가 생성한 ai_prompts.A 사용 (카테고리에 맞는 스타일로 이미 생성됨)
+                if ai_prompts and ai_prompts.get('A'):
                     thumb_prompt = ai_prompts.get('A')
+                    print(f"[AUTOMATION][THUMB] GPT 생성 프롬프트 사용")
+                elif is_news:
+                    # 폴백: 하드코딩된 뉴스 스타일 프롬프트
+                    print(f"[AUTOMATION][THUMB] 하드코딩된 뉴스 스타일 프롬프트 사용 (폴백)")
+                    thumb_prompt = {
+                        "prompt": "Korean TV news broadcast YouTube thumbnail exactly like KBS MBC SBS news. 16:9 aspect ratio. Real photo of news anchor or reporter in professional attire on one side. Large bold Korean headline text in WHITE or YELLOW with quotation marks. Dark blue or navy gradient background. RED accent bar with '단독' or '속보' badge at top. Multiple text layers - main headline + sub headline. News ticker style bar at bottom. Professional broadcast journalism aesthetic. Photorealistic news studio look. High contrast text readable at small size.",
+                        "text_overlay": {"main": "뉴스 헤드라인", "sub": ""}
+                    }
+                else:
+                    # 폴백: 기본 스토리 스타일 프롬프트
+                    print(f"[AUTOMATION][THUMB] 하드코딩된 스토리 스타일 프롬프트 사용 (폴백)")
+                    thumb_prompt = {
+                        "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression. Vibrant colors, high contrast. NO realistic humans, comic/cartoon style only.",
+                        "text_overlay": {"main": "메인 텍스트", "sub": ""}
+                    }
 
                 thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
                     "session_id": f"thumb_{session_id}",
@@ -17351,6 +17940,12 @@ def run_automation_pipeline(row_data, row_index):
         except Exception as chapter_err:
             print(f"[AUTOMATION] 챕터 생성 오류 (무시됨): {chapter_err}")
 
+        # 해시태그를 설명란 끝에 추가
+        if hashtags and len(hashtags) > 0:
+            hashtags_text = "\n\n" + " ".join(hashtags)
+            description = description + hashtags_text
+            print(f"[AUTOMATION] 해시태그 추가: {' '.join(hashtags)}")
+
         try:
             upload_payload = {
                 "videoPath": video_url_local,
@@ -17363,6 +17958,11 @@ def run_automation_pipeline(row_data, row_index):
             # 썸네일이 있으면 추가
             if thumbnail_url:
                 upload_payload["thumbnailPath"] = thumbnail_url
+
+            # GPT-5.1 생성 태그 추가
+            if tags and len(tags) > 0:
+                upload_payload["tags"] = tags
+                print(f"[AUTOMATION] YouTube 태그 {len(tags)}개 추가")
 
             # 예약시간(K열)이 있으면 ISO 8601 형식으로 변환하여 추가
             if publish_time:
@@ -17423,62 +18023,105 @@ def run_automation_pipeline(row_data, row_index):
                 video_id = upload_data.get('videoId', '')
                 print(f"[AUTOMATION] 4. 완료: {youtube_url} (총 비용: ${total_cost:.2f})")
 
-                # ========== 5. 쇼츠 자동 생성 및 업로드 (옵션) ==========
+                # ========== 5. 쇼츠 자동 생성 및 업로드 (방법 2: 새 TTS + 새 이미지) ==========
                 shorts_url = None
+                shorts_cost = 0.0
                 shorts_info = video_effects.get('shorts', {})
-                highlight_scenes = shorts_info.get('highlight_scenes', [])
+                highlight_scenes_nums = shorts_info.get('highlight_scenes', [])
 
                 # highlight_scenes가 비어있으면 기본값으로 처음 2-3개 씬 선택
-                if not highlight_scenes or len(highlight_scenes) == 0:
-                    total_scenes = len(scenes) if scenes else 0
-                    if total_scenes >= 3:
-                        # 첫 번째, 중간, 마지막 씬 선택
-                        mid = total_scenes // 2
-                        highlight_scenes = [1, mid, total_scenes]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
-                    elif total_scenes >= 2:
-                        highlight_scenes = [1, total_scenes]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
-                    elif total_scenes == 1:
-                        highlight_scenes = [1]
-                        print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes}")
+                if not highlight_scenes_nums or len(highlight_scenes_nums) == 0:
+                    total_scenes_count = len(scenes) if scenes else 0
+                    if total_scenes_count >= 3:
+                        mid = total_scenes_count // 2
+                        highlight_scenes_nums = [1, mid, total_scenes_count]
+                    elif total_scenes_count >= 2:
+                        highlight_scenes_nums = [1, total_scenes_count]
+                    elif total_scenes_count == 1:
+                        highlight_scenes_nums = [1]
+                    print(f"[AUTOMATION] 5. highlight_scenes 기본값 설정: {highlight_scenes_nums}")
 
-                if highlight_scenes and len(highlight_scenes) > 0:
-                    print(f"[AUTOMATION] 5. 쇼츠 생성 시작...")
+                if highlight_scenes_nums and len(highlight_scenes_nums) > 0:
+                    print(f"[AUTOMATION] 5. 쇼츠 생성 시작 (방법 2: 새 TTS + 새 이미지)...")
                     try:
-                        # 쇼츠 영상 생성
-                        shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
-                        hook_text = shorts_info.get('hook_text', '')
-                        shorts_title = shorts_info.get('title', f"{title} #Shorts")
+                        # 5-1. 하이라이트 씬들의 나레이션 추출
+                        highlight_narrations = []
+                        for scene_num in highlight_scenes_nums:
+                            if 1 <= scene_num <= len(scenes):
+                                narration = scenes[scene_num - 1].get('narration', '')
+                                if narration:
+                                    # SSML 태그 제거
+                                    import re
+                                    clean_narration = re.sub(r'<[^>]+>', '', narration)
+                                    highlight_narrations.append(clean_narration)
 
-                        if _generate_shorts_video(video_url_local.lstrip('/'), scenes, highlight_scenes, hook_text, shorts_output_path):
-                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 완료: {shorts_output_path}")
+                        if not highlight_narrations:
+                            print(f"[AUTOMATION] 5. 하이라이트 나레이션 없음, 쇼츠 생성 스킵")
+                        else:
+                            print(f"[AUTOMATION] 5-1. 하이라이트 나레이션 {len(highlight_narrations)}개 추출")
 
-                            # 쇼츠 업로드 (원본 영상 링크 포함)
-                            shorts_description = f"""🎬 전체 영상 보기: {youtube_url}
+                            # 5-2. GPT-5.1로 쇼츠 콘텐츠 분석
+                            shorts_analysis = _analyze_shorts_content_gpt(
+                                highlight_narrations=highlight_narrations,
+                                title=title,
+                                detected_category=detected_category,
+                                audience=audience,
+                                duration_target=45
+                            )
+
+                            if shorts_analysis:
+                                shorts_cost += 0.03  # GPT-5.1 비용
+                                beats = shorts_analysis.get("structure", {}).get("beats", [])
+                                print(f"[AUTOMATION] 5-2. 쇼츠 분석 완료: {len(beats)}개 beats")
+
+                                # 쇼츠 제목 및 해시태그 추출
+                                platform_info = shorts_analysis.get("platform_specific", {}).get("youtube_shorts", {})
+                                shorts_title = platform_info.get("title_suggestion", "") or shorts_info.get('title', f"{title} #Shorts")
+                                shorts_hashtags = platform_info.get("hashtags_hint", ["#Shorts", "#유튜브쇼츠"])
+
+                                # 5-3. 쇼츠 영상 생성 (새 TTS + 새 이미지)
+                                shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
+                                shorts_result = _generate_shorts_video_v2(
+                                    shorts_analysis=shorts_analysis,
+                                    voice_name=voice,
+                                    output_path=shorts_output_path,
+                                    base_url=base_url
+                                )
+
+                                if shorts_result.get("ok"):
+                                    shorts_cost += shorts_result.get("cost", 0)
+                                    shorts_duration = shorts_result.get("duration", 0)
+                                    print(f"[AUTOMATION] 5-3. 쇼츠 영상 생성 완료: {shorts_duration:.1f}초 (비용: ${shorts_cost:.2f})")
+
+                                    # 5-4. 쇼츠 업로드
+                                    shorts_description = f"""🎬 전체 영상 보기: {youtube_url}
 
 {description[:200]}...
 
-#Shorts #유튜브쇼츠"""
+{' '.join(shorts_hashtags)}"""
 
-                            shorts_upload_payload = {
-                                "video_path": shorts_output_path,
-                                "title": shorts_title,
-                                "description": shorts_description,
-                                "visibility": visibility,
-                                "channel_id": channel_id
-                            }
+                                    shorts_upload_payload = {
+                                        "videoPath": shorts_output_path,
+                                        "title": shorts_title,
+                                        "description": shorts_description,
+                                        "privacyStatus": visibility,
+                                        "channelId": channel_id
+                                    }
 
-                            shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
-                            shorts_data = shorts_resp.json()
+                                    shorts_resp = req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
+                                    shorts_data = shorts_resp.json()
 
-                            if shorts_data.get('ok'):
-                                shorts_url = shorts_data.get('videoUrl', '')
-                                print(f"[AUTOMATION] 5. 쇼츠 업로드 완료: {shorts_url}")
+                                    if shorts_data.get('ok'):
+                                        shorts_url = shorts_data.get('videoUrl', '')
+                                        total_cost += shorts_cost
+                                        print(f"[AUTOMATION] 5-4. 쇼츠 업로드 완료: {shorts_url}")
+                                    else:
+                                        print(f"[AUTOMATION] 5-4. 쇼츠 업로드 실패: {shorts_data.get('error')}")
+                                else:
+                                    print(f"[AUTOMATION] 5-3. 쇼츠 영상 생성 실패: {shorts_result.get('error')}")
                             else:
-                                print(f"[AUTOMATION] 5. 쇼츠 업로드 실패: {shorts_data.get('error')}")
-                        else:
-                            print(f"[AUTOMATION] 5. 쇼츠 영상 생성 실패")
+                                print(f"[AUTOMATION] 5-2. 쇼츠 분석 실패")
+
                     except Exception as shorts_err:
                         print(f"[AUTOMATION] 5. 쇼츠 처리 오류: {shorts_err}")
                         import traceback
@@ -17489,7 +18132,17 @@ def run_automation_pipeline(row_data, row_index):
                     "video_url": youtube_url,
                     "shorts_url": shorts_url,
                     "error": None,
-                    "cost": total_cost
+                    "cost": total_cost,
+                    # 새로 추가: 제목 옵션 및 사용된 설정 정보
+                    "title": title,
+                    "title_options": title_options,
+                    "voice": voice,
+                    "audience": audience,
+                    "detected_category": detected_category,
+                    # 유튜브 메타데이터 추가
+                    "hashtags": hashtags,
+                    "tags": tags,
+                    "pin_comment": pin_comment  # YouTube Studio에서 수동으로 고정 필요
                 }
             else:
                 return {"ok": False, "error": f"YouTube 업로드 실패: {upload_data.get('error')}", "video_url": None, "shorts_url": None, "cost": total_cost}
@@ -18220,8 +18873,8 @@ def _automation_generate_video(scenes, episode_id, output_dir):
         return {"ok": False, "error": str(e)}
 
 
-def _automation_youtube_upload(video_path, title, description, visibility, channel_id, thumbnail_path=None):
-    """YouTube 업로드 (썸네일 포함)"""
+def _automation_youtube_upload(video_path, title, description, visibility, channel_id, thumbnail_path=None, tags=None):
+    """YouTube 업로드 (썸네일 포함, GPT-5.1 생성 태그 지원)"""
     try:
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
@@ -18262,11 +18915,16 @@ def _automation_youtube_upload(video_path, title, description, visibility, chann
 
         youtube = build('youtube', 'v3', credentials=creds)
 
+        # 태그: GPT-5.1 생성 태그 사용, 없으면 기본 태그
+        youtube_tags = tags if tags and len(tags) > 0 else ['자동생성', '드라마', 'AI']
+        # YouTube 태그 제한: 최대 500자, 각 태그 30자 이하
+        youtube_tags = [tag[:30] for tag in youtube_tags[:20]]
+
         body = {
             'snippet': {
                 'title': title[:100],
                 'description': description[:5000] if description else '',
-                'tags': ['자동생성', '드라마', 'AI'],
+                'tags': youtube_tags,
                 'categoryId': '22'
             },
             'status': {
@@ -18421,7 +19079,7 @@ def api_sheets_check_and_process():
                             # 20분 초과 → 실패로 변경
                             print(f"[SHEETS] 행 {i}: 처리중 상태 {elapsed_minutes:.1f}분 경과 - 타임아웃으로 실패 처리")
                             sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
-                            sheets_update_cell(service, sheet_id, f'Sheet1!K{i}', f'타임아웃: {elapsed_minutes:.0f}분 경과')
+                            sheets_update_cell(service, sheet_id, f'Sheet1!M{i}', f'타임아웃: {elapsed_minutes:.0f}분 경과')
                             continue  # 다음 행 확인
                         else:
                             print(f"[SHEETS] 처리중인 작업 발견 (행 {i}, {elapsed_minutes:.1f}분 경과) - 새 작업 시작 안함")
@@ -18429,13 +19087,13 @@ def api_sheets_check_and_process():
                         # 시간 형식 파싱 실패 → 실패로 처리
                         print(f"[SHEETS] 행 {i}: 시작시간 형식 오류 - 실패 처리")
                         sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
-                        sheets_update_cell(service, sheet_id, f'Sheet1!K{i}', '시작시간 형식 오류로 실패')
+                        sheets_update_cell(service, sheet_id, f'Sheet1!M{i}', '시작시간 형식 오류로 실패')
                         continue  # 다음 행 확인
                 else:
                     # 시작시간 없음 → 실패로 처리 (배포 전 작업 등)
                     print(f"[SHEETS] 행 {i}: 시작시간 없음 - 실패 처리")
                     sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
-                    sheets_update_cell(service, sheet_id, f'Sheet1!K{i}', '시작시간 없음 (서버 재시작)')
+                    sheets_update_cell(service, sheet_id, f'Sheet1!M{i}', '시작시간 없음 (서버 재시작)')
                     continue  # 다음 행 확인
 
                 return jsonify({
@@ -18480,22 +19138,44 @@ def api_sheets_check_and_process():
                     # 파이프라인 실행
                     result = run_automation_pipeline(row, i)
 
-                    # 비용 기록 (H열) - 성공/실패 모두
+                    # ========== 새로운 컬럼 구조 (H,I 제목 추가로 2칸 밀림) ==========
+                    # G: 제목(메인), H: 제목2(대안1), I: 제목3(대안2)
+                    # J: 비용, K: 공개설정, L: 영상URL, M: 에러메시지
+                    # N: 음성, O: 타겟, P: 카테고리, Q: 쇼츠URL
+
+                    # 비용 기록 (J열) - 성공/실패 모두
                     cost = result.get('cost', 0.0)
-                    sheets_update_cell(service, sheet_id, f'Sheet1!H{i}', f'${cost:.2f}')
+                    sheets_update_cell(service, sheet_id, f'Sheet1!J{i}', f'${cost:.2f}')
+
+                    # 제목 기록 (G, H, I열) - GPT가 생성한 3가지 스타일 제목
+                    if result.get('title'):
+                        sheets_update_cell(service, sheet_id, f'Sheet1!G{i}', result['title'])
+                    title_options = result.get('title_options', [])
+                    if len(title_options) >= 1:
+                        sheets_update_cell(service, sheet_id, f'Sheet1!H{i}', title_options[0].get('title', ''))
+                    if len(title_options) >= 2:
+                        sheets_update_cell(service, sheet_id, f'Sheet1!I{i}', title_options[1].get('title', ''))
+
+                    # 사용된 설정 정보 기록 (N, O, P열)
+                    if result.get('voice'):
+                        sheets_update_cell(service, sheet_id, f'Sheet1!N{i}', result['voice'])
+                    if result.get('audience'):
+                        sheets_update_cell(service, sheet_id, f'Sheet1!O{i}', result['audience'])
+                    if result.get('detected_category'):
+                        sheets_update_cell(service, sheet_id, f'Sheet1!P{i}', result['detected_category'])
 
                     if result.get('ok'):
-                        # 성공 - 상태: 완료, 영상URL 기록 (J열), 쇼츠URL 기록 (O열)
+                        # 성공 - 상태: 완료, 영상URL 기록 (L열), 쇼츠URL 기록 (Q열)
                         sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '완료')
                         if result.get('video_url'):
-                            sheets_update_cell(service, sheet_id, f'Sheet1!J{i}', result['video_url'])
+                            sheets_update_cell(service, sheet_id, f'Sheet1!L{i}', result['video_url'])
                         if result.get('shorts_url'):
-                            sheets_update_cell(service, sheet_id, f'Sheet1!O{i}', result['shorts_url'])
+                            sheets_update_cell(service, sheet_id, f'Sheet1!Q{i}', result['shorts_url'])
                     else:
-                        # 실패 - 상태: 실패, 에러메시지 기록 (K열)
+                        # 실패 - 상태: 실패, 에러메시지 기록 (M열)
                         sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
                         error_msg = result.get('error', '알 수 없는 오류')[:500]  # 최대 500자
-                        sheets_update_cell(service, sheet_id, f'Sheet1!K{i}', error_msg)
+                        sheets_update_cell(service, sheet_id, f'Sheet1!M{i}', error_msg)
 
                     processed_count += 1
                     results.append({
