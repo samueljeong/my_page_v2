@@ -9571,6 +9571,60 @@ def youtube_upload():
                     "ok": False,
                     "error": f"영상 파일을 찾을 수 없습니다: {video_path}"
                 }), 200
+
+            # 영상 파일 유효성 검사 (ffprobe)
+            try:
+                import subprocess
+                import json as json_module
+
+                probe_result = subprocess.run([
+                    'ffprobe', '-v', 'error',
+                    '-show_entries', 'format=duration,size:stream=codec_type,width,height',
+                    '-of', 'json', full_path
+                ], capture_output=True, text=True, timeout=30)
+
+                if probe_result.returncode != 0:
+                    print(f"[YOUTUBE-UPLOAD][ERROR] 손상된 영상 파일: {full_path}")
+                    print(f"[YOUTUBE-UPLOAD][ERROR] ffprobe stderr: {probe_result.stderr[:500]}")
+                    return jsonify({
+                        "ok": False,
+                        "error": f"손상된 영상 파일입니다. FFmpeg 인코딩 오류가 발생했을 수 있습니다."
+                    }), 200
+
+                probe_data = json_module.loads(probe_result.stdout)
+                video_duration = float(probe_data.get('format', {}).get('duration', 0))
+                video_size = int(probe_data.get('format', {}).get('size', 0))
+
+                # 스트림 확인 (비디오/오디오 있는지)
+                streams = probe_data.get('streams', [])
+                has_video = any(s.get('codec_type') == 'video' for s in streams)
+                has_audio = any(s.get('codec_type') == 'audio' for s in streams)
+
+                print(f"[YOUTUBE-UPLOAD] 영상 검증: duration={video_duration:.1f}s, size={video_size/1024/1024:.1f}MB, video={has_video}, audio={has_audio}")
+
+                if video_duration < 1:
+                    print(f"[YOUTUBE-UPLOAD][ERROR] 영상 길이가 너무 짧음: {video_duration}초")
+                    return jsonify({
+                        "ok": False,
+                        "error": f"영상 길이가 너무 짧습니다 ({video_duration:.1f}초). 인코딩 오류가 발생했을 수 있습니다."
+                    }), 200
+
+                if not has_video:
+                    print(f"[YOUTUBE-UPLOAD][ERROR] 비디오 스트림 없음")
+                    return jsonify({
+                        "ok": False,
+                        "error": "영상에 비디오 스트림이 없습니다. 인코딩 오류가 발생했을 수 있습니다."
+                    }), 200
+
+            except subprocess.TimeoutExpired:
+                print(f"[YOUTUBE-UPLOAD][ERROR] ffprobe 타임아웃")
+                return jsonify({
+                    "ok": False,
+                    "error": "영상 파일 검증 타임아웃. 파일이 손상되었을 수 있습니다."
+                }), 200
+            except Exception as e:
+                print(f"[YOUTUBE-UPLOAD][WARN] ffprobe 검증 실패 (계속 진행): {e}")
+                # 검증 실패해도 업로드 시도 (ffprobe 없는 환경 대비)
         else:
             full_path = video_path
 

@@ -179,3 +179,14 @@ else:
 - 11621-11623행 (concat): `capture_output=True` → `stdout=DEVNULL, stderr=PIPE`
 - 11672-11677행 (subtitle burn-in): `capture_output=True` → `stdout=DEVNULL, stderr=PIPE`
 - subprocess 완료 후 `del` + `gc.collect()` 추가
+
+### 2025-12-07: YouTube 업로드 전 영상 검증 추가
+
+**증상**: YouTube 업로드 성공했으나 영상이 Studio에 표시되지 않음
+
+**원인**: 손상된 영상 파일이 업로드되어 YouTube 처리 중 자동 삭제됨
+
+**수정** (`drama_server.py` 9575-9627행):
+- 업로드 전 ffprobe로 영상 유효성 검사
+- 검사 항목: duration, size, video/audio 스트림 존재 여부
+- 손상된 파일 발견 시 업로드 차단 및 명확한 에러 메시지 반환
