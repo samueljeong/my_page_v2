@@ -1774,6 +1774,658 @@ def api_analyze_tags():
 
 # ===== 신규 기능: 키워드 트렌드 (YouTube 검색 기반) =====
 
+# ===== 신규 기능: 통합 영상 점수 계산 =====
+
+def calculate_seo_score(title: str, description: str, tags: List[str] = None) -> Dict[str, Any]:
+    """SEO 점수 계산 - 제목, 설명, 태그 최적화 분석"""
+    score = 0
+    details = []
+
+    # 제목 분석 (최대 40점)
+    title_len = len(title)
+    if 30 <= title_len <= 60:
+        score += 20
+        details.append("✅ 제목 길이 적절 (30-60자)")
+    elif 20 <= title_len <= 70:
+        score += 10
+        details.append("⚠️ 제목 길이 보통")
+    else:
+        details.append("❌ 제목 너무 짧거나 김")
+
+    # 제목에 숫자 포함 (클릭률 향상)
+    import re
+    if re.search(r'\d+', title):
+        score += 10
+        details.append("✅ 숫자 포함 (클릭률 ↑)")
+
+    # 제목에 감정 표현 포함
+    emotion_words = ['충격', '놀라운', '대박', '감동', '실화', '경악', '비밀', '반전', '최초', '드디어']
+    if any(word in title for word in emotion_words):
+        score += 10
+        details.append("✅ 감정 유발 키워드 포함")
+
+    # 설명란 분석 (최대 30점)
+    desc_len = len(description) if description else 0
+    if desc_len >= 500:
+        score += 15
+        details.append("✅ 설명란 충분히 작성됨")
+    elif desc_len >= 200:
+        score += 8
+        details.append("⚠️ 설명란 보통")
+    else:
+        details.append("❌ 설명란 너무 짧음")
+
+    # 설명에 타임스탬프 포함
+    if description and re.search(r'\d{1,2}:\d{2}', description):
+        score += 10
+        details.append("✅ 타임스탬프 포함")
+
+    # 해시태그 분석
+    hashtags = re.findall(r'#\w+', title + (description or ''))
+    if 3 <= len(hashtags) <= 10:
+        score += 5
+        details.append("✅ 해시태그 적절")
+    elif len(hashtags) > 0:
+        score += 2
+        details.append("⚠️ 해시태그 부족하거나 과다")
+
+    # 태그 분석 (최대 30점)
+    if tags:
+        if len(tags) >= 10:
+            score += 15
+            details.append("✅ 태그 충분히 설정됨")
+        elif len(tags) >= 5:
+            score += 8
+            details.append("⚠️ 태그 보통")
+        else:
+            details.append("❌ 태그 부족")
+
+        # 태그 길이 다양성
+        tag_lengths = [len(t) for t in tags]
+        if min(tag_lengths, default=0) < 10 and max(tag_lengths, default=0) > 15:
+            score += 10
+            details.append("✅ 태그 길이 다양함")
+    else:
+        score += 5  # 태그 정보 없으면 기본점
+
+    # 등급 결정
+    if score >= 80:
+        grade = "A+"
+    elif score >= 65:
+        grade = "A"
+    elif score >= 50:
+        grade = "B"
+    elif score >= 35:
+        grade = "C"
+    else:
+        grade = "D"
+
+    return {
+        "score": min(100, score),
+        "grade": grade,
+        "details": details
+    }
+
+
+def calculate_viral_score(video: Dict[str, Any]) -> Dict[str, Any]:
+    """바이럴 예측 점수 계산 - 조회수 가속도, 참여율, 구독자 대비 성과 종합"""
+    view_count = video.get("viewCount", 0)
+    like_count = video.get("likeCount", 0)
+    comment_count = video.get("commentCount", 0)
+    subscriber_count = video.get("subscriberCount", 1) or 1
+    hours_since_upload = video.get("hoursSinceUpload", 24)
+
+    if hours_since_upload == 0:
+        hours_since_upload = 1
+
+    score = 0
+    factors = []
+
+    # 1. 시간당 조회수 (가속도) - 최대 30점
+    views_per_hour = view_count / hours_since_upload
+    if views_per_hour >= 10000:
+        score += 30
+        factors.append(("시간당 조회수", "🔥 폭발적", views_per_hour))
+    elif views_per_hour >= 1000:
+        score += 20
+        factors.append(("시간당 조회수", "🚀 높음", views_per_hour))
+    elif views_per_hour >= 100:
+        score += 10
+        factors.append(("시간당 조회수", "📈 보통", views_per_hour))
+    else:
+        factors.append(("시간당 조회수", "➡️ 낮음", views_per_hour))
+
+    # 2. 구독자 대비 성과 - 최대 25점
+    performance = view_count / subscriber_count
+    if performance >= 5:
+        score += 25
+        factors.append(("구독자 대비", "🔥 5배 이상", performance))
+    elif performance >= 2:
+        score += 18
+        factors.append(("구독자 대비", "✅ 2배 이상", performance))
+    elif performance >= 1:
+        score += 10
+        factors.append(("구독자 대비", "📊 1배 이상", performance))
+    else:
+        factors.append(("구독자 대비", "➡️ 1배 미만", performance))
+
+    # 3. 참여율 - 최대 25점
+    engagement_rate = 0
+    if view_count > 0:
+        engagement_rate = ((like_count + comment_count) / view_count) * 100
+
+    if engagement_rate >= 10:
+        score += 25
+        factors.append(("참여율", "🔥 매우 높음", f"{engagement_rate:.1f}%"))
+    elif engagement_rate >= 5:
+        score += 18
+        factors.append(("참여율", "✅ 높음", f"{engagement_rate:.1f}%"))
+    elif engagement_rate >= 2:
+        score += 10
+        factors.append(("참여율", "📊 보통", f"{engagement_rate:.1f}%"))
+    else:
+        factors.append(("참여율", "➡️ 낮음", f"{engagement_rate:.1f}%"))
+
+    # 4. 좋아요/댓글 비율 - 최대 10점
+    if comment_count > 0:
+        like_comment_ratio = like_count / comment_count
+        if 5 <= like_comment_ratio <= 50:
+            score += 10
+            factors.append(("좋아요/댓글 비율", "✅ 건강함", like_comment_ratio))
+        elif like_comment_ratio > 50:
+            score += 5
+            factors.append(("좋아요/댓글 비율", "⚠️ 댓글 부족", like_comment_ratio))
+
+    # 5. 신선도 보너스 - 최대 10점
+    if hours_since_upload <= 24:
+        score += 10
+        factors.append(("신선도", "🆕 24시간 이내", f"{hours_since_upload:.0f}h"))
+    elif hours_since_upload <= 72:
+        score += 5
+        factors.append(("신선도", "📅 3일 이내", f"{hours_since_upload:.0f}h"))
+
+    # 등급 결정
+    if score >= 80:
+        grade = "🔥 바이럴 확실"
+    elif score >= 60:
+        grade = "🚀 바이럴 가능성 높음"
+    elif score >= 40:
+        grade = "📈 성장 중"
+    else:
+        grade = "➡️ 보통"
+
+    return {
+        "viralScore": min(100, score),
+        "viralGrade": grade,
+        "viralFactors": factors
+    }
+
+
+@tubelens_bp.route('/api/tubelens/upload-pattern', methods=['POST'])
+def api_upload_pattern():
+    """채널의 업로드 패턴 분석 - 요일/시간대별 성과"""
+    try:
+        data = request.get_json()
+        channel_id = data.get("channelId", "")
+        api_keys = data.get("apiKeys", [])
+        current_api_key_index = data.get("currentApiKeyIndex", 0)
+
+        if not channel_id:
+            return jsonify({"success": False, "message": "채널 ID가 필요합니다."}), 400
+
+        # API 키 선택
+        api_key = None
+        if api_keys and len(api_keys) > current_api_key_index:
+            api_key = api_keys[current_api_key_index]
+
+        if not api_key:
+            api_key = get_youtube_api_key()
+
+        if not api_key:
+            return jsonify({"success": False, "message": "API 키가 필요합니다."}), 400
+
+        # 채널의 업로드 플레이리스트 가져오기
+        channel_info = get_channel_info(channel_id, api_key)
+        upload_playlist = channel_info.get("uploadPlaylist", "")
+
+        if not upload_playlist:
+            return jsonify({"success": False, "message": "업로드 플레이리스트를 찾을 수 없습니다."}), 400
+
+        # 최근 50개 영상 가져오기
+        playlist_data = make_youtube_request("playlistItems", {
+            "part": "contentDetails",
+            "playlistId": upload_playlist,
+            "maxResults": 50
+        }, api_key)
+
+        video_ids = [item["contentDetails"]["videoId"] for item in playlist_data.get("items", [])]
+
+        if not video_ids:
+            return jsonify({"success": False, "message": "영상이 없습니다."}), 400
+
+        # 영상 상세 정보 가져오기
+        videos_data = make_youtube_request("videos", {
+            "part": "snippet,statistics,contentDetails",
+            "id": ",".join(video_ids)
+        }, api_key)
+
+        # 요일별 분석
+        day_stats = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []}  # 월~일
+        day_names = ["월", "화", "수", "목", "금", "토", "일"]
+
+        # 시간대별 분석
+        hour_stats = {h: [] for h in range(24)}
+
+        # 영상 길이별 성과
+        duration_stats = {"short": [], "medium": [], "long": []}  # ~10분, 10~30분, 30분+
+
+        # 제목 길이별 성과
+        title_length_stats = {"short": [], "medium": [], "long": []}  # ~30자, 30~50자, 50자+
+
+        for vid in videos_data.get("items", []):
+            snippet = vid.get("snippet", {})
+            stats = vid.get("statistics", {})
+            content = vid.get("contentDetails", {})
+
+            published_at = snippet.get("publishedAt", "")
+            view_count = int(stats.get("viewCount", 0))
+
+            if published_at:
+                from datetime import datetime
+                dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                weekday = dt.weekday()
+                hour = dt.hour
+
+                day_stats[weekday].append(view_count)
+                hour_stats[hour].append(view_count)
+
+            # 영상 길이 분석
+            duration_seconds = parse_duration(content.get("duration", ""))
+            if duration_seconds <= 600:  # 10분 이하
+                duration_stats["short"].append(view_count)
+            elif duration_seconds <= 1800:  # 30분 이하
+                duration_stats["medium"].append(view_count)
+            else:
+                duration_stats["long"].append(view_count)
+
+            # 제목 길이 분석
+            title = snippet.get("title", "")
+            title_len = len(title)
+            if title_len <= 30:
+                title_length_stats["short"].append(view_count)
+            elif title_len <= 50:
+                title_length_stats["medium"].append(view_count)
+            else:
+                title_length_stats["long"].append(view_count)
+
+        # 요일별 평균 계산
+        day_avg = []
+        best_day = {"name": "", "avg": 0}
+        for i in range(7):
+            views = day_stats[i]
+            avg = sum(views) / len(views) if views else 0
+            day_avg.append({"day": day_names[i], "avgViews": round(avg), "videoCount": len(views)})
+            if avg > best_day["avg"]:
+                best_day = {"name": day_names[i], "avg": avg}
+
+        # 시간대별 평균 (6시간 단위로 그룹핑)
+        time_periods = [
+            {"name": "새벽 (0-6시)", "hours": list(range(0, 6))},
+            {"name": "오전 (6-12시)", "hours": list(range(6, 12))},
+            {"name": "오후 (12-18시)", "hours": list(range(12, 18))},
+            {"name": "저녁 (18-24시)", "hours": list(range(18, 24))}
+        ]
+
+        time_avg = []
+        best_time = {"name": "", "avg": 0}
+        for period in time_periods:
+            views = []
+            for h in period["hours"]:
+                views.extend(hour_stats[h])
+            avg = sum(views) / len(views) if views else 0
+            time_avg.append({"period": period["name"], "avgViews": round(avg), "videoCount": len(views)})
+            if avg > best_time["avg"]:
+                best_time = {"name": period["name"], "avg": avg}
+
+        # 영상 길이별 평균
+        duration_avg = {}
+        duration_labels = {"short": "10분 이하", "medium": "10-30분", "long": "30분 이상"}
+        best_duration = {"name": "", "avg": 0}
+        for key, views in duration_stats.items():
+            avg = sum(views) / len(views) if views else 0
+            duration_avg[key] = {"label": duration_labels[key], "avgViews": round(avg), "videoCount": len(views)}
+            if avg > best_duration["avg"]:
+                best_duration = {"name": duration_labels[key], "avg": avg}
+
+        # 제목 길이별 평균
+        title_avg = {}
+        title_labels = {"short": "30자 이하", "medium": "30-50자", "long": "50자 이상"}
+        best_title_len = {"name": "", "avg": 0}
+        for key, views in title_length_stats.items():
+            avg = sum(views) / len(views) if views else 0
+            title_avg[key] = {"label": title_labels[key], "avgViews": round(avg), "videoCount": len(views)}
+            if avg > best_title_len["avg"]:
+                best_title_len = {"name": title_labels[key], "avg": avg}
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "channelTitle": channel_info.get("channelTitle", ""),
+                "analyzedVideos": len(video_ids),
+                "dayPattern": {
+                    "data": day_avg,
+                    "bestDay": best_day["name"],
+                    "recommendation": f"'{best_day['name']}요일'에 업로드하면 평균 {format_number(int(best_day['avg']))}회 조회수 기대"
+                },
+                "timePattern": {
+                    "data": time_avg,
+                    "bestTime": best_time["name"],
+                    "recommendation": f"'{best_time['name']}'에 업로드하면 평균 {format_number(int(best_time['avg']))}회 조회수 기대"
+                },
+                "durationPattern": {
+                    "data": duration_avg,
+                    "bestDuration": best_duration["name"],
+                    "recommendation": f"'{best_duration['name']}' 영상이 평균 {format_number(int(best_duration['avg']))}회로 가장 좋은 성과"
+                },
+                "titleLengthPattern": {
+                    "data": title_avg,
+                    "bestTitleLength": best_title_len["name"],
+                    "recommendation": f"'{best_title_len['name']}' 제목이 평균 {format_number(int(best_title_len['avg']))}회로 가장 좋은 성과"
+                }
+            },
+            "message": "업로드 패턴 분석 완료"
+        })
+
+    except Exception as e:
+        print(f"업로드 패턴 분석 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/video-score', methods=['POST'])
+def api_video_score():
+    """영상 종합 점수 계산 - SEO + 바이럴 예측 통합"""
+    try:
+        data = request.get_json()
+        video_id = data.get("videoId", "")
+        api_keys = data.get("apiKeys", [])
+        current_api_key_index = data.get("currentApiKeyIndex", 0)
+
+        if not video_id:
+            return jsonify({"success": False, "message": "비디오 ID가 필요합니다."}), 400
+
+        # API 키 선택
+        api_key = None
+        if api_keys and len(api_keys) > current_api_key_index:
+            api_key = api_keys[current_api_key_index]
+
+        if not api_key:
+            api_key = get_youtube_api_key()
+
+        if not api_key:
+            return jsonify({"success": False, "message": "API 키가 필요합니다."}), 400
+
+        # 영상 정보 가져오기
+        videos_data = make_youtube_request("videos", {
+            "part": "snippet,statistics,contentDetails",
+            "id": video_id
+        }, api_key)
+
+        if not videos_data.get("items"):
+            return jsonify({"success": False, "message": "영상을 찾을 수 없습니다."}), 400
+
+        video = videos_data["items"][0]
+        snippet = video.get("snippet", {})
+        stats = video.get("statistics", {})
+        content = video.get("contentDetails", {})
+
+        # 채널 정보 가져오기
+        channel_id = snippet.get("channelId", "")
+        channel_info = get_channel_info(channel_id, api_key) if channel_id else {}
+
+        # 업로드 시간 계산
+        published_at = snippet.get("publishedAt", "")
+        hours_since_upload = 24
+        if published_at:
+            try:
+                from datetime import datetime
+                published_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                now = datetime.now(published_dt.tzinfo) if published_dt.tzinfo else datetime.utcnow()
+                hours_since_upload = max(1, (now - published_dt.replace(tzinfo=None)).total_seconds() / 3600)
+            except:
+                pass
+
+        video_data = {
+            "viewCount": int(stats.get("viewCount", 0)),
+            "likeCount": int(stats.get("likeCount", 0)),
+            "commentCount": int(stats.get("commentCount", 0)),
+            "subscriberCount": channel_info.get("subscriberCount", 0),
+            "hoursSinceUpload": hours_since_upload
+        }
+
+        # SEO 점수 계산
+        tags = snippet.get("tags", [])
+        seo_result = calculate_seo_score(
+            snippet.get("title", ""),
+            snippet.get("description", ""),
+            tags
+        )
+
+        # 바이럴 점수 계산
+        viral_result = calculate_viral_score(video_data)
+
+        # 종합 점수 (SEO 40% + 바이럴 60%)
+        total_score = seo_result["score"] * 0.4 + viral_result["viralScore"] * 0.6
+
+        if total_score >= 80:
+            total_grade = "🏆 S등급"
+        elif total_score >= 65:
+            total_grade = "⭐ A등급"
+        elif total_score >= 50:
+            total_grade = "✅ B등급"
+        elif total_score >= 35:
+            total_grade = "📊 C등급"
+        else:
+            total_grade = "➡️ D등급"
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "videoId": video_id,
+                "title": snippet.get("title", ""),
+                "thumbnail": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
+                "seo": seo_result,
+                "viral": viral_result,
+                "totalScore": round(total_score, 1),
+                "totalGrade": total_grade,
+                "stats": video_data
+            },
+            "message": "영상 종합 분석 완료"
+        })
+
+    except Exception as e:
+        print(f"영상 점수 계산 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/similar-channels', methods=['POST'])
+def api_similar_channels():
+    """유사 채널 찾기 - 비슷한 주제/규모의 채널 발굴"""
+    try:
+        data = request.get_json()
+        channel_id = data.get("channelId", "")
+        api_keys = data.get("apiKeys", [])
+        current_api_key_index = data.get("currentApiKeyIndex", 0)
+
+        if not channel_id:
+            return jsonify({"success": False, "message": "채널 ID가 필요합니다."}), 400
+
+        # API 키 선택
+        api_key = None
+        if api_keys and len(api_keys) > current_api_key_index:
+            api_key = api_keys[current_api_key_index]
+
+        if not api_key:
+            api_key = get_youtube_api_key()
+
+        if not api_key:
+            return jsonify({"success": False, "message": "API 키가 필요합니다."}), 400
+
+        # 원본 채널 정보
+        base_channel = get_channel_info(channel_id, api_key)
+        if not base_channel:
+            return jsonify({"success": False, "message": "채널을 찾을 수 없습니다."}), 400
+
+        base_subs = base_channel.get("subscriberCount", 0)
+        channel_title = base_channel.get("channelTitle", "")
+
+        # 채널 키워드로 유사 채널 검색
+        search_data = make_youtube_request("search", {
+            "part": "snippet",
+            "q": channel_title,
+            "type": "channel",
+            "maxResults": 20,
+            "regionCode": "KR"
+        }, api_key)
+
+        similar_channels = []
+        for item in search_data.get("items", []):
+            found_channel_id = item["id"]["channelId"]
+            if found_channel_id == channel_id:  # 자기 자신 제외
+                continue
+
+            ch_info = get_channel_info(found_channel_id, api_key)
+            if not ch_info:
+                continue
+
+            ch_subs = ch_info.get("subscriberCount", 0)
+
+            # 구독자 수 유사도 계산 (0.1배 ~ 10배 범위)
+            if base_subs > 0 and ch_subs > 0:
+                ratio = ch_subs / base_subs if ch_subs > base_subs else base_subs / ch_subs
+                if ratio <= 10:  # 10배 이내만
+                    similarity = max(0, 100 - (ratio - 1) * 10)  # 비율이 가까울수록 높은 점수
+
+                    similar_channels.append({
+                        "channelId": found_channel_id,
+                        "channelTitle": ch_info.get("channelTitle", ""),
+                        "thumbnail": ch_info.get("thumbnailUrl", ""),
+                        "subscriberCount": ch_subs,
+                        "videoCount": ch_info.get("videoCount", 0),
+                        "viewCount": ch_info.get("viewCount", 0),
+                        "similarity": round(similarity, 1),
+                        "sizeRatio": f"{ch_subs / base_subs:.1f}x" if base_subs > 0 else "N/A"
+                    })
+
+        # 유사도 순 정렬
+        similar_channels.sort(key=lambda x: x["similarity"], reverse=True)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "baseChannel": {
+                    "channelId": channel_id,
+                    "channelTitle": channel_title,
+                    "subscriberCount": base_subs
+                },
+                "similarChannels": similar_channels[:10]
+            },
+            "message": f"{len(similar_channels[:10])}개의 유사 채널을 찾았습니다."
+        })
+
+    except Exception as e:
+        print(f"유사 채널 찾기 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/generate-description', methods=['POST'])
+def api_generate_description():
+    """AI로 최적화된 설명란 템플릿 생성"""
+    try:
+        import json
+        from openai import OpenAI
+
+        data = request.get_json()
+        title = data.get("title", "")
+        category = data.get("category", "general")  # general, news, story, education
+        include_sections = data.get("includeSections", ["timestamps", "links", "hashtags"])
+
+        if not title:
+            return jsonify({"success": False, "message": "영상 제목이 필요합니다."}), 400
+
+        openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        if not openai_api_key:
+            return jsonify({"success": False, "message": "OpenAI API 키가 설정되지 않았습니다."}), 400
+
+        client = OpenAI(api_key=openai_api_key)
+
+        sections_guide = {
+            "timestamps": "- 챕터별 타임스탬프 (00:00 형식)",
+            "links": "- 관련 링크 섹션",
+            "hashtags": "- SEO용 해시태그 (3-5개)",
+            "cta": "- 구독/좋아요 CTA",
+            "credits": "- 출처/크레딧 섹션"
+        }
+
+        selected_sections = "\n".join([sections_guide.get(s, "") for s in include_sections if s in sections_guide])
+
+        category_style = {
+            "general": "일반적인 유튜브 영상",
+            "news": "뉴스/시사 콘텐츠 (정보 전달 중심)",
+            "story": "스토리텔링 콘텐츠 (감성적, 몰입형)",
+            "education": "교육/정보 콘텐츠 (학습 목적)"
+        }
+
+        prompt = f"""다음 YouTube 영상 제목에 맞는 최적화된 설명란 템플릿을 생성해주세요.
+
+영상 제목: {title}
+콘텐츠 스타일: {category_style.get(category, "일반적인 유튜브 영상")}
+
+포함할 섹션:
+{selected_sections}
+
+다음 형식의 JSON으로 응답해주세요:
+{{
+  "description": "완성된 설명란 텍스트 (실제로 바로 사용 가능한 형태)",
+  "hookLine": "첫 줄에 들어갈 훅 (검색 결과에 노출되는 부분)",
+  "tips": ["설명란 작성 팁 1", "팁 2", ...]
+}}
+
+한국어로 작성해주세요. 설명란은 최소 500자 이상으로 작성하고, 검색 최적화를 고려해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube SEO 전문가입니다. 검색 최적화와 시청자 참여를 높이는 설명란을 작성합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        result = json.loads(result_text)
+
+        return jsonify({
+            "success": True,
+            "data": result,
+            "message": "설명란 템플릿 생성 완료"
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"설명란 생성 JSON 파싱 오류: {e}")
+        return jsonify({"success": False, "message": "결과 파싱 실패"}), 500
+    except Exception as e:
+        print(f"설명란 생성 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @tubelens_bp.route('/api/tubelens/keyword-trend', methods=['POST'])
 def api_keyword_trend():
     """키워드 트렌드 분석 - 기간별 영상 수와 평균 조회수 비교"""
