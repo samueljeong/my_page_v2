@@ -18133,8 +18133,9 @@ def run_automation_pipeline(row_data, row_index):
 
                 job_id = video_data.get('job_id')
 
-                # 영상 생성 완료 대기 (폴링) - 20분 대기
-                for _ in range(600):  # 600 * 2초 = 20분
+                # 영상 생성 완료 대기 (폴링) - 40분 대기
+                # 10분 영상에 ~20분 소요되므로 여유있게 40분
+                for _ in range(1200):  # 1200 * 2초 = 40분
                     time_module.sleep(2)
                     status_resp = req.get(f"{base_url}/api/image/video-status/{job_id}", timeout=30)
                     status_data = status_resp.json()
@@ -18151,7 +18152,7 @@ def run_automation_pipeline(row_data, row_index):
                     print(f"[AUTOMATION] 3. 완료: {video_url_local} (영상 생성은 무료)")
                     break  # 성공, 루프 탈출
                 elif not video_generation_error:
-                    video_generation_error = "영상 생성 타임아웃 (20분 초과)"
+                    video_generation_error = "영상 생성 타임아웃 (40분 초과)"
                     print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 실패: {video_generation_error}")
 
             except Exception as e:
@@ -19387,9 +19388,10 @@ def api_sheets_check_and_process():
         processed_count = 0
         results = []
 
-        # ========== 처리중인 작업이 있는지 확인 (20분 타임아웃) ==========
+        # ========== 처리중인 작업이 있는지 확인 (40분 타임아웃) ==========
         # "처리중"인 행이 있으면 새 작업을 시작하지 않음 (한 번에 하나씩만 처리)
-        # 단, 20분 이상 처리중이거나 시작시간이 없으면 실패로 변경
+        # 단, 40분 이상 처리중이거나 시작시간이 없으면 실패로 변경
+        # (10분 영상에 ~20분 소요되므로 여유있게 40분)
         for i, row in enumerate(rows[1:], start=2):
             if len(row) > 0 and row[0] == '처리중':
                 work_time = row[1] if len(row) > 1 else ''
@@ -19400,8 +19402,8 @@ def api_sheets_check_and_process():
                         work_dt = datetime.strptime(work_time, '%Y-%m-%d %H:%M:%S')
                         elapsed_minutes = (now - work_dt).total_seconds() / 60
 
-                        if elapsed_minutes > 20:
-                            # 20분 초과 → 실패로 변경
+                        if elapsed_minutes > 40:
+                            # 40분 초과 → 실패로 변경
                             print(f"[SHEETS] 행 {i}: 처리중 상태 {elapsed_minutes:.1f}분 경과 - 타임아웃으로 실패 처리")
                             sheets_update_cell(service, sheet_id, f'Sheet1!A{i}', '실패')
                             sheets_update_cell(service, sheet_id, f'Sheet1!M{i}', f'타임아웃: {elapsed_minutes:.0f}분 경과')
