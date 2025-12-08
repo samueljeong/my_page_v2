@@ -18502,12 +18502,15 @@ def analyze_channel_shorts_style(channel_id: str) -> dict:
         if len(top_shorts) < 2:
             return {"analyzed": False, "summary": "분석할 쇼츠가 부족함"}
 
-        # 쇼츠 썸네일 분석 (TubeLens API 사용, 프롬프트 수정)
+        # 쇼츠 썸네일 분석 (GPT-5.1 Responses API 사용)
         from openai import OpenAI
         client = OpenAI()
 
-        content = [
-            {"type": "text", "text": """다음 YouTube Shorts 썸네일들을 분석해주세요.
+        # GPT-5.1 Responses API용 input 구성
+        system_prompt = "당신은 YouTube Shorts 전문가입니다. 성공적인 쇼츠의 시각적 패턴을 분석합니다."
+
+        user_content = [
+            {"type": "input_text", "text": """다음 YouTube Shorts 썸네일들을 분석해주세요.
 
 쇼츠의 특성 (세로 9:16)을 고려하여 다음을 분석해주세요:
 1. 후킹 텍스트 스타일 (상단 배치, 글씨 크기, 색상)
@@ -18531,20 +18534,28 @@ JSON 형식으로 답변해주세요:
         for i, v in enumerate(top_shorts[:6]):
             thumbnail_url = v.get("thumbnail", "")
             if thumbnail_url:
-                content.append({"type": "image_url", "image_url": {"url": thumbnail_url}})
-                content.append({"type": "text", "text": f"[쇼츠 {i+1}] {v.get('title', '')} (조회수: {v.get('viewCount', 0):,})"})
+                user_content.append({"type": "input_image", "image_url": thumbnail_url})
+                user_content.append({"type": "input_text", "text": f"[쇼츠 {i+1}] {v.get('title', '')} (조회수: {v.get('viewCount', 0):,})"})
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "당신은 YouTube Shorts 전문가입니다. 성공적인 쇼츠의 시각적 패턴을 분석합니다."},
-                {"role": "user", "content": content}
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": user_content}
             ],
-            temperature=0.7,
-            max_tokens=1500
+            temperature=0.7
         )
 
-        result_text = response.choices[0].message.content.strip()
+        # GPT-5.1 응답 추출
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content_item in getattr(item, "content", []) or []:
+                    if getattr(content_item, "type", "") == "text":
+                        text_chunks.append(getattr(content_item, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
 
         # JSON 파싱
         if "```json" in result_text:
