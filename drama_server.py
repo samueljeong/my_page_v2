@@ -14405,6 +14405,51 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                     del result
                     gc.collect()
 
+                    # Ken Burns 실패 시 단순 방식으로 재시도 (이미지 + 오디오만)
+                    print(f"[VIDEO-WORKER] Clip {idx+1} 단순 방식으로 재시도...")
+                    simple_filter = f"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2"
+                    if audio_path and os.path.exists(audio_path):
+                        fallback_cmd = [
+                            "ffmpeg", "-y",
+                            "-loop", "1",
+                            "-i", img_path,
+                            "-i", audio_path,
+                            "-vf", simple_filter,
+                            "-c:v", "libx264", "-preset", "fast",
+                            "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                            "-pix_fmt", "yuv420p",
+                            "-shortest", "-t", str(duration),
+                            clip_path
+                        ]
+                    else:
+                        fallback_cmd = [
+                            "ffmpeg", "-y",
+                            "-loop", "1",
+                            "-i", img_path,
+                            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                            "-vf", simple_filter,
+                            "-c:v", "libx264", "-preset", "fast",
+                            "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                            "-pix_fmt", "yuv420p",
+                            "-t", str(duration), "-shortest",
+                            clip_path
+                        ]
+
+                    fallback_result = subprocess.run(
+                        fallback_cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        timeout=600
+                    )
+                    if fallback_result.returncode == 0 and os.path.exists(clip_path):
+                        scene_videos.append(clip_path)
+                        print(f"[VIDEO-WORKER] Clip {idx+1} 단순 방식 성공")
+                    else:
+                        fallback_stderr = fallback_result.stderr.decode('utf-8', errors='ignore')[:500] if fallback_result.stderr else ''
+                        print(f"[VIDEO-WORKER] Clip {idx+1} 단순 방식도 실패: {fallback_stderr}")
+                    del fallback_result
+                    gc.collect()
+
             print(f"[VIDEO-WORKER] Total clips created: {len(scene_videos)} / {total_scenes}")
 
             if not scene_videos:
