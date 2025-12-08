@@ -18829,13 +18829,33 @@ def run_automation_pipeline(row_data, row_index):
             print(f"[TUBELENS] 설명란 CTA 추가 실패 (무시): {cta_err}")
 
         try:
+            # [최적화] public + 예약시간 없음 = 15분 후 공개 (YouTube 처리 최적화 + 쇼츠 생성 대기)
+            delayed_publish = False
+            actual_visibility = visibility
+            publish_at_iso = None
+
+            if visibility.lower() == 'public' and not publish_time:
+                from datetime import datetime, timedelta
+                # 15분 후 공개로 설정
+                publish_later = datetime.utcnow() + timedelta(minutes=15)
+                publish_at_iso = publish_later.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                actual_visibility = 'private'  # 먼저 비공개로 업로드
+                delayed_publish = True
+                print(f"[AUTOMATION] 🕐 15분 후 공개 설정 (YouTube 최적화 + 쇼츠 대기)")
+                print(f"[AUTOMATION]    - 업로드: private -> 15분 후 public")
+                print(f"[AUTOMATION]    - 공개 예정: {publish_later.strftime('%Y-%m-%d %H:%M')} UTC")
+
             upload_payload = {
                 "videoPath": video_url_local,
                 "title": title,
                 "description": description,
-                "privacyStatus": visibility,
+                "privacyStatus": actual_visibility,
                 "channelId": channel_id
             }
+
+            # 15분 후 공개 설정
+            if delayed_publish and publish_at_iso:
+                upload_payload["publish_at"] = publish_at_iso
 
             # 썸네일이 있으면 추가
             if thumbnail_url:
@@ -18846,8 +18866,7 @@ def run_automation_pipeline(row_data, row_index):
                 upload_payload["tags"] = tags
                 print(f"[AUTOMATION] YouTube 태그 {len(tags)}개 추가")
 
-            # 예약시간(K열)이 있으면 ISO 8601 형식으로 변환하여 추가
-            publish_at_iso = None  # 클로저에서 접근할 수 있도록 미리 초기화
+            # 예약시간(E열)이 있으면 ISO 8601 형식으로 변환하여 추가 (15분 후 공개보다 우선)
             if publish_time:
                 try:
                     from datetime import datetime
@@ -19000,18 +19019,20 @@ def run_automation_pipeline(row_data, row_index):
 
 {' '.join(shorts_hashtags)}"""
 
+                            # 쇼츠도 메인 영상과 동일한 공개 설정 사용
+                            # (15분 후 공개 또는 예약시간이 있으면 동시 공개)
                             shorts_upload_payload = {
                                 "videoPath": shorts_output_path,
                                 "title": shorts_title,
                                 "description": shorts_description,
-                                "privacyStatus": visibility,
+                                "privacyStatus": actual_visibility,  # 메인과 동일 (private if 15분 후 공개)
                                 "channelId": channel_id
                             }
 
-                            # 메인 영상과 같은 예약시간 적용 (있는 경우)
+                            # 메인 영상과 같은 예약시간 적용 (15분 후 공개 또는 예약시간)
                             if publish_at_iso:
                                 shorts_upload_payload["publish_at"] = publish_at_iso
-                                print(f"[SHORTS-BG] 쇼츠 예약 공개 설정: {publish_at_iso}")
+                                print(f"[SHORTS-BG] 쇼츠도 메인 영상과 동시 공개 예정: {publish_at_iso}")
 
                             shorts_resp = bg_req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
                             shorts_data = shorts_resp.json()
