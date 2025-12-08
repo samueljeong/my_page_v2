@@ -13828,7 +13828,8 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
                 clip_path = os.path.join(temp_dir, f"clip_{bd['beat_id']:02d}.mp4")
 
                 # 이미지 + 오디오 + 자막 합성 (한국 뉴스 스타일)
-                voiceover_escaped = bd['voiceover'].replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
+                # FFmpeg drawtext 이스케이프 순서: 백슬래시 → 콜론 → 따옴표
+                voiceover_escaped = bd['voiceover'].replace("\\", "\\\\").replace(":", "\\:").replace("'", "'\\''")
 
                 # 폰트 경로 (NanumGothicBold 우선)
                 font_path = "fonts/NanumGothicBold.ttf"
@@ -13837,10 +13838,13 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
                 font_escaped = font_path.replace("\\", "/").replace(":", "\\:")
 
                 # ========== 한국 뉴스 스타일 텍스트 오버레이 ==========
+                # 쇼츠 해상도: 1080x1920 (9:16)
                 # 1. 하단 자막 영역: 반투명 검정 배경 박스 + 흰색 텍스트
                 subtitle_filter = (
+                    # 먼저 해상도를 명시적으로 설정 (drawbox 'h' 평가 오류 방지)
+                    f"scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,"
                     # 하단 반투명 검정 배경 박스 (하단 25%)
-                    f"drawbox=x=0:y=h*0.75:w=w:h=h*0.25:color=black@0.7:t=fill,"
+                    f"drawbox=x=0:y=ih*0.75:w=iw:h=ih*0.25:color=black@0.7:t=fill,"
                     # 자막 텍스트 (하단 중앙)
                     f"drawtext=text='{voiceover_escaped}':"
                     f"fontfile='{font_escaped}':fontsize=44:fontcolor=white:"
@@ -13851,7 +13855,8 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
 
                 # 2. 상단 헤드라인 (on_screen_text): 뉴스 스타일 - 노란색/청록색, 큰 폰트
                 if bd['on_screen_text']:
-                    text_escaped = bd['on_screen_text'].replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
+                    # FFmpeg drawtext 이스케이프 순서: 백슬래시 → 콜론 → 따옴표
+                    text_escaped = bd['on_screen_text'].replace("\\", "\\\\").replace(":", "\\:").replace("'", "'\\''")
 
                     # 텍스트 길이에 따라 폰트 크기 조절
                     text_len = len(bd['on_screen_text'])
@@ -13867,7 +13872,7 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
 
                     subtitle_filter += (
                         # 상단 반투명 배경 (상단 18%)
-                        f",drawbox=x=0:y=0:w=w:h=h*0.18:color=black@0.6:t=fill,"
+                        f",drawbox=x=0:y=0:w=iw:h=ih*0.18:color=black@0.6:t=fill,"
                         # 헤드라인 텍스트 (노란색/청록색, 강한 테두리)
                         f"drawtext=text='{text_escaped}':"
                         f"fontfile='{font_escaped}':fontsize={headline_fontsize}:fontcolor={headline_color}:"
