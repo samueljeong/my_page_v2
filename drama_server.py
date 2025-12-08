@@ -13039,14 +13039,14 @@ def _get_bgm_file(mood, bgm_dir=None):
     return selected
 
 
-def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
+def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.25):
     """비디오에 BGM 믹싱 (나레이션 유지, BGM은 작게)
 
     Args:
         video_path: 원본 비디오 경로
         bgm_path: BGM 오디오 경로
         output_path: 출력 비디오 경로
-        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.25 = 25%)
 
     Returns:
         성공 여부 (bool)
@@ -13074,7 +13074,7 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
             "-stream_loop", "-1", "-i", bgm_path,      # BGM 루프
             "-filter_complex",
             f"[1:a]volume={bgm_volume},afade=t=in:st=0:d=2,afade=t=out:st={fade_start}:d=3[bgm];"  # BGM 볼륨+페이드
-            f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",  # 믹싱
+            f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]",  # 믹싱 (normalize=0: TTS 볼륨 유지)
             "-map", "0:v",                             # 비디오 스트림
             "-map", "[aout]",                          # 믹싱된 오디오
             "-c:v", "copy",                            # 비디오 재인코딩 안함
@@ -13267,7 +13267,7 @@ def _mix_sfx_into_video(video_path, sound_effects, scenes, output_path, sfx_dir=
         # amix로 모든 오디오 합치기
         sfx_labels = "".join([f"[sfx{i}]" for i in range(len(sfx_inputs))])
         mix_inputs = len(sfx_inputs) + 1  # 효과음 개수 + 원본 오디오
-        filter_parts.append(f"[0:a]{sfx_labels}amix=inputs={mix_inputs}:duration=first:dropout_transition=2[aout]")
+        filter_parts.append(f"[0:a]{sfx_labels}amix=inputs={mix_inputs}:duration=first:dropout_transition=2:normalize=0[aout]")
 
         filter_complex = ";".join(filter_parts)
 
@@ -15133,8 +15133,11 @@ def api_generate_shorts_script():
 
 @app.route('/api/shorts/generate-tts', methods=['POST'])
 def api_generate_shorts_tts():
-    """쇼츠용 TTS 음성 생성"""
+    """쇼츠용 TTS 음성 생성 (REST API 사용)"""
     try:
+        import requests as req
+        import base64
+
         data = request.get_json()
         text = data.get('text', '').strip()
         voice = data.get('voice', 'ko-KR-Neural2-C')
@@ -15145,28 +15148,35 @@ def api_generate_shorts_tts():
 
         print(f"[SHORTS-TTS] 음성 생성: {len(text)}자, 속도: {speed}x")
 
-        from google.cloud import texttospeech
+        # Google Cloud TTS REST API 사용
+        google_api_key = os.getenv("GOOGLE_CLOUD_API_KEY", "")
+        if not google_api_key:
+            return jsonify({'ok': False, 'error': 'GOOGLE_CLOUD_API_KEY 환경변수가 필요합니다.'}), 500
 
-        tts_client = texttospeech.TextToSpeechClient()
+        url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
 
-        synthesis_input = texttospeech.SynthesisInput(text=text)
+        payload = {
+            "input": {"text": text},
+            "voice": {
+                "languageCode": "ko-KR",
+                "name": voice
+            },
+            "audioConfig": {
+                "audioEncoding": "MP3",
+                "speakingRate": max(0.25, min(4.0, speed)),
+                "pitch": 0.0
+            }
+        }
 
-        voice_params = texttospeech.VoiceSelectionParams(
-            language_code="ko-KR",
-            name=voice
-        )
+        response = req.post(url, json=payload, timeout=60)
 
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=speed,
-            pitch=0.0
-        )
+        if response.status_code != 200:
+            error_text = response.text
+            print(f"[SHORTS-TTS] Google API 오류: {response.status_code} - {error_text}")
+            return jsonify({'ok': False, 'error': f'Google TTS 오류: {response.status_code}'}), 500
 
-        response = tts_client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice_params,
-            audio_config=audio_config
-        )
+        result = response.json()
+        audio_content = base64.b64decode(result.get("audioContent", ""))
 
         # 오디오 파일 저장
         audio_dir = 'static/audio/shorts'
@@ -15175,7 +15185,7 @@ def api_generate_shorts_tts():
         audio_path = os.path.join(audio_dir, audio_filename)
 
         with open(audio_path, 'wb') as f:
-            f.write(response.audio_content)
+            f.write(audio_content)
 
         audio_url = f'/{audio_path}'
         print(f"[SHORTS-TTS] 저장 완료: {audio_path}")
