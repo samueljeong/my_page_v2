@@ -18031,6 +18031,292 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
     return False
 
 
+# ========== TubeLens 통합 기능 (자동화 파이프라인용) ==========
+
+# 채널별 최적 업로드 시간 캐시 (메모리 + 파일)
+_channel_optimal_time_cache = {}
+
+
+def analyze_channel_best_time(channel_id: str) -> dict:
+    """
+    채널의 실제 업로드 성과 데이터를 분석하여 최적 시간대를 찾습니다.
+    YouTube API를 호출하여 최근 50개 영상의 성과를 분석합니다.
+
+    반환값:
+    {
+        "bestTime": "저녁 (18-24시)",
+        "bestHour": 19,  # 추천 시간 (정각)
+        "bestDay": "수",
+        "analyzed": True
+    }
+    """
+    import os
+    import json
+
+    # 1. 메모리 캐시 확인
+    if channel_id in _channel_optimal_time_cache:
+        cached = _channel_optimal_time_cache[channel_id]
+        print(f"[TUBELENS] 채널 최적 시간 캐시 히트: {channel_id} -> {cached.get('bestHour', 19)}:00")
+        return cached
+
+    # 2. 파일 캐시 확인 (7일간 유효)
+    cache_file = f"/tmp/tubelens_cache_{channel_id}.json"
+    try:
+        if os.path.exists(cache_file):
+            from datetime import datetime, timedelta
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(cache_file))
+            if datetime.now() - file_mtime < timedelta(days=7):
+                with open(cache_file, 'r') as f:
+                    cached = json.load(f)
+                    _channel_optimal_time_cache[channel_id] = cached
+                    print(f"[TUBELENS] 파일 캐시 로드: {channel_id} -> {cached.get('bestHour', 19)}:00")
+                    return cached
+    except Exception as e:
+        print(f"[TUBELENS] 캐시 파일 읽기 오류: {e}")
+
+    # 3. YouTube API로 실제 분석
+    try:
+        import requests
+        # TubeLens API 내부 호출
+        base_url = os.environ.get('BASE_URL', 'http://localhost:5002')
+        api_key = os.environ.get('YOUTUBE_API_KEY', '')
+
+        if not api_key:
+            print(f"[TUBELENS] YouTube API 키 없음, 기본값 사용")
+            return {"bestHour": 19, "bestTime": "저녁", "analyzed": False}
+
+        resp = requests.post(
+            f"{base_url}/api/tubelens/upload-pattern",
+            json={"channelId": channel_id, "apiKeys": [api_key]},
+            timeout=30
+        )
+
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("success"):
+                pattern_data = data.get("data", {})
+                time_pattern = pattern_data.get("timePattern", {})
+                best_time_str = time_pattern.get("bestTime", "저녁 (18-24시)")
+
+                # 시간대 문자열을 시간으로 변환
+                time_mapping = {
+                    "새벽 (0-6시)": 5,
+                    "오전 (6-12시)": 9,
+                    "오후 (12-18시)": 15,
+                    "저녁 (18-24시)": 20,
+                    "새벽": 5,
+                    "오전": 9,
+                    "오후": 15,
+                    "저녁": 20,
+                }
+                best_hour = time_mapping.get(best_time_str, 19)
+
+                result = {
+                    "bestTime": best_time_str,
+                    "bestHour": best_hour,
+                    "bestDay": pattern_data.get("dayPattern", {}).get("bestDay", ""),
+                    "analyzed": True
+                }
+
+                # 캐시 저장
+                _channel_optimal_time_cache[channel_id] = result
+                try:
+                    with open(cache_file, 'w') as f:
+                        json.dump(result, f)
+                except:
+                    pass
+
+                print(f"[TUBELENS] 채널 분석 완료: {channel_id} -> 최적 시간: {best_hour}:00 ({best_time_str})")
+                return result
+
+    except Exception as e:
+        print(f"[TUBELENS] 채널 분석 오류: {e}")
+
+    # 4. 실패 시 기본값
+    return {"bestHour": 19, "bestTime": "저녁", "analyzed": False}
+
+
+def get_optimal_publish_time(channel_id: str, date_str: str, category: str = "") -> str:
+    """
+    날짜만 입력되면 최적 업로드 시간을 자동 설정합니다.
+
+    우선순위:
+    1. 채널 데이터 분석 결과 (TubeLens API)
+    2. 카테고리별 기본값 (news: 08:00, story: 19:00)
+
+    입력: "2024-12-10" 또는 "12/10"
+    출력: "2024-12-10 20:00" (채널 분석 결과) 또는 "2024-12-10 08:00" (뉴스 카테고리)
+    """
+    from datetime import datetime
+
+    date_str = str(date_str).strip()
+    category = str(category).strip().lower() if category else ""
+
+    # 이미 시간이 포함되어 있으면 그대로 반환
+    if ':' in date_str:
+        return date_str
+
+    # 1. 채널 데이터 분석으로 최적 시간 결정
+    optimal_hour = 19  # 기본값
+    analysis_source = "기본값"
+
+    if channel_id:
+        try:
+            analysis = analyze_channel_best_time(channel_id)
+            if analysis.get("analyzed"):
+                optimal_hour = analysis.get("bestHour", 19)
+                analysis_source = f"채널분석({analysis.get('bestTime', '')})"
+        except Exception as e:
+            print(f"[TUBELENS] 채널 분석 실패, 카테고리 기본값 사용: {e}")
+
+    # 2. 채널 분석 실패 시 카테고리별 기본값 사용
+    if analysis_source == "기본값":
+        category_optimal_hours = {
+            "news": 8,       # 뉴스: 아침 8시
+            "뉴스": 8,
+            "story": 19,     # 스토리: 저녁 7시
+            "drama": 19,
+            "드라마": 19,
+        }
+        if category in category_optimal_hours:
+            optimal_hour = category_optimal_hours[category]
+            analysis_source = f"카테고리({category})"
+
+    optimal_time = f"{optimal_hour:02d}:00"
+
+    # 날짜만 있는 경우 파싱
+    date_only_formats = [
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%m/%d",
+        "%m-%d",
+    ]
+
+    for fmt in date_only_formats:
+        try:
+            parsed = datetime.strptime(date_str, fmt)
+            if parsed.year == 1900:
+                parsed = parsed.replace(year=datetime.now().year)
+
+            result = parsed.strftime("%Y-%m-%d") + f" {optimal_time}"
+            print(f"[TUBELENS] 최적 시간 설정: {date_str} -> {result} (KST, {analysis_source})")
+            return result
+        except ValueError:
+            continue
+
+    return date_str
+
+
+def calculate_seo_score_for_automation(title: str, description: str = "", tags: list = None) -> dict:
+    """
+    SEO 점수 계산 - 자동화 파이프라인용
+    (TubeLens calculate_seo_score 함수 기반)
+    """
+    import re
+
+    score = 0
+    details = []
+
+    # 제목 분석 (최대 40점)
+    title_len = len(title) if title else 0
+    if 30 <= title_len <= 60:
+        score += 20
+        details.append("✅ 제목 길이 적절 (30-60자)")
+    elif 20 <= title_len <= 70:
+        score += 10
+        details.append("⚠️ 제목 길이 보통")
+    else:
+        details.append("❌ 제목 너무 짧거나 김")
+
+    # 제목에 숫자 포함 (클릭률 향상)
+    if title and re.search(r'\d+', title):
+        score += 10
+        details.append("✅ 숫자 포함 (클릭률 ↑)")
+
+    # 제목에 감정 표현 포함
+    emotion_words = ['충격', '놀라운', '대박', '감동', '실화', '경악', '비밀', '반전', '최초', '드디어', '결국', '진실', '폭로']
+    if title and any(word in title for word in emotion_words):
+        score += 10
+        details.append("✅ 감정 유발 키워드 포함")
+
+    # 설명란 분석 (최대 30점)
+    desc_len = len(description) if description else 0
+    if desc_len >= 500:
+        score += 15
+        details.append("✅ 설명란 충분히 작성됨")
+    elif desc_len >= 200:
+        score += 8
+        details.append("⚠️ 설명란 보통")
+    else:
+        details.append("❌ 설명란 너무 짧음")
+
+    # 설명에 타임스탬프 포함
+    if description and re.search(r'\d{1,2}:\d{2}', description):
+        score += 10
+        details.append("✅ 타임스탬프 포함")
+
+    # 해시태그 분석
+    hashtags = re.findall(r'#\w+', title + (description or ''))
+    if 3 <= len(hashtags) <= 10:
+        score += 5
+        details.append("✅ 해시태그 적절")
+    elif len(hashtags) > 0:
+        score += 2
+        details.append("⚠️ 해시태그 부족하거나 과다")
+
+    # 태그 분석 (최대 30점)
+    if tags and len(tags) >= 10:
+        score += 15
+        details.append("✅ 태그 충분히 설정됨")
+    elif tags and len(tags) >= 5:
+        score += 8
+        details.append("⚠️ 태그 보통")
+    else:
+        score += 5  # 태그 정보 없으면 기본점
+
+    # 등급 결정
+    if score >= 80:
+        grade = "A+"
+    elif score >= 65:
+        grade = "A"
+    elif score >= 50:
+        grade = "B"
+    elif score >= 35:
+        grade = "C"
+    else:
+        grade = "D"
+
+    return {
+        "score": min(100, score),
+        "grade": grade,
+        "details": details
+    }
+
+
+def enhance_description_for_youtube(description: str, title: str, hashtags: list = None) -> str:
+    """
+    YouTube 설명란 SEO 최적화
+    - CTA (구독/좋아요 유도) 추가
+    - 해시태그 정리
+    """
+    if not description:
+        description = ""
+
+    # 이미 CTA가 있는지 확인
+    cta_keywords = ['구독', '좋아요', '알림', '댓글']
+    has_cta = any(keyword in description for keyword in cta_keywords)
+
+    # CTA가 없으면 추가
+    if not has_cta:
+        cta_text = "\n\n" + "=" * 30 + "\n"
+        cta_text += "👍 이 영상이 도움이 되셨다면 좋아요와 구독 부탁드립니다!\n"
+        cta_text += "🔔 알림 설정하시면 새로운 영상을 놓치지 않습니다.\n"
+        cta_text += "💬 궁금한 점은 댓글로 남겨주세요!"
+        description = description + cta_text
+
+    return description
+
+
 def run_automation_pipeline(row_data, row_index):
     """
     자동화 파이프라인 실행 - 기존 /image 페이지 API 재사용
@@ -18061,7 +18347,7 @@ def run_automation_pipeline(row_data, row_index):
         work_time = row_data[1] if len(row_data) > 1 else ''  # B: 작업시간 (파이프라인 실행용)
         channel_id = (row_data[2] if len(row_data) > 2 else '').strip()  # 공백 제거
         channel_name = row_data[3] if len(row_data) > 3 else ''  # D: 채널명 (참고용, 코드에서 미사용)
-        publish_time = row_data[4] if len(row_data) > 4 else ''  # E: 예약시간 (YouTube 공개용)
+        publish_time_raw = row_data[4] if len(row_data) > 4 else ''  # E: 예약시간 (YouTube 공개용)
         script = row_data[5] if len(row_data) > 5 else ''
         title = row_data[6] if len(row_data) > 6 else ''
         # H(7), I(8), J(9)는 출력 컬럼 (제목2, 제목3, 비용)
@@ -18070,6 +18356,10 @@ def run_automation_pipeline(row_data, row_index):
         voice = (row_data[13] if len(row_data) > 13 else '').strip() or 'ko-KR-Neural2-C'  # N열: 음성
         audience = (row_data[14] if len(row_data) > 14 else '').strip() or 'senior'  # O열: 타겟 시청자
         category = (row_data[15] if len(row_data) > 15 else '').strip()  # P열: 카테고리 (뉴스 등)
+
+        # [TUBELENS] 날짜만 입력된 경우 카테고리별 최적 시간 자동 추가
+        # news -> 08:00, story/drama -> 19:00, 기본 -> 19:00
+        publish_time = get_optimal_publish_time(channel_id, publish_time_raw, category) if publish_time_raw else ''
 
         # 비용 추적 변수 초기화
         total_cost = 0.0
@@ -18173,6 +18463,15 @@ def run_automation_pipeline(row_data, row_index):
 
             if not title:
                 title = generated_title or f"자동 생성 영상 #{row_index}"
+
+            # [TUBELENS] SEO 점수 계산 및 로깅
+            try:
+                seo_result = calculate_seo_score_for_automation(title, description, tags)
+                print(f"[TUBELENS] SEO 점수: {seo_result['score']}점 ({seo_result['grade']})")
+                for detail in seo_result['details']:
+                    print(f"  {detail}")
+            except Exception as seo_err:
+                print(f"[TUBELENS] SEO 점수 계산 실패 (무시): {seo_err}")
 
             # 비용: GPT-5.1 대본 분석 (~$0.03)
             total_cost += 0.03
@@ -18521,6 +18820,13 @@ def run_automation_pipeline(row_data, row_index):
             hashtags_text = "\n\n" + " ".join(hashtags)
             description = description + hashtags_text
             print(f"[AUTOMATION] 해시태그 추가: {' '.join(hashtags)}")
+
+        # [TUBELENS] 설명란 SEO 최적화 (CTA 자동 추가)
+        try:
+            description = enhance_description_for_youtube(description, title, hashtags)
+            print(f"[TUBELENS] 설명란 CTA 추가 완료 (총 {len(description)}자)")
+        except Exception as cta_err:
+            print(f"[TUBELENS] 설명란 CTA 추가 실패 (무시): {cta_err}")
 
         try:
             upload_payload = {
