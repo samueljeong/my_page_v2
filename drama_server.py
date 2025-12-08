@@ -10598,39 +10598,45 @@ def api_image_analyze_script():
                 thumb_style = "회상형/후회형 (그날을 잊지 않는다, 하는게 아니었다, 늦게 알았다)"
 
             # GPT가 자동으로 카테고리를 감지하고 대본 내용 기반 구체적 썸네일 생성
-            # 뉴스: 대본 내용을 시각화 / 스토리: 감정 표현
+            # 뉴스: 한국 뉴스 스타일 (MBC/SBS/TV조선 분석 기반) / 스토리: 감정 표현
             ai_prompts_section = f'''    "detected_category": "news 또는 story 중 하나 선택 (대본 분석 결과)",
+    "thumbnail_text": {{
+      // ★ 대본에서 "따옴표 발언" 추출 - 가장 중요!
+      "quote": "대본에서 가장 충격적/흥미로운 발언을 따옴표로 추출 (예: \\"이건 처음 있는 일\\")",
+      "headline": "핵심 헤드라인 2줄 이내 (예: 환율 1500원 돌파 / 당신의 자산은?)",
+      "numbers": "강조할 숫자가 있다면 추출 (예: 3370만명, 456개, 40억)"
+    }},
     "visual_elements": {{
-      // ★ 대본에서 추출한 핵심 시각 요소 (뉴스일 때 필수!)
-      "main_subject": "대본의 핵심 주제 (예: 쿠팡 개인정보 유출, 환율 상승, 누리호 발사)",
-      "key_visuals": ["시각화할 요소1", "시각화할 요소2", "시각화할 요소3"],
-      "emotion": "충격/분노/기쁨/슬픔/긴장 중 하나",
-      "color_mood": "red-danger/blue-trust/green-money/orange-warning 중 하나"
+      // ★ 대본에서 추출한 핵심 시각 요소
+      "main_subject": "대본의 핵심 주제 (예: 쿠팡 개인정보 유출, 환율 상승, 정치인 발언)",
+      "person_description": "등장 인물 묘사 (예: 50대 한국 남성 정치인, 정장, 심각한 표정 / 30대 여성 기자, 마이크 들고)",
+      "scene_description": "배경/현장 묘사 (예: 국회의사당, 법정, 쇼핑앱 화면, 환율 그래프)",
+      "emotion": "충격/분노/기쁨/슬픔/긴장/우려/희망 중 하나",
+      "color_scheme": "yellow-highlight/cyan-news/pink-scandal/red-urgent/blue-trust 중 하나"
     }},
     "ai_prompts": {{
-      // ★ detected_category가 "news"일 때: 대본 내용을 직접 시각화!
-      // 앵커가 아닌, 뉴스 내용 자체를 보여주는 이미지
+      // ★ detected_category가 "news"일 때: 한국 뉴스 썸네일 스타일
+      // 로고 없이, 콘텐츠 중심으로 생성
       "A": {{
-        "description": "뉴스 콘텐츠 시각화 A: 대본 핵심 내용을 직접 보여주는 이미지",
-        "prompt": "★ 대본 내용 기반으로 작성! 예시 참고: 쿠팡 유출 → 'Korean e-commerce app interface screenshot style, orange shopping app with red WARNING popup, personal data icons (ID card, phone, address) floating, hacker silhouette in background, digital data breach visualization, 16:9, photorealistic, news infographic style' / 환율 → 'Korean won vs US dollar exchange rate graph sharply rising to 1500, red upward arrow, Korean currency coins falling, financial crisis mood, stock market display, 16:9, photorealistic' / 누리호 → 'Korean Nuri rocket launching with flames, Korean flag overlay, space exploration success, blue sky with rocket trail, 16:9, photorealistic news photo style'",
-        "text_overlay": {{"main": "핵심 키워드 (4-6자)", "sub": "충격적 사실 요약"}},
-        "style": "content-visualization, news-infographic"
+        "description": "인물 중심: 클로즈업 + 하단 텍스트 영역",
+        "prompt": "대본의 핵심 인물을 시각화. 예시: 정치인 발언 → 'Korean male politician in his 50s, wearing dark suit, serious concerned expression, speaking at podium, blurred government building background, dramatic lighting, upper body shot, space for text overlay at bottom 35%, 16:9, photorealistic, news interview style' / 연예인 스캔들 → 'Korean female celebrity in her 30s, casual clothes, worried expression, paparazzi style photo, dark moody background, space for text at bottom, 16:9, tabloid news style'",
+        "text_overlay": {{"main": "따옴표 발언 또는 핵심 헤드라인 (15자 이내)", "sub": "부연 설명 (20자 이내)", "color": "yellow 또는 cyan 또는 pink"}},
+        "style": "person-closeup, news-interview"
       }},
       "B": {{
-        "description": "뉴스 콘텐츠 시각화 B: 대비/비교 강조",
-        "prompt": "★ 대본 내용 기반 비교 시각화! 예시: 쿠팡 → 'Split screen: left side happy shopping customer, right side shocked person seeing data breach alert, before/after contrast, 16:9' / 환율 → 'Split screen: left 1200 won calm green, right 1500 won panic red, Korean won coin shrinking vs dollar growing, 16:9' / 일본반응 → 'Split screen: left Korean rocket success celebration, right Japanese news commentator shocked reaction, 16:9, news broadcast style'",
-        "text_overlay": {{"main": "대비 키워드", "sub": "변화 설명"}},
-        "style": "comparison, split-screen"
+        "description": "현장/이벤트 중심: 배경 이미지 + 텍스트 오버레이",
+        "prompt": "대본의 핵심 현장/사건을 시각화. 예시: 쿠팡 유출 → 'Coupang-style orange e-commerce app interface on smartphone screen, red warning popup showing data breach alert, personal information icons floating, dark dramatic background, space for bold text overlay at bottom 40%, 16:9, tech news style' / 환율 → 'Korean won to US dollar exchange rate display showing 1500, red upward arrows, financial crisis mood, stock market screens in background, dramatic red lighting, space for text at bottom, 16:9' / 건물/장소 → 'Korean National Assembly building exterior, dramatic cloudy sky, news photo style, space for headline text at bottom 35%, 16:9'",
+        "text_overlay": {{"main": "충격적 헤드라인 (15자 이내)", "sub": "상세 설명", "color": "white 또는 yellow"}},
+        "style": "scene-event, background-overlay"
       }},
       "C": {{
-        "description": "뉴스 콘텐츠 시각화 C: 데이터/통계 강조",
-        "prompt": "★ 대본의 숫자/통계를 시각화! 예시: 쿠팡 → 'Infographic showing 33.7 million people affected, data leak visualization with numbers, personal info icons scattered, red alert theme, 16:9' / 환율 → 'Financial chart showing won-dollar rate hitting 1500, big red numbers, downward Korean economy indicators, 16:9' / 정보유출 → 'Data breach infographic, millions of user profiles exposed, security lock broken, 16:9, dark theme with red accents'",
-        "text_overlay": {{"main": "핵심 숫자", "sub": "데이터 설명"}},
-        "style": "infographic, data-visualization"
-      }}
+        "description": "분할 비교: 2인 대비 또는 Before/After",
+        "prompt": "대본의 대립/비교 요소를 시각화. 예시: 정치 대립 → 'Split screen thumbnail: left side Korean male politician from ruling party speaking angrily, right side opposition party politician responding with stern face, versus composition, political debate style, space for text at bottom 30%, 16:9' / 국제 반응 → 'Split screen: left side Korean celebration scene, right side Japanese news commentator looking shocked/surprised, contrast composition, 16:9' / 변화 비교 → 'Split screen before/after style: left calm green mood, right alarming red mood, clear visual contrast, 16:9'",
+        "text_overlay": {{"main": "vs 대비 텍스트", "sub": "각 측 설명", "color": "multi-color (left: cyan, right: pink)"}},
+        "style": "split-comparison, versus"
+      }},
 
       // ★ detected_category가 "story"일 때 사용 (드라마, 감성, 인간관계, 일상 이야기)
-      // 스토리 스타일: 웹툰/만화 일러스트 + 감정 표현
       "A": {{
         "description": "스토리 스타일 A: 감정/표정 중심",
         "prompt": "Cartoon illustration style YouTube thumbnail, 16:9 aspect ratio. Character with exaggerated emotional expression (shock, surprise, joy). Vibrant colors, high contrast. NO realistic humans, comic/cartoon style only.",
@@ -10651,7 +10657,7 @@ def api_image_analyze_script():
       }}
     }}'''
 
-            ai_prompts_rules = f"""## ⚠️ CRITICAL: 대본 내용 기반 썸네일 이미지 생성 ⚠️
+            ai_prompts_rules = f"""## ⚠️ CRITICAL: 한국 뉴스 스타일 썸네일 생성 ⚠️
 
 ### 1단계: 대본 내용 분석하여 카테고리 감지
 대본을 읽고 아래 기준으로 "detected_category"를 결정하세요:
@@ -10670,40 +10676,74 @@ def api_image_analyze_script():
 - 일상적인 에피소드
 - 드라마/영화 같은 서사 구조
 
-### 2단계: 핵심 시각 요소 추출 (visual_elements) - 뉴스일 때 매우 중요!
+### 2단계: 썸네일 텍스트 추출 (thumbnail_text) - 매우 중요!
+
+대본에서 다음을 추출하세요 (한국 뉴스 스타일):
+- **quote**: 대본에서 가장 충격적/흥미로운 발언을 "따옴표"로 감싸서 추출 (예: "3370만명 유출됐다")
+- **headline**: 핵심 헤드라인 2줄 이내 (예: "쿠팡 초유의 사태")
+- **numbers**: 강조할 숫자가 있다면 추출 (예: "3370만", "1500원")
+
+### 3단계: 시각 요소 추출 (visual_elements)
 
 대본에서 다음을 추출하세요:
-- **main_subject**: 뉴스의 핵심 주제 (예: "쿠팡 개인정보 3370만명 유출", "원달러 환율 1500원 돌파")
-- **key_visuals**: 이미지로 표현할 시각 요소 3개 (예: ["쇼핑앱 화면", "해킹 경고창", "개인정보 아이콘"])
-- **emotion**: 시청자가 느낄 감정
-- **color_mood**: 적절한 색상 톤
+- **main_subject**: 뉴스의 핵심 주제
+- **person_description**: 등장 인물 묘사 (있는 경우) - 실제 인물 얼굴 생성용
+- **scene_description**: 배경/현장 묘사 (예: "국회의사당", "법원 앞", "증권거래소")
+- **emotion**: 충격/분노/기쁨/슬픔/긴장/우려/희망 중 하나
+- **color_scheme**: 아래 중 하나 선택
+  - yellow-highlight: 노란색 강조 (일반 뉴스, MBC 스타일)
+  - cyan-news: 청록색 (SBS 스타일, 정보성 뉴스)
+  - pink-scandal: 분홍/자주색 (TV조선 스타일, 연예/스캔들)
+  - red-urgent: 빨간색 (긴급/속보)
+  - blue-trust: 파란색 (신뢰/공식 발표)
 
-### 3단계: 대본 내용을 직접 시각화하는 프롬프트 작성
+### 4단계: A/B/C 세 가지 한국 뉴스 스타일로 생성
 
-**⚠️ 중요: 뉴스 앵커가 아닌, 뉴스 내용 자체를 보여주세요!**
+**A = 인물 클로즈업 스타일**:
+- 핵심 인물의 얼굴/상반신 클로즈업
+- 하단에 텍스트 영역 (어두운 배경)
+- 인물 감정 표현 (충격받은, 분노한, 자신감 있는 등)
+- 예: "korean businessman in suit, shocked expression, close-up portrait, dark navy gradient background at bottom for text space"
 
-예시:
-| 대본 주제 | ❌ 잘못된 프롬프트 | ✅ 올바른 프롬프트 |
-|----------|------------------|------------------|
-| 쿠팡 유출 | "news anchor in studio" | "e-commerce app with data breach warning, personal info icons floating" |
-| 환율 1500원 | "reporter explaining economy" | "won-dollar exchange graph hitting 1500, red arrows, currency coins" |
-| 누리호 발사 | "news broadcast about rocket" | "Korean Nuri rocket launching, flames, Korean flag, blue sky" |
-| 일본 반응 | "Japanese person interviewed" | "split screen: Korean rocket success vs Japanese commentator shocked" |
+**B = 현장/이벤트 스타일**:
+- 뉴스 현장이나 관련 장소 시각화
+- 텍스트를 위한 여백 고려
+- 예: "korean national assembly building exterior, dramatic lighting, news photography style, space for text overlay"
 
-### 4단계: A/B/C 세 가지 스타일로 생성
-
-**A = 콘텐츠 직접 시각화**: 대본의 핵심 장면을 그대로 이미지화
-**B = 대비/비교 시각화**: Before/After, 좌우 비교, 반응 대비
-**C = 데이터/숫자 시각화**: 통계, 그래프, 인포그래픽 스타일
+**C = 분할 비교 스타일**:
+- 화면을 2분할하여 대비 표현 (좌우 또는 상하)
+- Before/After, 찬성/반대, 두 인물 대비
+- 예: "split screen comparison, left side: rising stock chart with green arrows, right side: worried korean investor, dramatic lighting"
 
 ### 출력 형식
-"detected_category": "news" 또는 "story",
-"visual_elements": {{ ... 추출된 시각 요소 ... }},
-"ai_prompts": {{
-  "A": {{ "prompt": "대본 내용 기반 구체적 영문 프롬프트", ... }},
-  "B": {{ "prompt": "대비/비교 스타일 영문 프롬프트", ... }},
-  "C": {{ "prompt": "데이터/통계 스타일 영문 프롬프트", ... }}
-}}"""
+```json
+{{
+  "detected_category": "news",
+  "thumbnail_text": {{
+    "quote": "충격적인 발언 따옴표",
+    "headline": "핵심 헤드라인",
+    "numbers": "강조 숫자"
+  }},
+  "visual_elements": {{
+    "main_subject": "핵심 주제",
+    "person_description": "인물 묘사",
+    "scene_description": "장소/현장 묘사",
+    "emotion": "감정",
+    "color_scheme": "색상 스킴"
+  }},
+  "ai_prompts": {{
+    "A": {{ "prompt": "인물 클로즈업 영문 프롬프트", "style": "person", "text_position": "bottom" }},
+    "B": {{ "prompt": "현장/이벤트 영문 프롬프트", "style": "scene", "text_position": "center" }},
+    "C": {{ "prompt": "분할 비교 영문 프롬프트", "style": "split", "text_position": "overlay" }}
+  }}
+}}
+```
+
+### ⚠️ 프롬프트 작성 규칙 (중요!)
+1. **실제 한국인 얼굴 생성**: "korean man/woman" 사용, realistic portrait style
+2. **텍스트 공간 확보**: "space for text overlay", "dark gradient at bottom"
+3. **뉴스 사진 스타일**: "news photography", "dramatic lighting", "high contrast"
+4. **구체적 묘사**: 일반적 설명 대신 대본 내용을 직접 반영"""
 
             system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 
@@ -13626,14 +13666,15 @@ JSON 형식으로만 출력해. 다른 텍스트 없이 순수 JSON만.'''
         return None
 
 
-def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url="http://localhost:5000"):
-    """쇼츠 전용 영상 생성 (새 TTS + 새 9:16 이미지 + 세로 자막)
+def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url="http://localhost:5000", scene_images=None):
+    """쇼츠 전용 영상 생성 (새 TTS + 메인 영상 이미지 크롭 + 한국 뉴스 스타일 텍스트)
 
     Args:
         shorts_analysis: GPT-5.1 쇼츠 분석 결과 (beats 포함)
         voice_name: TTS 음성 이름
         output_path: 출력 파일 경로
         base_url: API 서버 URL
+        scene_images: 메인 영상의 씬 이미지 URL 리스트 (16:9 → 9:16 크롭용)
 
     Returns:
         dict: {ok, shorts_path, duration, cost}
@@ -13642,7 +13683,7 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
     import tempfile
     import shutil
 
-    print(f"[SHORTS-V2] 쇼츠 영상 생성 시작 (방법 2: 새 TTS + 새 이미지)")
+    print(f"[SHORTS-V2] 쇼츠 영상 생성 시작 (메인 이미지 크롭 + 한국 뉴스 스타일)")
 
     try:
         # beats 위치: result.beats 또는 result.structure.beats
@@ -13710,43 +13751,61 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
                         except:
                             pass
 
-                # 1-2. 9:16 세로 이미지 생성
+                # 1-2. 메인 영상 이미지를 9:16으로 크롭 (새 이미지 생성 대신)
                 image_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_image.png")
-                try:
-                    # 세로 이미지용 프롬프트 구성
-                    image_prompt = broll_prompt if broll_prompt else f"Vertical 9:16 background for: {visual_direction}"
-                    image_prompt += ", vertical 9:16 aspect ratio, 1080x1920, mobile-optimized, high contrast"
 
-                    img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
-                        "prompt": image_prompt,
-                        "size": "1080x1920",  # 세로 크기
-                        "imageProvider": "gemini"
-                    }, timeout=120)
+                # scene_images가 제공되면 해당 이미지를 크롭하여 사용
+                if scene_images and len(scene_images) > 0:
+                    # beat_id에 해당하는 이미지 선택 (순환)
+                    img_idx = (idx) % len(scene_images)
+                    source_img_url = scene_images[img_idx]
 
-                    if img_resp.status_code == 200:
-                        img_data = img_resp.json()
-                        if img_data.get("ok"):
-                            img_url = img_data.get("image_url", "")
-                            if img_url:
-                                if img_url.startswith("http"):
-                                    img_download = req.get(img_url, timeout=30)
-                                else:
-                                    img_download = req.get(f"{base_url}{img_url}", timeout=30)
-                                with open(image_path, "wb") as f:
-                                    f.write(img_download.content)
-                                total_cost += 0.02
-                                print(f"[SHORTS-V2] Beat {beat_id} 이미지 완료")
-                except Exception as img_err:
-                    print(f"[SHORTS-V2] Beat {beat_id} 이미지 실패: {img_err}")
+                    if source_img_url:
+                        try:
+                            # 원본 이미지 다운로드
+                            temp_source = os.path.join(temp_dir, f"source_{beat_id:02d}.png")
+                            if source_img_url.startswith("http"):
+                                img_download = req.get(source_img_url, timeout=30)
+                            else:
+                                img_download = req.get(f"{base_url}{source_img_url}", timeout=30)
 
-                # 이미지 파일이 없으면 fallback 단색 배경 생성
+                            with open(temp_source, "wb") as f:
+                                f.write(img_download.content)
+
+                            # 16:9 → 9:16 크롭 (중앙 기준, 세로로 확대 후 좌우 크롭)
+                            # scale=-1:1920 = 높이 1920으로 스케일 (비율 유지)
+                            # crop=1080:1920 = 중앙에서 1080x1920 크롭
+                            crop_cmd = [
+                                "ffmpeg", "-y", "-i", temp_source,
+                                "-vf", "scale=-1:1920,crop=1080:1920",
+                                "-frames:v", "1", image_path
+                            ]
+                            crop_result = subprocess.run(crop_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+
+                            if crop_result.returncode == 0 and os.path.exists(image_path):
+                                print(f"[SHORTS-V2] Beat {beat_id} 이미지 크롭 완료 (원본: {img_idx+1}번째)")
+                            else:
+                                print(f"[SHORTS-V2] Beat {beat_id} 크롭 실패: {crop_result.stderr.decode('utf-8', errors='ignore')[-200:]}")
+                        except Exception as crop_err:
+                            print(f"[SHORTS-V2] Beat {beat_id} 이미지 크롭 실패: {crop_err}")
+
+                # 이미지 파일이 없으면 fallback: 어두운 그라데이션 배경 생성
                 if not os.path.exists(image_path):
-                    print(f"[SHORTS-V2] Beat {beat_id} 이미지 없음, 단색 배경 생성")
+                    print(f"[SHORTS-V2] Beat {beat_id} 이미지 없음, 그라데이션 배경 생성")
+                    # 뉴스 스타일 어두운 그라데이션 배경 (상단 진한 파랑 → 하단 검정)
                     subprocess.run([
                         "ffmpeg", "-y", "-f", "lavfi",
-                        "-i", "color=c=0x1a1a2e:s=1080x1920:d=1",
+                        "-i", "gradients=s=1080x1920:c0=0x0a1628:c1=0x000000:x0=0:y0=0:x1=0:y1=1920:d=1",
                         "-frames:v", "1", image_path
                     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                    # gradients 필터가 없는 FFmpeg 버전 fallback
+                    if not os.path.exists(image_path):
+                        subprocess.run([
+                            "ffmpeg", "-y", "-f", "lavfi",
+                            "-i", "color=c=0x0a1628:s=1080x1920:d=1",
+                            "-frames:v", "1", image_path
+                        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
                 # 자막 정보 저장
                 emphasis_words = caption_style.get("emphasis_words", [])
@@ -13768,33 +13827,52 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
             for bd in beat_data:
                 clip_path = os.path.join(temp_dir, f"clip_{bd['beat_id']:02d}.mp4")
 
-                # 이미지 + 오디오 + 자막 합성
-                # 자막 필터 (하단 safe zone)
-                voiceover_escaped = bd['voiceover'].replace("'", "'\\''").replace(":", "\\:")
+                # 이미지 + 오디오 + 자막 합성 (한국 뉴스 스타일)
+                voiceover_escaped = bd['voiceover'].replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
 
-                # 폰트 경로 (NanumGothicBold 우선 - Pretendard는 한글 글리프 없음)
+                # 폰트 경로 (NanumGothicBold 우선)
                 font_path = "fonts/NanumGothicBold.ttf"
                 if not os.path.exists(font_path):
                     font_path = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
                 font_escaped = font_path.replace("\\", "/").replace(":", "\\:")
 
-                # 자막 필터 (하단 20% 영역)
+                # ========== 한국 뉴스 스타일 텍스트 오버레이 ==========
+                # 1. 하단 자막 영역: 반투명 검정 배경 박스 + 흰색 텍스트
                 subtitle_filter = (
+                    # 하단 반투명 검정 배경 박스 (하단 25%)
+                    f"drawbox=x=0:y=h*0.75:w=w:h=h*0.25:color=black@0.7:t=fill,"
+                    # 자막 텍스트 (하단 중앙)
                     f"drawtext=text='{voiceover_escaped}':"
-                    f"fontfile='{font_escaped}':fontsize=42:fontcolor=white:"
-                    f"borderw=3:bordercolor=black:"
-                    f"x=(w-text_w)/2:y=h*0.82:"
-                    f"line_spacing=10"
+                    f"fontfile='{font_escaped}':fontsize=44:fontcolor=white:"
+                    f"borderw=2:bordercolor=black:"
+                    f"x=(w-text_w)/2:y=h*0.83:"
+                    f"line_spacing=8"
                 )
 
-                # on_screen_text 오버레이 (상단 15% 영역)
+                # 2. 상단 헤드라인 (on_screen_text): 뉴스 스타일 - 노란색/청록색, 큰 폰트
                 if bd['on_screen_text']:
-                    text_escaped = bd['on_screen_text'].replace("'", "'\\''").replace(":", "\\:")
+                    text_escaped = bd['on_screen_text'].replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
+
+                    # 텍스트 길이에 따라 폰트 크기 조절
+                    text_len = len(bd['on_screen_text'])
+                    if text_len <= 10:
+                        headline_fontsize = 72
+                    elif text_len <= 20:
+                        headline_fontsize = 60
+                    else:
+                        headline_fontsize = 48
+
+                    # 색상 선택: beat 번호에 따라 노란색/청록색 교대
+                    headline_color = "yellow" if bd['beat_id'] % 2 == 1 else "cyan"
+
                     subtitle_filter += (
-                        f",drawtext=text='{text_escaped}':"
-                        f"fontfile='{font_escaped}':fontsize=56:fontcolor=yellow:"
+                        # 상단 반투명 배경 (상단 18%)
+                        f",drawbox=x=0:y=0:w=w:h=h*0.18:color=black@0.6:t=fill,"
+                        # 헤드라인 텍스트 (노란색/청록색, 강한 테두리)
+                        f"drawtext=text='{text_escaped}':"
+                        f"fontfile='{font_escaped}':fontsize={headline_fontsize}:fontcolor={headline_color}:"
                         f"borderw=4:bordercolor=black:"
-                        f"x=(w-text_w)/2:y=h*0.08"
+                        f"x=(w-text_w)/2:y=h*0.06"
                     )
 
                 cmd = [
@@ -18520,13 +18598,18 @@ def run_automation_pipeline(row_data, row_index):
                             shorts_title = platform_info.get("title_suggestion", "") or shorts_info.get('title', f"{title} #Shorts")
                             shorts_hashtags = platform_info.get("hashtags_hint", ["#Shorts", "#유튜브쇼츠"])
 
+                            # 메인 영상의 씬 이미지 URL 추출 (쇼츠용 크롭에 사용)
+                            scene_image_urls = [s.get('image_url', '') for s in scenes if s.get('image_url')]
+                            print(f"[SHORTS-BG] 메인 영상 이미지 {len(scene_image_urls)}개 사용 가능")
+
                             # 쇼츠 영상 생성
                             shorts_output_path = os.path.join("uploads", f"shorts_{session_id}.mp4")
                             shorts_result = _generate_shorts_video_v2(
                                 shorts_analysis=shorts_analysis,
                                 voice_name=voice,
                                 output_path=shorts_output_path,
-                                base_url=base_url
+                                base_url=base_url,
+                                scene_images=scene_image_urls
                             )
 
                             if not shorts_result.get("ok"):
@@ -18550,6 +18633,11 @@ def run_automation_pipeline(row_data, row_index):
                                 "privacyStatus": visibility,
                                 "channelId": channel_id
                             }
+
+                            # 메인 영상과 같은 예약시간 적용 (있는 경우)
+                            if publish_at_iso:
+                                shorts_upload_payload["publish_at"] = publish_at_iso
+                                print(f"[SHORTS-BG] 쇼츠 예약 공개 설정: {publish_at_iso}")
 
                             shorts_resp = bg_req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
                             shorts_data = shorts_resp.json()
