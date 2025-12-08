@@ -2,6 +2,7 @@ import os
 import re
 import json
 import sqlite3
+import subprocess
 import threading
 import queue
 import uuid
@@ -14494,21 +14495,40 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
 
             print(f"[VIDEO-WORKER] ASS path: {ass_abs_path}")
             print(f"[VIDEO-WORKER] VF filter 길이: {len(vf_filter)} chars")
+            print(f"[VIDEO-WORKER] VF filter (처음 500자): {vf_filter[:500]}")
             print(f"[VIDEO-WORKER] Fonts directory: {fonts_dir}")
 
             # IMPORTANT: stdout=DEVNULL, stderr=PIPE to avoid OOM from buffering FFmpeg output
             # FFmpeg video encoding generates massive amounts of progress output to stderr
+            # YouTube 호환 설정: -profile:v high -level 4.0, AAC 오디오, +faststart
             result = subprocess.run([
                 "ffmpeg", "-y", "-i", merged_path,
                 "-vf", vf_filter,
-                "-c:v", "libx264", "-preset", "fast", "-c:a", "copy",
+                "-c:v", "libx264", "-preset", "fast", "-profile:v", "high", "-level", "4.0",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                "-movflags", "+faststart",
                 final_path
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=1800)  # 30분 타임아웃
 
             if result.returncode != 0:
-                stderr_msg = result.stderr.decode('utf-8', errors='ignore')[:500] if result.stderr else ""
+                stderr_msg = result.stderr.decode('utf-8', errors='ignore')[:1500] if result.stderr else ""
                 print(f"[VIDEO-WORKER] Subtitle burn-in failed (code {result.returncode}): {stderr_msg}")
-                final_path = merged_path
+
+                # 자막 burn-in 실패 시 자막 없이 YouTube 호환 인코딩 시도
+                print(f"[VIDEO-WORKER] 자막 없이 YouTube 호환 재인코딩 시도...")
+                fallback_result = subprocess.run([
+                    "ffmpeg", "-y", "-i", merged_path,
+                    "-c:v", "libx264", "-preset", "fast", "-profile:v", "high", "-level", "4.0",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                    "-movflags", "+faststart",
+                    final_path
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=1800)
+
+                if fallback_result.returncode != 0:
+                    print(f"[VIDEO-WORKER] Fallback 인코딩도 실패, 원본 사용")
+                    final_path = merged_path
+                else:
+                    print(f"[VIDEO-WORKER] Fallback 인코딩 성공 (자막 없음)")
 
             del result
             gc.collect()
@@ -18018,6 +18038,50 @@ def run_automation_pipeline(row_data, row_index):
         # ========== 4. YouTube 업로드 ==========
         print(f"[AUTOMATION] 4. YouTube 업로드 시작...")
 
+        # GPT가 생성한 예상 챕터 제거 (실제 duration 기반 챕터로 대체)
+        # 예상 챕터는 "00:00 제목" 또는 "0:00 제목" 형식의 연속된 줄로 시작함
+        try:
+            import re
+            # 타임스탬프로 시작하는 연속된 줄들을 찾아서 제거 (예상 챕터 섹션)
+            # 패턴: 숫자:숫자 또는 숫자:숫자:숫자로 시작하는 줄
+            lines = description.split('\n')
+            cleaned_lines = []
+            in_chapter_section = False
+            consecutive_timestamps = 0
+
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                # 타임스탬프로 시작하는지 확인 (0:00, 00:00, 1:30 등)
+                is_timestamp_line = bool(re.match(r'^\d{1,2}:\d{2}(?::\d{2})?\s', stripped))
+
+                if is_timestamp_line:
+                    consecutive_timestamps += 1
+                    # 연속으로 3개 이상 타임스탬프 줄이면 챕터 섹션으로 간주
+                    if consecutive_timestamps >= 3:
+                        in_chapter_section = True
+                        # 이전에 추가한 타임스탬프 줄들도 제거
+                        while cleaned_lines and re.match(r'^\d{1,2}:\d{2}(?::\d{2})?\s', cleaned_lines[-1].strip()):
+                            cleaned_lines.pop()
+                    if not in_chapter_section:
+                        cleaned_lines.append(line)
+                else:
+                    consecutive_timestamps = 0
+                    if in_chapter_section:
+                        # 빈 줄이면 챕터 섹션 종료
+                        if not stripped:
+                            in_chapter_section = False
+                        # 타임스탬프가 아닌 줄이 오면 챕터 섹션 종료
+                        else:
+                            in_chapter_section = False
+                            cleaned_lines.append(line)
+                    else:
+                        cleaned_lines.append(line)
+
+            description = '\n'.join(cleaned_lines)
+            print(f"[AUTOMATION] GPT 예상 챕터 제거 완료 (실제 duration 기반 챕터로 대체)")
+        except Exception as clean_err:
+            print(f"[AUTOMATION] 챕터 정리 오류 (무시됨): {clean_err}")
+
         # 자동 챕터 생성 (씬별 chapter_title과 duration 기반)
         try:
             chapters_text = "\n\n📑 챕터\n"
@@ -18123,7 +18187,10 @@ def run_automation_pipeline(row_data, row_index):
 
             upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=600)
 
+            print(f"[AUTOMATION] YouTube 업로드 응답 상태: {upload_resp.status_code}")
             upload_data = upload_resp.json()
+            print(f"[AUTOMATION] YouTube 업로드 응답: ok={upload_data.get('ok')}, videoUrl={upload_data.get('videoUrl', 'N/A')[:50] if upload_data.get('videoUrl') else 'N/A'}")
+
             if upload_data.get('ok'):
                 youtube_url = upload_data.get('videoUrl', '')  # camelCase로 반환됨
                 video_id = upload_data.get('videoId', '')
