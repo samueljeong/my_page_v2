@@ -791,9 +791,94 @@ def api_categories():
     })
 
 
+def calculate_rising_score(video: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    진짜 급상승 점수 계산 - 시간당 조회수 + 구독자 대비 성과
+
+    점수 요소:
+    1. 시간당 조회수 (views_per_hour) - 최근 영상일수록 높은 가치
+    2. 구독자 대비 배율 (performance_value)
+    3. 신선도 보너스 (72시간 이내 영상에 가중치)
+    4. 참여율 보너스 (좋아요+댓글 비율)
+    """
+    view_count = video.get("viewCount", 0)
+    subscriber_count = video.get("subscriberCount", 1) or 1
+    like_count = video.get("likeCount", 0)
+    comment_count = video.get("commentCount", 0)
+    published_at_raw = video.get("publishedAtRaw", "")
+
+    # 업로드 후 경과 시간 (시간 단위)
+    hours_since_upload = 1  # 최소 1시간
+    if published_at_raw:
+        try:
+            from datetime import datetime
+            published_dt = datetime.fromisoformat(published_at_raw.replace("Z", "+00:00"))
+            now = datetime.now(published_dt.tzinfo) if published_dt.tzinfo else datetime.utcnow()
+            hours_since_upload = max(1, (now - published_dt.replace(tzinfo=None)).total_seconds() / 3600)
+        except:
+            hours_since_upload = 24  # 기본값
+
+    # 1. 시간당 조회수
+    views_per_hour = view_count / hours_since_upload
+
+    # 2. 일일 평균 조회수
+    views_per_day = views_per_hour * 24
+
+    # 3. 구독자 대비 배율
+    performance_value = view_count / subscriber_count
+
+    # 4. 신선도 보너스 (72시간 이내: 1.5배, 168시간(1주) 이내: 1.2배)
+    freshness_bonus = 1.0
+    if hours_since_upload <= 72:
+        freshness_bonus = 1.5
+    elif hours_since_upload <= 168:
+        freshness_bonus = 1.2
+
+    # 5. 참여율 (좋아요+댓글 / 조회수)
+    engagement_rate = 0
+    if view_count > 0:
+        engagement_rate = (like_count + comment_count) / view_count * 100
+
+    # 6. 참여율 보너스 (3% 이상이면 추가 점수)
+    engagement_bonus = 1.0
+    if engagement_rate >= 5:
+        engagement_bonus = 1.3
+    elif engagement_rate >= 3:
+        engagement_bonus = 1.15
+
+    # 급상승 점수 계산 (0-100 스케일)
+    # 시간당 조회수가 높고 + 구독자 대비 성과가 좋고 + 신선하고 + 참여율 높으면 급상승
+    rising_score = min(100, (
+        (views_per_hour ** 0.5) * 2 +  # 시간당 조회수 (제곱근으로 스케일 조정)
+        performance_value * 10 +        # 구독자 대비 배율
+        engagement_rate * 5             # 참여율
+    ) * freshness_bonus * engagement_bonus)
+
+    # 급상승 등급
+    if rising_score >= 70:
+        rising_grade = "🔥 폭발"
+    elif rising_score >= 50:
+        rising_grade = "🚀 급상승"
+    elif rising_score >= 30:
+        rising_grade = "📈 상승중"
+    else:
+        rising_grade = "➡️ 보통"
+
+    # 결과에 추가 정보 포함
+    video["viewsPerHour"] = round(views_per_hour, 1)
+    video["viewsPerDay"] = round(views_per_day, 0)
+    video["hoursSinceUpload"] = round(hours_since_upload, 1)
+    video["risingScore"] = round(rising_score, 1)
+    video["risingGrade"] = rising_grade
+    video["freshnessBonus"] = freshness_bonus
+    video["engagementBonus"] = engagement_bonus
+
+    return video
+
+
 @tubelens_bp.route('/api/tubelens/rising', methods=['POST'])
 def api_rising():
-    """급상승 영상 발굴 (구독자 대비 고성과 영상)"""
+    """급상승 영상 발굴 (시간당 조회수 + 구독자 대비 성과 기반)"""
     try:
         data = request.get_json()
         region_code = data.get("regionCode", "KR")
@@ -803,6 +888,7 @@ def api_rising():
         video_type = data.get("videoType", "all")  # all, shorts, long
         api_keys = data.get("apiKeys", [])
         current_api_key_index = data.get("currentApiKeyIndex", 0)
+        exclude_categories = data.get("excludeCategories", [])  # 제외할 카테고리
 
         # API 키 선택
         api_key = None
@@ -818,13 +904,13 @@ def api_rising():
         # 시간 필터 계산
         published_after = get_time_filter(time_frame)
 
-        # 검색 파라미터
+        # 검색 파라미터 - date 순으로 검색하여 최신 영상 위주로 수집
         search_params = {
             "part": "snippet",
             "type": "video",
             "maxResults": 50,
             "regionCode": region_code,
-            "order": "viewCount",
+            "order": "date",  # 최신순으로 변경 (급상승은 최신 영상에서 찾아야 함)
         }
 
         if published_after:
@@ -837,13 +923,13 @@ def api_rising():
         if video_type == "shorts":
             search_params["videoDuration"] = "short"
         elif video_type == "long":
-            search_params["videoDuration"] = "medium"  # medium 또는 long
+            search_params["videoDuration"] = "medium"
 
-        # 여러 페이지에서 영상 수집
+        # 여러 페이지에서 영상 수집 (최대 300개)
         all_video_ids = []
         next_page_token = None
 
-        for _ in range(4):  # 최대 200개 수집
+        for _ in range(6):  # 최대 300개 수집
             if next_page_token:
                 search_params["pageToken"] = next_page_token
 
@@ -863,23 +949,33 @@ def api_rising():
         # 비디오 상세 정보 가져오기
         videos = get_video_details(all_video_ids, api_key)
 
-        # 급상승 필터링: 구독자 상한 이하 + CII Good 이상
+        # 급상승 필터링 및 점수 계산
         rising_videos = []
         for video in videos:
             subscriber_count = video.get("subscriberCount", 0)
-            cii = video.get("cii", "")
-            performance_value = video.get("performanceValue", 0)
+            category_id_str = str(video.get("categoryId", ""))
 
             # 구독자 상한 체크
             if subscriber_count > max_subscribers:
                 continue
 
-            # 성과도 배율 1.5 이상 (Good 이상)
-            if performance_value >= 1.5:
+            # 제외 카테고리 체크
+            if category_id_str in exclude_categories:
+                continue
+
+            # 최소 조회수 체크 (노이즈 제거)
+            if video.get("viewCount", 0) < 1000:
+                continue
+
+            # 급상승 점수 계산
+            video = calculate_rising_score(video)
+
+            # 급상승 점수 25 이상만 포함
+            if video.get("risingScore", 0) >= 25:
                 rising_videos.append(video)
 
-        # 성과도 배율 기준 정렬
-        rising_videos.sort(key=lambda x: x.get("performanceValue", 0), reverse=True)
+        # 급상승 점수 기준 정렬
+        rising_videos.sort(key=lambda x: x.get("risingScore", 0), reverse=True)
 
         # 상위 50개만
         rising_videos = rising_videos[:50]
@@ -949,3 +1045,298 @@ def api_comments():
     except Exception as e:
         print(f"댓글 가져오기 오류: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+# ===== AI 분석 API =====
+
+@tubelens_bp.route('/api/tubelens/analyze-titles', methods=['POST'])
+def api_analyze_titles():
+    """AI로 제목 패턴 분석 - 클릭 유발 요소 파악"""
+    try:
+        import json
+        from openai import OpenAI
+
+        data = request.get_json()
+        titles = data.get("titles", [])  # [{title, viewCount, subscriberCount, ...}]
+
+        if not titles:
+            return jsonify({"success": False, "message": "분석할 제목이 없습니다."}), 400
+
+        if len(titles) > 20:
+            titles = titles[:20]  # 최대 20개
+
+        # OpenAI API 키 확인
+        openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        if not openai_api_key:
+            return jsonify({"success": False, "message": "OpenAI API 키가 설정되지 않았습니다."}), 400
+
+        client = OpenAI(api_key=openai_api_key)
+
+        # 제목 데이터 준비
+        titles_text = "\n".join([
+            f"{i+1}. \"{t.get('title', '')}\" (조회수: {t.get('viewCount', 0):,}, 구독자: {t.get('subscriberCount', 0):,})"
+            for i, t in enumerate(titles)
+        ])
+
+        prompt = f"""다음 YouTube 영상 제목들을 분석해주세요. 이 영상들은 구독자 대비 높은 조회수를 기록한 급상승 영상들입니다.
+
+{titles_text}
+
+다음 형식의 JSON으로 분석 결과를 제공해주세요:
+{{
+  "common_patterns": ["공통 패턴 1", "공통 패턴 2", ...],
+  "click_triggers": ["클릭 유발 요소 1", "클릭 유발 요소 2", ...],
+  "emotional_hooks": ["감정 자극 표현 1", "감정 자극 표현 2", ...],
+  "title_structures": ["제목 구조 패턴 1", "제목 구조 패턴 2", ...],
+  "recommended_keywords": ["추천 키워드 1", "추천 키워드 2", ...],
+  "title_suggestions": [
+    {{"template": "제목 템플릿 1", "example": "예시 제목 1"}},
+    {{"template": "제목 템플릿 2", "example": "예시 제목 2"}},
+    {{"template": "제목 템플릿 3", "example": "예시 제목 3"}}
+  ],
+  "summary": "전체 분석 요약 (2-3문장)"
+}}
+
+한국어로 답변해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 콘텐츠 마케팅 전문가입니다. 제목 패턴 분석을 통해 클릭률을 높이는 인사이트를 제공합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        analysis = json.loads(result_text)
+
+        return jsonify({
+            "success": True,
+            "data": analysis,
+            "message": "제목 패턴 분석 완료"
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"제목 분석 JSON 파싱 오류: {e}")
+        return jsonify({"success": False, "message": "분석 결과 파싱 실패"}), 500
+    except Exception as e:
+        print(f"제목 분석 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/generate-ideas', methods=['POST'])
+def api_generate_ideas():
+    """트렌딩 영상 기반 대본 주제/아이디어 생성"""
+    try:
+        import json
+        from openai import OpenAI
+
+        data = request.get_json()
+        videos = data.get("videos", [])  # [{title, description, ...}]
+        target_category = data.get("targetCategory", "")  # 원하는 카테고리
+        content_style = data.get("contentStyle", "story")  # story, news, education
+
+        if not videos:
+            return jsonify({"success": False, "message": "참고할 영상이 없습니다."}), 400
+
+        if len(videos) > 10:
+            videos = videos[:10]
+
+        openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        if not openai_api_key:
+            return jsonify({"success": False, "message": "OpenAI API 키가 설정되지 않았습니다."}), 400
+
+        client = OpenAI(api_key=openai_api_key)
+
+        # 영상 정보 준비
+        videos_text = "\n".join([
+            f"{i+1}. 제목: \"{v.get('title', '')}\"\n   설명: {v.get('description', '')[:200]}..."
+            for i, v in enumerate(videos)
+        ])
+
+        style_guide = {
+            "story": "감동적인 스토리텔링, 인간미 있는 이야기",
+            "news": "시사/뉴스 형식, 팩트 기반",
+            "education": "교육/정보 전달 형식",
+            "entertainment": "재미있고 흥미로운 콘텐츠"
+        }
+
+        prompt = f"""다음 YouTube 인기/급상승 영상들을 참고하여 새로운 콘텐츠 아이디어를 생성해주세요.
+
+참고 영상:
+{videos_text}
+
+콘텐츠 스타일: {style_guide.get(content_style, content_style)}
+{f'타겟 카테고리: {target_category}' if target_category else ''}
+
+다음 형식의 JSON으로 5개의 콘텐츠 아이디어를 제공해주세요:
+{{
+  "trend_analysis": "현재 트렌드 분석 (2-3문장)",
+  "ideas": [
+    {{
+      "title": "추천 제목",
+      "hook": "영상 시작 훅 (첫 5초)",
+      "outline": "대본 개요 (3-5문장)",
+      "target_emotion": "타겟 감정 (호기심/공감/분노/감동 등)",
+      "viral_potential": "바이럴 가능성 (상/중/하)",
+      "similar_to": "참고한 원본 영상 번호"
+    }}
+  ],
+  "keywords": ["추천 키워드 1", "추천 키워드 2", ...],
+  "avoid": ["피해야 할 요소 1", "피해야 할 요소 2", ...]
+}}
+
+한국어로 답변해주세요. 참신하고 한국 시청자에게 어필할 수 있는 아이디어로 제안해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 콘텐츠 기획 전문가입니다. 트렌드를 분석하고 바이럴 가능성이 높은 콘텐츠 아이디어를 제안합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            max_tokens=3000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        ideas = json.loads(result_text)
+
+        return jsonify({
+            "success": True,
+            "data": ideas,
+            "message": f"{len(ideas.get('ideas', []))}개의 콘텐츠 아이디어가 생성되었습니다."
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"아이디어 생성 JSON 파싱 오류: {e}")
+        return jsonify({"success": False, "message": "결과 파싱 실패"}), 500
+    except Exception as e:
+        print(f"아이디어 생성 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/analyze-thumbnails', methods=['POST'])
+def api_analyze_thumbnails():
+    """썸네일 패턴 분석 (URL 기반)"""
+    try:
+        import json
+        from openai import OpenAI
+
+        data = request.get_json()
+        videos = data.get("videos", [])  # [{title, thumbnail, viewCount, ...}]
+
+        if not videos:
+            return jsonify({"success": False, "message": "분석할 영상이 없습니다."}), 400
+
+        if len(videos) > 10:
+            videos = videos[:10]
+
+        openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        if not openai_api_key:
+            return jsonify({"success": False, "message": "OpenAI API 키가 설정되지 않았습니다."}), 400
+
+        client = OpenAI(api_key=openai_api_key)
+
+        # 멀티모달 분석을 위한 메시지 구성
+        content = [
+            {"type": "text", "text": """다음 YouTube 썸네일들을 분석해주세요. 이 영상들은 높은 성과를 기록한 급상승 영상들입니다.
+
+각 썸네일의 공통 패턴과 클릭을 유발하는 요소를 분석하고, 다음 형식의 JSON으로 결과를 제공해주세요:
+
+{
+  "common_elements": ["공통 요소 1", "공통 요소 2", ...],
+  "color_patterns": ["색상 패턴 1", "색상 패턴 2", ...],
+  "text_usage": ["텍스트 사용 패턴 1", "텍스트 사용 패턴 2", ...],
+  "face_expressions": ["표정/인물 패턴 1", "표정/인물 패턴 2", ...],
+  "composition": ["구도 패턴 1", "구도 패턴 2", ...],
+  "recommendations": [
+    {"tip": "추천 1", "reason": "이유 1"},
+    {"tip": "추천 2", "reason": "이유 2"},
+    {"tip": "추천 3", "reason": "이유 3"}
+  ],
+  "summary": "전체 분석 요약 (2-3문장)"
+}
+
+한국어로 답변해주세요."""}
+        ]
+
+        # 썸네일 이미지 추가
+        for i, v in enumerate(videos[:6]):  # 최대 6개 이미지
+            thumbnail_url = v.get("thumbnail", "")
+            if thumbnail_url:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": thumbnail_url}
+                })
+                content.append({
+                    "type": "text",
+                    "text": f"[영상 {i+1}] 제목: {v.get('title', '')} (조회수: {v.get('viewCount', 0):,})"
+                })
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 썸네일 디자인 전문가입니다. 클릭률을 높이는 썸네일 패턴을 분석합니다."},
+                {"role": "user", "content": content}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        analysis = json.loads(result_text)
+
+        return jsonify({
+            "success": True,
+            "data": analysis,
+            "message": "썸네일 패턴 분석 완료"
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"썸네일 분석 JSON 파싱 오류: {e}")
+        return jsonify({"success": False, "message": "분석 결과 파싱 실패"}), 500
+    except Exception as e:
+        print(f"썸네일 분석 오류: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@tubelens_bp.route('/api/tubelens/config', methods=['GET'])
+def api_get_config():
+    """서버에 저장된 API 키 확인 (마스킹된 형태로)"""
+    youtube_key = os.getenv("YOUTUBE_API_KEY", "")
+
+    has_youtube_key = bool(youtube_key)
+    masked_key = ""
+    if youtube_key:
+        masked_key = youtube_key[:8] + "••••••••" + youtube_key[-4:] if len(youtube_key) > 12 else "••••"
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "hasYouTubeKey": has_youtube_key,
+            "maskedKey": masked_key
+        }
+    })

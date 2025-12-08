@@ -31,11 +31,30 @@
     // 초기화
     init: function() {
       this.loadApiKeys();
+      this.loadServerConfig();  // 서버 API 키 자동 로드
       this.updateApiKeysList();
       this.updateStatus();
       this.initCategoryPills();
       this.initExcludePills();
       console.log('[TubeLens] Initialized with', this.apiKeys.length, 'API keys');
+    },
+
+    // 서버 설정 로드 (API 키)
+    loadServerConfig: function() {
+      var self = this;
+      fetch('/api/tubelens/config')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.success && data.data.hasYouTubeKey) {
+            self.serverHasApiKey = true;
+            self.serverMaskedKey = data.data.maskedKey;
+            console.log('[TubeLens] 서버에 YouTube API 키가 설정되어 있습니다.');
+            self.updateStatus('서버 API 키 사용 가능 - 검색 준비 완료');
+          }
+        })
+        .catch(function(err) {
+          console.log('[TubeLens] 서버 설정 로드 실패:', err);
+        });
     },
 
     // 제외 카테고리 필 초기화
@@ -1162,6 +1181,13 @@
 
       var escapedTitle = this.escapeHtml(item.title);
 
+      // 급상승 점수 관련 (있는 경우)
+      var risingBadge = '';
+      if (item.risingScore !== undefined) {
+        var risingClass = item.risingScore >= 70 ? 'rising-hot' : item.risingScore >= 50 ? 'rising-up' : 'rising-normal';
+        risingBadge = '<span class="rising-badge ' + risingClass + '">' + (item.risingGrade || '') + '</span>';
+      }
+
       var html = '<tr>';
       html += '<td>' + item.index + '</td>';
       html += '<td><img class="thumbnail" src="' + item.thumbnail + '" alt="" onclick="TubeLens.openVideoModal(\'' + item.videoId + '\', \'' + escapedTitle.replace(/'/g, "\\'") + '\')" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22140%22 height=%2279%22><rect fill=%22%23e1e5eb%22 width=%22140%22 height=%2279%22/><text x=%2270%22 y=%2245%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>No Image</text></svg>\'"></td>';
@@ -1170,8 +1196,16 @@
       html += '<td>' + item.publishedAt + '</td>';
       html += '<td>' + this.formatNumber(item.subscriberCount) + '</td>';
       html += '<td>' + this.formatNumber(item.viewCount) + '</td>';
-      html += '<td><div class="gauge"><div class="gauge-fill ' + contribColor + '" style="width:' + contribPercent + '%"></div></div><div class="gauge-value">' + contribPercent.toFixed(0) + '%</div></td>';
-      html += '<td>' + item.performanceValue.toFixed(2) + 'x</td>';
+
+      // 급상승 점수 또는 기존 기여도 표시
+      if (item.risingScore !== undefined) {
+        html += '<td>' + risingBadge + '<br><small>' + (item.risingScore || 0) + '점</small></td>';
+        html += '<td><small>' + this.formatNumber(item.viewsPerHour || 0) + '/h</small><br><small>' + this.formatNumber(item.viewsPerDay || 0) + '/d</small></td>';
+      } else {
+        html += '<td><div class="gauge"><div class="gauge-fill ' + contribColor + '" style="width:' + contribPercent + '%"></div></div><div class="gauge-value">' + contribPercent.toFixed(0) + '%</div></td>';
+        html += '<td>' + item.performanceValue.toFixed(2) + 'x</td>';
+      }
+
       html += '<td><span class="cii-badge ' + ciiClass + '">' + item.cii + '</span></td>';
       html += '<td>' + item.duration + '</td>';
       html += '<td>' + this.formatNumber(item.likeCount) + '</td>';
@@ -1375,6 +1409,245 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    },
+
+    // ===== AI 분석 기능 =====
+
+    // 제목 패턴 분석
+    analyzeTitles: function() {
+      var self = this;
+
+      if (this.currentResults.length === 0) {
+        alert('먼저 영상을 검색하거나 급상승 발굴을 실행해주세요.');
+        return;
+      }
+
+      var titles = this.currentResults.slice(0, 20).map(function(v) {
+        return {
+          title: v.title,
+          viewCount: v.viewCount,
+          subscriberCount: v.subscriberCount
+        };
+      });
+
+      this.updateStatus('🤖 AI가 제목 패턴을 분석 중...');
+
+      fetch('/api/tubelens/analyze-titles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titles: titles })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          self.showAnalysisModal('제목 패턴 분석', data.data);
+          self.updateStatus('✅ 제목 패턴 분석 완료');
+        } else {
+          throw new Error(data.message);
+        }
+      })
+      .catch(function(error) {
+        console.error('[TubeLens] Title analysis error:', error);
+        alert('제목 분석 실패: ' + error.message);
+        self.updateStatus('분석 실패: ' + error.message);
+      });
+    },
+
+    // 썸네일 패턴 분석
+    analyzeThumbnails: function() {
+      var self = this;
+
+      if (this.currentResults.length === 0) {
+        alert('먼저 영상을 검색하거나 급상승 발굴을 실행해주세요.');
+        return;
+      }
+
+      var videos = this.currentResults.slice(0, 10).map(function(v) {
+        return {
+          title: v.title,
+          thumbnail: v.thumbnail,
+          viewCount: v.viewCount
+        };
+      });
+
+      this.updateStatus('🤖 AI가 썸네일 패턴을 분석 중...');
+
+      fetch('/api/tubelens/analyze-thumbnails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videos: videos })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          self.showAnalysisModal('썸네일 패턴 분석', data.data);
+          self.updateStatus('✅ 썸네일 패턴 분석 완료');
+        } else {
+          throw new Error(data.message);
+        }
+      })
+      .catch(function(error) {
+        console.error('[TubeLens] Thumbnail analysis error:', error);
+        alert('썸네일 분석 실패: ' + error.message);
+        self.updateStatus('분석 실패: ' + error.message);
+      });
+    },
+
+    // 콘텐츠 아이디어 생성
+    generateIdeas: function(style) {
+      var self = this;
+      style = style || 'story';
+
+      if (this.currentResults.length === 0) {
+        alert('먼저 영상을 검색하거나 급상승 발굴을 실행해주세요.');
+        return;
+      }
+
+      var videos = this.currentResults.slice(0, 10).map(function(v) {
+        return {
+          title: v.title,
+          description: v.description || ''
+        };
+      });
+
+      this.updateStatus('🤖 AI가 콘텐츠 아이디어를 생성 중...');
+
+      fetch('/api/tubelens/generate-ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: videos,
+          contentStyle: style
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          self.showIdeasModal('콘텐츠 아이디어', data.data);
+          self.updateStatus('✅ 콘텐츠 아이디어 생성 완료');
+        } else {
+          throw new Error(data.message);
+        }
+      })
+      .catch(function(error) {
+        console.error('[TubeLens] Ideas generation error:', error);
+        alert('아이디어 생성 실패: ' + error.message);
+        self.updateStatus('생성 실패: ' + error.message);
+      });
+    },
+
+    // 분석 결과 모달 표시
+    showAnalysisModal: function(title, data) {
+      var html = '<div class="analysis-content">';
+
+      if (data.summary) {
+        html += '<div class="analysis-summary"><strong>📊 요약:</strong> ' + data.summary + '</div>';
+      }
+
+      if (data.common_patterns && data.common_patterns.length) {
+        html += '<div class="analysis-section"><h4>🔍 공통 패턴</h4><ul>';
+        data.common_patterns.forEach(function(p) { html += '<li>' + p + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      if (data.click_triggers && data.click_triggers.length) {
+        html += '<div class="analysis-section"><h4>🎯 클릭 유발 요소</h4><ul>';
+        data.click_triggers.forEach(function(p) { html += '<li>' + p + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      if (data.emotional_hooks && data.emotional_hooks.length) {
+        html += '<div class="analysis-section"><h4>💡 감정 자극 표현</h4><ul>';
+        data.emotional_hooks.forEach(function(p) { html += '<li>' + p + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      if (data.title_suggestions && data.title_suggestions.length) {
+        html += '<div class="analysis-section"><h4>✨ 추천 제목 템플릿</h4>';
+        data.title_suggestions.forEach(function(s) {
+          html += '<div class="title-suggestion"><strong>' + s.template + '</strong><br><small>예시: ' + s.example + '</small></div>';
+        });
+        html += '</div>';
+      }
+
+      if (data.recommended_keywords && data.recommended_keywords.length) {
+        html += '<div class="analysis-section"><h4>🏷️ 추천 키워드</h4><div class="keyword-tags">';
+        data.recommended_keywords.forEach(function(k) { html += '<span class="keyword-tag">' + k + '</span>'; });
+        html += '</div></div>';
+      }
+
+      // 썸네일 분석용
+      if (data.common_elements && data.common_elements.length) {
+        html += '<div class="analysis-section"><h4>🖼️ 공통 요소</h4><ul>';
+        data.common_elements.forEach(function(p) { html += '<li>' + p + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      if (data.color_patterns && data.color_patterns.length) {
+        html += '<div class="analysis-section"><h4>🎨 색상 패턴</h4><ul>';
+        data.color_patterns.forEach(function(p) { html += '<li>' + p + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      if (data.recommendations && data.recommendations.length) {
+        html += '<div class="analysis-section"><h4>💡 추천 사항</h4>';
+        data.recommendations.forEach(function(r) {
+          html += '<div class="recommendation-item"><strong>' + r.tip + '</strong><br><small>' + r.reason + '</small></div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+
+      document.getElementById('analysis-modal-title').textContent = title;
+      document.getElementById('analysis-modal-content').innerHTML = html;
+      document.getElementById('analysis-modal').classList.add('show');
+    },
+
+    // 아이디어 모달 표시
+    showIdeasModal: function(title, data) {
+      var html = '<div class="ideas-content">';
+
+      if (data.trend_analysis) {
+        html += '<div class="trend-analysis"><strong>📈 트렌드 분석:</strong> ' + data.trend_analysis + '</div>';
+      }
+
+      if (data.ideas && data.ideas.length) {
+        html += '<div class="ideas-list">';
+        data.ideas.forEach(function(idea, idx) {
+          html += '<div class="idea-card">';
+          html += '<div class="idea-header"><span class="idea-number">' + (idx + 1) + '</span>';
+          html += '<span class="viral-badge viral-' + (idea.viral_potential || '중').toLowerCase() + '">' + (idea.viral_potential || '중') + '</span></div>';
+          html += '<h4 class="idea-title">' + idea.title + '</h4>';
+          html += '<div class="idea-hook"><strong>🎬 훅:</strong> ' + idea.hook + '</div>';
+          html += '<div class="idea-outline"><strong>📝 개요:</strong> ' + idea.outline + '</div>';
+          html += '<div class="idea-emotion"><strong>🎭 타겟 감정:</strong> ' + idea.target_emotion + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      if (data.keywords && data.keywords.length) {
+        html += '<div class="ideas-keywords"><h4>🏷️ 추천 키워드</h4><div class="keyword-tags">';
+        data.keywords.forEach(function(k) { html += '<span class="keyword-tag">' + k + '</span>'; });
+        html += '</div></div>';
+      }
+
+      if (data.avoid && data.avoid.length) {
+        html += '<div class="ideas-avoid"><h4>⚠️ 피해야 할 요소</h4><ul>';
+        data.avoid.forEach(function(a) { html += '<li>' + a + '</li>'; });
+        html += '</ul></div>';
+      }
+
+      html += '</div>';
+
+      document.getElementById('analysis-modal-title').textContent = title;
+      document.getElementById('analysis-modal-content').innerHTML = html;
+      document.getElementById('analysis-modal').classList.add('show');
+    },
+
+    closeAnalysisModal: function() {
+      document.getElementById('analysis-modal').classList.remove('show');
     }
   };
 
