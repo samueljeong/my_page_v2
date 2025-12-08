@@ -13652,17 +13652,17 @@ def _generate_shorts_video_v2(shorts_analysis, voice_name, output_path, base_url
                 # 1-1. TTS 생성
                 audio_path = os.path.join(temp_dir, f"beat_{beat_id:02d}_audio.mp3")
                 try:
-                    tts_resp = req.post(f"{base_url}/api/tts/generate", json={
+                    tts_resp = req.post(f"{base_url}/api/shorts/generate-tts", json={
                         "text": voiceover,
                         "voice": voice_name,
-                        "language": "ko"
+                        "speed": 1.2
                     }, timeout=60)
 
                     if tts_resp.status_code == 200:
                         tts_data = tts_resp.json()
                         if tts_data.get("ok"):
                             # 오디오 URL에서 다운로드
-                            audio_url = tts_data.get("audio_url", "")
+                            audio_url = tts_data.get("audioUrl", "")
                             if audio_url:
                                 audio_resp = req.get(f"{base_url}{audio_url}", timeout=30)
                                 with open(audio_path, "wb") as f:
