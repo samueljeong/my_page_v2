@@ -12891,13 +12891,65 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
     """
     try:
         # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
-        # NanumGothic 사용 (Pretendard는 한글 글리프 없음)
         if lang == 'ko':
             font_name = "NanumGothic"
             font_size = 48  # 24 → 48 (2배 크기)
+            max_chars_per_line = 20  # 한국어: 한 줄 최대 20자
+        elif lang == 'ja':
+            font_name = "Noto Sans CJK JP"  # 일본어 전용 폰트
+            font_size = 40  # 일본어는 글자가 복잡해서 조금 작게
+            max_chars_per_line = 18  # 일본어: 한 줄 최대 18자
         else:
             font_name = "NanumGothic"
             font_size = 44  # 22 → 44 (2배 크기)
+            max_chars_per_line = 25  # 영어: 한 줄 최대 25자
+
+        # 긴 텍스트 자동 줄바꿈 함수
+        def wrap_text(text, max_chars):
+            """긴 텍스트를 max_chars 기준으로 줄바꿈"""
+            if len(text) <= max_chars:
+                return text
+
+            # 이미 줄바꿈이 있으면 그대로
+            if '\n' in text or '\\N' in text:
+                return text
+
+            # 자연스러운 줄바꿈 위치 찾기
+            words = []
+            current = ""
+            for char in text:
+                current += char
+                # 띄어쓰기, 마침표, 쉼표 등에서 단어 분리
+                if char in ' 、。，．!?！？':
+                    words.append(current)
+                    current = ""
+            if current:
+                words.append(current)
+
+            # 단어 단위로 줄바꿈
+            lines = []
+            current_line = ""
+            for word in words:
+                if len(current_line) + len(word) <= max_chars:
+                    current_line += word
+                else:
+                    if current_line:
+                        lines.append(current_line.strip())
+                    current_line = word
+            if current_line:
+                lines.append(current_line.strip())
+
+            # 줄바꿈이 안 된 경우 강제 분할
+            if len(lines) == 1 and len(lines[0]) > max_chars:
+                text = lines[0]
+                lines = []
+                while len(text) > max_chars:
+                    lines.append(text[:max_chars])
+                    text = text[max_chars:]
+                if text:
+                    lines.append(text)
+
+            return '\n'.join(lines)
 
         # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
         # Outline: 2 → 4 (더 두꺼운 테두리)
@@ -12923,6 +12975,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start = _format_ass_time(sub['start'])
             end = _format_ass_time(sub['end'])
             text = sub.get('text', '')
+
+            # 긴 텍스트 자동 줄바꿈 적용
+            text = wrap_text(text, max_chars_per_line)
 
             # 색상 강조 적용
             if highlights:
