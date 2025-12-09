@@ -6771,6 +6771,197 @@ def get_youtube_channel_advice():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@assistant_bp.route('/assistant/api/youtube/channels/<int:channel_db_id>/advisor', methods=['POST'])
+def get_registered_channel_advice(channel_db_id):
+    """등록된 채널 GPT 분석 - OAuth 없이 API 키로 분석"""
+    try:
+        import json
+        import requests as req
+        from openai import OpenAI
+        from datetime import datetime, timedelta, timezone
+
+        # YouTube API 키 확인
+        api_key = os.getenv('YOUTUBE_API_KEY')
+        if not api_key:
+            return jsonify({'success': False, 'error': 'YouTube API 키가 설정되지 않았습니다'}), 400
+
+        # OpenAI API 키 확인
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return jsonify({'success': False, 'error': 'OpenAI API 키가 설정되지 않았습니다'}), 400
+
+        # DB에서 채널 정보 조회
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if USE_POSTGRES:
+            cursor.execute('SELECT channel_id, channel_title, alias FROM youtube_channels WHERE id = %s', (channel_db_id,))
+        else:
+            cursor.execute('SELECT channel_id, channel_title, alias FROM youtube_channels WHERE id = ?', (channel_db_id,))
+
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': '채널을 찾을 수 없습니다'}), 404
+
+        channel_id = row[0]
+        channel_title = row[1] or row[2] or channel_id
+
+        # 1. 채널 기본 정보 조회
+        channel_url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&id={channel_id}&key={api_key}"
+        channel_resp = req.get(channel_url, timeout=10)
+        channel_data = channel_resp.json()
+
+        if not channel_data.get('items'):
+            return jsonify({'success': False, 'error': '채널 정보를 가져올 수 없습니다'}), 404
+
+        channel_info = channel_data['items'][0]
+        channel_stats = channel_info.get('statistics', {})
+        subscribers = int(channel_stats.get('subscriberCount', 0))
+        total_views = int(channel_stats.get('viewCount', 0))
+        video_count = int(channel_stats.get('videoCount', 0))
+        monetization_eligible = subscribers >= 1000
+
+        # 업로드 플레이리스트 ID
+        uploads_playlist_id = channel_info.get('contentDetails', {}).get('relatedPlaylists', {}).get('uploads')
+
+        # 2. 최근 영상 데이터 수집
+        my_videos = []
+        if uploads_playlist_id:
+            playlist_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId={uploads_playlist_id}&maxResults=20&key={api_key}"
+            playlist_resp = req.get(playlist_url, timeout=10)
+            playlist_data = playlist_resp.json()
+
+            video_ids = [item.get('contentDetails', {}).get('videoId') for item in playlist_data.get('items', [])]
+
+            if video_ids:
+                videos_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id={','.join(video_ids)}&key={api_key}"
+                videos_resp = req.get(videos_url, timeout=10)
+                videos_data = videos_resp.json()
+
+                now = datetime.now(timezone.utc)
+
+                for item in videos_data.get('items', []):
+                    snippet = item.get('snippet', {})
+                    stats = item.get('statistics', {})
+
+                    published_str = snippet.get('publishedAt', '')
+                    days_since_publish = None
+                    if published_str:
+                        try:
+                            published = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                            days_since_publish = (now - published).total_seconds() / 86400
+                        except:
+                            pass
+
+                    views = int(stats.get('viewCount', 0))
+                    likes = int(stats.get('likeCount', 0))
+                    comments = int(stats.get('commentCount', 0))
+
+                    views_per_day = views / days_since_publish if days_since_publish and days_since_publish > 0 else 0
+                    engagement_rate = ((likes + comments) / views * 100) if views > 0 else 0
+
+                    my_videos.append({
+                        'title': snippet.get('title', ''),
+                        'views': views,
+                        'likes': likes,
+                        'comments': comments,
+                        'days_ago': round(days_since_publish, 1) if days_since_publish else None,
+                        'views_per_day': round(views_per_day, 1),
+                        'engagement_rate': round(engagement_rate, 2)
+                    })
+
+        # 영상 성과 분석
+        avg_views = sum(v['views'] for v in my_videos) / len(my_videos) if my_videos else 0
+        avg_engagement = sum(v['engagement_rate'] for v in my_videos) / len(my_videos) if my_videos else 0
+        best_video = max(my_videos, key=lambda x: x['views']) if my_videos else None
+        worst_video = min(my_videos, key=lambda x: x['views']) if my_videos else None
+
+        # 업로드 빈도 분석
+        avg_upload_interval = None
+        upload_dates = [v['days_ago'] for v in my_videos if v['days_ago'] is not None]
+        if len(upload_dates) >= 2:
+            upload_dates.sort()
+            avg_upload_interval = (upload_dates[-1] - upload_dates[0]) / (len(upload_dates) - 1)
+
+        # 3. GPT 분석 요청
+        client = OpenAI(api_key=openai_api_key)
+
+        analysis_data = {
+            "channel": {
+                "name": channel_title,
+                "subscribers": subscribers,
+                "total_views": total_views,
+                "video_count": video_count,
+                "monetization_eligible": monetization_eligible,
+                "avg_upload_interval_days": round(avg_upload_interval, 1) if avg_upload_interval else None
+            },
+            "recent_videos": my_videos[:15],
+            "performance_summary": {
+                "avg_views": round(avg_views),
+                "avg_engagement_rate": round(avg_engagement, 2),
+                "best_video": {"title": best_video['title'], "views": best_video['views']} if best_video else None,
+                "worst_video": {"title": worst_video['title'], "views": worst_video['views']} if worst_video else None
+            }
+        }
+
+        prompt = f"""당신은 YouTube 성장 전략 전문가입니다. 다음 채널 데이터를 분석하고 성장 조언을 제공해주세요.
+
+## 채널 데이터
+{json.dumps(analysis_data, ensure_ascii=False, indent=2)}
+
+다음 JSON 형식으로 간결하게 답변해주세요:
+{{
+  "summary": "전체 분석 요약 (2-3문장)",
+  "quick_wins": ["빠르게 실행 가능한 팁 1", "빠르게 실행 가능한 팁 2", "빠르게 실행 가능한 팁 3"],
+  "title_advice": "제목 개선 조언 (1-2문장)",
+  "thumbnail_advice": "썸네일 개선 조언 (1-2문장)",
+  "upload_time_advice": "업로드 시간 조언 (1-2문장)",
+  "action_plan": ["우선순위 1 액션", "우선순위 2 액션", "우선순위 3 액션"]
+}}
+
+한국 YouTube 생태계를 고려하여 실용적인 조언을 제공해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 채널 성장 전문 컨설턴트입니다. 간결하고 실용적인 조언을 제공합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1500
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        advice = json.loads(result_text)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'channel_id': channel_id,
+            'channel_title': channel_title,
+            'analysis_data': analysis_data,
+            'advice': advice,
+            'generated_at': datetime.now(timezone.utc).isoformat()
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"[YOUTUBE-ADVISOR] JSON 파싱 오류: {e}")
+        return jsonify({'success': False, 'error': 'AI 분석 결과 파싱 실패'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @assistant_bp.route('/assistant/api/youtube/my-channel/compare-trending', methods=['POST'])
 def compare_with_trending():
     """내 채널 영상과 트렌딩 영상 비교 분석"""
