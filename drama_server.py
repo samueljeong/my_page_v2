@@ -12830,13 +12830,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return False
 
 
-def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
-    """화면 텍스트 오버레이용 FFmpeg drawtext 필터 생성
+def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=None):
+    """화면 텍스트 오버레이용 FFmpeg drawtext 필터 생성 (나레이션 싱크)
 
     Args:
         screen_overlays: [{"scene": 3, "text": "대박!", "duration": 3, "style": "impact"}, ...]
         scenes: 씬 목록 (duration 계산용)
         fonts_dir: 폰트 디렉토리 경로
+        subtitles: 자막 데이터 [{"start": 0.0, "end": 2.5, "text": "..."}, ...] (나레이션 싱크용)
 
     Returns:
         FFmpeg drawtext 필터 문자열 또는 None
@@ -12844,7 +12845,7 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
     if not screen_overlays:
         return None
 
-    # 씬별 시작 시간 계산
+    # 씬별 시작 시간 계산 (fallback용)
     scene_start_times = {}
     current_time = 0
     for idx, scene in enumerate(scenes):
@@ -12859,48 +12860,78 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
     for overlay in screen_overlays:
         scene_num = overlay.get('scene', 1)
         text = overlay.get('text', '')
-        duration = overlay.get('duration', 3)
+        duration = overlay.get('duration', 5)  # 기본 5초로 증가 (기존 3초)
         style = overlay.get('style', 'impact')
 
-        if not text or scene_num not in scene_start_times:
-            print(f"[OVERLAY] 스킵: text='{text}', scene={scene_num}, available_scenes={list(scene_start_times.keys())}")
+        if not text:
             continue
 
-        start_time = scene_start_times[scene_num]
+        # ========== 나레이션 싱크: 자막에서 해당 텍스트가 나오는 시간 찾기 ==========
+        start_time = None
+        if subtitles:
+            # 오버레이 텍스트가 포함된 자막 찾기
+            text_lower = text.lower().replace(' ', '')
+            for sub in subtitles:
+                sub_text = sub.get('text', '').lower().replace(' ', '')
+                if text_lower in sub_text:
+                    start_time = sub.get('start', 0)
+                    print(f"[OVERLAY] 나레이션 싱크 성공: '{text}' → {start_time:.1f}s (자막: '{sub.get('text', '')[:30]}...')")
+                    break
+
+        # 자막에서 못 찾으면 씬 시작 시간 사용 (fallback)
+        if start_time is None:
+            if scene_num in scene_start_times:
+                start_time = scene_start_times[scene_num]
+                print(f"[OVERLAY] 나레이션 싱크 실패, 씬 시작 시간 사용: '{text}' → scene {scene_num} = {start_time:.1f}s")
+            else:
+                print(f"[OVERLAY] 스킵: text='{text}', scene={scene_num} 없음")
+                continue
+
         end_time = start_time + duration
 
-        # 스타일별 설정
+        # ========== 스타일별 설정 (더 볼드하게) ==========
         if style == 'impact':
-            # 빨간 테두리, 흰 텍스트, 큰 글씨
+            # 빨간 배경 느낌의 강렬한 스타일
             fontcolor = "white"
-            bordercolor = "red"
-            fontsize = 80
-            borderw = 4
+            bordercolor = "#FF0000"  # 순수 빨강
+            fontsize = 100  # 80 → 100 (더 크게)
+            borderw = 6     # 4 → 6 (더 두껍게)
+            shadowcolor = "black"
+            shadowx = 3
+            shadowy = 3
         elif style == 'dramatic':
-            # 노란 텍스트, 검정 배경
-            fontcolor = "yellow"
+            # 노란 텍스트, 더 강조
+            fontcolor = "#FFFF00"  # 순수 노랑
             bordercolor = "black"
-            fontsize = 70
-            borderw = 3
+            fontsize = 90   # 70 → 90
+            borderw = 5     # 3 → 5
+            shadowcolor = "black"
+            shadowx = 2
+            shadowy = 2
         elif style == 'emotional':
-            # 부드러운 파란 텍스트
-            fontcolor = "cyan"
-            bordercolor = "darkblue"
-            fontsize = 60
-            borderw = 2
+            # 부드러운 청록 텍스트
+            fontcolor = "#00FFFF"  # 순수 청록
+            bordercolor = "#000066"
+            fontsize = 80   # 60 → 80
+            borderw = 4     # 2 → 4
+            shadowcolor = "black"
+            shadowx = 2
+            shadowy = 2
         else:
             fontcolor = "white"
             bordercolor = "black"
-            fontsize = 70
-            borderw = 3
+            fontsize = 90
+            borderw = 5
+            shadowcolor = "black"
+            shadowx = 2
+            shadowy = 2
 
         # FFmpeg drawtext 텍스트 이스케이프
-        # 특수 문자 이스케이프: : = ' \ 를 백슬래시로 이스케이프
         text_escaped = text.replace('\\', '\\\\').replace("'", "\\'").replace(':', '\\:').replace('=', '\\=')
 
-        print(f"[OVERLAY] 추가: scene={scene_num}, text='{text}', style={style}, time={start_time:.1f}-{end_time:.1f}s")
+        print(f"[OVERLAY] 추가: text='{text}', style={style}, time={start_time:.1f}-{end_time:.1f}s (duration={duration}s)")
 
-        # drawtext 필터 생성 (화면 중앙에 표시)
+        # drawtext 필터 생성 (화면 중앙, 그림자 효과 추가)
         drawtext = (
             f"drawtext=text='{text_escaped}':"
             f"fontfile='{font_escaped}':"
@@ -12908,6 +12939,8 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir):
             f"fontcolor={fontcolor}:"
             f"bordercolor={bordercolor}:"
             f"borderw={borderw}:"
+            f"shadowcolor={shadowcolor}:"
+            f"shadowx={shadowx}:shadowy={shadowy}:"
             f"x=(w-text_w)/2:"
             f"y=(h-text_h)/2:"
             f"enable='between(t,{start_time},{end_time})'"
@@ -14860,13 +14893,14 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             # 기본 자막 필터 (ASS 형식은 force_style 불필요 - 파일에 스타일 포함)
             vf_filter = f"ass={ass_escaped}:fontsdir={fonts_escaped}"
 
-            # 화면 텍스트 오버레이 추가 (screen_overlays)
+            # 화면 텍스트 오버레이 추가 (screen_overlays) - 나레이션 싱크 적용
             screen_overlays = video_effects.get('screen_overlays', [])
             if screen_overlays:
-                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir)
+                # all_subtitles를 전달하여 나레이션 타이밍과 동기화
+                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=all_subtitles)
                 if overlay_filter:
                     vf_filter = f"{vf_filter},{overlay_filter}"
-                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가")
+                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가 (나레이션 싱크)")
 
             # 로워서드 오버레이 추가 (lower_thirds)
             lower_thirds = video_effects.get('lower_thirds', [])
