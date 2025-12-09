@@ -12075,6 +12075,25 @@ def api_image_generate_assets_zip():
 
                 return result
 
+            # ★ 성경 구절 패턴 (X장 Y절) - 한자어로 읽어야 함 (고유어 처리 전에!)
+            # 예: "4장 3절" → "사장 삼절", "5장 18절" → "오장 십팔절"
+            # 장(章, 챕터)은 한자어 단위이므로 한자어 수사 사용
+            def replace_bible_verse(match):
+                chapter = num_to_sino(int(match.group(1)))
+                verse = num_to_sino(int(match.group(2)))
+                return f"{chapter}장 {verse}절"
+            text = re.sub(r'(\d+)장\s*(\d+)절', replace_bible_verse, text)
+
+            # X장만 단독으로 사용된 경우도 한자어로 (문맥상 챕터를 의미할 때)
+            # "제1장", "1장에서" 등의 패턴
+            def replace_chapter_context(match):
+                prefix = match.group(1) or ''
+                chapter = num_to_sino(int(match.group(2)))
+                suffix = match.group(3)
+                return f"{prefix}{chapter}장{suffix}"
+            # 제X장, X장에서, X장을, X장의, X장은, X장이, X장과, X장부터, X장까지 등
+            text = re.sub(r'(제)?(\d+)장(에서|을|의|은|이|과|부터|까지|으로|에|도)', replace_chapter_context, text)
+
             # 고유어 단위 패턴 (숫자 + 고유어단위)
             for unit in native_units:
                 pattern = r'(\d+)' + re.escape(unit)
