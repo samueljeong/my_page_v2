@@ -6470,6 +6470,489 @@ def get_youtube_recent_performance():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@assistant_bp.route('/assistant/api/youtube/my-channel/advisor', methods=['POST'])
+def get_youtube_channel_advice():
+    """AI 기반 채널 성장 조언 - 수익화를 위한 전략 분석"""
+    try:
+        import json
+        from openai import OpenAI
+        from datetime import datetime, timedelta, timezone
+
+        youtube = get_youtube_oauth_service()
+        if not youtube:
+            return jsonify({'success': False, 'error': 'YouTube 인증이 필요합니다', 'need_auth': True}), 401
+
+        # OpenAI API 키 확인
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return jsonify({'success': False, 'error': 'OpenAI API 키가 설정되지 않았습니다'}), 400
+
+        data = request.get_json() or {}
+        include_trending = data.get('include_trending', True)
+
+        # 1. 내 채널 기본 정보
+        channels_response = youtube.channels().list(
+            part='snippet,statistics,contentDetails,brandingSettings',
+            mine=True
+        ).execute()
+
+        items = channels_response.get('items', [])
+        if not items:
+            return jsonify({'success': False, 'error': '연결된 채널이 없습니다'}), 404
+
+        channel = items[0]
+        channel_id = channel.get('id')
+        channel_title = channel.get('snippet', {}).get('title')
+        channel_stats = channel.get('statistics', {})
+
+        subscribers = int(channel_stats.get('subscriberCount', 0))
+        total_views = int(channel_stats.get('viewCount', 0))
+        video_count = int(channel_stats.get('videoCount', 0))
+
+        # 수익화 조건 체크
+        monetization_eligible = subscribers >= 1000
+        uploads_playlist_id = channel.get('contentDetails', {}).get('relatedPlaylists', {}).get('uploads')
+
+        # 2. 최근 영상 데이터 수집 (최대 30개)
+        playlist_response = youtube.playlistItems().list(
+            part='snippet,contentDetails',
+            playlistId=uploads_playlist_id,
+            maxResults=30
+        ).execute()
+
+        video_ids = [item.get('contentDetails', {}).get('videoId') for item in playlist_response.get('items', [])]
+
+        my_videos = []
+        if video_ids:
+            videos_response = youtube.videos().list(
+                part='snippet,statistics,contentDetails',
+                id=','.join(video_ids)
+            ).execute()
+
+            now = datetime.now(timezone.utc)
+
+            for item in videos_response.get('items', []):
+                snippet = item.get('snippet', {})
+                stats = item.get('statistics', {})
+                content_details = item.get('contentDetails', {})
+
+                published_str = snippet.get('publishedAt', '')
+                hours_since_publish = None
+                days_since_publish = None
+                if published_str:
+                    try:
+                        published = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                        hours_since_publish = (now - published).total_seconds() / 3600
+                        days_since_publish = hours_since_publish / 24
+                    except:
+                        pass
+
+                views = int(stats.get('viewCount', 0))
+                likes = int(stats.get('likeCount', 0))
+                comments = int(stats.get('commentCount', 0))
+
+                # 성과 지표 계산
+                views_per_day = views / days_since_publish if days_since_publish and days_since_publish > 0 else 0
+                engagement_rate = ((likes + comments) / views * 100) if views > 0 else 0
+                like_ratio = (likes / views * 100) if views > 0 else 0
+
+                my_videos.append({
+                    'video_id': item.get('id'),
+                    'title': snippet.get('title', ''),
+                    'description': snippet.get('description', '')[:300] if snippet.get('description') else '',
+                    'published_at': published_str,
+                    'days_ago': round(days_since_publish, 1) if days_since_publish else None,
+                    'views': views,
+                    'likes': likes,
+                    'comments': comments,
+                    'views_per_day': round(views_per_day, 1),
+                    'engagement_rate': round(engagement_rate, 2),
+                    'like_ratio': round(like_ratio, 2),
+                    'duration': content_details.get('duration', '')
+                })
+
+        # 영상 성과 분석
+        if my_videos:
+            avg_views = sum(v['views'] for v in my_videos) / len(my_videos)
+            avg_engagement = sum(v['engagement_rate'] for v in my_videos) / len(my_videos)
+            best_video = max(my_videos, key=lambda x: x['views'])
+            worst_video = min(my_videos, key=lambda x: x['views'])
+
+            # 업로드 빈도 분석
+            upload_dates = [v['days_ago'] for v in my_videos if v['days_ago'] is not None]
+            if len(upload_dates) >= 2:
+                upload_dates.sort()
+                avg_upload_interval = (upload_dates[-1] - upload_dates[0]) / (len(upload_dates) - 1)
+            else:
+                avg_upload_interval = None
+        else:
+            avg_views = 0
+            avg_engagement = 0
+            best_video = None
+            worst_video = None
+            avg_upload_interval = None
+
+        # 3. 트렌딩 영상 비교 데이터 (선택적)
+        trending_insights = None
+        if include_trending:
+            try:
+                # YouTube Data API로 인기 급상승 영상 가져오기
+                trending_response = youtube.videos().list(
+                    part='snippet,statistics',
+                    chart='mostPopular',
+                    regionCode='KR',
+                    maxResults=10
+                ).execute()
+
+                trending_videos = []
+                for item in trending_response.get('items', []):
+                    snippet = item.get('snippet', {})
+                    stats = item.get('statistics', {})
+                    trending_videos.append({
+                        'title': snippet.get('title', ''),
+                        'channel': snippet.get('channelTitle', ''),
+                        'views': int(stats.get('viewCount', 0)),
+                        'likes': int(stats.get('likeCount', 0))
+                    })
+
+                if trending_videos:
+                    trending_insights = {
+                        'count': len(trending_videos),
+                        'avg_views': sum(v['views'] for v in trending_videos) / len(trending_videos),
+                        'titles': [v['title'] for v in trending_videos[:5]]
+                    }
+            except Exception as e:
+                print(f"[YOUTUBE-ADVISOR] 트렌딩 데이터 조회 오류: {e}")
+
+        # 4. GPT 분석 요청
+        client = OpenAI(api_key=openai_api_key)
+
+        # 분석 데이터 준비
+        analysis_data = {
+            "channel": {
+                "name": channel_title,
+                "subscribers": subscribers,
+                "total_views": total_views,
+                "video_count": video_count,
+                "monetization_eligible": monetization_eligible,
+                "avg_upload_interval_days": round(avg_upload_interval, 1) if avg_upload_interval else None
+            },
+            "recent_videos": [
+                {
+                    "title": v['title'],
+                    "views": v['views'],
+                    "likes": v['likes'],
+                    "comments": v['comments'],
+                    "days_ago": v['days_ago'],
+                    "views_per_day": v['views_per_day'],
+                    "engagement_rate": v['engagement_rate']
+                }
+                for v in my_videos[:15]  # 최근 15개만
+            ],
+            "performance_summary": {
+                "avg_views": round(avg_views),
+                "avg_engagement_rate": round(avg_engagement, 2),
+                "best_video": {"title": best_video['title'], "views": best_video['views']} if best_video else None,
+                "worst_video": {"title": worst_video['title'], "views": worst_video['views']} if worst_video else None
+            },
+            "trending_reference": trending_insights
+        }
+
+        prompt = f"""당신은 YouTube 성장 전략 전문가입니다. 다음 채널 데이터를 분석하고 수익화를 위한 구체적인 조언을 제공해주세요.
+
+## 채널 데이터
+{json.dumps(analysis_data, ensure_ascii=False, indent=2)}
+
+## 분석 요청
+이 채널이 수익화(구독자 1,000명 이상, 시청시간 4,000시간)를 달성하고 성장하기 위한 전략을 분석해주세요.
+
+다음 JSON 형식으로 답변해주세요:
+{{
+  "channel_diagnosis": {{
+    "strengths": ["강점 1", "강점 2"],
+    "weaknesses": ["약점 1", "약점 2"],
+    "monetization_status": "현재 수익화 상태 및 예상 달성 시점"
+  }},
+  "title_strategy": {{
+    "current_analysis": "현재 제목 패턴 분석",
+    "improvements": ["개선점 1", "개선점 2"],
+    "suggested_templates": ["추천 제목 템플릿 1", "추천 제목 템플릿 2"]
+  }},
+  "content_strategy": {{
+    "what_works": "성과 좋은 콘텐츠 패턴",
+    "recommendations": ["콘텐츠 추천 1", "콘텐츠 추천 2"],
+    "trending_opportunities": ["트렌드 활용 기회 1", "트렌드 활용 기회 2"]
+  }},
+  "upload_strategy": {{
+    "current_frequency": "현재 업로드 빈도 분석",
+    "recommended_frequency": "추천 업로드 빈도",
+    "best_timing": "추천 업로드 시간대"
+  }},
+  "growth_actions": [
+    {{
+      "priority": 1,
+      "action": "즉시 실행할 액션",
+      "expected_impact": "예상 효과",
+      "how_to": "구체적 실행 방법"
+    }},
+    {{
+      "priority": 2,
+      "action": "다음 실행할 액션",
+      "expected_impact": "예상 효과",
+      "how_to": "구체적 실행 방법"
+    }},
+    {{
+      "priority": 3,
+      "action": "장기적 액션",
+      "expected_impact": "예상 효과",
+      "how_to": "구체적 실행 방법"
+    }}
+  ],
+  "monetization_roadmap": {{
+    "current_progress": "현재 진행 상황 (구독자, 시청시간)",
+    "estimated_timeline": "예상 수익화 달성 시점",
+    "key_milestones": ["마일스톤 1", "마일스톤 2", "마일스톤 3"]
+  }},
+  "quick_wins": ["빠르게 실행 가능한 팁 1", "빠르게 실행 가능한 팁 2", "빠르게 실행 가능한 팁 3"],
+  "summary": "전체 분석 요약 (3-4문장)"
+}}
+
+실질적이고 구체적인 조언을 제공해주세요. 한국 YouTube 생태계를 고려해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 채널 성장 전문 컨설턴트입니다. 데이터 기반의 실용적인 조언을 제공합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=3000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        advice = json.loads(result_text)
+
+        return jsonify({
+            'success': True,
+            'channel_id': channel_id,
+            'channel_title': channel_title,
+            'analysis_data': analysis_data,
+            'advice': advice,
+            'generated_at': datetime.now(timezone.utc).isoformat()
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"[YOUTUBE-ADVISOR] JSON 파싱 오류: {e}")
+        return jsonify({'success': False, 'error': 'AI 분석 결과 파싱 실패'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@assistant_bp.route('/assistant/api/youtube/my-channel/compare-trending', methods=['POST'])
+def compare_with_trending():
+    """내 채널 영상과 트렌딩 영상 비교 분석"""
+    try:
+        import json
+        from openai import OpenAI
+
+        youtube = get_youtube_oauth_service()
+        if not youtube:
+            return jsonify({'success': False, 'error': 'YouTube 인증이 필요합니다', 'need_auth': True}), 401
+
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return jsonify({'success': False, 'error': 'OpenAI API 키가 설정되지 않았습니다'}), 400
+
+        data = request.get_json() or {}
+        category = data.get('category', '')  # 특정 카테고리 필터 (선택)
+        search_query = data.get('search_query', '')  # 특정 키워드 검색 (선택)
+
+        # 1. 내 최고 성과 영상 가져오기
+        channels_response = youtube.channels().list(
+            part='contentDetails',
+            mine=True
+        ).execute()
+
+        items = channels_response.get('items', [])
+        if not items:
+            return jsonify({'success': False, 'error': '연결된 채널이 없습니다'}), 404
+
+        uploads_playlist_id = items[0].get('contentDetails', {}).get('relatedPlaylists', {}).get('uploads')
+
+        playlist_response = youtube.playlistItems().list(
+            part='snippet,contentDetails',
+            playlistId=uploads_playlist_id,
+            maxResults=10
+        ).execute()
+
+        video_ids = [item.get('contentDetails', {}).get('videoId') for item in playlist_response.get('items', [])]
+
+        my_videos = []
+        if video_ids:
+            videos_response = youtube.videos().list(
+                part='snippet,statistics',
+                id=','.join(video_ids)
+            ).execute()
+
+            for item in videos_response.get('items', []):
+                snippet = item.get('snippet', {})
+                stats = item.get('statistics', {})
+                my_videos.append({
+                    'title': snippet.get('title', ''),
+                    'views': int(stats.get('viewCount', 0)),
+                    'likes': int(stats.get('likeCount', 0)),
+                    'comments': int(stats.get('commentCount', 0))
+                })
+
+        # 2. 트렌딩 또는 검색 결과 가져오기
+        if search_query:
+            # 키워드 검색
+            search_response = youtube.search().list(
+                part='snippet',
+                q=search_query,
+                type='video',
+                order='viewCount',
+                maxResults=10,
+                regionCode='KR'
+            ).execute()
+
+            search_video_ids = [item.get('id', {}).get('videoId') for item in search_response.get('items', [])]
+
+            if search_video_ids:
+                compare_response = youtube.videos().list(
+                    part='snippet,statistics',
+                    id=','.join(search_video_ids)
+                ).execute()
+
+                compare_videos = []
+                for item in compare_response.get('items', []):
+                    snippet = item.get('snippet', {})
+                    stats = item.get('statistics', {})
+                    compare_videos.append({
+                        'title': snippet.get('title', ''),
+                        'channel': snippet.get('channelTitle', ''),
+                        'views': int(stats.get('viewCount', 0)),
+                        'likes': int(stats.get('likeCount', 0))
+                    })
+            else:
+                compare_videos = []
+        else:
+            # 트렌딩 영상
+            trending_response = youtube.videos().list(
+                part='snippet,statistics',
+                chart='mostPopular',
+                regionCode='KR',
+                maxResults=10
+            ).execute()
+
+            compare_videos = []
+            for item in trending_response.get('items', []):
+                snippet = item.get('snippet', {})
+                stats = item.get('statistics', {})
+                compare_videos.append({
+                    'title': snippet.get('title', ''),
+                    'channel': snippet.get('channelTitle', ''),
+                    'views': int(stats.get('viewCount', 0)),
+                    'likes': int(stats.get('likeCount', 0))
+                })
+
+        # 3. GPT 비교 분석
+        client = OpenAI(api_key=openai_api_key)
+
+        comparison_data = {
+            "my_videos": my_videos[:5],
+            "trending_videos": compare_videos[:5],
+            "search_query": search_query if search_query else "인기 급상승"
+        }
+
+        prompt = f"""다음은 내 채널 영상과 {'검색 결과' if search_query else '트렌딩'} 영상의 비교입니다.
+
+## 내 영상
+{json.dumps(my_videos[:5], ensure_ascii=False, indent=2)}
+
+## {'검색: ' + search_query if search_query else '트렌딩'} 영상
+{json.dumps(compare_videos[:5], ensure_ascii=False, indent=2)}
+
+다음 JSON 형식으로 비교 분석해주세요:
+{{
+  "title_comparison": {{
+    "my_pattern": "내 영상 제목 패턴 분석",
+    "trending_pattern": "트렌딩 제목 패턴 분석",
+    "gap_analysis": "차이점 분석",
+    "improvement_suggestions": ["개선 제안 1", "개선 제안 2"]
+  }},
+  "performance_gap": {{
+    "views_gap": "조회수 차이 분석",
+    "engagement_gap": "참여도 차이 분석",
+    "key_differences": ["핵심 차이점 1", "핵심 차이점 2"]
+  }},
+  "actionable_insights": [
+    "즉시 적용 가능한 인사이트 1",
+    "즉시 적용 가능한 인사이트 2",
+    "즉시 적용 가능한 인사이트 3"
+  ],
+  "content_ideas": [
+    {{
+      "idea": "콘텐츠 아이디어 1",
+      "why": "이 아이디어가 좋은 이유",
+      "suggested_title": "추천 제목"
+    }},
+    {{
+      "idea": "콘텐츠 아이디어 2",
+      "why": "이 아이디어가 좋은 이유",
+      "suggested_title": "추천 제목"
+    }}
+  ],
+  "summary": "핵심 요약 (2-3문장)"
+}}
+
+실용적이고 바로 적용 가능한 조언을 제공해주세요."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "당신은 YouTube 콘텐츠 전략가입니다. 데이터를 기반으로 실용적인 비교 분석을 제공합니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        comparison = json.loads(result_text)
+
+        return jsonify({
+            'success': True,
+            'my_videos_count': len(my_videos),
+            'compare_videos_count': len(compare_videos),
+            'search_query': search_query,
+            'comparison': comparison
+        })
+
+    except json.JSONDecodeError as e:
+        print(f"[YOUTUBE-COMPARE] JSON 파싱 오류: {e}")
+        return jsonify({'success': False, 'error': '분석 결과 파싱 실패'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # 모듈 로드 시 DB 초기화
 try:
     init_assistant_db()

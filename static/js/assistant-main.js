@@ -4051,6 +4051,382 @@ const AssistantMain = (() => {
   // Replace loadYoutubeChannels with new version
   loadYoutubeChannels = loadYoutubeChannelsWithOAuth;
 
+  // ===== YouTube AI Advisor Functions =====
+  let youtubeAdvisorData = null;
+
+  async function getYoutubeAdvice() {
+    const contentEl = document.getElementById('youtube-my-content');
+    if (!contentEl) return;
+
+    contentEl.innerHTML = `
+      <div style="text-align: center; padding: 2rem;">
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🤖</div>
+        <div style="font-weight: 600; margin-bottom: 0.5rem;">AI 분석 중...</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">채널 데이터와 트렌딩 영상을 분석하고 있습니다</div>
+        <div style="margin-top: 1rem; width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
+          <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); animation: loading 1.5s ease-in-out infinite;"></div>
+        </div>
+      </div>
+      <style>
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(400%); }
+        }
+      </style>`;
+
+    try {
+      const response = await fetch('/assistant/api/youtube/my-channel/advisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ include_trending: true })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        youtubeAdvisorData = data;
+        renderYoutubeAdvice(data);
+      } else if (data.need_auth) {
+        showToast('YouTube 인증이 필요합니다', 'warning');
+        contentEl.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-muted);">먼저 YouTube 계정을 연동해주세요</div>';
+      } else {
+        showToast(data.error || 'AI 분석 실패', 'error');
+        contentEl.innerHTML = `<div style="text-align: center; padding: 1rem; color: #f44336;">분석 실패: ${data.error}</div>`;
+      }
+    } catch (error) {
+      console.error('[Assistant] Get YouTube advice error:', error);
+      showToast('AI 분석 중 오류가 발생했습니다', 'error');
+      contentEl.innerHTML = '<div style="text-align: center; padding: 1rem; color: #f44336;">분석 중 오류 발생</div>';
+    }
+  }
+
+  function renderYoutubeAdvice(data) {
+    const contentEl = document.getElementById('youtube-my-content');
+    if (!contentEl) return;
+
+    const advice = data.advice || {};
+    const analysisData = data.analysis_data || {};
+    const channel = analysisData.channel || {};
+
+    // 수익화 상태 배지
+    const monetizationBadge = channel.monetization_eligible
+      ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">수익화 가능</span>'
+      : '<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">구독자 1,000명 필요</span>';
+
+    let html = `
+      <div style="margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h5 style="font-size: 0.95rem; margin: 0;">🤖 AI 성장 전략 분석</h5>
+          ${monetizationBadge}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+          구독자 ${formatNumberShort(channel.subscribers)} · 영상 ${channel.video_count}개 · 평균 ${channel.avg_upload_interval_days || '?'}일마다 업로드
+        </div>
+      </div>`;
+
+    // 요약
+    if (advice.summary) {
+      html += `
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+          <div style="font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.25rem;">💡 핵심 요약</div>
+          <div style="font-size: 0.85rem; line-height: 1.5;">${advice.summary}</div>
+        </div>`;
+    }
+
+    // Quick Wins
+    if (advice.quick_wins && advice.quick_wins.length > 0) {
+      html += `
+        <div style="background: #ecfdf5; border: 1px solid #10b981; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
+          <div style="font-weight: 600; color: #059669; margin-bottom: 0.5rem;">⚡ 바로 실행 가능한 팁</div>
+          <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem; color: #065f46;">
+            ${advice.quick_wins.map(tip => `<li style="margin-bottom: 0.25rem;">${escapeHtml(tip)}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    // 탭 네비게이션
+    html += `
+      <div style="display: flex; gap: 0.25rem; margin-bottom: 0.75rem; overflow-x: auto; padding-bottom: 0.25rem;">
+        <button onclick="AssistantMain.showAdviceTab('diagnosis')" class="btn btn-small advice-tab active" data-tab="diagnosis">진단</button>
+        <button onclick="AssistantMain.showAdviceTab('title')" class="btn btn-small btn-secondary advice-tab" data-tab="title">제목</button>
+        <button onclick="AssistantMain.showAdviceTab('content')" class="btn btn-small btn-secondary advice-tab" data-tab="content">콘텐츠</button>
+        <button onclick="AssistantMain.showAdviceTab('actions')" class="btn btn-small btn-secondary advice-tab" data-tab="actions">액션</button>
+        <button onclick="AssistantMain.showAdviceTab('roadmap')" class="btn btn-small btn-secondary advice-tab" data-tab="roadmap">로드맵</button>
+      </div>
+      <div id="advice-tab-content"></div>`;
+
+    contentEl.innerHTML = html;
+
+    // 기본 탭 표시
+    showAdviceTab('diagnosis');
+  }
+
+  function showAdviceTab(tabName) {
+    if (!youtubeAdvisorData) return;
+
+    const advice = youtubeAdvisorData.advice || {};
+    const tabContent = document.getElementById('advice-tab-content');
+    if (!tabContent) return;
+
+    // 탭 버튼 활성화 상태 업데이트
+    document.querySelectorAll('.advice-tab').forEach(btn => {
+      if (btn.dataset.tab === tabName) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('active');
+      } else {
+        btn.classList.add('btn-secondary');
+        btn.classList.remove('active');
+      }
+    });
+
+    let html = '';
+
+    switch(tabName) {
+      case 'diagnosis':
+        const diag = advice.channel_diagnosis || {};
+        html = `
+          <div style="display: grid; gap: 0.75rem;">
+            <div style="background: #ecfdf5; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #059669; margin-bottom: 0.5rem;">💪 강점</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+                ${(diag.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+              </ul>
+            </div>
+            <div style="background: #fef2f2; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #dc2626; margin-bottom: 0.5rem;">⚠️ 개선점</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+                ${(diag.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('')}
+              </ul>
+            </div>
+            <div style="background: #fef3c7; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #92400e; margin-bottom: 0.25rem;">💰 수익화 상태</div>
+              <div style="font-size: 0.8rem;">${escapeHtml(diag.monetization_status || '')}</div>
+            </div>
+          </div>`;
+        break;
+
+      case 'title':
+        const title = advice.title_strategy || {};
+        html = `
+          <div style="display: grid; gap: 0.75rem;">
+            <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">📊 현재 제목 분석</div>
+              <div style="font-size: 0.8rem;">${escapeHtml(title.current_analysis || '')}</div>
+            </div>
+            <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">✨ 개선점</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+                ${(title.improvements || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}
+              </ul>
+            </div>
+            <div style="background: #eff6ff; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #1d4ed8; margin-bottom: 0.5rem;">📝 추천 제목 템플릿</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem; color: #1e40af;">
+                ${(title.suggested_templates || []).map(t => `<li style="margin-bottom: 0.25rem;">"${escapeHtml(t)}"</li>`).join('')}
+              </ul>
+            </div>
+          </div>`;
+        break;
+
+      case 'content':
+        const content = advice.content_strategy || {};
+        html = `
+          <div style="display: grid; gap: 0.75rem;">
+            <div style="background: #ecfdf5; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #059669; margin-bottom: 0.25rem;">🎯 효과적인 콘텐츠</div>
+              <div style="font-size: 0.8rem;">${escapeHtml(content.what_works || '')}</div>
+            </div>
+            <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">💡 콘텐츠 추천</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+                ${(content.recommendations || []).map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+              </ul>
+            </div>
+            <div style="background: #fef3c7; padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; color: #92400e; margin-bottom: 0.5rem;">🔥 트렌드 기회</div>
+              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+                ${(content.trending_opportunities || []).map(t => `<li>${escapeHtml(t)}</li>`).join('')}
+              </ul>
+            </div>
+          </div>`;
+        break;
+
+      case 'actions':
+        const actions = advice.growth_actions || [];
+        html = `<div style="display: grid; gap: 0.5rem;">`;
+        actions.forEach((action, idx) => {
+          const colors = ['#667eea', '#10b981', '#f59e0b'];
+          html += `
+            <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 6px; border-left: 3px solid ${colors[idx] || '#667eea'};">
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span style="background: ${colors[idx] || '#667eea'}; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">${action.priority}</span>
+                <span style="font-weight: 600; font-size: 0.85rem;">${escapeHtml(action.action)}</span>
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">📈 ${escapeHtml(action.expected_impact)}</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">📋 ${escapeHtml(action.how_to)}</div>
+            </div>`;
+        });
+        html += '</div>';
+        break;
+
+      case 'roadmap':
+        const roadmap = advice.monetization_roadmap || {};
+        html = `
+          <div style="display: grid; gap: 0.75rem;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; border-radius: 8px;">
+              <div style="font-size: 0.75rem; opacity: 0.9;">🎯 목표: 수익화 달성</div>
+              <div style="font-size: 1.1rem; font-weight: 700; margin: 0.25rem 0;">${escapeHtml(roadmap.estimated_timeline || '분석 중...')}</div>
+              <div style="font-size: 0.8rem; opacity: 0.9;">${escapeHtml(roadmap.current_progress || '')}</div>
+            </div>
+            <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 6px;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">🚩 주요 마일스톤</div>
+              <div style="display: grid; gap: 0.5rem;">
+                ${(roadmap.key_milestones || []).map((m, idx) => `
+                  <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem;">
+                    <span style="width: 20px; height: 20px; border-radius: 50%; background: var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.7rem;">${idx + 1}</span>
+                    ${escapeHtml(m)}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>`;
+        break;
+    }
+
+    tabContent.innerHTML = html;
+  }
+
+  async function compareWithTrending(searchQuery = '') {
+    const contentEl = document.getElementById('youtube-my-content');
+    if (!contentEl) return;
+
+    contentEl.innerHTML = `
+      <div style="text-align: center; padding: 2rem;">
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+        <div style="font-weight: 600;">트렌딩 영상과 비교 분석 중...</div>
+      </div>`;
+
+    try {
+      const response = await fetch('/assistant/api/youtube/my-channel/compare-trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_query: searchQuery })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        renderTrendingComparison(data);
+      } else {
+        showToast(data.error || '비교 분석 실패', 'error');
+      }
+    } catch (error) {
+      console.error('[Assistant] Compare trending error:', error);
+      showToast('비교 분석 중 오류가 발생했습니다', 'error');
+    }
+  }
+
+  function renderTrendingComparison(data) {
+    const contentEl = document.getElementById('youtube-my-content');
+    if (!contentEl) return;
+
+    const comparison = data.comparison || {};
+
+    let html = `
+      <div style="margin-bottom: 1rem;">
+        <h5 style="font-size: 0.95rem; margin: 0 0 0.5rem 0;">📊 ${data.search_query ? '키워드' : '트렌딩'} 비교 분석</h5>
+      </div>`;
+
+    // 요약
+    if (comparison.summary) {
+      html += `
+        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+          <div style="font-size: 0.85rem; line-height: 1.5;">${escapeHtml(comparison.summary)}</div>
+        </div>`;
+    }
+
+    // 즉시 적용 가능한 인사이트
+    if (comparison.actionable_insights && comparison.actionable_insights.length > 0) {
+      html += `
+        <div style="background: #ecfdf5; border: 1px solid #10b981; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
+          <div style="font-weight: 600; color: #059669; margin-bottom: 0.5rem;">💡 즉시 적용 가능한 인사이트</div>
+          <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.8rem;">
+            ${comparison.actionable_insights.map(i => `<li style="margin-bottom: 0.25rem;">${escapeHtml(i)}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    // 콘텐츠 아이디어
+    if (comparison.content_ideas && comparison.content_ideas.length > 0) {
+      html += `
+        <div style="background: var(--bg-color); padding: 0.75rem; border-radius: 8px;">
+          <div style="font-weight: 600; margin-bottom: 0.5rem;">🎬 추천 콘텐츠 아이디어</div>
+          <div style="display: grid; gap: 0.5rem;">`;
+
+      comparison.content_ideas.forEach(idea => {
+        html += `
+          <div style="padding: 0.5rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 500; font-size: 0.85rem; margin-bottom: 0.25rem;">${escapeHtml(idea.idea)}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">${escapeHtml(idea.why)}</div>
+            <div style="font-size: 0.75rem; color: #1d4ed8;">📝 "${escapeHtml(idea.suggested_title)}"</div>
+          </div>`;
+      });
+
+      html += '</div></div>';
+    }
+
+    contentEl.innerHTML = html;
+  }
+
+  // Update renderYoutubeOAuthSection to include advisor button
+  const originalRenderYoutubeOAuthSection = renderYoutubeOAuthSection;
+
+  function renderYoutubeOAuthSectionWithAdvisor(oauthData) {
+    const oauthEl = document.getElementById('youtube-oauth-section');
+    if (!oauthEl) return;
+
+    if (!oauthData || !oauthData.authenticated) {
+      oauthEl.innerHTML = `
+        <div style="background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; margin-bottom: 0.25rem;">🔗 YouTube 계정 연동</div>
+              <div style="font-size: 0.8rem; opacity: 0.9;">예약 영상, 비공개 영상, AI 성장 조언을 받으려면 연동하세요</div>
+            </div>
+            <button onclick="AssistantMain.connectYoutubeOAuth()" class="btn" style="background: white; color: #cc0000; font-weight: 600;">
+              연동하기
+            </button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const channel = oauthData.channel;
+    oauthEl.innerHTML = `
+      <div style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <img src="${channel?.thumbnail || ''}" style="width: 32px; height: 32px; border-radius: 50%;"
+                 onerror="this.style.display='none'">
+            <div>
+              <div style="font-weight: 600;">✅ ${channel?.title || 'YouTube 연동됨'}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">구독자 ${formatNumberShort(channel?.subscribers || 0)}</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="AssistantMain.loadMyChannelVideos()" class="btn btn-small btn-secondary">내 영상</button>
+            <button onclick="AssistantMain.loadMyChannelAnalytics()" class="btn btn-small btn-secondary">분석</button>
+            <button onclick="AssistantMain.getYoutubeAdvice()" class="btn btn-small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600;">🤖 AI 조언</button>
+            <button onclick="AssistantMain.disconnectYoutubeOAuth()" class="btn btn-small" style="background: #fee2e2; color: #dc2626;">연동해제</button>
+          </div>
+        </div>
+        <div id="youtube-my-content" style="margin-top: 0.5rem;"></div>
+      </div>`;
+  }
+
+  // Replace the function
+  renderYoutubeOAuthSection = renderYoutubeOAuthSectionWithAdvisor;
+
   // ===== Initialize on DOM Ready =====
   document.addEventListener('DOMContentLoaded', init);
 
@@ -4166,6 +4542,10 @@ const AssistantMain = (() => {
     loadMyChannelVideos,
     loadMyChannelAnalytics,
     loadMyChannelPerformance,
-    filterMyVideos
+    filterMyVideos,
+    // YouTube AI Advisor functions
+    getYoutubeAdvice,
+    showAdviceTab,
+    compareWithTrending
   };
 })();
