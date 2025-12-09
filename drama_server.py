@@ -19619,19 +19619,24 @@ def run_automation_pipeline(row_data, row_index):
                 # TODO: 쇼츠 품질 개선 후 다시 활성화
                 # 롱폼이 더 중요하므로 먼저 결과를 반환하고, 쇼츠는 백그라운드에서 처리
                 SHORTS_ENABLED = False  # 쇼츠 생성 비활성화 (2025-12-09)
-                shorts_info = video_effects.get('shorts', {}) if SHORTS_ENABLED else {}
-                highlight_scenes_nums = shorts_info.get('highlight_scenes', [])
 
-                # highlight_scenes가 비어있으면 기본값으로 처음 2-3개 씬 선택
-                if not highlight_scenes_nums or len(highlight_scenes_nums) == 0:
-                    total_scenes_count = len(scenes) if scenes else 0
-                    if total_scenes_count >= 3:
-                        mid = total_scenes_count // 2
-                        highlight_scenes_nums = [1, mid, total_scenes_count]
-                    elif total_scenes_count >= 2:
-                        highlight_scenes_nums = [1, total_scenes_count]
-                    elif total_scenes_count == 1:
-                        highlight_scenes_nums = [1]
+                if SHORTS_ENABLED:
+                    shorts_info = video_effects.get('shorts', {})
+                    highlight_scenes_nums = shorts_info.get('highlight_scenes', [])
+
+                    # highlight_scenes가 비어있으면 기본값으로 처음 2-3개 씬 선택
+                    if not highlight_scenes_nums or len(highlight_scenes_nums) == 0:
+                        total_scenes_count = len(scenes) if scenes else 0
+                        if total_scenes_count >= 3:
+                            mid = total_scenes_count // 2
+                            highlight_scenes_nums = [1, mid, total_scenes_count]
+                        elif total_scenes_count >= 2:
+                            highlight_scenes_nums = [1, total_scenes_count]
+                        elif total_scenes_count == 1:
+                            highlight_scenes_nums = [1]
+                else:
+                    highlight_scenes_nums = []
+                    print(f"[AUTOMATION] 5. 쇼츠 생성 비활성화됨 (SHORTS_ENABLED=False)")
 
                 if highlight_scenes_nums and len(highlight_scenes_nums) > 0:
                     # 백그라운드 스레드에서 쇼츠 생성
