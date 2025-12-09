@@ -13000,8 +13000,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             end = _format_ass_time(sub['end'])
             text = sub.get('text', '')
 
-            # 긴 텍스트 자동 줄바꿈 적용
-            text = wrap_text(text, max_chars_per_line)
+            # 긴 텍스트 자동 줄바꿈 적용 (일본어만! 한국어는 기존 스타일 유지)
+            if lang == 'ja':
+                text = wrap_text(text, max_chars_per_line)
 
             # 색상 강조 적용
             if highlights:
