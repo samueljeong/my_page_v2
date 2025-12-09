@@ -10682,6 +10682,15 @@ def api_image_analyze_script():
 ### 1단계: 대본 내용 분석하여 카테고리 감지
 대본을 읽고 아래 기준으로 "detected_category"를 결정하세요:
 
+**"health" 선택 기준** (건강/의료 관련 - 최우선 감지!):
+- 건강, 질병, 증상, 치료, 예방 관련 내용
+- 의사, 병원, 약, 검사, 진단 언급
+- 신체 부위 (혈압, 혈당, 관절, 심장, 뇌 등)
+- 건강 식품, 영양제, 운동법
+- 노화, 장수, 수명, 치매, 암, 당뇨 등
+- "~하면 안됩니다", "~하지 마세요" 형식의 건강 조언
+- 의학적 연구 결과나 통계 인용
+
 **"news" 선택 기준** (하나라도 해당되면 news):
 - 정치인, 대통령, 국회, 정당 언급
 - 경제 지표, 주가, 환율, 부동산 언급
@@ -10722,7 +10731,41 @@ def api_image_analyze_script():
   - red-urgent: 빨간색 (긴급/속보)
   - blue-trust: 파란색 (신뢰/공식 발표)
 
-### 4단계: A/B/C 세 가지 한국 뉴스 스타일로 생성
+### 4단계: 카테고리별 썸네일 스타일 생성
+
+---
+## 🏥 "health" 카테고리 (건강/의료) - 전문가 스타일 썸네일
+
+**★ 건강 썸네일 핵심 원칙:**
+- 반드시 **흰 가운 입은 한국인 의사/전문가** 이미지
+- **PHOTOREALISTIC** 스타일 (실사 사진처럼)
+- 여러 줄의 큰 텍스트 (충격적/경고성 문구)
+- 빨강/노랑 강조색으로 핵심 숫자/키워드 강조
+
+**건강 썸네일 텍스트 패턴 (text_overlay에 적용):**
+- 숫자 강조: "5가지", "3초", "90대", "8시간", "30%"
+- 경고 문구: "절대 하지마세요", "~하면 끝!", "의사도 경고"
+- 충격 문구: "99%는 몰라서 후회합니다", "이것만 알면", "당장 중단하세요"
+- 결과 문구: "~이 사라집니다", "~이 좋아집니다", "폭삭 늙습니다"
+
+**A = 의사 클로즈업 스타일** (가장 권장):
+- 흰 가운 입은 한국인 의사 상반신
+- 진지하거나 걱정하는 표정
+- 텍스트 공간을 위한 어두운 배경
+- 예: "korean male doctor in white coat, serious concerned expression, hospital background, professional medical portrait, photorealistic, space for large text overlay, dramatic lighting"
+
+**B = 의사 + 제스처 스타일**:
+- 손가락으로 경고/강조하는 의사
+- "안돼요" 또는 "이것!" 제스처
+- 예: "korean female doctor in white coat pointing finger in warning gesture, serious expression, medical office background, photorealistic portrait, text space on left side"
+
+**C = 의사 + 의료 시각 자료 스타일**:
+- 의사 옆에 관련 의료 이미지 (X-ray, 차트, 신체 부위 등)
+- 분할 화면 또는 오버레이
+- 예: "split screen, left: korean doctor in white coat looking concerned, right: medical chart showing declining health indicators, photorealistic, dramatic contrast"
+
+---
+## 📰 "news" 카테고리 (뉴스) - 뉴스 스타일 썸네일
 
 **A = 인물 클로즈업 스타일**:
 - 핵심 인물의 얼굴/상반신 클로즈업
@@ -10741,6 +10784,34 @@ def api_image_analyze_script():
 - 예: "split screen comparison, left side: rising stock chart with green arrows, right side: worried korean investor, dramatic lighting"
 
 ### 출력 형식
+
+**건강 카테고리 예시:**
+```json
+{{
+  "detected_category": "health",
+  "thumbnail_text": {{
+    "person_name": "",
+    "entity_name": "",
+    "quote": "70대가 넘으면 절대 하지마세요",
+    "headline": "5가지 검사는 의사들도 피합니다",
+    "numbers": "70대, 5가지"
+  }},
+  "visual_elements": {{
+    "main_subject": "노년층 건강 검사 주의사항",
+    "person_description": "50대 한국인 남성 의사, 흰 가운, 진지한 표정",
+    "scene_description": "병원 진료실, 의료 장비",
+    "emotion": "우려",
+    "color_scheme": "red-urgent"
+  }},
+  "ai_prompts": {{
+    "A": {{ "prompt": "korean male doctor in 50s wearing white coat, serious concerned expression looking at camera, hospital office background with medical equipment, photorealistic portrait, dramatic lighting, space for large text overlay on right side", "style": "doctor", "text_overlay": {{"line1": "70대가 넘으면", "line2": "절대 하지마세요", "line3": "5가지 검사는", "line4": "의사들도 피합니다", "highlight": "5가지 검사"}} }},
+    "B": {{ "prompt": "korean female doctor in white coat pointing finger in warning gesture, serious expression, clean hospital background, photorealistic, text space on left", "style": "doctor-gesture", "text_overlay": {{"line1": "70대 넘으면", "line2": "이 검사 절대 NO", "line3": "의사도 안합니다", "highlight": "절대 NO"}} }},
+    "C": {{ "prompt": "split screen, left side: korean doctor looking worried in white coat, right side: medical test results with red warning indicators, photorealistic, high contrast", "style": "doctor-visual", "text_overlay": {{"line1": "5가지 검사", "line2": "70대는 위험", "highlight": "위험"}} }}
+  }}
+}}
+```
+
+**뉴스 카테고리 예시:**
 ```json
 {{
   "detected_category": "news",
@@ -10770,7 +10841,9 @@ def api_image_analyze_script():
 1. **실제 한국인 얼굴 생성**: "korean man/woman" 사용, realistic portrait style
 2. **텍스트 공간 확보**: "space for text overlay", "dark gradient at bottom"
 3. **뉴스 사진 스타일**: "news photography", "dramatic lighting", "high contrast"
-4. **구체적 묘사**: 일반적 설명 대신 대본 내용을 직접 반영"""
+4. **구체적 묘사**: 일반적 설명 대신 대본 내용을 직접 반영
+5. **건강 카테고리 필수**: "doctor in white coat", "photorealistic", "medical" 키워드 포함
+6. **건강 썸네일 텍스트**: 여러 줄 (line1, line2, line3, line4)로 구성, highlight 필드에 강조할 키워드"""
 
             system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 
