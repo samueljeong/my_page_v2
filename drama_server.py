@@ -10903,11 +10903,33 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 
 ## 🎯 유튜브 제목 생성 규칙 (중요!)
 
-### 기본 규칙
-- 길이: **18-32자** (공백 포함, 모바일에서 잘리지 않도록)
+### 🌍 언어 감지 및 적용 (CRITICAL!)
+대본의 언어를 먼저 감지하고, **해당 언어로** 제목/설명/썸네일 텍스트를 작성하세요:
+- 한국어 대본 → 한국어로 모든 메타데이터 작성
+- 일본어 대본 → 일본어로 모든 메타데이터 작성 (제목, 설명, 썸네일 텍스트, 해시태그)
+- 영어 대본 → 영어로 모든 메타데이터 작성
+- **절대 대본 언어와 다른 언어로 메타데이터를 작성하지 마세요!**
+
+### 기본 규칙 (언어별 길이 기준)
+- **한국어**: 18-32자 (공백 포함)
+- **일본어**: 20-40자 (히라가나/가타카나 포함)
+- **영어**: 40-70 characters (spaces included)
 - **숫자 1개 이상 필수** (연도, 개수, 기간, 금액 등)
 - 심리 트리거 **2개 이상** 사용
 - 낚시성/과장/선정성 **절대 금지** ("충격", "소름", "멸망", "난리" 금지)
+
+### ⚠️ 제목 작성 시 흔한 실수 (절대 금지!)
+**❌ 나쁜 예시:**
+- "이것이 바로 진실입니다" → 무엇에 대한 진실인지 불분명
+- "알아야 할 중요한 사실" → 구체성 없음, 클릭 유도 약함
+- "충격적인 발견" → 낚시성, 선정적
+- "이 영상을 꼭 보세요" → 시청자에게 명령, 거부감 유발
+- "~에 대해 알아봅시다" → 교과서 스타일, 흥미 없음
+
+**✅ 좋은 예시:**
+- "3년 용산 시대 끝, 청와대·세종 3단계 구상" → 구체적 숫자 + 핵심 내용
+- "60년 인생이 가르쳐준 3가지 후회" → 타깃 + 숫자 + 감정
+- "2025년 부동산 세금, 이렇게 바뀝니다" → 시의성 + 구체적 주제
 
 ### 타겟별 스타일
 - **시니어 (50-70대)**: 회상형, 감성적, 신뢰감
@@ -10928,6 +10950,10 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 3. **authority** (권위형): 데이터/전문성 기반 느낌
 
 ## 🎯 유튜브 설명란 생성 규칙 (중요!)
+
+### 🌍 언어 규칙 (CRITICAL!)
+- **대본 언어와 동일한 언어로 설명란 작성!**
+- 일본어 대본 → 일본어 설명란, 영어 대본 → 영어 설명란
 
 ### 목표
 - 검색·추천 노출에 유리한 설명란 작성
@@ -11069,31 +11095,26 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 
 {ai_prompts_rules}
 
-## ⚠️ CRITICAL: TEXT_OVERLAY RULES (한글 텍스트 규칙) ⚠️
-The "text_overlay" field contains Korean text that will be rendered ON the thumbnail image.
+## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
+The "text_overlay" text MUST match the script language!
 ⚠️ IMAGE GENERATION MODELS STRUGGLE WITH LONG TEXT! Keep it SHORT!
 
-**MAIN TEXT RULES:**
-- MAXIMUM 6 Korean characters (e.g., "그날의 선택", "운명의 순간", "충격 반전")
-- Use SIMPLE, COMMON Korean words only
-- NO typos, NO made-up words
-- Must be grammatically correct Korean
+### 🌍 언어 규칙: 대본 언어 = 썸네일 텍스트 언어!
 
-**SUB TEXT RULES:**
-- MAXIMUM 15 Korean characters
-- Can be a short phrase or subtitle
-- Use proper Korean spacing (띄어쓰기)
-- NO English, NO special characters
+**MAIN TEXT RULES (언어별):**
+- 한국어: 최대 6자 | 일본어: 최대 8자 | 영어: 최대 15자
+- Use SIMPLE, COMMON words - NO typos, NO made-up words
+
+**SUB TEXT RULES (언어별):**
+- 한국어: 최대 15자 | 일본어: 최대 20자 | 영어: 최대 40자
 
 **GOOD EXAMPLES:**
-- main: "운명의 선택" (4자), sub: "그 날의 결정이 모든 걸 바꿨다"
-- main: "충격 결말" (4자), sub: "아무도 예상 못한 반전"
-- main: "눈물의 재회" (5자), sub: "10년 만에 다시 만난 그 사람"
+- 한국어: main: "운명의 선택", sub: "그 날의 결정이 모든 걸 바꿨다"
+- 일본어: main: "運命の瞬間", sub: "あの日の決断が全てを変えた"
+- 영어: main: "THE MOMENT", sub: "One decision changed everything"
 
 **BAD EXAMPLES (절대 금지):**
-- main: "쫓이 쫓아가던" ❌ (오타, 너무 김)
-- main: "그날을 잊지 못해요 정말로" ❌ (너무 김)
-- sub: "투자, 그 후의 이야..." ❌ (불완전한 문장)
+- "쫓이 쫓아가던" ❌ (오타) | "그날을 잊지 못해요 정말로" ❌ (너무 김)
 
 ## ⚠️ CRITICAL: NARRATION RULE ⚠️
 The "narration" field MUST contain the EXACT ORIGINAL TEXT from the script + SSML emotion tags!
@@ -11529,31 +11550,26 @@ The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
 - All 3 prompts MUST be different compositions!
 - ALWAYS use professional photography style - like movie posters or news thumbnails!
 
-## ⚠️ CRITICAL: TEXT_OVERLAY RULES (한글 텍스트 규칙) ⚠️
-The "text_overlay" field contains Korean text that will be rendered ON the thumbnail image.
+## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
+The "text_overlay" text MUST match the script language!
 ⚠️ IMAGE GENERATION MODELS STRUGGLE WITH LONG TEXT! Keep it SHORT!
 
-**MAIN TEXT RULES:**
-- MAXIMUM 6 Korean characters (e.g., "그날의 선택", "운명의 순간", "충격 반전")
-- Use SIMPLE, COMMON Korean words only
-- NO typos, NO made-up words
-- Must be grammatically correct Korean
+### 🌍 언어 규칙: 대본 언어 = 썸네일 텍스트 언어!
 
-**SUB TEXT RULES:**
-- MAXIMUM 15 Korean characters
-- Can be a short phrase or subtitle
-- Use proper Korean spacing (띄어쓰기)
-- NO English, NO special characters
+**MAIN TEXT RULES (언어별):**
+- 한국어: 최대 6자 | 일본어: 최대 8자 | 영어: 최대 15자
+- Use SIMPLE, COMMON words - NO typos, NO made-up words
+
+**SUB TEXT RULES (언어별):**
+- 한국어: 최대 15자 | 일본어: 최대 20자 | 영어: 최대 40자
 
 **GOOD EXAMPLES:**
-- main: "운명의 선택" (4자), sub: "그 날의 결정이 모든 걸 바꿨다"
-- main: "충격 결말" (4자), sub: "아무도 예상 못한 반전"
-- main: "눈물의 재회" (5자), sub: "10년 만에 다시 만난 그 사람"
+- 한국어: main: "운명의 선택", sub: "그 날의 결정이 모든 걸 바꿨다"
+- 일본어: main: "運命の瞬間", sub: "あの日の決断が全てを変えた"
+- 영어: main: "THE MOMENT", sub: "One decision changed everything"
 
 **BAD EXAMPLES (절대 금지):**
-- main: "쫓이 쫓아가던" ❌ (오타, 너무 김)
-- main: "그날을 잊지 못해요 정말로" ❌ (너무 김)
-- sub: "투자, 그 후의 이야..." ❌ (불완전한 문장)
+- "쫓이 쫓아가던" ❌ (오타) | "그날을 잊지 못해요 정말로" ❌ (너무 김)
 
 ## ⚠️ CRITICAL: NARRATION RULE ⚠️
 The "narration" field MUST contain the EXACT ORIGINAL TEXT from the script!
