@@ -10682,6 +10682,15 @@ def api_image_analyze_script():
 ### 1단계: 대본 내용 분석하여 카테고리 감지
 대본을 읽고 아래 기준으로 "detected_category"를 결정하세요:
 
+**"health" 선택 기준** (건강/의료 관련 - 최우선 감지!):
+- 건강, 질병, 증상, 치료, 예방 관련 내용
+- 의사, 병원, 약, 검사, 진단 언급
+- 신체 부위 (혈압, 혈당, 관절, 심장, 뇌 등)
+- 건강 식품, 영양제, 운동법
+- 노화, 장수, 수명, 치매, 암, 당뇨 등
+- "~하면 안됩니다", "~하지 마세요" 형식의 건강 조언
+- 의학적 연구 결과나 통계 인용
+
 **"news" 선택 기준** (하나라도 해당되면 news):
 - 정치인, 대통령, 국회, 정당 언급
 - 경제 지표, 주가, 환율, 부동산 언급
@@ -10722,7 +10731,41 @@ def api_image_analyze_script():
   - red-urgent: 빨간색 (긴급/속보)
   - blue-trust: 파란색 (신뢰/공식 발표)
 
-### 4단계: A/B/C 세 가지 한국 뉴스 스타일로 생성
+### 4단계: 카테고리별 썸네일 스타일 생성
+
+---
+## 🏥 "health" 카테고리 (건강/의료) - 전문가 스타일 썸네일
+
+**★ 건강 썸네일 핵심 원칙:**
+- 반드시 **흰 가운 입은 한국인 의사/전문가** 이미지
+- **PHOTOREALISTIC** 스타일 (실사 사진처럼)
+- 여러 줄의 큰 텍스트 (충격적/경고성 문구)
+- 빨강/노랑 강조색으로 핵심 숫자/키워드 강조
+
+**건강 썸네일 텍스트 패턴 (text_overlay에 적용):**
+- 숫자 강조: "5가지", "3초", "90대", "8시간", "30%"
+- 경고 문구: "절대 하지마세요", "~하면 끝!", "의사도 경고"
+- 충격 문구: "99%는 몰라서 후회합니다", "이것만 알면", "당장 중단하세요"
+- 결과 문구: "~이 사라집니다", "~이 좋아집니다", "폭삭 늙습니다"
+
+**A = 의사 클로즈업 스타일** (가장 권장):
+- 흰 가운 입은 한국인 의사 상반신
+- 진지하거나 걱정하는 표정
+- 텍스트 공간을 위한 어두운 배경
+- 예: "korean male doctor in white coat, serious concerned expression, hospital background, professional medical portrait, photorealistic, space for large text overlay, dramatic lighting"
+
+**B = 의사 + 제스처 스타일**:
+- 손가락으로 경고/강조하는 의사
+- "안돼요" 또는 "이것!" 제스처
+- 예: "korean female doctor in white coat pointing finger in warning gesture, serious expression, medical office background, photorealistic portrait, text space on left side"
+
+**C = 의사 + 의료 시각 자료 스타일**:
+- 의사 옆에 관련 의료 이미지 (X-ray, 차트, 신체 부위 등)
+- 분할 화면 또는 오버레이
+- 예: "split screen, left: korean doctor in white coat looking concerned, right: medical chart showing declining health indicators, photorealistic, dramatic contrast"
+
+---
+## 📰 "news" 카테고리 (뉴스) - 뉴스 스타일 썸네일
 
 **A = 인물 클로즈업 스타일**:
 - 핵심 인물의 얼굴/상반신 클로즈업
@@ -10741,6 +10784,34 @@ def api_image_analyze_script():
 - 예: "split screen comparison, left side: rising stock chart with green arrows, right side: worried korean investor, dramatic lighting"
 
 ### 출력 형식
+
+**건강 카테고리 예시:**
+```json
+{{
+  "detected_category": "health",
+  "thumbnail_text": {{
+    "person_name": "",
+    "entity_name": "",
+    "quote": "70대가 넘으면 절대 하지마세요",
+    "headline": "5가지 검사는 의사들도 피합니다",
+    "numbers": "70대, 5가지"
+  }},
+  "visual_elements": {{
+    "main_subject": "노년층 건강 검사 주의사항",
+    "person_description": "50대 한국인 남성 의사, 흰 가운, 진지한 표정",
+    "scene_description": "병원 진료실, 의료 장비",
+    "emotion": "우려",
+    "color_scheme": "red-urgent"
+  }},
+  "ai_prompts": {{
+    "A": {{ "prompt": "korean male doctor in 50s wearing white coat, serious concerned expression looking at camera, hospital office background with medical equipment, photorealistic portrait, dramatic lighting, space for large text overlay on right side", "style": "doctor", "text_overlay": {{"line1": "70대가 넘으면", "line2": "절대 하지마세요", "line3": "5가지 검사는", "line4": "의사들도 피합니다", "highlight": "5가지 검사"}} }},
+    "B": {{ "prompt": "korean female doctor in white coat pointing finger in warning gesture, serious expression, clean hospital background, photorealistic, text space on left", "style": "doctor-gesture", "text_overlay": {{"line1": "70대 넘으면", "line2": "이 검사 절대 NO", "line3": "의사도 안합니다", "highlight": "절대 NO"}} }},
+    "C": {{ "prompt": "split screen, left side: korean doctor looking worried in white coat, right side: medical test results with red warning indicators, photorealistic, high contrast", "style": "doctor-visual", "text_overlay": {{"line1": "5가지 검사", "line2": "70대는 위험", "highlight": "위험"}} }}
+  }}
+}}
+```
+
+**뉴스 카테고리 예시:**
 ```json
 {{
   "detected_category": "news",
@@ -10770,7 +10841,9 @@ def api_image_analyze_script():
 1. **실제 한국인 얼굴 생성**: "korean man/woman" 사용, realistic portrait style
 2. **텍스트 공간 확보**: "space for text overlay", "dark gradient at bottom"
 3. **뉴스 사진 스타일**: "news photography", "dramatic lighting", "high contrast"
-4. **구체적 묘사**: 일반적 설명 대신 대본 내용을 직접 반영"""
+4. **구체적 묘사**: 일반적 설명 대신 대본 내용을 직접 반영
+5. **건강 카테고리 필수**: "doctor in white coat", "photorealistic", "medical" 키워드 포함
+6. **건강 썸네일 텍스트**: 여러 줄 (line1, line2, line3, line4)로 구성, highlight 필드에 강조할 키워드"""
 
             system_prompt = f"""You are an AI that generates image prompts for COLLAGE STYLE: Detailed Anime Background + 2D Stickman Character.
 
@@ -12818,13 +12891,65 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
     """
     try:
         # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
-        # NanumGothic 사용 (Pretendard는 한글 글리프 없음)
         if lang == 'ko':
             font_name = "NanumGothic"
             font_size = 48  # 24 → 48 (2배 크기)
+            max_chars_per_line = 20  # 한국어: 한 줄 최대 20자
+        elif lang == 'ja':
+            font_name = "Noto Sans CJK JP"  # 일본어 전용 폰트
+            font_size = 40  # 일본어는 글자가 복잡해서 조금 작게
+            max_chars_per_line = 18  # 일본어: 한 줄 최대 18자
         else:
             font_name = "NanumGothic"
             font_size = 44  # 22 → 44 (2배 크기)
+            max_chars_per_line = 25  # 영어: 한 줄 최대 25자
+
+        # 긴 텍스트 자동 줄바꿈 함수
+        def wrap_text(text, max_chars):
+            """긴 텍스트를 max_chars 기준으로 줄바꿈"""
+            if len(text) <= max_chars:
+                return text
+
+            # 이미 줄바꿈이 있으면 그대로
+            if '\n' in text or '\\N' in text:
+                return text
+
+            # 자연스러운 줄바꿈 위치 찾기
+            words = []
+            current = ""
+            for char in text:
+                current += char
+                # 띄어쓰기, 마침표, 쉼표 등에서 단어 분리
+                if char in ' 、。，．!?！？':
+                    words.append(current)
+                    current = ""
+            if current:
+                words.append(current)
+
+            # 단어 단위로 줄바꿈
+            lines = []
+            current_line = ""
+            for word in words:
+                if len(current_line) + len(word) <= max_chars:
+                    current_line += word
+                else:
+                    if current_line:
+                        lines.append(current_line.strip())
+                    current_line = word
+            if current_line:
+                lines.append(current_line.strip())
+
+            # 줄바꿈이 안 된 경우 강제 분할
+            if len(lines) == 1 and len(lines[0]) > max_chars:
+                text = lines[0]
+                lines = []
+                while len(text) > max_chars:
+                    lines.append(text[:max_chars])
+                    text = text[max_chars:]
+                if text:
+                    lines.append(text)
+
+            return '\n'.join(lines)
 
         # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
         # Outline: 2 → 4 (더 두꺼운 테두리)
@@ -12850,6 +12975,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start = _format_ass_time(sub['start'])
             end = _format_ass_time(sub['end'])
             text = sub.get('text', '')
+
+            # 긴 텍스트 자동 줄바꿈 적용
+            text = wrap_text(text, max_chars_per_line)
 
             # 색상 강조 적용
             if highlights:
@@ -17584,18 +17712,66 @@ IMPORTANT TEXT OVERLAY:
         if not is_news_style:
             is_news_style = any(kw in prompt.lower() for kw in ['news', 'photorealistic', 'korean politician', 'korean businessman', 'korean anchor', 'national assembly', 'dramatic lighting'])
 
-        if is_news_style:
+        # 건강 카테고리 감지
+        is_health_style = category == 'health'
+        if not is_health_style and style:
+            is_health_style = any(kw in style.lower() for kw in ['doctor', 'medical', 'health', 'hospital'])
+        if not is_health_style:
+            is_health_style = any(kw in prompt.lower() for kw in ['doctor', 'white coat', 'medical', 'hospital', 'health'])
+
+        # 공통: 얼굴 없는 스타일 키워드 제거
+        def remove_faceless_keywords(p):
+            for bad_kw in ['silhouette', 'faceless', 'no face', 'without face', 'backlit figure', 'dark figure']:
+                p = p.replace(bad_kw, '').replace(bad_kw.lower(), '').replace(bad_kw.capitalize(), '')
+            return p
+
+        if is_health_style:
+            print(f"[THUMBNAIL-AI] 건강 스타일 적용 - category: '{category}', style: '{style}'")
+            # 건강 스타일: 의사 이미지 + 명확한 얼굴
+            clean_prompt = prompt
+            for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
+                clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
+
+            enhanced_prompt = f"""Create a HEALTH/MEDICAL style YouTube thumbnail (16:9 landscape).
+
+CRITICAL STYLE REQUIREMENTS:
+- PHOTOREALISTIC professional medical photography
+- Korean doctor/medical professional in WHITE COAT
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
+- Serious, concerned, or authoritative expression
+- Hospital or clinic background
+- Professional medical portrait style
+- Space for large bold Korean text overlay
+
+Subject/Scene:
+{clean_prompt}
+
+{text_instruction}
+
+ABSOLUTE RESTRICTIONS:
+- NO cartoon style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- NO stickman characters
+- NO illustration style
+- MUST show CLEAR VISIBLE FACE
+- MUST be photorealistic medical style"""
+
+        elif is_news_style:
             print(f"[THUMBNAIL-AI] 뉴스 스타일 적용 - category: '{category}', style: '{style}'")
             # 뉴스 스타일: 만화/스틱맨 금지, 실사 뉴스 스타일 강조
             # GPT 프롬프트에서 스틱맨/만화 관련 키워드 제거
             clean_prompt = prompt
             for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
                 clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
 
             enhanced_prompt = f"""Create a Korean TV NEWS style YouTube thumbnail (16:9 landscape).
 
 CRITICAL STYLE REQUIREMENTS:
 - PHOTOREALISTIC news broadcast style like KBS, MBC, SBS, TV Chosun
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless, NO hidden face
 - Real human faces, NOT cartoon, NOT illustration, NOT anime, NOT stickman
 - Professional news photography aesthetic
 - Dramatic lighting, high contrast
@@ -17613,6 +17789,9 @@ ABSOLUTE RESTRICTIONS:
 - NO anime style
 - NO stickman characters
 - NO illustration style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- MUST show CLEAR VISIBLE FACE
 - MUST be photorealistic news style"""
         else:
             print(f"[THUMBNAIL-AI] 스토리 스타일 적용 - category: '{category}', style: '{style}'")
@@ -17620,11 +17799,13 @@ ABSOLUTE RESTRICTIONS:
             clean_prompt = prompt
             for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life', 'webtoon', 'manhwa']:
                 clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
 
             enhanced_prompt = f"""Create a YouTube thumbnail (16:9 landscape).
 
 STYLE REQUIREMENTS:
 - PHOTOREALISTIC style, like a movie poster or professional photography
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
 - Real human expressions, NOT cartoon, NOT illustration, NOT stickman
 - Dramatic lighting, cinematic composition
 - High contrast, vibrant colors
@@ -17643,6 +17824,9 @@ ABSOLUTE RESTRICTIONS:
 - NO stickman characters
 - NO illustration style
 - NO webtoon/manhwa style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- MUST show CLEAR VISIBLE FACE
 - MUST be photorealistic cinematic style"""
 
         headers = {
