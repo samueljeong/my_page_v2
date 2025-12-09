@@ -17657,18 +17657,66 @@ IMPORTANT TEXT OVERLAY:
         if not is_news_style:
             is_news_style = any(kw in prompt.lower() for kw in ['news', 'photorealistic', 'korean politician', 'korean businessman', 'korean anchor', 'national assembly', 'dramatic lighting'])
 
-        if is_news_style:
+        # 건강 카테고리 감지
+        is_health_style = category == 'health'
+        if not is_health_style and style:
+            is_health_style = any(kw in style.lower() for kw in ['doctor', 'medical', 'health', 'hospital'])
+        if not is_health_style:
+            is_health_style = any(kw in prompt.lower() for kw in ['doctor', 'white coat', 'medical', 'hospital', 'health'])
+
+        # 공통: 얼굴 없는 스타일 키워드 제거
+        def remove_faceless_keywords(p):
+            for bad_kw in ['silhouette', 'faceless', 'no face', 'without face', 'backlit figure', 'dark figure']:
+                p = p.replace(bad_kw, '').replace(bad_kw.lower(), '').replace(bad_kw.capitalize(), '')
+            return p
+
+        if is_health_style:
+            print(f"[THUMBNAIL-AI] 건강 스타일 적용 - category: '{category}', style: '{style}'")
+            # 건강 스타일: 의사 이미지 + 명확한 얼굴
+            clean_prompt = prompt
+            for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
+                clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
+
+            enhanced_prompt = f"""Create a HEALTH/MEDICAL style YouTube thumbnail (16:9 landscape).
+
+CRITICAL STYLE REQUIREMENTS:
+- PHOTOREALISTIC professional medical photography
+- Korean doctor/medical professional in WHITE COAT
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
+- Serious, concerned, or authoritative expression
+- Hospital or clinic background
+- Professional medical portrait style
+- Space for large bold Korean text overlay
+
+Subject/Scene:
+{clean_prompt}
+
+{text_instruction}
+
+ABSOLUTE RESTRICTIONS:
+- NO cartoon style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- NO stickman characters
+- NO illustration style
+- MUST show CLEAR VISIBLE FACE
+- MUST be photorealistic medical style"""
+
+        elif is_news_style:
             print(f"[THUMBNAIL-AI] 뉴스 스타일 적용 - category: '{category}', style: '{style}'")
             # 뉴스 스타일: 만화/스틱맨 금지, 실사 뉴스 스타일 강조
             # GPT 프롬프트에서 스틱맨/만화 관련 키워드 제거
             clean_prompt = prompt
             for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
                 clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
 
             enhanced_prompt = f"""Create a Korean TV NEWS style YouTube thumbnail (16:9 landscape).
 
 CRITICAL STYLE REQUIREMENTS:
 - PHOTOREALISTIC news broadcast style like KBS, MBC, SBS, TV Chosun
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless, NO hidden face
 - Real human faces, NOT cartoon, NOT illustration, NOT anime, NOT stickman
 - Professional news photography aesthetic
 - Dramatic lighting, high contrast
@@ -17686,6 +17734,9 @@ ABSOLUTE RESTRICTIONS:
 - NO anime style
 - NO stickman characters
 - NO illustration style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- MUST show CLEAR VISIBLE FACE
 - MUST be photorealistic news style"""
         else:
             print(f"[THUMBNAIL-AI] 스토리 스타일 적용 - category: '{category}', style: '{style}'")
@@ -17693,11 +17744,13 @@ ABSOLUTE RESTRICTIONS:
             clean_prompt = prompt
             for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life', 'webtoon', 'manhwa']:
                 clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
+            clean_prompt = remove_faceless_keywords(clean_prompt)
 
             enhanced_prompt = f"""Create a YouTube thumbnail (16:9 landscape).
 
 STYLE REQUIREMENTS:
 - PHOTOREALISTIC style, like a movie poster or professional photography
+- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
 - Real human expressions, NOT cartoon, NOT illustration, NOT stickman
 - Dramatic lighting, cinematic composition
 - High contrast, vibrant colors
@@ -17716,6 +17769,9 @@ ABSOLUTE RESTRICTIONS:
 - NO stickman characters
 - NO illustration style
 - NO webtoon/manhwa style
+- NO silhouette or faceless figures
+- NO dark/hidden faces
+- MUST show CLEAR VISIBLE FACE
 - MUST be photorealistic cinematic style"""
 
         headers = {
