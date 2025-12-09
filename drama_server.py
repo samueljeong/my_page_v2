@@ -12958,7 +12958,7 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
 
         # 긴 텍스트 자동 줄바꿈 함수
         def wrap_text(text, max_chars):
-            """긴 텍스트를 max_chars 기준으로 줄바꿈"""
+            """긴 텍스트를 max_chars 기준으로 줄바꿈 (일본어 특화)"""
             if len(text) <= max_chars:
                 return text
 
@@ -12966,13 +12966,14 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
             if '\n' in text or '\\N' in text:
                 return text
 
+            # 일본어는 띄어쓰기가 없으므로 구두점 기준으로만 분리
             # 자연스러운 줄바꿈 위치 찾기
             words = []
             current = ""
             for char in text:
                 current += char
-                # 띄어쓰기, 마침표, 쉼표 등에서 단어 분리
-                if char in ' 、。，．!?！？':
+                # 구두점에서 단어 분리 (일본어 구두점 포함)
+                if char in '、。，．!?！？':
                     words.append(current)
                     current = ""
             if current:
@@ -12982,7 +12983,19 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
             lines = []
             current_line = ""
             for word in words:
-                if len(current_line) + len(word) <= max_chars:
+                # 단어 자체가 max_chars보다 긴 경우 강제 분할
+                if len(word) > max_chars:
+                    # 현재 줄 저장
+                    if current_line:
+                        lines.append(current_line.strip())
+                        current_line = ""
+                    # 긴 단어 강제 분할
+                    while len(word) > max_chars:
+                        lines.append(word[:max_chars])
+                        word = word[max_chars:]
+                    if word:
+                        current_line = word
+                elif len(current_line) + len(word) <= max_chars:
                     current_line += word
                 else:
                     if current_line:
@@ -12991,17 +13004,9 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
             if current_line:
                 lines.append(current_line.strip())
 
-            # 줄바꿈이 안 된 경우 강제 분할
-            if len(lines) == 1 and len(lines[0]) > max_chars:
-                text = lines[0]
-                lines = []
-                while len(text) > max_chars:
-                    lines.append(text[:max_chars])
-                    text = text[max_chars:]
-                if text:
-                    lines.append(text)
-
-            return '\n'.join(lines)
+            result = '\n'.join(lines)
+            print(f"[ASS-WRAP] 일본어 줄바꿈: '{text[:30]}...' → {len(lines)}줄")
+            return result
 
         # ASS 헤더 (큰 폰트, 두꺼운 테두리, 하단 중앙 정렬)
         # Outline: 2 → 4 (더 두꺼운 테두리)
@@ -21086,6 +21091,37 @@ def api_sheets_update():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# ===== Fontconfig 설정 (일본어 폰트 인식용) =====
+def setup_fontconfig():
+    """프로젝트 fonts 디렉토리를 fontconfig에 등록"""
+    try:
+        import subprocess
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        fonts_dir = os.path.join(script_dir, "fonts")
+
+        # fontconfig 설정 파일 생성
+        config_dir = os.path.expanduser("~/.config/fontconfig")
+        os.makedirs(config_dir, exist_ok=True)
+
+        fonts_conf = os.path.join(config_dir, "fonts.conf")
+        config_content = f'''<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>{fonts_dir}</dir>
+</fontconfig>'''
+
+        with open(fonts_conf, 'w') as f:
+            f.write(config_content)
+
+        # fontconfig 캐시 업데이트
+        subprocess.run(['fc-cache', '-f'], capture_output=True)
+        print(f"[FONTCONFIG] 설정 완료: {fonts_dir}")
+    except Exception as e:
+        print(f"[FONTCONFIG] 설정 실패 (무시): {e}")
+
+# 서버 시작 시 fontconfig 설정
+setup_fontconfig()
 
 # ===== Render 배포를 위한 설정 =====
 if __name__ == "__main__":
