@@ -11623,29 +11623,49 @@ Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-7
 ## ⚠️ CRITICAL: AI THUMBNAIL PROMPTS RULES ⚠️
 The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
 
-### ★★★ 절대 규칙 (ABSOLUTE RULES) ★★★
-⚠️ ALL THUMBNAILS MUST BE PHOTOREALISTIC! NO stickman, NO cartoon, NO webtoon, NO illustration, NO silhouette, NO faceless!
-⚠️ 모든 썸네일은 실사 스타일이어야 함! 스틱맨, 만화, 실루엣, 얼굴 없는 인물 절대 금지!
+### ★★★ 썸네일 스타일 (WEBTOON/COMIC STYLE) ★★★
+⚠️ 모든 썸네일은 웹툰/만화 일러스트 스타일로 제작!
+⚠️ NO photorealistic, NO stickman - 웹툰 스타일만!
 
-### ★★★ 인물/기업 규칙 (PERSON/COMPANY RULES) ★★★
-대본에 특정 인물이나 기업이 언급되면:
-1. **text_overlay.name 필드에 인물/기업명 추가** (예: "박나래", "삼성전자", "윤석열")
-2. **이미지 프롬프트에 해당 인물/기업이 연상되는 묘사 추가**
-   - 연예인: 그 사람의 특징적인 외모, 의상, 분위기 묘사
-   - 정치인: 정장, 연설 제스처, 공식적인 분위기
-   - 기업: 해당 기업의 로고 색상, 분위기, 관련 제품/서비스
-3. **얼굴이 명확하게 보이는 구도** - NO silhouette, NO hidden face!
+**캐릭터 국적 규칙 (언어에 따라 결정):**
+- 한국어 대본 → 한국인 캐릭터 (Korean man/woman)
+- 일본어 대본 → 일본인 캐릭터 (Japanese man/woman)
+- 영어 대본 → 서양인 캐릭터 (Western man/woman)
 
-### 스타일 가이드
-- A: **인물 클로즈업** - 핵심 인물의 얼굴/상반신, CLEAR VISIBLE FACE, 감정 표현
-- B: **현장/상황** - 뉴스 현장, 관련 장소, 제품/서비스 시각화
-- C: **비교/대비** - 분할 화면, Before/After, 두 요소 대비
+**캐릭터 스타일:**
+- 웹툰 스타일 캐릭터 (webtoon style character)
+- 과장된 표정 (exaggerated shocked/surprised expression)
+- 큰 눈, 입 벌린 충격 표정, 땀방울
+- 30-40대 남성/여성 (상황에 맞게, 국적은 위 규칙 따름)
+- 선명한 외곽선, 깔끔한 채색
 
-### 기술 요구사항
-- All 3 prompts MUST use PHOTOREALISTIC cinematic style!
-- All 3 prompts MUST be different compositions!
-- All 3 prompts MUST show CLEAR VISIBLE FACE when person is involved!
-- ALWAYS use professional photography style - like movie posters or news thumbnails!
+**배경 스타일:**
+- 주제와 관련된 배경/소품 포함
+- 예: 옷가게+패딩, 수족관+물고기, 청구서+돈 등
+- 만화적 효과선, 충격 이펙트 (방사형 선, 번개 등)
+
+**구도:**
+- 캐릭터가 화면 오른쪽 또는 중앙에 배치
+- 왼쪽에 텍스트 공간 확보
+- 배경 소품이 상황 설명
+
+### ★★★ 프롬프트 작성 규칙 ★★★
+**반드시 포함할 키워드:**
+- "[국적] webtoon style illustration" (예: "Korean/Japanese/Western webtoon style")
+- "exaggerated shocked expression" 또는 "surprised face"
+- "comic style, clean lines, vibrant colors"
+- "YouTube thumbnail, 16:9"
+
+**프롬프트 예시 (한국어 대본):**
+- "Korean webtoon style illustration, shocked Korean man in his 30s with exaggerated surprised expression, sweating, mouth wide open, standing in front of clothing store with colorful padded jackets, comic style impact lines, clean lines, vibrant colors, YouTube thumbnail 16:9"
+
+**프롬프트 예시 (일본어 대본):**
+- "Japanese webtoon style illustration, shocked Japanese man in his 30s with exaggerated surprised expression, sweating, mouth wide open, standing in front of office building, comic style impact lines, clean lines, vibrant colors, YouTube thumbnail 16:9"
+
+### ★★★ A/B/C 스타일 가이드 ★★★
+- **A**: 캐릭터 중심 - 과장된 표정의 캐릭터 + 관련 배경
+- **B**: 상황 중심 - 캐릭터 + 문제 상황을 보여주는 소품/배경
+- **C**: 대비/비교 - 분할 화면 또는 Before/After 느낌
 
 ## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
 The "text_overlay" text MUST match the script language!
@@ -17724,6 +17744,7 @@ def api_thumbnail_ai_generate_single():
         prompt = prompt_data.get('prompt', '')
         text_overlay = prompt_data.get('text_overlay', {})
         style = prompt_data.get('style', '')
+        lang = data.get('lang', 'ko')  # 언어 파라미터 (기본값: 한국어)
 
         main_text = text_overlay.get('main', '')
         sub_text = text_overlay.get('sub', '')
@@ -17738,132 +17759,62 @@ IMPORTANT TEXT OVERLAY:
             if sub_text:
                 text_instruction += f'- Subtitle: "{sub_text}"\n'
 
-        # 뉴스 스타일 감지 (우선순위):
-        # 1. category 파라미터가 'news'인 경우 (GPT가 대본 분석으로 감지)
-        # 2. style에 news/person/scene/split 키워드가 있는 경우
-        # 3. prompt에 news/photorealistic 키워드가 있는 경우
-        is_news_style = category == 'news'
-        if not is_news_style and style:
-            is_news_style = any(kw in style.lower() for kw in ['news', 'person', 'scene', 'split', 'interview', 'event'])
-        if not is_news_style:
-            is_news_style = any(kw in prompt.lower() for kw in ['news', 'photorealistic', 'korean politician', 'korean businessman', 'korean anchor', 'national assembly', 'dramatic lighting'])
+        # ========== 웹툰 스타일 썸네일 (단일 스타일) ==========
+        # 언어에 따른 캐릭터 국적 결정
+        if lang == 'ja':
+            character_nationality = "Japanese"
+            character_desc = "Japanese man or woman"
+        elif lang == 'en':
+            character_nationality = "Western"
+            character_desc = "Western man or woman"
+        else:  # ko 또는 기타
+            character_nationality = "Korean"
+            character_desc = "Korean man or woman"
 
-        # 건강 카테고리 감지
-        is_health_style = category == 'health'
-        if not is_health_style and style:
-            is_health_style = any(kw in style.lower() for kw in ['doctor', 'medical', 'health', 'hospital'])
-        if not is_health_style:
-            is_health_style = any(kw in prompt.lower() for kw in ['doctor', 'white coat', 'medical', 'hospital', 'health'])
+        print(f"[THUMBNAIL-AI] 웹툰 스타일 적용 - category: '{category}', style: '{style}', lang: '{lang}' → {character_nationality} character")
 
-        # 공통: 얼굴 없는 스타일 키워드 제거
-        def remove_faceless_keywords(p):
-            for bad_kw in ['silhouette', 'faceless', 'no face', 'without face', 'backlit figure', 'dark figure']:
-                p = p.replace(bad_kw, '').replace(bad_kw.lower(), '').replace(bad_kw.capitalize(), '')
-            return p
+        # 기존 프롬프트에서 실사/스틱맨 관련 키워드 제거
+        clean_prompt = prompt
+        for remove_kw in ['stickman', 'stick man', 'photorealistic', 'realistic', 'photograph', 'photo', 'Ghibli', 'anime']:
+            clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
 
-        if is_health_style:
-            print(f"[THUMBNAIL-AI] 건강 스타일 적용 - category: '{category}', style: '{style}'")
-            # 건강 스타일: 의사 이미지 + 명확한 얼굴
-            clean_prompt = prompt
-            for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
-                clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
-            clean_prompt = remove_faceless_keywords(clean_prompt)
+        enhanced_prompt = f"""Create a {character_nationality} WEBTOON style YouTube thumbnail (16:9 landscape).
 
-            enhanced_prompt = f"""Create a HEALTH/MEDICAL style YouTube thumbnail (16:9 landscape).
+★★★ CRITICAL STYLE: {character_nationality.upper()} WEBTOON/MANHWA ILLUSTRATION ★★★
 
-CRITICAL STYLE REQUIREMENTS:
-- PHOTOREALISTIC professional medical photography
-- Korean doctor/medical professional in WHITE COAT
-- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
-- Serious, concerned, or authoritative expression
-- Hospital or clinic background
-- Professional medical portrait style
-- Space for large bold Korean text overlay
+CHARACTER REQUIREMENTS:
+- {character_nationality} webtoon/manhwa style character (NOT realistic, NOT anime, NOT stickman)
+- EXAGGERATED SHOCKED/SURPRISED EXPRESSION (mouth wide open, big eyes, sweating)
+- 30-40 year old {character_desc} (match the content)
+- Clean bold outlines, vibrant flat colors
+- Comic-style expression marks (sweat drops, impact lines, exclamation marks)
+
+BACKGROUND REQUIREMENTS:
+- Background related to the topic/situation
+- Comic-style effect lines (radial lines, impact effects)
+- Bright, vibrant colors
+
+COMPOSITION:
+- Character on right side or center
+- Leave space on left for text overlay
+- Background elements explain the situation
 
 Subject/Scene:
 {clean_prompt}
 
 {text_instruction}
 
-ABSOLUTE RESTRICTIONS:
-- NO cartoon style
-- NO silhouette or faceless figures
-- NO dark/hidden faces
-- NO stickman characters
-- NO illustration style
-- MUST show CLEAR VISIBLE FACE
-- MUST be photorealistic medical style"""
-
-        elif is_news_style:
-            print(f"[THUMBNAIL-AI] 뉴스 스타일 적용 - category: '{category}', style: '{style}'")
-            # 뉴스 스타일: 만화/스틱맨 금지, 실사 뉴스 스타일 강조
-            # GPT 프롬프트에서 스틱맨/만화 관련 키워드 제거
-            clean_prompt = prompt
-            for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life']:
-                clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
-            clean_prompt = remove_faceless_keywords(clean_prompt)
-
-            enhanced_prompt = f"""Create a Korean TV NEWS style YouTube thumbnail (16:9 landscape).
-
-CRITICAL STYLE REQUIREMENTS:
-- PHOTOREALISTIC news broadcast style like KBS, MBC, SBS, TV Chosun
-- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless, NO hidden face
-- Real human faces, NOT cartoon, NOT illustration, NOT anime, NOT stickman
-- Professional news photography aesthetic
-- Dramatic lighting, high contrast
-- Dark blue/navy gradient background typical of Korean news
-- Space for bold Korean text overlay at bottom
-
-Subject/Scene:
-{clean_prompt}
-
-{text_instruction}
+MANDATORY KEYWORDS TO USE:
+- "{character_nationality} webtoon style illustration"
+- "exaggerated shocked expression" or "surprised face"
+- "comic style, clean lines, vibrant colors"
+- "manhwa/webtoon style"
 
 ABSOLUTE RESTRICTIONS:
-- NO cartoon style
-- NO comic style
-- NO anime style
-- NO stickman characters
-- NO illustration style
-- NO silhouette or faceless figures
-- NO dark/hidden faces
-- MUST show CLEAR VISIBLE FACE
-- MUST be photorealistic news style"""
-        else:
-            print(f"[THUMBNAIL-AI] 스토리 스타일 적용 - category: '{category}', style: '{style}'")
-            # 스틱맨/만화 스타일 제거 → 실사 스타일로 통일
-            clean_prompt = prompt
-            for remove_kw in ['stickman', 'stick man', 'cartoon', 'comic', 'illustration', 'anime', 'animated', 'Ghibli', 'slice-of-life', 'webtoon', 'manhwa']:
-                clean_prompt = clean_prompt.replace(remove_kw, '').replace(remove_kw.lower(), '').replace(remove_kw.capitalize(), '')
-            clean_prompt = remove_faceless_keywords(clean_prompt)
-
-            enhanced_prompt = f"""Create a YouTube thumbnail (16:9 landscape).
-
-STYLE REQUIREMENTS:
-- PHOTOREALISTIC style, like a movie poster or professional photography
-- CLEAR VISIBLE FACE with detailed facial features - NO silhouette, NO faceless
-- Real human expressions, NOT cartoon, NOT illustration, NOT stickman
-- Dramatic lighting, cinematic composition
-- High contrast, vibrant colors
-- Professional photography aesthetic
-- Space for bold Korean text overlay
-
-Subject/Scene:
-{clean_prompt}
-
-{text_instruction}
-
-ABSOLUTE RESTRICTIONS:
-- NO cartoon style
-- NO comic style
-- NO anime style
-- NO stickman characters
-- NO illustration style
-- NO webtoon/manhwa style
-- NO silhouette or faceless figures
-- NO dark/hidden faces
-- MUST show CLEAR VISIBLE FACE
-- MUST be photorealistic cinematic style"""
+- NO photorealistic style
+- NO stickman
+- NO 3D render
+- MUST be {character_nationality} webtoon/manhwa illustration style"""
 
         headers = {
             "Authorization": f"Bearer {openrouter_api_key}",
@@ -19541,7 +19492,8 @@ def run_automation_pipeline(row_data, row_index):
                 thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
                     "session_id": f"thumb_{session_id}",
                     "prompt": thumb_prompt,
-                    "category": detected_category  # 뉴스/스토리 카테고리 명시적 전달
+                    "category": detected_category,  # 뉴스/스토리 카테고리 명시적 전달
+                    "lang": detected_lang  # 언어 전달 (캐릭터 국적 결정용)
                 }, timeout=180)
 
                 thumb_data = thumb_resp.json()
