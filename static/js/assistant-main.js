@@ -3666,14 +3666,113 @@ const AssistantMain = (() => {
       html += `</tbody></table></div></details>`;
     }
 
+    // GPT 분석 섹션
+    html += `
+      <div id="channel-gpt-advice-${channel.id}" style="margin-bottom: 1rem;"></div>`;
+
     // 액션 버튼
     html += `
-      <div style="display: flex; gap: 0.5rem; justify-content: center; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+      <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+        <button class="btn btn-small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;" onclick="AssistantMain.getChannelGptAdvice(${channel.id})">🤖 GPT 분석</button>
         <a href="https://www.youtube.com/channel/${channel.channel_id}" target="_blank" class="btn btn-secondary btn-small">YouTube에서 보기</a>
         <button class="btn btn-small" style="background: #fee2e2; color: #dc2626;" onclick="AssistantMain.deleteYoutubeChannel(${channel.id}); AssistantMain.closeYoutubeDetailModal();">삭제</button>
       </div>`;
 
     detailContent.innerHTML = html;
+  }
+
+  // GPT 채널 분석 (등록된 채널용)
+  async function getChannelGptAdvice(channelDbId) {
+    const adviceEl = document.getElementById(`channel-gpt-advice-${channelDbId}`);
+    if (!adviceEl) return;
+
+    adviceEl.innerHTML = `
+      <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 1px solid #667eea30; border-radius: 8px; padding: 1rem; text-align: center;">
+        <span style="font-size: 1.5rem;">🔄</span>
+        <p style="color: var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.85rem;">AI가 채널을 분석 중입니다...</p>
+      </div>`;
+
+    try {
+      const response = await fetch(`/assistant/api/youtube/channels/${channelDbId}/advisor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        renderChannelGptAdvice(channelDbId, data);
+      } else {
+        adviceEl.innerHTML = `
+          <div style="background: #fee2e2; border: 1px solid #dc2626; border-radius: 8px; padding: 1rem; text-align: center;">
+            <span style="color: #dc2626;">❌ 분석 실패: ${data.error}</span>
+          </div>`;
+      }
+    } catch (error) {
+      console.error('[Assistant] Get channel GPT advice error:', error);
+      adviceEl.innerHTML = `
+        <div style="background: #fee2e2; border: 1px solid #dc2626; border-radius: 8px; padding: 1rem; text-align: center;">
+          <span style="color: #dc2626;">❌ 분석 중 오류 발생</span>
+        </div>`;
+    }
+  }
+
+  function renderChannelGptAdvice(channelDbId, data) {
+    const adviceEl = document.getElementById(`channel-gpt-advice-${channelDbId}`);
+    if (!adviceEl) return;
+
+    const advice = data.advice || {};
+
+    let html = `
+      <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 1px solid #667eea30; border-radius: 8px; padding: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span style="font-size: 1rem;">🤖</span>
+          <span style="font-weight: 600; font-size: 0.9rem;">AI 채널 분석</span>
+          <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 4px;">GPT</span>
+        </div>`;
+
+    // 요약
+    if (advice.summary) {
+      html += `<p style="font-size: 0.85rem; margin: 0 0 0.75rem 0; line-height: 1.5;">${escapeHtml(advice.summary)}</p>`;
+    }
+
+    // Quick Wins
+    if (advice.quick_wins && advice.quick_wins.length > 0) {
+      html += `
+        <div style="background: #ecfdf5; border: 1px solid #10b981; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.75rem;">
+          <div style="font-weight: 600; color: #059669; font-size: 0.8rem; margin-bottom: 0.25rem;">⚡ 바로 실행</div>
+          <ul style="margin: 0; padding-left: 1rem; font-size: 0.75rem; color: #065f46;">
+            ${advice.quick_wins.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    // 조언들
+    const adviceItems = [
+      { key: 'title_advice', icon: '📝', label: '제목' },
+      { key: 'thumbnail_advice', icon: '🖼️', label: '썸네일' },
+      { key: 'upload_time_advice', icon: '⏰', label: '업로드 시간' }
+    ];
+
+    for (const item of adviceItems) {
+      if (advice[item.key]) {
+        html += `<p style="font-size: 0.8rem; margin: 0.25rem 0;"><strong>${item.icon} ${item.label}:</strong> ${escapeHtml(advice[item.key])}</p>`;
+      }
+    }
+
+    // 액션 플랜
+    if (advice.action_plan && advice.action_plan.length > 0) {
+      html += `
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 600; font-size: 0.8rem; margin-bottom: 0.25rem;">🎯 액션 플랜</div>
+          <ol style="margin: 0; padding-left: 1.25rem; font-size: 0.75rem;">
+            ${advice.action_plan.map(action => `<li>${escapeHtml(action)}</li>`).join('')}
+          </ol>
+        </div>`;
+    }
+
+    html += `</div>`;
+    adviceEl.innerHTML = html;
   }
 
   // ===== YouTube OAuth Functions =====
@@ -4657,6 +4756,7 @@ const AssistantMain = (() => {
     refreshYoutubeChannels,
     showYoutubeChannelDetail,
     closeYoutubeDetailModal,
+    getChannelGptAdvice,  // 등록된 채널 GPT 분석
     // YouTube OAuth functions
     connectYoutubeOAuth,
     disconnectYoutubeOAuth,
