@@ -12208,6 +12208,17 @@ def api_image_generate_assets_zip():
             # 제X장, X장에서, X장을, X장의, X장은, X장이, X장과, X장부터, X장까지 등
             text = re.sub(r'(제)?(\d+)장(에서|을|의|은|이|과|부터|까지|으로|에|도)', replace_chapter_context, text)
 
+            # ★ "개"로 시작하는 한자어 단위 (고유어 처리 전에 먼저!)
+            # "11개월" → "십일개월" (O), "열한개월" (X)
+            # "5개국" → "오개국" (O), "다섯개국" (X)
+            sino_ge_units = ['개월', '개국', '개사', '개년', '개소', '개항', '개교']
+            for unit in sino_ge_units:
+                pattern = r'(\d+)' + re.escape(unit)
+                def replace_sino_ge(match, u=unit):
+                    num = int(match.group(1))
+                    return num_to_sino(num) + u
+                text = re.sub(pattern, replace_sino_ge, text)
+
             # 고유어 단위 패턴 (숫자 + 고유어단위)
             for unit in native_units:
                 pattern = r'(\d+)' + re.escape(unit)
