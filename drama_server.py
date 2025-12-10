@@ -10481,7 +10481,13 @@ def youtube_upload():
             token_data = load_youtube_token_from_db(channel_id) if channel_id else load_youtube_token_from_db()
 
             if not token_data or not token_data.get('refresh_token'):
-                print(f"[YOUTUBE-UPLOAD] 테스트 모드 - DB에 토큰 없음 (channel_id: {channel_id})")
+                print(f"[YOUTUBE-UPLOAD] 에러 - DB에 토큰 없음 (channel_id: {channel_id})")
+                return jsonify({
+                    "ok": False,
+                    "error": f"YouTube 토큰이 없습니다. OAuth 로그인이 필요합니다. (channel_id: {channel_id})",
+                    "needsAuth": True,
+                    "channelId": channel_id
+                }), 200
             else:
                 # Credentials 객체 생성
                 creds = Credentials(
@@ -21356,7 +21362,23 @@ def run_automation_pipeline(row_data, row_index):
 
             print(f"[AUTOMATION] YouTube 업로드 응답 상태: {upload_resp.status_code}")
             upload_data = upload_resp.json()
-            print(f"[AUTOMATION] YouTube 업로드 응답: ok={upload_data.get('ok')}, videoUrl={upload_data.get('videoUrl', 'N/A')[:50] if upload_data.get('videoUrl') else 'N/A'}")
+            print(f"[AUTOMATION] YouTube 업로드 응답: ok={upload_data.get('ok')}, mode={upload_data.get('mode', 'N/A')}, videoUrl={upload_data.get('videoUrl', 'N/A')[:50] if upload_data.get('videoUrl') else 'N/A'}")
+
+            # 테스트 모드 감지 (실제 업로드 안됨)
+            if upload_data.get('mode') == 'test':
+                error_msg = "YouTube 토큰이 없어 테스트 모드로 실행됨. OAuth 로그인 필요."
+                print(f"[AUTOMATION][ERROR] {error_msg}")
+                sheets_update_cell(row_num, COL_STATUS, '실패')
+                sheets_update_cell(row_num, COL_ERROR, error_msg)
+                return {"ok": False, "error": error_msg, "needsAuth": True}
+
+            # OAuth 인증 필요 에러 처리
+            if upload_data.get('needsAuth'):
+                error_msg = upload_data.get('error', 'YouTube OAuth 로그인 필요')
+                print(f"[AUTOMATION][ERROR] {error_msg}")
+                sheets_update_cell(row_num, COL_STATUS, '실패')
+                sheets_update_cell(row_num, COL_ERROR, error_msg)
+                return {"ok": False, "error": error_msg, "needsAuth": True}
 
             if upload_data.get('ok'):
                 youtube_url = upload_data.get('videoUrl', '')  # camelCase로 반환됨
