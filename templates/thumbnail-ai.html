@@ -495,6 +495,7 @@
     let currentSession = null;
     let currentPrompts = null;
     let currentImageUrls = {};
+    let currentLang = 'ko';  // 감지된 언어
     let pendingSelection = null;
 
     // 썸네일 분석 시작 (1개만 생성)
@@ -525,6 +526,7 @@
 
         currentSession = analyzeData.session_id;
         currentPrompts = analyzeData.prompts;
+        currentLang = analyzeData.lang || 'ko';  // 감지된 언어 저장
 
         // 컨셉 프리뷰 표시
         const conceptPreview = document.getElementById('concept-preview');
@@ -545,6 +547,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: currentSession,
+            lang: currentLang,  // 감지된 언어 전달
             prompt: {
               prompt: promptA.prompt,
               text_overlay: promptA.text_overlay,
