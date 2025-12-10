@@ -17250,8 +17250,32 @@ def api_thumbnail_ai_analyze():
         if not script:
             return jsonify({"ok": False, "error": "대본이 필요합니다"}), 400
 
+        # 언어 감지 (대본 기준)
+        def detect_language(text):
+            """대본의 주요 언어를 감지"""
+            import re
+            # 일본어 감지 (히라가나/가타카나)
+            ja_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF]')
+            ja_count = len(ja_pattern.findall(text[:1000]))
+            # 한국어 감지
+            ko_pattern = re.compile(r'[\uAC00-\uD7AF]')
+            ko_count = len(ko_pattern.findall(text[:1000]))
+            # 영어 감지 (알파벳)
+            en_pattern = re.compile(r'[a-zA-Z]')
+            en_count = len(en_pattern.findall(text[:1000]))
+
+            if ja_count > 30:  # 일본어가 충분히 많으면
+                return 'ja', '日本語', 'Japanese'
+            elif ko_count > en_count:
+                return 'ko', '한국어', 'Korean'
+            elif en_count > 50:  # 영어가 충분히 많으면
+                return 'en', 'English', 'English'
+            else:
+                return 'ko', '한국어', 'Korean'  # 기본값
+
+        lang_code, lang_name, lang_english = detect_language(script + title)
         print(f"[THUMBNAIL-AI] 분석 요청 - 제목: {title}")
-        print(f"[THUMBNAIL-AI] 대본 길이: {len(script)}자")
+        print(f"[THUMBNAIL-AI] 대본 길이: {len(script)}자, 감지 언어: {lang_name} ({lang_code})")
         if additional_prompt:
             print(f"[THUMBNAIL-AI] 추가 요청사항: {additional_prompt}")
 
@@ -17281,22 +17305,38 @@ def api_thumbnail_ai_analyze():
 {additional_prompt}
 """
 
+        # 언어별 설정
+        if lang_code == 'ja':
+            text_lang_instruction = "日本語で"
+            text_lang_desc = "日本語"
+            webtoon_style = "Japanese manga/anime style"
+        elif lang_code == 'en':
+            text_lang_instruction = "in English"
+            text_lang_desc = "English"
+            webtoon_style = "Western comic/illustration style"
+        else:  # ko
+            text_lang_instruction = "한글로"
+            text_lang_desc = "한글"
+            webtoon_style = "Korean webtoon style"
+
         system_prompt = f"""당신은 유튜브 썸네일 전문 디자이너입니다.
 사용자의 대본을 분석하여 클릭률이 높은 썸네일 이미지 프롬프트 1개를 생성합니다.
 
+★★★ 중요: 대본이 {lang_name}로 작성되어 있으므로, 썸네일 텍스트도 반드시 {lang_name}로 작성하세요! ★★★
+
 [핵심 원칙]
 1. 유튜브 썸네일은 "호기심"과 "감정"을 자극해야 합니다
-2. 텍스트는 한글로, 크고 굵게, 읽기 쉽게
+2. 텍스트는 {text_lang_instruction}, 크고 굵게, 읽기 쉽게
 3. 대비가 강한 색상 사용 (빨강/노랑/흰색 등)
 4. 얼굴 표정이나 감정적인 요소 포함
-5. 한국 웹툰/만화 스타일 (저작권 안전)
+5. {webtoon_style} (저작권 안전)
 
 [이미지 프롬프트 작성 규칙]
 - 영문으로 작성 (Gemini 3 Pro Image가 이해할 수 있도록)
 - 16:9 가로 비율 (YouTube 썸네일 표준)
-- 한글 텍스트 오버레이 지시 포함
+- {lang_english} 텍스트 오버레이 지시 포함
 - 구체적인 색상, 스타일, 구도 명시
-- 한국 웹툰/만화 일러스트 스타일 필수
+- {webtoon_style} 필수
 - 과장된 감정 표현 (놀람, 충격, 기쁨 등)
 {examples_text}
 {additional_instruction}
@@ -17304,28 +17344,31 @@ def api_thumbnail_ai_analyze():
 [응답 형식]
 반드시 다음 JSON 형식으로만 응답하세요:
 {{
-  "script_summary": "대본 핵심 요약 (1-2문장)",
+  "script_summary": "대본 핵심 요약 (1-2문장, {lang_name}로)",
   "thumbnail_concept": "썸네일 컨셉 설명",
   "prompts": {{
     "A": {{
-      "description": "프롬프트 설명 (한글)",
-      "prompt": "영문 이미지 생성 프롬프트 (Korean webtoon style 포함 필수)",
+      "description": "프롬프트 설명",
+      "prompt": "영문 이미지 생성 프롬프트 ({webtoon_style} 포함 필수)",
       "text_overlay": {{
-        "main": "메인 텍스트 (한글, 짧고 임팩트있게)",
-        "sub": "서브 텍스트 (한글, 선택)"
+        "main": "메인 텍스트 ({text_lang_desc}, 짧고 임팩트있게)",
+        "sub": "서브 텍스트 ({text_lang_desc}, 선택)"
       }},
       "style": "스타일 키워드"
     }}
-  }}
+  }},
+  "lang": "{lang_code}"
 }}"""
 
         user_prompt = f"""[제목] {title}
+[언어] {lang_name}
 
 [대본]
 {script[:3000]}
 
 위 대본을 분석하여 클릭률 높은 유튜브 썸네일 프롬프트 1개를 생성해주세요.
-한국 웹툰/만화 스타일로, 과장된 표정과 감정을 담아주세요."""
+{webtoon_style}로, 과장된 표정과 감정을 담아주세요.
+★ 썸네일의 텍스트는 반드시 {lang_name}로 작성하세요! ★"""
 
         # GPT-5.1 Responses API 호출
         response = client.responses.create(
@@ -17381,6 +17424,7 @@ def api_thumbnail_ai_analyze():
             "thumbnail_concept": result.get("thumbnail_concept", ""),
             "prompts": result.get("prompts", {}),
             "title": title,
+            "lang": lang_code,  # 감지된 언어
             "learning_examples_used": len(learning_examples)
         })
 
@@ -17779,11 +17823,19 @@ def api_thumbnail_ai_generate_single():
         main_text = text_overlay.get('main', '')
         sub_text = text_overlay.get('sub', '')
 
+        # 언어에 따른 텍스트 언어 설정
+        if lang == 'ja':
+            text_lang = "Japanese"
+        elif lang == 'en':
+            text_lang = "English"
+        else:
+            text_lang = "Korean"
+
         text_instruction = ""
         if main_text:
             text_instruction = f"""
 IMPORTANT TEXT OVERLAY:
-- Add large, bold Korean text "{main_text}" prominently
+- Add large, bold {text_lang} text "{main_text}" prominently
 - High contrast (white text with black outline)
 """
             if sub_text:
