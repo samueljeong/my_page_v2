@@ -11117,6 +11117,11 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 - channel_tags (채널 고유 태그): 예) 채널명, 시리즈명
 - 영상과 무관한 인기 키워드 넣기 금지
 
+### 고정 댓글(pin_comment) 규칙
+- **대본 언어와 동일한 언어로 작성!** (일본어 대본 → 일본어 댓글)
+- 핵심 요약 1-2문장 + 시청자 질문 1개
+- 댓글 참여를 유도하는 열린 질문
+
 ## OUTPUT FORMAT (MUST BE JSON)
 {{
   "detected_category": "news 또는 story (대본 분석 결과 - 반드시 먼저 결정!)",
@@ -11606,6 +11611,7 @@ Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-7
 - **해시태그**: 3-5개 (주제태그 + 카테고리태그)
 - **태그**: 5-12개 (넓은/구체/변형/채널 키워드)
 - **톤**: 과장 금지, 팩트 → 의미 → 액션 순서
+- **고정 댓글**: 대본 언어와 동일한 언어로 작성! (일본어 대본 → 일본어 댓글)
 
 ## Output Format (MUST be valid JSON)
 {{
