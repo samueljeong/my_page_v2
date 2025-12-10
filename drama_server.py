@@ -5243,6 +5243,158 @@ def api_list_bgm():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ========== Freesound API 다운로드 ==========
+FREESOUND_API_KEY = "xuttzpvpcpbcXZTxGj75GXd6lnzn16SlADMhlP9f"
+FREESOUND_BASE_URL = "https://freesound.org/apiv2"
+
+# 다운로드할 오디오 쿼리 정의
+FREESOUND_BGM_QUERIES = {
+    "epic": ("epic cinematic orchestral", 30, 180),
+    "romantic": ("romantic piano love", 30, 180),
+    "comedic": ("funny comedy playful", 30, 180),
+    "horror": ("horror scary dark ambient", 30, 180),
+    "upbeat": ("upbeat happy energetic", 30, 180),
+}
+
+FREESOUND_SFX_QUERIES = {
+    "notification": ("notification alert ding", 0.5, 5),
+    "heartbeat": ("heartbeat heart beat", 1, 10),
+    "clock_tick": ("clock tick ticking", 1, 10),
+    "applause": ("applause clapping crowd", 1, 10),
+    "gasp": ("gasp surprise shock", 0.5, 5),
+    "typing": ("typing keyboard", 1, 10),
+    "door": ("door open close creak", 0.5, 5),
+}
+
+
+def _freesound_search(query, min_duration=0, max_duration=300, num_results=4):
+    """Freesound에서 소리 검색"""
+    import requests
+    params = {
+        "query": query,
+        "token": FREESOUND_API_KEY,
+        "fields": "id,name,duration,previews,license",
+        "filter": f"duration:[{min_duration} TO {max_duration}]",
+        "sort": "score",
+        "page_size": num_results * 2,
+    }
+    try:
+        response = requests.get(f"{FREESOUND_BASE_URL}/search/text/", params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("results", [])[:num_results]
+    except Exception as e:
+        print(f"[FREESOUND] 검색 실패: {e}")
+        return []
+
+
+def _freesound_download_preview(sound, output_path):
+    """사운드 프리뷰(MP3) 다운로드"""
+    import requests
+    try:
+        preview_url = sound.get("previews", {}).get("preview-hq-mp3")
+        if not preview_url:
+            preview_url = sound.get("previews", {}).get("preview-lq-mp3")
+        if not preview_url:
+            return False
+        response = requests.get(preview_url, timeout=60)
+        response.raise_for_status()
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+        return True
+    except Exception as e:
+        print(f"[FREESOUND] 다운로드 실패: {e}")
+        return False
+
+
+@app.route('/api/freesound/download', methods=['POST'])
+def api_freesound_download():
+    """Freesound에서 BGM/SFX 다운로드"""
+    import time
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    bgm_dir = os.path.join(script_dir, "static", "audio", "bgm")
+    sfx_dir = os.path.join(script_dir, "static", "audio", "sfx")
+
+    results = {"bgm": {}, "sfx": {}, "errors": []}
+
+    data = request.get_json() or {}
+    download_bgm = data.get("bgm", True)
+    download_sfx = data.get("sfx", True)
+
+    # BGM 다운로드
+    if download_bgm:
+        for sound_type, (query, min_dur, max_dur) in FREESOUND_BGM_QUERIES.items():
+            print(f"[FREESOUND] BGM 검색: {sound_type} - '{query}'")
+            sounds = _freesound_search(query, min_dur, max_dur, num_results=4)
+
+            if not sounds:
+                results["errors"].append(f"BGM '{sound_type}' 검색 결과 없음")
+                continue
+
+            downloaded = []
+            for i, sound in enumerate(sounds, 1):
+                filename = f"{sound_type}_{i:02d}.mp3"
+                output_path = os.path.join(bgm_dir, filename)
+
+                if _freesound_download_preview(sound, output_path):
+                    downloaded.append({
+                        "file": filename,
+                        "name": sound.get("name", "")[:50],
+                        "duration": sound.get("duration", 0)
+                    })
+                    print(f"[FREESOUND] ✓ {filename} 다운로드 완료")
+
+                time.sleep(0.3)  # Rate limit
+
+            results["bgm"][sound_type] = downloaded
+            time.sleep(0.5)
+
+    # SFX 다운로드
+    if download_sfx:
+        for sound_type, (query, min_dur, max_dur) in FREESOUND_SFX_QUERIES.items():
+            print(f"[FREESOUND] SFX 검색: {sound_type} - '{query}'")
+            sounds = _freesound_search(query, min_dur, max_dur, num_results=4)
+
+            if not sounds:
+                results["errors"].append(f"SFX '{sound_type}' 검색 결과 없음")
+                continue
+
+            downloaded = []
+            for i, sound in enumerate(sounds, 1):
+                filename = f"{sound_type}_{i:02d}.mp3"
+                output_path = os.path.join(sfx_dir, filename)
+
+                if _freesound_download_preview(sound, output_path):
+                    downloaded.append({
+                        "file": filename,
+                        "name": sound.get("name", "")[:50],
+                        "duration": sound.get("duration", 0)
+                    })
+                    print(f"[FREESOUND] ✓ {filename} 다운로드 완료")
+
+                time.sleep(0.3)
+
+            results["sfx"][sound_type] = downloaded
+            time.sleep(0.5)
+
+    return jsonify({
+        "ok": True,
+        "message": "Freesound 다운로드 완료",
+        "results": results
+    })
+
+
+@app.route('/api/freesound/test', methods=['GET'])
+def api_freesound_test():
+    """Freesound API 키 테스트"""
+    sounds = _freesound_search("test", 0, 10, 1)
+    if sounds:
+        return jsonify({"ok": True, "message": "API 키 유효함", "sample": sounds[0].get("name")})
+    else:
+        return jsonify({"ok": False, "message": "API 키 확인 필요"}), 500
+
+
 @app.route('/bgm-upload')
 def bgm_upload_page():
     """BGM 업로드 페이지"""
@@ -11374,6 +11526,59 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 - 핵심 요약 1-2문장 + 시청자 질문 1개
 - 댓글 참여를 유도하는 열린 질문
 
+## 🎵 BGM & SFX 가이드라인 (중요!)
+
+### BGM 분위기 종류 (13가지)
+- **hopeful**: 희망적, 밝은 분위기 (긍정적인 결말, 성공 스토리)
+- **sad**: 슬픈, 감성적 분위기 (비극, 이별, 슬픈 사연)
+- **tense**: 긴장감 있는 분위기 (위기, 갈등, 서스펜스)
+- **dramatic**: 극적인 분위기 (반전, 클라이맥스, 충격적 사실)
+- **calm**: 차분한 분위기 (정보 전달, 설명, 일상)
+- **inspiring**: 영감을 주는 분위기 (동기부여, 도전, 성취)
+- **mysterious**: 신비로운 분위기 (미스터리, 의문, 궁금증)
+- **nostalgic**: 향수를 자극하는 분위기 (과거 회상, 추억)
+- **epic**: 웅장한 분위기 (대규모 사건, 역사적 순간)
+- **romantic**: 로맨틱한 분위기 (사랑, 감동적인 관계)
+- **comedic**: 코믹한 분위기 (유머, 웃긴 상황)
+- **horror**: 공포스러운 분위기 (무서운 사건, 소름)
+- **upbeat**: 신나는, 경쾌한 분위기 (활기찬, 에너지 넘치는)
+
+### 씬별 BGM 변경 규칙 (scene_bgm_changes)
+- 대본의 감정 흐름에 따라 BGM 분위기를 전환하세요
+- **최소 2~3번**의 BGM 전환 권장 (5씬 이상 영상)
+- 전환 포인트 예시:
+  - 충격적인 사실 공개 → tense/dramatic
+  - 희망적인 반전 → hopeful/inspiring
+  - 감동적인 결말 → emotional/nostalgic
+  - 위기/갈등 고조 → tense/horror
+  - 유머러스한 순간 → comedic/upbeat
+
+### SFX 효과음 종류 (13가지) - 적극 활용!
+- **impact**: 충격음 (충격적인 사실, 반전, 강조)
+- **whoosh**: 휘익 소리 (씬 전환, 빠른 움직임)
+- **ding**: 딩동 알림음 (포인트 강조, 정답)
+- **tension**: 긴장감 효과음 (위기, 불안, 서스펜스)
+- **emotional**: 감성 효과음 (감동, 슬픔, 여운)
+- **success**: 성공 효과음 (달성, 해결, 좋은 결과)
+- **notification**: 알림음 (중요 정보, 팁, 강조)
+- **heartbeat**: 심장박동 (긴장, 불안, 두려움)
+- **clock_tick**: 시계 소리 (시간 압박, 긴박감, 카운트다운)
+- **applause**: 박수 소리 (성공, 축하, 공감)
+- **gasp**: 놀람 소리 (충격, 반전, 서프라이즈)
+- **typing**: 타이핑 소리 (텍스트 표시, 메시지, 검색)
+- **door**: 문 소리 (등장, 퇴장, 전환점)
+
+### SFX 사용 규칙 (적극적으로!)
+- **씬당 1~2개**의 효과음을 적극 배치하세요!
+- 중요한 순간마다 효과음으로 강조 (시청자 집중도 향상)
+- 효과음 타이밍 예시:
+  - 영상 시작 → whoosh (주의 환기)
+  - 중요 정보 → notification/ding (강조)
+  - 충격적 사실 → impact/gasp (반응 유도)
+  - 긴장 장면 → tension/heartbeat (몰입)
+  - 해결/성공 → success/applause (카타르시스)
+  - 감동 장면 → emotional (여운)
+
 {seo_prompt}
 
 ## OUTPUT FORMAT (MUST BE JSON)
@@ -11428,7 +11633,11 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
     }}
   }},
   "video_effects": {{
-    "bgm_mood": "ONE of: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic",
+    "bgm_mood": "기본 BGM 분위기 (영상 전체에 적용). ONE of: hopeful, sad, tense, dramatic, calm, inspiring, mysterious, nostalgic, epic, romantic, comedic, horror, upbeat",
+    "scene_bgm_changes": [
+      {{"scene": 3, "mood": "tense", "reason": "긴장감 고조되는 장면"}},
+      {{"scene": 5, "mood": "hopeful", "reason": "희망적인 반전이 시작되는 장면"}}
+    ],
     "subtitle_highlights": [
       {{"keyword": "강조할 단어1", "color": "#FF0000"}},
       {{"keyword": "강조할 단어2", "color": "#FFFF00"}}
@@ -11438,8 +11647,13 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
       {{"scene": 7, "text": "반전", "duration": 2, "style": "dramatic"}}
     ],
     "sound_effects": [
-      {{"scene": 1, "type": "impact", "moment": "description of when to play"}},
-      {{"scene": 3, "type": "emotional", "moment": "description of when to play"}}
+      {{"scene": 1, "type": "whoosh", "moment": "씬 전환 시작"}},
+      {{"scene": 2, "type": "notification", "moment": "중요한 정보 등장"}},
+      {{"scene": 3, "type": "impact", "moment": "충격적인 사실 공개"}},
+      {{"scene": 4, "type": "tension", "moment": "긴장감 고조"}},
+      {{"scene": 5, "type": "heartbeat", "moment": "불안한 순간"}},
+      {{"scene": 6, "type": "emotional", "moment": "감동적인 장면"}},
+      {{"scene": 7, "type": "success", "moment": "해결/성공 순간"}}
     ],
     "lower_thirds": [
       {{"scene": 2, "text": "화자명 또는 출처", "position": "bottom-left"}}
@@ -13831,6 +14045,197 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.23):
         return False
 
 
+def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bgm_volume=0.23):
+    """비디오에 씬별 BGM 믹싱 (감정 흐름에 따라 BGM 전환)
+
+    Args:
+        video_path: 원본 비디오 경로
+        scenes: 씬 목록 (duration 정보 포함)
+        video_effects: video_effects 객체 (bgm_mood, scene_bgm_changes 포함)
+        output_path: 출력 비디오 경로
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.23 = 23%)
+
+    Returns:
+        성공 여부 (bool)
+    """
+    import tempfile
+    import shutil
+
+    try:
+        base_mood = video_effects.get('bgm_mood', '')
+        scene_bgm_changes = video_effects.get('scene_bgm_changes', [])
+
+        if not base_mood:
+            print(f"[BGM-SCENE] 기본 BGM 분위기가 없음")
+            return False
+
+        # 씬별 시작/종료 시간 계산
+        scene_times = []
+        current_time = 0
+        for idx, scene in enumerate(scenes):
+            duration = scene.get('duration', 0)
+            scene_times.append({
+                'scene': idx + 1,
+                'start': current_time,
+                'end': current_time + duration,
+                'duration': duration
+            })
+            current_time += duration
+
+        total_duration = current_time
+        print(f"[BGM-SCENE] 전체 길이: {total_duration:.1f}초, 씬 수: {len(scenes)}")
+
+        # scene_bgm_changes가 없거나 비어있으면 기존 방식으로 폴백
+        if not scene_bgm_changes:
+            print(f"[BGM-SCENE] 씬별 BGM 변경 없음, 기존 방식 사용")
+            bgm_file = _get_bgm_file(base_mood)
+            if bgm_file:
+                return _mix_bgm_with_video(video_path, bgm_file, output_path, bgm_volume)
+            return False
+
+        # BGM 구간 계산 (각 구간의 mood와 시간)
+        bgm_segments = []
+        changes_dict = {c['scene']: c['mood'] for c in scene_bgm_changes}
+
+        current_mood = base_mood
+        segment_start = 0
+
+        for st in scene_times:
+            scene_num = st['scene']
+            if scene_num in changes_dict:
+                # 이전 구간 저장
+                if st['start'] > segment_start:
+                    bgm_segments.append({
+                        'mood': current_mood,
+                        'start': segment_start,
+                        'end': st['start'],
+                        'duration': st['start'] - segment_start
+                    })
+                # 새 mood로 전환
+                current_mood = changes_dict[scene_num]
+                segment_start = st['start']
+
+        # 마지막 구간 추가
+        if total_duration > segment_start:
+            bgm_segments.append({
+                'mood': current_mood,
+                'start': segment_start,
+                'end': total_duration,
+                'duration': total_duration - segment_start
+            })
+
+        print(f"[BGM-SCENE] BGM 구간: {len(bgm_segments)}개")
+        for seg in bgm_segments:
+            print(f"  - {seg['mood']}: {seg['start']:.1f}s ~ {seg['end']:.1f}s ({seg['duration']:.1f}s)")
+
+        # 임시 디렉토리 생성
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # 각 구간별 BGM 세그먼트 준비
+            input_files = [video_path]
+            filter_parts = []
+
+            for i, seg in enumerate(bgm_segments):
+                bgm_file = _get_bgm_file(seg['mood'])
+                if not bgm_file:
+                    print(f"[BGM-SCENE] '{seg['mood']}' BGM 파일 없음, 건너뜀")
+                    continue
+
+                input_files.append(bgm_file)
+                input_idx = len(input_files) - 1
+
+                # 각 BGM 구간에 볼륨, 딜레이, 트림, 페이드 적용
+                delay_ms = int(seg['start'] * 1000)
+                duration = seg['duration']
+
+                # 페이드 인/아웃: 구간 시작/끝에 1초씩
+                fade_in_duration = min(1.0, duration * 0.2)
+                fade_out_start = max(0, duration - 1.0)
+                fade_out_duration = min(1.0, duration * 0.2)
+
+                filter_parts.append(
+                    f"[{input_idx}:a]atrim=0:{duration},asetpts=PTS-STARTPTS,"
+                    f"volume={bgm_volume},"
+                    f"afade=t=in:st=0:d={fade_in_duration},"
+                    f"afade=t=out:st={fade_out_start}:d={fade_out_duration},"
+                    f"adelay={delay_ms}|{delay_ms}[bgm{i}]"
+                )
+
+            if not filter_parts:
+                print(f"[BGM-SCENE] 사용 가능한 BGM 없음")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return False
+
+            # 모든 BGM 스트림 믹싱
+            bgm_labels = "".join([f"[bgm{i}]" for i in range(len(filter_parts))])
+            filter_parts.append(
+                f"{bgm_labels}amix=inputs={len(filter_parts)}:duration=longest:dropout_transition=2:normalize=0[bgm_mixed]"
+            )
+
+            # 원본 오디오와 믹싱된 BGM 합치기
+            filter_parts.append(
+                f"[0:a][bgm_mixed]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]"
+            )
+
+            filter_complex = ";".join(filter_parts)
+
+            # FFmpeg 명령 구성
+            input_args = []
+            for f in input_files:
+                if f == input_files[0]:
+                    input_args.extend(["-i", f])
+                else:
+                    input_args.extend(["-stream_loop", "-1", "-i", f])
+
+            ffmpeg_cmd = [
+                "ffmpeg", "-y",
+                *input_args,
+                "-filter_complex", filter_complex,
+                "-map", "0:v",
+                "-map", "[aout]",
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "128k",
+                "-shortest",
+                output_path
+            ]
+
+            print(f"[BGM-SCENE] 씬별 BGM 믹싱 시작...")
+            result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, timeout=900)
+
+            if result.returncode == 0:
+                print(f"[BGM-SCENE] 믹싱 완료: {output_path}")
+                return True
+            else:
+                stderr = result.stderr.decode('utf-8', errors='ignore')[-500:]
+                print(f"[BGM-SCENE] 믹싱 실패: {stderr}")
+                # 실패 시 기존 방식으로 폴백
+                print(f"[BGM-SCENE] 기존 방식으로 폴백...")
+                bgm_file = _get_bgm_file(base_mood)
+                if bgm_file:
+                    return _mix_bgm_with_video(video_path, bgm_file, output_path, bgm_volume)
+                return False
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        print(f"[BGM-SCENE] 믹싱 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        # 실패 시 기존 방식으로 폴백
+        try:
+            base_mood = video_effects.get('bgm_mood', '')
+            if base_mood:
+                bgm_file = _get_bgm_file(base_mood)
+                if bgm_file:
+                    return _mix_bgm_with_video(video_path, bgm_file, output_path, bgm_volume)
+        except:
+            pass
+        return False
+
+
 def _get_sfx_file(sfx_type, sfx_dir=None):
     """효과음 타입에 맞는 파일 선택 (여러 개면 랜덤)
 
@@ -15581,20 +15986,32 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             del result
             gc.collect()
 
-            # 5. BGM 믹싱 (옵션)
+            # 5. BGM 믹싱 (옵션) - 씬별 BGM 변경 지원
             bgm_mood = video_effects.get('bgm_mood', '')
+            scene_bgm_changes = video_effects.get('scene_bgm_changes', [])
             if bgm_mood:
                 _update_job_status(job_id, progress=95, message='BGM 믹싱 중...')
-                bgm_file = _get_bgm_file(bgm_mood)
-                if bgm_file:
-                    bgm_output_path = os.path.join(work_dir, "with_bgm.mp4")
-                    if _mix_bgm_with_video(final_path, bgm_file, bgm_output_path):
+                bgm_output_path = os.path.join(work_dir, "with_bgm.mp4")
+
+                # 씬별 BGM 변경이 있으면 새로운 함수 사용
+                if scene_bgm_changes:
+                    print(f"[VIDEO-WORKER] 씬별 BGM 믹싱 시작 (변경 {len(scene_bgm_changes)}회)")
+                    if _mix_scene_bgm_with_video(final_path, scenes, video_effects, bgm_output_path):
                         final_path = bgm_output_path
-                        print(f"[VIDEO-WORKER] BGM 믹싱 완료: {bgm_mood}")
+                        print(f"[VIDEO-WORKER] 씬별 BGM 믹싱 완료")
                     else:
-                        print(f"[VIDEO-WORKER] BGM 믹싱 실패, BGM 없이 진행")
+                        print(f"[VIDEO-WORKER] 씬별 BGM 믹싱 실패, BGM 없이 진행")
                 else:
-                    print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
+                    # 기존 방식: 전체 영상에 하나의 BGM
+                    bgm_file = _get_bgm_file(bgm_mood)
+                    if bgm_file:
+                        if _mix_bgm_with_video(final_path, bgm_file, bgm_output_path):
+                            final_path = bgm_output_path
+                            print(f"[VIDEO-WORKER] BGM 믹싱 완료: {bgm_mood}")
+                        else:
+                            print(f"[VIDEO-WORKER] BGM 믹싱 실패, BGM 없이 진행")
+                    else:
+                        print(f"[VIDEO-WORKER] BGM 파일 없음: {bgm_mood}")
 
             # 6. 효과음 믹싱 (옵션)
             sound_effects = video_effects.get('sound_effects', [])
