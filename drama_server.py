@@ -17975,18 +17975,41 @@ ABSOLUTE RESTRICTIONS:
             print(f"[THUMBNAIL-AI] 이미지 추출 실패 - 전체 응답: {str(result)[:1000]}")
             return jsonify({"ok": False, "error": "이미지 데이터 추출 실패"})
 
-        # 파일 저장
+        # 파일 저장 (JPEG 압축으로 용량 최적화)
         import base64
+        from PIL import Image
+        import io
+
         upload_dir = "uploads/thumbnails"
         os.makedirs(upload_dir, exist_ok=True)
-        filename = f"thumb_{session_id}.png"
-        filepath = os.path.join(upload_dir, filename)
 
-        with open(filepath, "wb") as f:
-            f.write(base64.b64decode(base64_image_data))
+        # 원본 이미지 디코딩
+        image_bytes = base64.b64decode(base64_image_data)
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # RGBA → RGB 변환 (JPEG는 알파 채널 미지원)
+        if img.mode == 'RGBA':
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # 1280x720으로 리사이즈 (너무 크면)
+        max_width, max_height = 1280, 720
+        if img.width > max_width or img.height > max_height:
+            img.thumbnail((max_width, max_height), Image.LANCZOS)
+
+        # JPEG로 저장 (품질 85% - 좋은 화질/적은 용량)
+        filename = f"thumb_{session_id}.jpg"
+        filepath = os.path.join(upload_dir, filename)
+        img.save(filepath, 'JPEG', quality=85, optimize=True)
+
+        # 용량 로깅
+        file_size = os.path.getsize(filepath)
+        print(f"[THUMBNAIL-AI] 썸네일 저장: {filepath} ({file_size / 1024:.1f}KB)")
 
         image_url = f"/uploads/thumbnails/{filename}"
-        print(f"[THUMBNAIL-AI] 썸네일 저장: {image_url}")
 
         return jsonify({
             "ok": True,
