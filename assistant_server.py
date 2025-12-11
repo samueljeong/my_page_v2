@@ -2547,25 +2547,27 @@ _news_cache = {
 }
 
 def fetch_rss_news():
-    """Google News RSS 피드에서 뉴스 가져오기"""
+    """Google News RSS 피드에서 한국/일본/미국 뉴스 가져오기"""
     news_items = []
 
-    # 한국 뉴스 RSS 피드들
+    # 한국, 일본, 미국 뉴스 RSS 피드들
     rss_feeds = [
-        # Google News Korea - 주요 뉴스
-        ('https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko', '국내'),
-        # Google News Korea - 세계 뉴스
-        ('https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtdHZHZ0pMVWlnQVAB?hl=ko&gl=KR&ceid=KR:ko', '해외'),
+        # 한국 뉴스 - 주요 뉴스
+        ('https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko', '한국'),
+        # 일본 뉴스 - 주요 뉴스
+        ('https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja', '일본'),
+        # 미국 뉴스 - 주요 뉴스
+        ('https://news.google.com/rss?hl=en&gl=US&ceid=US:en', '미국'),
     ]
 
-    for feed_url, category in rss_feeds:
+    for feed_url, country in rss_feeds:
         try:
             response = requests.get(feed_url, timeout=10, headers={
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             })
             if response.status_code == 200:
                 root = ElementTree.fromstring(response.content)
-                items = root.findall('.//item')[:10]  # 각 피드에서 최대 10개
+                items = root.findall('.//item')[:15]  # 각 피드에서 최대 15개
 
                 for item in items:
                     title = item.find('title')
@@ -2577,10 +2579,10 @@ def fetch_rss_news():
                             'title': title.text,
                             'link': link.text if link is not None else '',
                             'pub_date': pub_date.text if pub_date is not None else '',
-                            'category': category
+                            'country': country
                         })
         except Exception as e:
-            print(f"[NEWS] RSS 피드 오류 ({category}): {e}")
+            print(f"[NEWS] RSS 피드 오류 ({country}): {e}")
             continue
 
     return news_items
@@ -2602,17 +2604,17 @@ def parse_rss_date(date_str):
 
 
 def analyze_news_with_gpt(news_items):
-    """GPT로 뉴스 분석 및 유튜브 영상 소재 평가"""
+    """GPT로 뉴스 분석 - 한국/일본/미국 각 3개씩 선별, 한국어 번역"""
     client = get_openai_client()
     if not client:
         return None
 
     today = date.today()
 
-    # 뉴스 헤드라인 목록 생성 (인덱스 포함)
+    # 뉴스 헤드라인 목록 생성 (인덱스, 나라 포함)
     headlines_text = "\n".join([
-        f"[{i}][{item['category']}] {item['title']}"
-        for i, item in enumerate(news_items[:20])
+        f"[{i}][{item['country']}] {item['title']}"
+        for i, item in enumerate(news_items[:45])  # 각 나라 15개씩
     ])
 
     system_prompt = f"""[역할]
@@ -2620,16 +2622,17 @@ def analyze_news_with_gpt(news_items):
 오늘 날짜: {today.isoformat()}
 
 [임무]
-주어진 뉴스 헤드라인들을 분석하여:
-1. 중요한 뉴스를 선별하고 (중복/비슷한 내용은 하나로 통합)
-2. 각 뉴스를 간략하게 요약하고
-3. 해외 뉴스는 한국인이 이해하기 쉽게 맥락을 설명하고
-4. 유튜브 이슈 영상 소재로서의 가능성을 평가한다
+주어진 한국/일본/미국 뉴스 헤드라인들을 분석하여:
+1. 각 나라별로 가장 뜨거운 이슈 3개씩 선별 (총 9개)
+2. 대중의 관심이 높고, 논쟁적이며, 화제가 되는 주제 우선
+3. 모든 뉴스를 한국어로 번역하고 요약
+4. 일본/미국 뉴스는 한국인이 이해하기 쉽게 배경 설명 추가
 
-[영상 소재 가능성 평가 기준]
-- high (높음): 논쟁적, 대중적 관심 높음, 조회수 기대, 트렌드 연관
-- medium (보통): 정보 가치 있음, 일부 관심층 존재
-- low (낮음): 일상적 뉴스, 특별한 관심 유발 어려움
+[선별 기준]
+- 대중의 관심도가 높은 뉴스
+- SNS에서 화제가 될 만한 뉴스
+- 논쟁적이거나 충격적인 뉴스
+- 단순 연예/스포츠 결과보다 사회적 이슈 우선
 
 [출력 형식]
 반드시 다음 JSON 형식으로만 출력:
@@ -2637,23 +2640,22 @@ def analyze_news_with_gpt(news_items):
   "news": [
     {{
       "original_index": 0,
-      "category": "국내" | "해외",
-      "title": "뉴스 제목 (간결하게)",
-      "summary": "2-3문장 요약",
-      "interpretation": "해외 뉴스인 경우 한국인을 위한 맥락 설명 (국내 뉴스면 null)",
-      "video_potential": "high" | "medium" | "low",
-      "video_reason": "영상 소재로서의 이유 (1문장)"
+      "country": "한국" | "일본" | "미국",
+      "title": "한국어로 번역된 뉴스 제목",
+      "summary": "한국어로 2-3문장 요약 (어떤 뉴스인지 내용 설명)",
+      "context": "일본/미국 뉴스인 경우 한국인을 위한 배경 설명 (한국 뉴스면 null)"
     }}
   ]
 }}
 
 [규칙]
-1. 최대 8개의 중요 뉴스만 선별한다
-2. 국내/해외 균형있게 포함한다 (각각 3-4개)
-3. 단순 연예/스포츠 결과보다는 사회적 이슈를 우선한다
-4. 같은 사건의 후속 보도는 하나로 통합한다
-5. original_index는 입력된 뉴스의 [인덱스] 번호를 그대로 사용한다
-6. JSON 외의 텍스트는 출력하지 마라"""
+1. 각 나라별로 정확히 3개씩 선별한다 (한국 3개, 일본 3개, 미국 3개)
+2. 모든 제목과 요약은 반드시 한국어로 작성한다
+3. 일본어/영어 뉴스는 자연스러운 한국어로 번역한다
+4. summary는 뉴스의 핵심 내용을 설명한다 (단순 제목 반복 X)
+5. context는 해당 뉴스가 왜 그 나라에서 화제인지, 배경이 무엇인지 설명한다
+6. original_index는 입력된 뉴스의 [인덱스] 번호를 그대로 사용한다
+7. JSON 외의 텍스트는 출력하지 마라"""
 
     try:
         response = client.chat.completions.create(
