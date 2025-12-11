@@ -221,6 +221,202 @@ const AssistantMain = (() => {
     }
   }
 
+  // ===== News Section Functions =====
+  async function loadNewsSection() {
+    const container = document.getElementById('news-section-container');
+    const timeEl = document.getElementById('news-update-time');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        <p>뉴스를 불러오는 중...</p>
+      </div>
+    `;
+
+    try {
+      const response = await fetch('/assistant/api/news');
+      const data = await response.json();
+
+      if (data.success && data.news && data.news.length > 0) {
+        newsData = data.news;
+        renderNewsSectionList(data.news);
+
+        if (timeEl && data.updated_at) {
+          const updateTime = new Date(data.updated_at);
+          timeEl.textContent = updateTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 업데이트';
+        }
+      } else {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            <p style="font-size: 2rem; margin-bottom: 0.5rem;">📰</p>
+            <p>뉴스가 없습니다. 새로고침을 눌러주세요.</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('[Assistant] News section load error:', error);
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--danger-color);">
+          <p>뉴스를 불러오는데 실패했습니다. 다시 시도해주세요.</p>
+        </div>
+      `;
+    }
+  }
+
+  async function refreshNewsSection() {
+    const container = document.getElementById('news-section-container');
+    const timeEl = document.getElementById('news-update-time');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        <p>새로운 뉴스를 가져오는 중...</p>
+      </div>
+    `;
+
+    try {
+      const response = await fetch('/assistant/api/news/refresh', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success && data.news && data.news.length > 0) {
+        newsData = data.news;
+        renderNewsSectionList(data.news);
+
+        if (timeEl && data.updated_at) {
+          const updateTime = new Date(data.updated_at);
+          timeEl.textContent = updateTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 업데이트';
+        }
+      } else {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            <p>새로고침 실패. 다시 시도해주세요.</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('[Assistant] News section refresh error:', error);
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--danger-color);">
+          <p>네트워크 오류가 발생했습니다.</p>
+        </div>
+      `;
+    }
+  }
+
+  function renderNewsSectionList(news) {
+    const container = document.getElementById('news-section-container');
+    if (!container) return;
+
+    newsData = news;
+
+    // 나라별로 분류
+    const koreaNews = news.filter(n => n.country === '한국');
+    const japanNews = news.filter(n => n.country === '일본');
+    const usaNews = news.filter(n => n.country === '미국');
+
+    const renderNewsItem = (item, idx) => `
+      <div class="news-section-item" style="display: block; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.75rem; background: white; cursor: pointer; transition: box-shadow 0.2s;"
+           onclick="window.open('${escapeHtml(item.link || '#')}', '_blank')"
+           onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+           onmouseout="this.style.boxShadow='none'">
+        <h4 style="font-size: 0.95rem; margin: 0 0 0.5rem 0; line-height: 1.4; color: var(--text-primary);">
+          ${escapeHtml(item.title)}
+        </h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0; line-height: 1.5;">${escapeHtml(item.summary || '')}</p>
+        ${item.context ? `
+          <p style="font-size: 0.8rem; color: #6366f1; margin: 0; line-height: 1.4; background: #f0f0ff; padding: 0.5rem; border-radius: 4px;">💡 ${escapeHtml(item.context)}</p>
+        ` : ''}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">
+          ${item.pub_date ? `<span style="font-size: 0.7rem; color: var(--text-muted);">🕐 ${escapeHtml(item.pub_date)}</span>` : '<span></span>'}
+          <button class="btn btn-primary btn-small" onclick="event.stopPropagation(); AssistantMain.generateScriptFromNewsSection(${idx})" style="white-space: nowrap; font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+            ✍️ 대본 생성
+          </button>
+        </div>
+      </div>
+    `;
+
+    const renderCountrySection = (countryNews, flag, countryName) => `
+      <div style="background: #fafafa; border-radius: 12px; padding: 1rem;">
+        <h4 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 1rem;">
+          ${flag} ${countryName} <span style="font-size: 0.75rem; color: var(--text-muted);">(${countryNews.length}건)</span>
+        </h4>
+        ${countryNews.length > 0
+          ? countryNews.map((item, idx) => renderNewsItem(item, news.indexOf(item))).join('')
+          : `<p style="color: var(--text-muted); text-align: center; padding: 1rem;">${countryName} 뉴스가 없습니다.</p>`
+        }
+      </div>
+    `;
+
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+        ${renderCountrySection(koreaNews, '🇰🇷', '한국')}
+        ${renderCountrySection(japanNews, '🇯🇵', '일본')}
+        ${renderCountrySection(usaNews, '🇺🇸', '미국')}
+      </div>
+    `;
+  }
+
+  async function generateScriptFromNewsSection(newsIndex) {
+    const news = newsData[newsIndex];
+    if (!news) {
+      alert('뉴스 데이터를 찾을 수 없습니다.');
+      return;
+    }
+
+    const resultDiv = document.getElementById('news-script-result');
+    const contentPre = document.getElementById('news-script-content');
+
+    if (!resultDiv || !contentPre) return;
+
+    resultDiv.style.display = 'block';
+    contentPre.innerHTML = `<div style="text-align: center; padding: 2rem;">
+      <div class="spinner" style="margin: 0 auto 1rem;"></div>
+      <p style="color: var(--text-muted);">GPT가 10분 분량의 유튜브 대본을 생성하고 있습니다...</p>
+      <p style="font-size: 0.8rem; color: var(--text-muted);">약 30초~1분 소요됩니다</p>
+    </div>`;
+
+    // Scroll to result
+    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    try {
+      const response = await fetch('/assistant/api/news/script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: news.title,
+          summary: news.summary || '',
+          interpretation: news.interpretation || '',
+          category: news.category
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.script) {
+        currentScript = data.script;
+        const formattedScript = formatScript(data.script);
+        contentPre.innerHTML = `
+          <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e5e7eb;">
+            <strong>${escapeHtml(news.title)}</strong>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.5rem 0 0 0;">${escapeHtml(news.summary || '')}</p>
+          </div>
+          ${formattedScript}
+        `;
+      } else {
+        contentPre.innerHTML = `<div style="color: var(--danger-color); text-align: center; padding: 1rem;">
+          대본 생성 실패: ${escapeHtml(data.error || '알 수 없는 오류')}
+        </div>`;
+      }
+    } catch (error) {
+      console.error('[Assistant] Script generation error:', error);
+      contentPre.innerHTML = `<div style="color: var(--danger-color); text-align: center; padding: 1rem;">
+        네트워크 오류가 발생했습니다. 다시 시도해주세요.
+      </div>`;
+    }
+  }
+
   // ===== Script Generation Functions =====
   async function generateScript(newsIndex) {
     const news = newsData[newsIndex];
@@ -1505,6 +1701,8 @@ const AssistantMain = (() => {
       loadProjects();
     } else if (section === 'youtube') {
       loadYoutubeChannels();
+    } else if (section === 'news') {
+      loadNewsSection();
     }
   }
 
@@ -4880,6 +5078,10 @@ const AssistantMain = (() => {
     generateScript,
     closeScriptModal,
     copyScript,
+    // News section functions
+    loadNewsSection,
+    refreshNewsSection,
+    generateScriptFromNewsSection,
     // Calendar functions
     calendarPrev,
     calendarNext,

@@ -2183,18 +2183,11 @@
             <span class="sidebar-icon">📺</span>
             <span>YouTube</span>
           </a>
+          <a href="#" class="sidebar-item" data-section="news" onclick="AssistantMain.showSection('news'); return false;">
+            <span class="sidebar-icon">📰</span>
+            <span>News</span>
+          </a>
         </nav>
-      </div>
-
-      <!-- 사이드바 뉴스 -->
-      <div class="sidebar-news">
-        <div class="sidebar-news-header">
-          <h4>📰 News</h4>
-          <button onclick="AssistantMain.refreshNews()" style="background: none; border: none; cursor: pointer; font-size: 0.7rem;">🔄</button>
-        </div>
-        <div class="sidebar-news-list" id="sidebar-news-container">
-          <div style="padding: 1rem; text-align: center; color: #9ca3af; font-size: 0.75rem;">Loading...</div>
-        </div>
       </div>
     </aside>
 
@@ -2628,6 +2621,52 @@
                   <span style="font-size: 1.5rem;">🔄</span>
                   <p style="color: var(--text-muted); margin: 0.5rem 0 0 0;">AI가 분석 중입니다...</p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- News Section -->
+      <div id="section-news" class="section">
+        <div class="card">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>📰 오늘의 뉴스</h3>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span id="news-update-time" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+              <button class="btn btn-secondary btn-small" onclick="AssistantMain.refreshNewsSection()">🔄 새로고침</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- 뉴스 목록 -->
+            <div id="news-section-container">
+              <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                <p>뉴스를 불러오는 중...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 뉴스 기반 대본 생성 섹션 -->
+        <div class="card" style="margin-top: 1rem;">
+          <div class="card-header">
+            <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+              🎬 뉴스 기반 대본 생성
+              <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: 4px;">GPT-5.1</span>
+            </h3>
+          </div>
+          <div class="card-body">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+              위 뉴스 목록에서 영상 소재로 적합한 뉴스를 선택하면 AI가 YouTube 대본을 자동 생성합니다.
+            </p>
+            <div id="news-script-result" style="display: none; margin-top: 1rem;">
+              <div style="background: #f8f9fa; border-radius: 8px; padding: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                  <h4 style="font-size: 0.9rem; margin: 0;">생성된 대본</h4>
+                  <button class="btn btn-primary btn-small" onclick="AssistantMain.copyScript()">📋 복사</button>
+                </div>
+                <pre id="news-script-content" style="white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6; max-height: 400px; overflow-y: auto; margin: 0;"></pre>
               </div>
             </div>
           </div>
