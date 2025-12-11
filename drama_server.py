@@ -18,6 +18,9 @@ from assistant_server import assistant_bp
 # TubeLens Blueprint 등록
 from tubelens_server import tubelens_bp
 
+# 언어별 설정 (폰트, 자막, TTS 등)
+from lang import ko as lang_ko
+
 app = Flask(__name__)
 
 # Assistant Blueprint 등록
@@ -4554,7 +4557,7 @@ def api_generate_tts():
             return jsonify({"ok": False, "error": "No data received"}), 400
 
         text = data.get("text", "")
-        speaker = data.get("speaker", "ko-KR-Wavenet-A")
+        speaker = data.get("speaker", lang_ko.TTS['default_voice'])
         speed = data.get("speed", 1.0)
         pitch = data.get("pitch", 0)
         volume = data.get("volume", 0)
@@ -13276,7 +13279,7 @@ def api_image_generate_assets_zip():
 
         data = request.get_json()
         session_id = data.get('session_id', str(uuid.uuid4())[:8])
-        base_voice = data.get('voice', 'ko-KR-Neural2-A')
+        base_voice = data.get('voice', lang_ko.TTS['default_voice'])
         scenes = data.get('scenes', [])
 
         if not scenes:
@@ -13359,10 +13362,10 @@ def api_image_generate_assets_zip():
                         char_ratio = len(sentence) / total_chars
                         sent_duration = total_duration * char_ratio
 
-                        # ★ 자막 싱크 최적화: ASS 자동 줄바꿈 사용으로 수동 분리 최소화
-                        # ASS WrapStyle=0 + MarginL/R=100으로 자동 2줄 줄바꿈
-                        # 문장 분리 없이 통째로 표시 → TTS duration 그대로 사용 → 정확한 싱크
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else 120
+                        # ★ 자막 길이 설정: lang/ko.py에서 관리
+                        # 한국어: lang_ko.SUBTITLE['max_chars_total'] (기본 40자)
+                        # 일본어: 100자 (TODO: lang/ja.py로 분리 예정)
+                        max_subtitle_chars = 100 if detected_lang == 'ja' else lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:
@@ -13413,10 +13416,10 @@ def api_image_generate_assets_zip():
                         duration = get_mp3_duration(audio_bytes)
                         scene_audios.append(audio_bytes)
 
-                        # ★ 자막 싱크 최적화: ASS 자동 줄바꿈 사용으로 수동 분리 최소화
-                        # ASS WrapStyle=0 + MarginL/R=100으로 자동 2줄 줄바꿈
-                        # 문장 분리 없이 통째로 표시 → TTS duration 그대로 사용 → 정확한 싱크
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else 120
+                        # ★ 자막 길이 설정: lang/ko.py에서 관리
+                        # 한국어: lang_ko.SUBTITLE['max_chars_total'] (기본 40자)
+                        # 일본어: 100자 (TODO: lang/ja.py로 분리 예정)
+                        max_subtitle_chars = 100 if detected_lang == 'ja' else lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:

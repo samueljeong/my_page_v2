@@ -269,43 +269,53 @@ OUTRO = {
 #        14209행, 14311행, 14949-14953행, 15449행, 15789행, 17731-17732행
 
 FONTS = {
+    # 기본 폰트 (한국어 전체에서 사용)
+    'default': 'NanumSquareRoundB.ttf',
+    'default_name': 'NanumSquareRound',  # ASS 자막용 폰트 이름
+
     # 폰트 우선순위 (첫 번째부터 시도)
     'priority': [
-        'NanumGothicBold.ttf',       # 나눔고딕 볼드 (기본)
+        'NanumSquareRoundB.ttf',     # 나눔스퀘어라운드 볼드 (기본)
+        'NanumGothicBold.ttf',       # 나눔고딕 볼드 (폴백)
         'NanumGothic.ttf',           # 나눔고딕
-        'NanumSquareRoundB.ttf',     # 나눔스퀘어라운드 볼드
         'NanumBarunGothicBold.ttf',  # 나눔바른고딕 볼드
     ],
 
     # 시스템 폰트 경로 (fonts/ 폴더에 없을 때)
     'system_paths': [
+        '/usr/share/fonts/truetype/nanum/NanumSquareRoundB.ttf',
         '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
-        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
     ],
 
-    # 용도별 폰트 설정
+    # 용도별 폰트 설정 (모두 NanumSquareRound 사용)
     'subtitle': {
-        'name': 'NanumSquareRound',  # 자막용 (둥근 고딕)
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
         'size': 28,
     },
     'thumbnail': {
-        'name': 'NanumGothicBold',   # 썸네일용
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
         'size': 60,
     },
     'overlay': {
-        'name': 'NanumGothicBold',   # 화면 오버레이용
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
         'size': 40,
     },
     'outro': {
-        'name': 'NanumGothicBold',   # 아웃트로용
-        'sizes': [48, 38, 30],       # 줄별 크기
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
+        'sizes': [48, 38, 30],
     },
     'lower_third': {
-        'name': 'NanumGothicBold',   # 로워서드용
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
         'size': 32,
     },
     'news_ticker': {
-        'name': 'NanumGothicBold',   # 뉴스 티커용
+        'name': 'NanumSquareRound',
+        'file': 'NanumSquareRoundB.ttf',
         'size': 28,
     },
 }
