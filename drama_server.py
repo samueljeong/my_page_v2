@@ -18,6 +18,11 @@ from assistant_server import assistant_bp
 # TubeLens Blueprint 등록
 from tubelens_server import tubelens_bp
 
+# 언어별 설정 (폰트, 자막, TTS 등)
+from lang import ko as lang_ko
+from lang import ja as lang_ja
+from lang import en as lang_en
+
 app = Flask(__name__)
 
 # Assistant Blueprint 등록
@@ -4554,7 +4559,7 @@ def api_generate_tts():
             return jsonify({"ok": False, "error": "No data received"}), 400
 
         text = data.get("text", "")
-        speaker = data.get("speaker", "ko-KR-Wavenet-A")
+        speaker = data.get("speaker", lang_ko.TTS['default_voice'])
         speed = data.get("speed", 1.0)
         pitch = data.get("pitch", 0)
         volume = data.get("volume", 0)
@@ -4748,11 +4753,14 @@ def api_generate_tts():
                     else:
                         emotion_chunk_count += 1
 
+                # speaker 이름에서 언어 코드 추출 (예: ko-KR-Neural2-C → ko-KR)
+                lang_code = '-'.join(speaker.split('-')[:2]) if speaker and '-' in speaker else lang_ko.TTS['language_code']
+
                 if is_ssml:
                     payload = {
                         "input": {"ssml": processed_chunk},
                         "voice": {
-                            "languageCode": "ko-KR",
+                            "languageCode": lang_code,
                             "name": speaker
                         },
                         "audioConfig": {
@@ -4772,7 +4780,7 @@ def api_generate_tts():
                     payload = {
                         "input": {"text": chunk},
                         "voice": {
-                            "languageCode": "ko-KR",
+                            "languageCode": lang_code,
                             "name": speaker
                         },
                         "audioConfig": {
@@ -6654,18 +6662,14 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
             srt_content = subtitle_data['srt']
 
             # 한글 폰트 확인 (ASS 자막은 폰트 이름만 사용)
-            # NanumGothic 사용 (Pretendard는 한글 글리프 없음)
+            # 폰트 설정: lang/ko.py에서 관리
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
             font_found = False
             font_location = None
-            # NanumGothic 폰트 우선 확인
-            korean_fonts = [
-                os.path.join(base_dir, 'fonts', 'NanumGothicBold.ttf'),
-                os.path.join(base_dir, 'fonts', 'NanumGothic.ttf'),
-                os.path.join(base_dir, 'fonts', 'NanumBarunGothicBold.ttf'),
-                '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
-            ]
+            # 한국어 폰트 우선순위 (lang_ko.FONTS에서 가져옴)
+            korean_fonts = [os.path.join(base_dir, 'fonts', f) for f in lang_ko.FONTS['priority']]
+            korean_fonts.extend(lang_ko.FONTS['system_paths'])
             for kf in korean_fonts:
                 if os.path.exists(kf):
                     font_found = True
@@ -6673,8 +6677,7 @@ def _generate_video_sync(images, audio_url, subtitle_data, burn_subtitle, resolu
                     break
 
             # ASS 자막에는 폰트 경로가 아닌 폰트 이름을 사용해야 함
-            # Pretendard는 한글 글리프가 없으므로 NanumGothic 사용
-            subtitle_font = 'NanumGothic' if font_found else 'Arial'
+            subtitle_font = lang_ko.FONTS['default_name'] if font_found else 'Arial'
 
             print(f"[VIDEO-SUBTITLE] 자막 폰트: {subtitle_font} (found: {font_found}, location: {font_location if font_found else 'N/A'})")
 
@@ -7987,16 +7990,11 @@ FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple w
             width, height = img.size
             draw = ImageDraw.Draw(img)
 
-            # 폰트 로드 (NanumGothicBold 우선 - Pretendard는 한글 글리프 없음)
+            # 폰트 로드: lang/ko.py에서 관리 (NanumSquareRoundB 우선)
             font_size = int(height * 0.08)  # 이미지 높이의 8%
             font = None
-            font_paths = [
-                os.path.join(static_dir, 'fonts', 'NanumGothicBold.ttf'),
-                os.path.join(static_dir, 'fonts', 'NanumGothic.ttf'),
-                os.path.join(static_dir, 'fonts', 'NanumSquareRoundB.ttf'),
-                os.path.join(static_dir, 'fonts', 'NanumBarunGothicBold.ttf'),
-                "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            ]
+            font_paths = [os.path.join(static_dir, 'fonts', f) for f in lang_ko.FONTS['priority']]
+            font_paths.extend(lang_ko.FONTS['system_paths'])
             for fp in font_paths:
                 if os.path.exists(fp):
                     try:
@@ -8748,20 +8746,11 @@ def api_thumbnail_overlay():
         width, height = img.size
         print(f"[THUMBNAIL] 이미지 크기: {width}x{height}")
 
-        # 폰트 로드 (한글 지원 폰트)
+        # 폰트 설정: lang/ko.py에서 관리
         font = None
         base_dir = os_module.path.dirname(os_module.path.abspath(__file__))
-        # NanumGothicBold 우선 (Pretendard는 한글 글리프 없음)
-        font_paths = [
-            # 한글 지원 폰트 (최우선)
-            os_module.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumGothic.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumSquareB.ttf"),
-            os_module.path.join(base_dir, "fonts/NanumBarunGothicBold.ttf"),
-            # Linux (Render)
-            "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        ]
+        font_paths = [os_module.path.join(base_dir, "fonts", f) for f in lang_ko.FONTS['priority']]
+        font_paths.extend(lang_ko.FONTS['system_paths'])
 
         for font_path in font_paths:
             if os_module.path.exists(font_path):
@@ -12857,18 +12846,19 @@ def api_image_generate_assets_zip():
             return 'en'
 
         def get_voice_for_language(lang, base_voice):
-            """언어에 맞는 TTS 음성 반환"""
+            """언어에 맞는 TTS 음성 반환 (lang/*.py에서 관리)"""
             is_female = 'Neural2-A' in base_voice or 'Neural2-B' in base_voice or 'Wavenet-A' in base_voice
             voice_map = {
-                'ko': {'female': 'ko-KR-Neural2-A', 'male': 'ko-KR-Neural2-C'},
-                'en': {'female': 'en-US-Neural2-F', 'male': 'en-US-Neural2-D'},
-                'ja': {'female': 'ja-JP-Neural2-B', 'male': 'ja-JP-Neural2-C'}
+                'ko': {'female': lang_ko.TTS['voices']['female'], 'male': lang_ko.TTS['voices']['male']},
+                'ja': {'female': lang_ja.TTS['voices']['female'], 'male': lang_ja.TTS['voices']['male']},
+                'en': {'female': lang_en.TTS['voices']['female'], 'male': lang_en.TTS['voices']['male']},
             }
             gender = 'female' if is_female else 'male'
             return voice_map.get(lang, voice_map['en'])[gender]
 
         def get_language_code(lang):
-            return {'ko': 'ko-KR', 'en': 'en-US', 'ja': 'ja-JP'}.get(lang, 'en-US')
+            """언어 코드 반환 (lang/*.py에서 관리)"""
+            return {'ko': lang_ko.TTS['language_code'], 'ja': lang_ja.TTS['language_code'], 'en': lang_en.TTS['language_code']}.get(lang, lang_en.TTS['language_code'])
 
         def split_sentences_with_gpt(text, lang='ko'):
             """GPT-5.1을 사용해 자연스러운 자막 단위로 분리"""
@@ -13276,7 +13266,7 @@ def api_image_generate_assets_zip():
 
         data = request.get_json()
         session_id = data.get('session_id', str(uuid.uuid4())[:8])
-        base_voice = data.get('voice', 'ko-KR-Neural2-A')
+        base_voice = data.get('voice', lang_ko.TTS['default_voice'])
         scenes = data.get('scenes', [])
 
         if not scenes:
@@ -13359,10 +13349,13 @@ def api_image_generate_assets_zip():
                         char_ratio = len(sentence) / total_chars
                         sent_duration = total_duration * char_ratio
 
-                        # ★ 자막 싱크 최적화: ASS 자동 줄바꿈 사용으로 수동 분리 최소화
-                        # ASS WrapStyle=0 + MarginL/R=100으로 자동 2줄 줄바꿈
-                        # 문장 분리 없이 통째로 표시 → TTS duration 그대로 사용 → 정확한 싱크
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else 120
+                        # ★ 자막 길이 설정: lang/*.py에서 관리
+                        if detected_lang == 'ja':
+                            max_subtitle_chars = lang_ja.SUBTITLE['max_chars_total']
+                        elif detected_lang == 'en':
+                            max_subtitle_chars = lang_en.SUBTITLE['max_chars_total']
+                        else:
+                            max_subtitle_chars = lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:
@@ -13413,10 +13406,13 @@ def api_image_generate_assets_zip():
                         duration = get_mp3_duration(audio_bytes)
                         scene_audios.append(audio_bytes)
 
-                        # ★ 자막 싱크 최적화: ASS 자동 줄바꿈 사용으로 수동 분리 최소화
-                        # ASS WrapStyle=0 + MarginL/R=100으로 자동 2줄 줄바꿈
-                        # 문장 분리 없이 통째로 표시 → TTS duration 그대로 사용 → 정확한 싱크
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else 120
+                        # ★ 자막 길이 설정: lang/*.py에서 관리
+                        if detected_lang == 'ja':
+                            max_subtitle_chars = lang_ja.SUBTITLE['max_chars_total']
+                        elif detected_lang == 'en':
+                            max_subtitle_chars = lang_en.SUBTITLE['max_chars_total']
+                        else:
+                            max_subtitle_chars = lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:
@@ -13838,23 +13834,36 @@ def _get_subtitle_style(lang):
     # PrimaryColour=&H00FFFF: 노란색 (BGR 순서)
     # OutlineColour=&H00000000: 검은색 테두리
     if lang == 'ko':
-        # NanumSquareRound - 나눔스퀘어 라운드 (둥근 고딕, 가독성 좋음)
+        # 한국어: lang/ko.py에서 관리하는 폰트 사용
+        font_name = lang_ko.FONTS['default_name']
         return (
-            "FontName=NanumSquareRound,FontSize=28,PrimaryColour=&H00FFFF,"
+            f"FontName={font_name},FontSize=28,PrimaryColour=&H00FFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
         )
     elif lang == 'ja':
-        # 일본어 - Corporate Logo Rounded 사용 (일본어 글리프 완전 지원)
+        # 일본어: lang/ja.py에서 관리하는 폰트 사용
+        font_name = lang_ja.FONTS['default_name']
+        font_size = lang_ja.SUBTITLE['style']['font_size']
         return (
-            "FontName=Corporate Logo Rounded ver3,FontSize=22,PrimaryColour=&H00FFFF,"
+            f"FontName={font_name},FontSize={font_size},PrimaryColour=&H00FFFF,"
+            "OutlineColour=&H00000000,BackColour=&H80000000,"
+            "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
+        )
+    elif lang == 'en':
+        # 영어: lang/en.py에서 관리하는 폰트 사용
+        font_name = lang_en.FONTS['default_name']
+        font_size = lang_en.SUBTITLE['style']['font_size']
+        return (
+            f"FontName={font_name},FontSize={font_size},PrimaryColour=&H00FFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
         )
     else:
-        # 영어/기타 언어 - NanumSquareRound 사용
+        # 기타 언어 - 영어 폰트로 fallback
+        font_name = lang_en.FONTS['default_name']
         return (
-            "FontName=NanumSquareRound,FontSize=22,PrimaryColour=&H00FFFF,"
+            f"FontName={font_name},FontSize=22,PrimaryColour=&H00FFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
         )
@@ -13921,18 +13930,26 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
     """
     try:
         # 언어별 폰트 설정 (큰 자막 - 50대+ 시청자 가독성)
+        # 한국어 폰트: lang/ko.py에서 관리
         if lang == 'ko':
-            font_name = "NanumSquareRound"  # 나눔스퀘어 라운드 (둥근 고딕)
+            font_name = lang_ko.FONTS['default_name']
             font_size = 48  # 24 → 48 (2배 크기)
             max_chars_per_line = 20  # 한국어: 한 줄 최대 20자
         elif lang == 'ja':
-            font_name = "Corporate Logo Rounded ver3"  # 일본어 전용 폰트
-            font_size = 40  # 일본어는 글자가 복잡해서 조금 작게
-            max_chars_per_line = 15  # 일본어: 한 줄 최대 15자 (18 → 15, 화면 잘림 방지)
+            # 일본어: lang/ja.py에서 관리
+            font_name = lang_ja.FONTS['default_name']
+            font_size = lang_ja.SUBTITLE['style']['font_size_burn']
+            max_chars_per_line = lang_ja.SUBTITLE['max_chars_per_line']
+        elif lang == 'en':
+            # 영어: lang/en.py에서 관리
+            font_name = lang_en.FONTS['default_name']
+            font_size = lang_en.SUBTITLE['style']['font_size_burn']
+            max_chars_per_line = lang_en.SUBTITLE['max_chars_per_line']
         else:
-            font_name = "NanumSquareRound"  # 나눔스퀘어 라운드
-            font_size = 44  # 22 → 44 (2배 크기)
-            max_chars_per_line = 25  # 영어: 한 줄 최대 25자
+            # 기타 언어 - 영어 설정으로 fallback
+            font_name = lang_en.FONTS['default_name']
+            font_size = lang_en.SUBTITLE['style']['font_size_burn']
+            max_chars_per_line = lang_en.SUBTITLE['max_chars_per_line']
 
         # 긴 텍스트 자동 줄바꿈 함수
         def wrap_text(text, max_chars):
@@ -14072,11 +14089,11 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
     if lang == 'ja':
         font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
     else:
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for overlay in screen_overlays:
@@ -14202,11 +14219,11 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
     if lang == 'ja':
         font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
     else:
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for lt in lower_thirds:
@@ -14304,11 +14321,11 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir, lang='k
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
     if lang == 'ja':
         font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
     else:
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
@@ -14945,13 +14962,20 @@ def _generate_outro_video(output_path, duration=5, fonts_dir=None):
         print(f"[OUTRO] 폰트 디렉토리: {fonts_dir}")
         print(f"[OUTRO] 디렉토리 존재: {os.path.exists(fonts_dir)}")
 
-        # 폰트 우선순위: NanumGothicBold (Pretendard는 한글 글리프 없음)
-        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
-        if not os.path.exists(font_path):
-            font_path = os.path.join(fonts_dir, "NanumGothic.ttf")
-        if not os.path.exists(font_path):
-            font_path = os.path.join(fonts_dir, "NanumBarunGothicBold.ttf")
-        if not os.path.exists(font_path):
+        # 폰트 설정: lang/ko.py에서 관리
+        font_path = None
+        for font_file in lang_ko.FONTS['priority']:
+            candidate = os.path.join(fonts_dir, font_file)
+            if os.path.exists(candidate):
+                font_path = candidate
+                break
+        if not font_path:
+            # 시스템 폰트 시도
+            for sys_path in lang_ko.FONTS['system_paths']:
+                if os.path.exists(sys_path):
+                    font_path = sys_path
+                    break
+        if not font_path:
             print(f"[OUTRO] 폰트 파일 없음: {fonts_dir}")
             return False
 
@@ -15445,10 +15469,10 @@ OUTPUT: 1080x1920 vertical image with ONLY ONE centered stickman against scenic 
                 voiceover_raw = bd['voiceover']
                 beat_duration = bd['duration']
 
-                # 폰트 경로 (NanumGothicBold 우선)
-                font_path = "fonts/NanumGothicBold.ttf"
+                # 폰트 설정: lang/ko.py에서 관리
+                font_path = f"fonts/{lang_ko.FONTS['default']}"
                 if not os.path.exists(font_path):
-                    font_path = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
+                    font_path = lang_ko.FONTS['system_paths'][0] if lang_ko.FONTS['system_paths'] else font_path
                 font_escaped = font_path.replace("\\", "/").replace(":", "\\:")
 
                 # ========== TTS 싱크 자막: 문장/구 단위로 분할 ==========
@@ -15784,9 +15808,9 @@ def _generate_shorts_video(main_video_path, scenes, highlight_scenes, hook_text,
                 return False
 
             # 훅 텍스트 오버레이 추가 (처음 3초)
-            # NanumGothicBold 사용 (Pretendard는 한글 글리프 없음)
+            # 폰트 설정: lang/ko.py에서 관리
             if hook_text:
-                font_path = "fonts/NanumGothicBold.ttf"
+                font_path = f"fonts/{lang_ko.FONTS['default']}"
                 font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
                 hook_filter = (
@@ -17166,7 +17190,7 @@ def api_generate_shorts_tts():
 
         data = request.get_json()
         text = data.get('text', '').strip()
-        voice = data.get('voice', 'ko-KR-Neural2-C')
+        voice = data.get('voice', lang_ko.TTS['default_voice'])  # 기본: lang/ko.py에서 관리
         speed = float(data.get('speed', 1.2))
 
         if not text:
@@ -17181,10 +17205,13 @@ def api_generate_shorts_tts():
 
         url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
 
+        # voice 이름에서 언어 코드 추출 (예: ko-KR-Neural2-C → ko-KR)
+        lang_code = '-'.join(voice.split('-')[:2]) if voice and '-' in voice else lang_ko.TTS['language_code']
+
         payload = {
             "input": {"text": text},
             "voice": {
-                "languageCode": "ko-KR",
+                "languageCode": lang_code,
                 "name": voice
             },
             "audioConfig": {
@@ -17725,15 +17752,14 @@ def generate_thumbnail_with_text():
         # 상품 이미지 합성
         bg_img.paste(product_img_resized, (img_x, img_y), product_img_resized)
 
-        # 폰트 로드 (NanumGothicBold 우선 - Pretendard는 한글 글리프 없음)
+        # 폰트 로드: lang/ko.py에서 관리
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        font_candidates = [
-            os.path.join(base_dir, "fonts/NanumGothicBold.ttf"),
-            os.path.join(base_dir, "fonts/NanumGothic.ttf"),
-            os.path.join(base_dir, "fonts/NanumBarunGothicBold.ttf"),
+        font_candidates = [os.path.join(base_dir, f"fonts/{f}") for f in lang_ko.FONTS['priority']]
+        font_candidates.extend(lang_ko.FONTS['system_paths'])
+        font_candidates.extend([
             '/usr/share/fonts/truetype/noto/NotoSansCJK-Black.ttc',
             '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-        ]
+        ])
 
         font_path = None
         for fp in font_candidates:
@@ -21095,7 +21121,7 @@ def run_automation_pipeline(row_data, row_index):
         # H(7), I(8), J(9)는 출력 컬럼 (제목2, 제목3, 비용)
         visibility = (row_data[10] if len(row_data) > 10 else '').strip() or 'private'  # K열: 공개설정
         # L(11), M(12)는 출력 컬럼 (영상URL, 에러메시지)
-        voice = (row_data[13] if len(row_data) > 13 else '').strip() or 'ko-KR-Neural2-C'  # N열: 음성
+        voice = (row_data[13] if len(row_data) > 13 else '').strip() or lang_ko.TTS['default_voice']  # N열: 음성 (기본: lang/ko.py)
         audience = (row_data[14] if len(row_data) > 14 else '').strip() or 'senior'  # O열: 타겟 시청자
         category = (row_data[15] if len(row_data) > 15 else '').strip()  # P열: 카테고리 (뉴스 등)
         # Q(16): 쇼츠URL(출력)
@@ -22125,8 +22151,8 @@ def _automation_generate_tts_neural2(scenes, episode_id, uploads_dir):
         if not api_key:
             return {"ok": False, "error": "GOOGLE_CLOUD_API_KEY가 설정되지 않았습니다"}
 
-        voice_name = "ko-KR-Neural2-C"  # 남성 Neural2 음성 (고품질)
-        language_code = "ko-KR"
+        voice_name = lang_ko.TTS['default_voice']  # 기본 음성 (lang/ko.py에서 관리)
+        language_code = lang_ko.TTS['language_code']
 
         audio_data = []
 
@@ -22606,8 +22632,9 @@ def _automation_generate_video(scenes, episode_id, output_dir):
                         f.write(f"{format_srt_time(sub['start'])} --> {format_srt_time(sub['end'])}\n")
                         f.write(f"{sub['text']}\n\n")
 
-                # 자막 스타일 (노란색 + 검은 테두리, NanumSquareRound 폰트)
-                subtitle_style = "FontName=NanumSquareRound,FontSize=22,PrimaryColour=&H00FFFF,OutlineColour=&H00000000,BackColour=&H80000000,BorderStyle=1,Outline=4,Shadow=2,MarginV=30,Bold=1"
+                # 자막 스타일 (노란색 + 검은 테두리): lang/ko.py에서 폰트 관리
+                font_name = lang_ko.FONTS['default_name']
+                subtitle_style = f"FontName={font_name},FontSize=22,PrimaryColour=&H00FFFF,OutlineColour=&H00000000,BackColour=&H80000000,BorderStyle=1,Outline=4,Shadow=2,MarginV=30,Bold=1"
 
                 # FFmpeg 자막 필터
                 escaped_srt = srt_path.replace('\\', '\\\\').replace(':', '\\:')
