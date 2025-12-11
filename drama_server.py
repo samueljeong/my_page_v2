@@ -21879,8 +21879,20 @@ def _automation_analyze_script_gpt5(script, episode_id):
         from openai import OpenAI
         client = OpenAI()
 
-        # 이미지 수 계산 (150자 = 1분 = 1장, 상한 없음)
-        image_count = max(3, len(script) // 150)
+        # 이미지 수 계산
+        # - 10분 이하 (1500자): 1분당 1개
+        # - 10분 초과: 최대 12개 (처음 10개 + 이후 1~2개)
+        script_length = len(script)
+        estimated_minutes = script_length / 150  # 150자 = 1분
+
+        if estimated_minutes <= 10:
+            # 10분 이하: 1분당 1개, 최소 3개
+            image_count = max(3, int(estimated_minutes))
+        else:
+            # 10분 초과: 처음 10분은 10개, 이후는 1~2개만 추가 (최대 12개)
+            extra_minutes = estimated_minutes - 10
+            extra_images = min(2, max(1, int(extra_minutes / 10)))  # 10분당 1개 추가, 최대 2개
+            image_count = min(12, 10 + extra_images)
 
         system_prompt = """You are an AI that analyzes scripts and generates image prompts for video production.
 
