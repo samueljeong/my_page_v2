@@ -7,11 +7,12 @@
 
     # 언어 감지
     lang = detect_language("안녕하세요")  # 'ko'
+    lang = detect_language("こんにちは")  # 'ja'
 
     # 설정 가져오기
     config = get_config('ko')
     print(config.FONTS)
-    print(config.SUBTITLE_MAX_CHARS)
+    print(config.SUBTITLE['max_chars_total'])
 """
 
 import re
@@ -19,14 +20,14 @@ from typing import Optional
 
 # 언어별 설정 모듈 import
 from . import ko
-# from . import ja  # TODO: 일본어 설정 파일 생성 후 활성화
+from . import ja
 # from . import en  # TODO: 영어 설정 파일 생성 후 활성화
 
 
 # 지원 언어 목록
 SUPPORTED_LANGUAGES = {
     'ko': ko,
-    # 'ja': ja,  # TODO
+    'ja': ja,
     # 'en': en,  # TODO
 }
 
@@ -75,28 +76,54 @@ def get_config(lang_code: str):
     return SUPPORTED_LANGUAGES.get(lang_code, ko)
 
 
-def get_fonts(lang_code: str) -> list:
-    """언어별 폰트 목록 반환"""
+def get_fonts(lang_code: str) -> dict:
+    """언어별 폰트 설정 반환"""
     config = get_config(lang_code)
     return getattr(config, 'FONTS', ko.FONTS)
+
+
+def get_subtitle_settings(lang_code: str) -> dict:
+    """언어별 자막 설정 반환"""
+    config = get_config(lang_code)
+    return getattr(config, 'SUBTITLE', ko.SUBTITLE)
 
 
 def get_subtitle_max_chars(lang_code: str) -> int:
     """언어별 자막 최대 글자 수 반환"""
     config = get_config(lang_code)
-    return getattr(config, 'SUBTITLE_MAX_CHARS', ko.SUBTITLE_MAX_CHARS)
+    subtitle = getattr(config, 'SUBTITLE', ko.SUBTITLE)
+    return subtitle.get('max_chars_total', 40)
+
+
+def get_tts_settings(lang_code: str) -> dict:
+    """언어별 TTS 설정 반환"""
+    config = get_config(lang_code)
+    return getattr(config, 'TTS', ko.TTS)
 
 
 def get_tts_voice(lang_code: str, gender: str = 'male') -> str:
     """언어별 TTS 음성 반환"""
     config = get_config(lang_code)
-    voices = getattr(config, 'TTS_VOICES', ko.TTS_VOICES)
-    return voices.get(gender, voices.get('male'))
+    tts = getattr(config, 'TTS', ko.TTS)
+    voices = tts.get('voices', {})
+    return voices.get(gender, tts.get('default_voice', ko.TTS['default_voice']))
 
 
 def get_ass_style(lang_code: str) -> str:
     """언어별 ASS 자막 스타일 문자열 반환"""
     config = get_config(lang_code)
-    if hasattr(config, 'get_ass_style_string'):
-        return config.get_ass_style_string()
-    return ko.get_ass_style_string()
+    if hasattr(config, 'get_subtitle_ass_style'):
+        return config.get_subtitle_ass_style()
+    return ko.get_subtitle_ass_style()
+
+
+def get_thumbnail_settings(lang_code: str) -> dict:
+    """언어별 썸네일 텍스트 설정 반환"""
+    config = get_config(lang_code)
+    return getattr(config, 'THUMBNAIL_TEXT', ko.THUMBNAIL_TEXT)
+
+
+def get_youtube_title_settings(lang_code: str) -> dict:
+    """언어별 유튜브 제목 설정 반환"""
+    config = get_config(lang_code)
+    return getattr(config, 'YOUTUBE_TITLE', ko.YOUTUBE_TITLE)

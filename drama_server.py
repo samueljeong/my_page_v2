@@ -20,6 +20,7 @@ from tubelens_server import tubelens_bp
 
 # 언어별 설정 (폰트, 자막, TTS 등)
 from lang import ko as lang_ko
+from lang import ja as lang_ja
 
 app = Flask(__name__)
 
@@ -12844,19 +12845,19 @@ def api_image_generate_assets_zip():
             return 'en'
 
         def get_voice_for_language(lang, base_voice):
-            """언어에 맞는 TTS 음성 반환 (한국어: lang/ko.py에서 관리)"""
+            """언어에 맞는 TTS 음성 반환 (lang/*.py에서 관리)"""
             is_female = 'Neural2-A' in base_voice or 'Neural2-B' in base_voice or 'Wavenet-A' in base_voice
             voice_map = {
                 'ko': {'female': lang_ko.TTS['voices']['female'], 'male': lang_ko.TTS['voices']['male']},
+                'ja': {'female': lang_ja.TTS['voices']['female'], 'male': lang_ja.TTS['voices']['male']},
                 'en': {'female': 'en-US-Neural2-F', 'male': 'en-US-Neural2-D'},
-                'ja': {'female': 'ja-JP-Neural2-B', 'male': 'ja-JP-Neural2-C'}
             }
             gender = 'female' if is_female else 'male'
             return voice_map.get(lang, voice_map['en'])[gender]
 
         def get_language_code(lang):
-            """언어 코드 반환 (한국어: lang/ko.py에서 관리)"""
-            return {'ko': lang_ko.TTS['language_code'], 'en': 'en-US', 'ja': 'ja-JP'}.get(lang, 'en-US')
+            """언어 코드 반환 (lang/*.py에서 관리)"""
+            return {'ko': lang_ko.TTS['language_code'], 'ja': lang_ja.TTS['language_code'], 'en': 'en-US'}.get(lang, 'en-US')
 
         def split_sentences_with_gpt(text, lang='ko'):
             """GPT-5.1을 사용해 자연스러운 자막 단위로 분리"""
@@ -13347,10 +13348,11 @@ def api_image_generate_assets_zip():
                         char_ratio = len(sentence) / total_chars
                         sent_duration = total_duration * char_ratio
 
-                        # ★ 자막 길이 설정: lang/ko.py에서 관리
-                        # 한국어: lang_ko.SUBTITLE['max_chars_total'] (기본 40자)
-                        # 일본어: 100자 (TODO: lang/ja.py로 분리 예정)
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else lang_ko.SUBTITLE['max_chars_total']
+                        # ★ 자막 길이 설정: lang/*.py에서 관리
+                        if detected_lang == 'ja':
+                            max_subtitle_chars = lang_ja.SUBTITLE['max_chars_total']
+                        else:
+                            max_subtitle_chars = lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:
@@ -13401,10 +13403,11 @@ def api_image_generate_assets_zip():
                         duration = get_mp3_duration(audio_bytes)
                         scene_audios.append(audio_bytes)
 
-                        # ★ 자막 길이 설정: lang/ko.py에서 관리
-                        # 한국어: lang_ko.SUBTITLE['max_chars_total'] (기본 40자)
-                        # 일본어: 100자 (TODO: lang/ja.py로 분리 예정)
-                        max_subtitle_chars = 100 if detected_lang == 'ja' else lang_ko.SUBTITLE['max_chars_total']
+                        # ★ 자막 길이 설정: lang/*.py에서 관리
+                        if detected_lang == 'ja':
+                            max_subtitle_chars = lang_ja.SUBTITLE['max_chars_total']
+                        else:
+                            max_subtitle_chars = lang_ko.SUBTITLE['max_chars_total']
                         if len(sentence) <= max_subtitle_chars:
                             subtitle_parts = [sentence]
                         else:
@@ -13834,9 +13837,11 @@ def _get_subtitle_style(lang):
             "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
         )
     elif lang == 'ja':
-        # 일본어 - Corporate Logo Rounded 사용 (일본어 글리프 완전 지원)
+        # 일본어: lang/ja.py에서 관리하는 폰트 사용
+        font_name = lang_ja.FONTS['default_name']
+        font_size = lang_ja.SUBTITLE['style']['font_size']
         return (
-            "FontName=Corporate Logo Rounded ver3,FontSize=22,PrimaryColour=&H00FFFF,"
+            f"FontName={font_name},FontSize={font_size},PrimaryColour=&H00FFFF,"
             "OutlineColour=&H00000000,BackColour=&H80000000,"
             "BorderStyle=1,Outline=4,Shadow=2,MarginV=40,Bold=1"
         )
@@ -13917,9 +13922,10 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
             font_size = 48  # 24 → 48 (2배 크기)
             max_chars_per_line = 20  # 한국어: 한 줄 최대 20자
         elif lang == 'ja':
-            font_name = "Corporate Logo Rounded ver3"  # 일본어 전용 폰트
-            font_size = 40  # 일본어는 글자가 복잡해서 조금 작게
-            max_chars_per_line = 15  # 일본어: 한 줄 최대 15자 (18 → 15, 화면 잘림 방지)
+            # 일본어: lang/ja.py에서 관리
+            font_name = lang_ja.FONTS['default_name']
+            font_size = lang_ja.SUBTITLE['style']['font_size_burn']
+            max_chars_per_line = lang_ja.SUBTITLE['max_chars_per_line']
         else:
             font_name = lang_ko.FONTS['default_name']  # 한국어 폰트로 fallback
             font_size = 44  # 22 → 44 (2배 크기)
