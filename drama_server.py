@@ -13883,7 +13883,7 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
         elif lang == 'ja':
             font_name = "Noto Sans CJK JP"  # 일본어 전용 폰트
             font_size = 40  # 일본어는 글자가 복잡해서 조금 작게
-            max_chars_per_line = 18  # 일본어: 한 줄 최대 18자
+            max_chars_per_line = 15  # 일본어: 한 줄 최대 15자 (18 → 15, 화면 잘림 방지)
         else:
             font_name = "NanumSquareRound"  # 나눔스퀘어 라운드
             font_size = 44  # 22 → 44 (2배 크기)
@@ -13891,22 +13891,26 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
 
         # 긴 텍스트 자동 줄바꿈 함수
         def wrap_text(text, max_chars):
-            """긴 텍스트를 max_chars 기준으로 줄바꿈 (일본어 특화)"""
+            """긴 텍스트를 max_chars 기준으로 줄바꿈"""
             if len(text) <= max_chars:
                 return text
 
-            # 이미 줄바꿈이 있으면 그대로
-            if '\n' in text or '\\N' in text:
-                return text
+            # 이미 줄바꿈이 있으면 각 줄에 대해 재귀 처리
+            if '\n' in text:
+                return '\n'.join(wrap_text(line, max_chars) for line in text.split('\n'))
+            if '\\N' in text:
+                return '\\N'.join(wrap_text(line, max_chars) for line in text.split('\\N'))
 
-            # 일본어는 띄어쓰기가 없으므로 구두점 기준으로만 분리
-            # 자연스러운 줄바꿈 위치 찾기
+            # 언어에 따른 분리 기준
+            # 일본어/한국어: 구두점, 한국어: 띄어쓰기도 포함
+            punctuation = '、。，．!?！？ 　'  # 일본어 구두점 + 공백
+
+            # 자연스러운 줄바꿈 위치 찾기 (구두점/공백에서 분리)
             words = []
             current = ""
             for char in text:
                 current += char
-                # 구두점에서 단어 분리 (일본어 구두점 포함)
-                if char in '、。，．!?！？':
+                if char in punctuation:
                     words.append(current)
                     current = ""
             if current:
@@ -13937,8 +13941,9 @@ def _generate_ass_subtitles(subtitles, highlights, output_path, lang='ko'):
             if current_line:
                 lines.append(current_line.strip())
 
+            # 빈 줄 제거
+            lines = [l for l in lines if l]
             result = '\n'.join(lines)
-            print(f"[ASS-WRAP] 일본어 줄바꿈: '{text[:30]}...' → {len(lines)}줄")
             return result
 
         # ASS 헤더 (반투명 박스 + 자동 줄바꿈)
@@ -13971,9 +13976,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             end = _format_ass_time(sub['end'])
             text = sub.get('text', '')
 
-            # 긴 텍스트 자동 줄바꿈 적용 (일본어만! 한국어는 기존 스타일 유지)
-            if lang == 'ja':
-                text = wrap_text(text, max_chars_per_line)
+            # 긴 텍스트 자동 줄바꿈 적용
+            original_text = text
+            text = wrap_text(text, max_chars_per_line)
+            if text != original_text:
+                print(f"[ASS] 자막 줄바꿈 적용 (lang={lang}): '{original_text[:30]}...' → {text.count(chr(10)) + 1}줄")
 
             # 색상 강조 적용
             if highlights:
@@ -13996,7 +14003,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return False
 
 
-def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=None):
+def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=None, lang='ko'):
     """화면 텍스트 오버레이용 FFmpeg drawtext 필터 생성 (나레이션 싱크)
 
     Args:
@@ -14004,6 +14011,7 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         scenes: 씬 목록 (duration 계산용)
         fonts_dir: 폰트 디렉토리 경로
         subtitles: 자막 데이터 [{"start": 0.0, "end": 2.5, "text": "..."}, ...] (나레이션 싱크용)
+        lang: 언어 코드 (ko, ja, en)
 
     Returns:
         FFmpeg drawtext 필터 문자열 또는 None
@@ -14019,8 +14027,11 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         current_time += scene.get('duration', 0)
 
     filters = []
-    # NanumGothicBold 사용 (Pretendard는 한글 글리프 없음)
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    # 언어별 폰트 선택
+    if lang == 'ja':
+        font_path = os.path.join(fonts_dir, "NotoSansCJKjp-Bold.otf")
+    else:
+        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for overlay in screen_overlays:
@@ -14121,13 +14132,14 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
     return None
 
 
-def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
+def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
     """로워서드(하단 자막) 오버레이용 FFmpeg drawtext 필터 생성
 
     Args:
         lower_thirds: [{"scene": 2, "text": "출처: OO일보", "position": "bottom-left"}, ...]
         scenes: 씬 목록 (duration 계산용)
         fonts_dir: 폰트 디렉토리 경로
+        lang: 언어 코드 (ko, ja, en)
 
     Returns:
         FFmpeg drawtext 필터 문자열 또는 None
@@ -14145,8 +14157,11 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
         current_time += scene.get('duration', 0)
 
     filters = []
-    # NanumGothicBold 사용 (Pretendard는 한글 글리프 없음)
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    # 언어별 폰트 선택
+    if lang == 'ja':
+        font_path = os.path.join(fonts_dir, "NotoSansCJKjp-Bold.otf")
+    else:
+        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     for lt in lower_thirds:
@@ -14221,13 +14236,14 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir):
     return None
 
 
-def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
+def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir, lang='ko'):
     """뉴스 티커(스크롤 헤드라인) 필터 생성
 
     Args:
         news_ticker: {"enabled": true, "headlines": ["속보: ...", "이슈: ..."]}
         total_duration: 전체 영상 길이 (초)
         fonts_dir: 폰트 디렉토리 경로
+        lang: 언어 코드 (ko, ja, en)
 
     Returns:
         FFmpeg drawtext 필터 문자열 또는 None
@@ -14243,8 +14259,11 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir):
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    # NanumGothicBold 사용 (Pretendard는 한글 글리프 없음)
-    font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
+    # 언어별 폰트 선택
+    if lang == 'ja':
+        font_path = os.path.join(fonts_dir, "NotoSansCJKjp-Bold.otf")
+    else:
+        font_path = os.path.join(fonts_dir, "NanumGothicBold.ttf")
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
 
     # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
@@ -16562,26 +16581,26 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
             screen_overlays = video_effects.get('screen_overlays', [])
             if screen_overlays:
                 # all_subtitles를 전달하여 나레이션 타이밍과 동기화
-                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=all_subtitles)
+                overlay_filter = _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitles=all_subtitles, lang=detected_lang)
                 if overlay_filter:
                     vf_filter = f"{vf_filter},{overlay_filter}"
-                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가 (나레이션 싱크)")
+                    print(f"[VIDEO-WORKER] 화면 오버레이 {len(screen_overlays)}개 추가 (나레이션 싱크, lang={detected_lang})")
 
             # 로워서드 오버레이 추가 (lower_thirds)
             lower_thirds = video_effects.get('lower_thirds', [])
             if lower_thirds:
-                lt_filter = _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir)
+                lt_filter = _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang=detected_lang)
                 if lt_filter:
                     vf_filter = f"{vf_filter},{lt_filter}"
-                    print(f"[VIDEO-WORKER] 로워서드 {len(lower_thirds)}개 추가")
+                    print(f"[VIDEO-WORKER] 로워서드 {len(lower_thirds)}개 추가 (lang={detected_lang})")
 
             # 뉴스 티커 추가 (news_ticker)
             news_ticker = video_effects.get('news_ticker', {})
             if news_ticker and news_ticker.get('enabled'):
-                ticker_filter = _generate_news_ticker_filter(news_ticker, current_time, fonts_dir)
+                ticker_filter = _generate_news_ticker_filter(news_ticker, current_time, fonts_dir, lang=detected_lang)
                 if ticker_filter:
                     vf_filter = f"{vf_filter},{ticker_filter}"
-                    print(f"[VIDEO-WORKER] 뉴스 티커 추가 (헤드라인 {len(news_ticker.get('headlines', []))}개)")
+                    print(f"[VIDEO-WORKER] 뉴스 티커 추가 (헤드라인 {len(news_ticker.get('headlines', []))}개, lang={detected_lang})")
 
             print(f"[VIDEO-WORKER] ASS path: {ass_abs_path}")
             print(f"[VIDEO-WORKER] VF filter 길이: {len(vf_filter)} chars")
