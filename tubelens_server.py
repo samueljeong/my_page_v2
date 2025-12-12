@@ -3931,6 +3931,7 @@ def api_my_channel_analysis():
 def download_shorts_video(video_id: str, output_dir: str) -> Optional[str]:
     """yt-dlp Python 라이브러리로 YouTube Shorts 다운로드"""
     output_template = os.path.join(output_dir, f"{video_id}.%(ext)s")
+    cookies_file = None
 
     try:
         import yt_dlp
@@ -3942,6 +3943,16 @@ def download_shorts_video(video_id: str, output_dir: str) -> Optional[str]:
             'quiet': True,
             'no_warnings': True,
         }
+
+        # YouTube 쿠키 설정 (환경변수에서 읽기)
+        youtube_cookies = os.getenv("YOUTUBE_COOKIES", "")
+        if youtube_cookies:
+            # 쿠키 내용을 임시 파일로 저장
+            cookies_file = os.path.join(output_dir, "cookies.txt")
+            with open(cookies_file, "w") as f:
+                f.write(youtube_cookies)
+            ydl_opts['cookiefile'] = cookies_file
+            print(f"[SHORTS] YouTube 쿠키 사용")
 
         url = f"https://www.youtube.com/shorts/{video_id}"
         print(f"[SHORTS] 다운로드 시작: {url}")
