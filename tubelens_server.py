@@ -4358,3 +4358,163 @@ def shorts_to_prompts():
 def shorts_prompt_generator_page():
     """Shorts 프롬프트 생성기 페이지"""
     return render_template('tubelens/shorts_prompt_generator.html')
+
+
+@tubelens_bp.route('/api/tubelens/image-to-prompt', methods=['POST'])
+def image_to_prompt():
+    """이미지를 분석하여 세밀한 이미지 생성 프롬프트 생성
+
+    Request:
+        multipart/form-data with 'image' file
+        또는 JSON with 'image_base64' (base64 encoded image)
+
+    Response:
+        {
+            "success": true,
+            "prompt": "...",
+            "analysis": {
+                "subject": "...",
+                "background": "...",
+                "lighting": "...",
+                "camera": "...",
+                "color": "...",
+                "mood": "...",
+                "style": "..."
+            }
+        }
+    """
+    try:
+        import PIL.Image
+        import io
+
+        # Gemini API 키 확인
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            return jsonify({"success": False, "message": "Gemini API 키가 설정되지 않았습니다"}), 500
+
+        genai.configure(api_key=api_key)
+
+        # 이미지 로드 (파일 업로드 또는 base64)
+        image = None
+
+        if request.files and 'image' in request.files:
+            file = request.files['image']
+            if file.filename:
+                image = PIL.Image.open(file.stream)
+        elif request.is_json:
+            data = request.get_json()
+            if data.get('image_base64'):
+                image_data = base64.b64decode(data['image_base64'])
+                image = PIL.Image.open(io.BytesIO(image_data))
+
+        if not image:
+            return jsonify({"success": False, "message": "이미지를 업로드해주세요"}), 400
+
+        print(f"[IMAGE-PROMPT] 이미지 분석 시작: {image.size}")
+
+        # Gemini Vision 모델로 세밀한 분석
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+
+        analysis_prompt = """이 이미지를 전문 사진작가/영상 감독의 관점에서 매우 세밀하게 분석해주세요.
+
+다음 항목들을 각각 상세하게 분석해주세요:
+
+1. **피사체 (Subject)**
+   - 주요 피사체 (사람, 물체, 동물 등)
+   - 자세, 표정, 동작
+   - 의상, 액세서리, 소품
+
+2. **배경 (Background)**
+   - 장소/환경 (실내/실외, 구체적 장소)
+   - 배경 요소들
+   - 심도(DOF) - 배경 흐림 정도
+
+3. **조명 (Lighting)**
+   - 광원 유형 (자연광, 인공조명, 스튜디오 등)
+   - 조명 방향 (정면광, 측광, 역광, 림라이트 등)
+   - 조명 강도 (하드라이트, 소프트라이트)
+   - 그림자 특성
+
+4. **카메라/구도 (Camera)**
+   - 카메라 앵글 (아이레벨, 하이앵글, 로우앵글, 버드아이 등)
+   - 샷 타입 (클로즈업, 미디엄샷, 풀샷, 와이드샷 등)
+   - 구도 (삼등분법, 중앙배치, 대칭, 리딩라인 등)
+   - 초점거리 느낌 (광각, 표준, 망원)
+
+5. **색감 (Color)**
+   - 전체적인 색조 (웜톤, 쿨톤, 뉴트럴)
+   - 주요 색상들
+   - 채도, 대비
+   - 색상 그레이딩 스타일
+
+6. **분위기/감정 (Mood)**
+   - 전체적인 분위기
+   - 전달하는 감정
+   - 스토리/내러티브
+
+7. **스타일 (Style)**
+   - 사진/영상 스타일 (시네마틱, 다큐멘터리, 패션, 포트레이트 등)
+   - 시대/트렌드
+   - 참고할 만한 작가/감독 스타일
+
+응답은 반드시 아래 JSON 형식으로만 출력해주세요 (다른 텍스트 없이):
+{
+  "subject": "피사체 설명",
+  "background": "배경 설명",
+  "lighting": "조명 설명",
+  "camera": "카메라/구도 설명",
+  "color": "색감 설명",
+  "mood": "분위기/감정 설명",
+  "style": "스타일 설명",
+  "prompt_ko": "한국어 이미지 생성 프롬프트 (위 분석을 바탕으로)",
+  "prompt_en": "English image generation prompt (based on above analysis)"
+}"""
+
+        response = model.generate_content([analysis_prompt, image])
+
+        if not response or not response.text:
+            return jsonify({"success": False, "message": "이미지 분석에 실패했습니다"}), 500
+
+        # JSON 파싱
+        response_text = response.text.strip()
+
+        # JSON 블록 추출 (```json ... ``` 형태일 경우)
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            analysis = json.loads(response_text)
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시 텍스트 그대로 반환
+            print(f"[IMAGE-PROMPT] JSON 파싱 실패, 원본 텍스트 반환")
+            return jsonify({
+                "success": True,
+                "prompt": response_text,
+                "analysis": None,
+                "raw_response": response_text
+            })
+
+        print(f"[IMAGE-PROMPT] 분석 완료")
+
+        return jsonify({
+            "success": True,
+            "prompt": analysis.get("prompt_en", ""),
+            "prompt_ko": analysis.get("prompt_ko", ""),
+            "analysis": {
+                "subject": analysis.get("subject", ""),
+                "background": analysis.get("background", ""),
+                "lighting": analysis.get("lighting", ""),
+                "camera": analysis.get("camera", ""),
+                "color": analysis.get("color", ""),
+                "mood": analysis.get("mood", ""),
+                "style": analysis.get("style", "")
+            }
+        })
+
+    except Exception as e:
+        print(f"[IMAGE-PROMPT] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500

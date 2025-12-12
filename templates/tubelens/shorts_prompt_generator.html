@@ -350,6 +350,32 @@
 
     .error-panel.active { display: block; }
 
+    /* Analysis Card */
+    .analysis-card {
+      background: #f8f9fa;
+      border: 1px solid #e1e5eb;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .analysis-card h4 {
+      font-size: 0.95rem;
+      margin: 0;
+    }
+
+    .analysis-card p {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+    }
+
+    /* Drop Zone */
+    #drop-zone.dragover {
+      border-color: #e53e3e;
+      background: rgba(229, 62, 62, 0.05);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .input-row { flex-direction: column; }
@@ -415,6 +441,89 @@
             <label for="refine">GPT로 프롬프트 정제 (선택)</label>
           </div>
           <button id="btn-analyze" class="btn-analyze">분석 시작</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Image Upload Panel -->
+    <section class="input-panel" style="margin-top: 20px;">
+      <h2>이미지 → 프롬프트 분석</h2>
+      <p style="color: #666; font-size: 0.9rem; margin-bottom: 16px;">
+        이미지를 업로드하면 조명, 카메라 앵글, 색감 등을 세밀하게 분석하여 프롬프트를 생성합니다.
+      </p>
+      <div class="input-row">
+        <div class="input-wrap" style="min-width: 100%;">
+          <label for="image-upload">이미지 파일</label>
+          <div id="drop-zone" style="border: 2px dashed #e1e5eb; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s;">
+            <input type="file" id="image-upload" accept="image/*" style="display: none;">
+            <div id="drop-text">
+              <span style="font-size: 2rem;">📷</span>
+              <p style="margin: 10px 0 0; color: #666;">클릭하거나 이미지를 드래그하세요</p>
+            </div>
+            <img id="preview-image" style="max-width: 100%; max-height: 300px; display: none; border-radius: 8px;">
+          </div>
+        </div>
+      </div>
+      <div class="input-row" style="margin-top: 16px;">
+        <button id="btn-analyze-image" class="btn-analyze" disabled>이미지 분석</button>
+      </div>
+    </section>
+
+    <!-- Image Analysis Result -->
+    <section id="image-result-panel" class="results-panel" style="margin-top: 20px;">
+      <div class="results-header">
+        <h2>이미지 분석 결과</h2>
+        <button id="btn-copy-image-prompt" class="btn-copy-all">프롬프트 복사</button>
+      </div>
+
+      <!-- Analysis Grid -->
+      <div id="analysis-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div class="analysis-card" data-field="subject">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">📸 피사체</h4>
+          <p id="analysis-subject">-</p>
+        </div>
+        <div class="analysis-card" data-field="background">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">🏞️ 배경</h4>
+          <p id="analysis-background">-</p>
+        </div>
+        <div class="analysis-card" data-field="lighting">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">💡 조명</h4>
+          <p id="analysis-lighting">-</p>
+        </div>
+        <div class="analysis-card" data-field="camera">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">🎥 카메라/구도</h4>
+          <p id="analysis-camera">-</p>
+        </div>
+        <div class="analysis-card" data-field="color">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">🎨 색감</h4>
+          <p id="analysis-color">-</p>
+        </div>
+        <div class="analysis-card" data-field="mood">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">✨ 분위기</h4>
+          <p id="analysis-mood">-</p>
+        </div>
+        <div class="analysis-card" data-field="style" style="grid-column: 1 / -1;">
+          <h4 style="color: #e53e3e; margin-bottom: 8px;">🎬 스타일</h4>
+          <p id="analysis-style">-</p>
+        </div>
+      </div>
+
+      <!-- Generated Prompts -->
+      <div style="margin-top: 20px;">
+        <h3 style="margin-bottom: 12px;">생성된 프롬프트</h3>
+        <div class="prompt-card" style="margin-bottom: 12px;">
+          <div class="prompt-header">
+            <span class="time-badge" style="background: #4a5568;">English</span>
+            <button class="btn-copy" id="btn-copy-en">복사</button>
+          </div>
+          <div class="prompt-text" id="prompt-en">-</div>
+        </div>
+        <div class="prompt-card">
+          <div class="prompt-header">
+            <span class="time-badge" style="background: #2d3748;">한국어</span>
+            <button class="btn-copy" id="btn-copy-ko">복사</button>
+          </div>
+          <div class="prompt-text" id="prompt-ko">-</div>
         </div>
       </div>
     </section>
@@ -630,6 +739,134 @@
         btnAnalyze.click();
       }
     });
+
+    // ========== 이미지 → 프롬프트 분석 ==========
+    const dropZone = document.getElementById('drop-zone');
+    const imageUpload = document.getElementById('image-upload');
+    const previewImage = document.getElementById('preview-image');
+    const dropText = document.getElementById('drop-text');
+    const btnAnalyzeImage = document.getElementById('btn-analyze-image');
+    const imageResultPanel = document.getElementById('image-result-panel');
+
+    let selectedFile = null;
+
+    // 드래그 앤 드롭
+    dropZone.addEventListener('click', () => imageUpload.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].type.startsWith('image/')) {
+        handleImageSelect(files[0]);
+      }
+    });
+
+    imageUpload.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleImageSelect(e.target.files[0]);
+      }
+    });
+
+    function handleImageSelect(file) {
+      selectedFile = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        previewImage.style.display = 'block';
+        dropText.style.display = 'none';
+        btnAnalyzeImage.disabled = false;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // 이미지 분석
+    btnAnalyzeImage.addEventListener('click', async () => {
+      if (!selectedFile) {
+        showError('이미지를 선택해주세요');
+        return;
+      }
+
+      hideError();
+      btnAnalyzeImage.disabled = true;
+      btnAnalyzeImage.textContent = '분석 중...';
+      imageResultPanel.classList.remove('active');
+
+      try {
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+
+        const response = await fetch('/api/tubelens/image-to-prompt', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          displayImageAnalysis(data);
+        } else {
+          showError(data.message || '이미지 분석에 실패했습니다');
+        }
+      } catch (error) {
+        showError('서버 오류: ' + error.message);
+      } finally {
+        btnAnalyzeImage.disabled = false;
+        btnAnalyzeImage.textContent = '이미지 분석';
+      }
+    });
+
+    function displayImageAnalysis(data) {
+      // 분석 결과 표시
+      if (data.analysis) {
+        document.getElementById('analysis-subject').textContent = data.analysis.subject || '-';
+        document.getElementById('analysis-background').textContent = data.analysis.background || '-';
+        document.getElementById('analysis-lighting').textContent = data.analysis.lighting || '-';
+        document.getElementById('analysis-camera').textContent = data.analysis.camera || '-';
+        document.getElementById('analysis-color').textContent = data.analysis.color || '-';
+        document.getElementById('analysis-mood').textContent = data.analysis.mood || '-';
+        document.getElementById('analysis-style').textContent = data.analysis.style || '-';
+      }
+
+      // 프롬프트 표시
+      document.getElementById('prompt-en').textContent = data.prompt || '-';
+      document.getElementById('prompt-ko').textContent = data.prompt_ko || '-';
+
+      imageResultPanel.classList.add('active');
+
+      // 복사 버튼 이벤트
+      document.getElementById('btn-copy-en').onclick = () => {
+        copyToClipboard(data.prompt, document.getElementById('btn-copy-en'));
+      };
+      document.getElementById('btn-copy-ko').onclick = () => {
+        copyToClipboard(data.prompt_ko, document.getElementById('btn-copy-ko'));
+      };
+      document.getElementById('btn-copy-image-prompt').onclick = () => {
+        const fullText = `[English]\n${data.prompt}\n\n[한국어]\n${data.prompt_ko}`;
+        copyToClipboard(fullText, document.getElementById('btn-copy-image-prompt'));
+      };
+    }
+
+    function copyToClipboard(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = '복사됨!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
   </script>
 </body>
 </html>
