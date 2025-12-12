@@ -3803,6 +3803,84 @@ def api_my_channel_analysis():
                 "avgValue": int(avg_competitor_subs)
             })
 
+        # 7. 성장 예측 (경쟁 채널 데이터 기반)
+        growth_prediction = {
+            "disclaimer": "경쟁 채널 데이터를 기반으로 한 예측이며, 실제 결과는 다를 수 있습니다.",
+            "scenarios": []
+        }
+
+        # 업로드 주기별 성과 분석
+        frequency_performance = {}
+        for comp in competitors:
+            freq = comp.get("uploadFrequency", "알 수 없음")
+            if freq != "알 수 없음" and comp["avgRecentViews"] > 0:
+                if freq not in frequency_performance:
+                    frequency_performance[freq] = []
+                frequency_performance[freq].append({
+                    "views": comp["avgRecentViews"],
+                    "subs": comp["subscriberCount"]
+                })
+
+        # 각 시나리오에 대한 예측
+        scenarios = [
+            {"frequency": "매일", "videos_per_month": 30},
+            {"frequency": "주 3회", "videos_per_month": 12},
+            {"frequency": "주 1회", "videos_per_month": 4},
+        ]
+
+        for scenario in scenarios:
+            # 비슷한 업로드 주기 채널들의 평균 조회수 찾기
+            matching_perfs = []
+            for freq, perfs in frequency_performance.items():
+                if "매일" in freq and "매일" in scenario["frequency"]:
+                    matching_perfs.extend(perfs)
+                elif "주" in freq and "주" in scenario["frequency"]:
+                    matching_perfs.extend(perfs)
+
+            # 없으면 전체 평균 사용
+            if not matching_perfs:
+                expected_views = int(avg_competitor_views * 0.7)  # 경쟁자 평균의 70%로 보수적 예측
+            else:
+                expected_views = int(sum(p["views"] for p in matching_perfs) / len(matching_perfs) * 0.7)
+
+            # 월간 예상 조회수
+            monthly_views = expected_views * scenario["videos_per_month"]
+
+            # 구독 전환율 (업계 평균 1-2%)
+            conversion_rate = 0.015
+            monthly_new_subs = int(monthly_views * conversion_rate)
+
+            # 목표 도달 예측 (10만 구독자)
+            current_subs = my_stats["subscriberCount"]
+            target_subs = 100000
+            if monthly_new_subs > 0:
+                months_to_100k = max(0, (target_subs - current_subs) / monthly_new_subs)
+            else:
+                months_to_100k = -1  # 계산 불가
+
+            growth_prediction["scenarios"].append({
+                "frequency": scenario["frequency"],
+                "videosPerMonth": scenario["videos_per_month"],
+                "expectedViewsPerVideo": expected_views,
+                "monthlyViews": monthly_views,
+                "monthlyNewSubs": monthly_new_subs,
+                "monthsTo100k": round(months_to_100k, 1) if months_to_100k >= 0 else "계산 불가",
+                "yearlyViews": monthly_views * 12,
+                "yearlyNewSubs": monthly_new_subs * 12
+            })
+
+        # 현재 채널과 상위 채널 비교
+        if competitors:
+            top_channel = competitors[0]
+            growth_prediction["comparison"] = {
+                "topChannelName": top_channel["title"],
+                "topChannelSubs": top_channel["subscriberCount"],
+                "topChannelViews": top_channel["avgRecentViews"],
+                "topChannelFrequency": top_channel.get("uploadFrequency", "알 수 없음"),
+                "viewsGap": top_channel["avgRecentViews"] - int(my_avg_views),
+                "subsGap": top_channel["subscriberCount"] - my_stats["subscriberCount"]
+            }
+
         return jsonify({
             "success": True,
             "data": {
@@ -3826,7 +3904,8 @@ def api_my_channel_analysis():
                     "avgCompetitorSubs": int(avg_competitor_subs),
                     "avgCompetitorViews": int(avg_competitor_views)
                 },
-                "growthTips": growth_tips
+                "growthTips": growth_tips,
+                "growthPrediction": growth_prediction
             },
             "message": f"'{my_stats['title']}' 채널 분석 완료"
         })

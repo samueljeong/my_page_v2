@@ -3792,6 +3792,34 @@
         html += '</div>';
       }
 
+      // 성장 예측
+      if (data.growthPrediction && data.growthPrediction.scenarios) {
+        html += '<div style="margin-top:24px;padding:20px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:16px;border:1px solid #bae6fd;">';
+        html += '  <h4 style="font-size:1rem;font-weight:600;margin-bottom:16px;color:#0369a1;">🔮 성장 예측 시뮬레이션</h4>';
+        html += '  <p style="font-size:0.8rem;color:#64748b;margin-bottom:16px;">' + data.growthPrediction.disclaimer + '</p>';
+
+        html += '  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">';
+        data.growthPrediction.scenarios.forEach(function(s) {
+          html += '    <div style="background:#fff;padding:16px;border-radius:12px;text-align:center;">';
+          html += '      <div style="font-size:0.9rem;font-weight:600;color:#0369a1;margin-bottom:8px;">📤 ' + s.frequency + '</div>';
+          html += '      <div style="font-size:0.75rem;color:#64748b;margin-bottom:12px;">월 ' + s.videosPerMonth + '개 업로드</div>';
+          html += '      <div style="font-size:0.8rem;margin-bottom:4px;">예상 조회수/영상: <b>' + self.formatNumber(s.expectedViewsPerVideo) + '</b></div>';
+          html += '      <div style="font-size:0.8rem;margin-bottom:4px;">월간 총 조회수: <b>' + self.formatNumber(s.monthlyViews) + '</b></div>';
+          html += '      <div style="font-size:0.8rem;margin-bottom:4px;">월간 예상 신규 구독: <b>+' + self.formatNumber(s.monthlyNewSubs) + '</b></div>';
+          if (s.monthsTo100k !== "계산 불가" && s.monthsTo100k > 0) {
+            var years = Math.floor(s.monthsTo100k / 12);
+            var months = Math.round(s.monthsTo100k % 12);
+            var timeStr = years > 0 ? years + '년 ' + months + '개월' : months + '개월';
+            html += '      <div style="font-size:0.85rem;margin-top:8px;padding:8px;background:#f0fdf4;border-radius:8px;color:#166534;">';
+            html += '        10만 도달: <b>' + timeStr + '</b>';
+            html += '      </div>';
+          }
+          html += '    </div>';
+        });
+        html += '  </div>';
+        html += '</div>';
+      }
+
       // 경쟁 채널 리스트
       html += '<div class="competitor-list">';
       html += '  <h4 style="font-size:1rem;font-weight:600;margin-bottom:12px;">🏆 상위 경쟁 채널</h4>';
