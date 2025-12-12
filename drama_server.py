@@ -13039,9 +13039,11 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
+    # 언어별 폰트 선택
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
+        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+    elif lang == 'en':
+        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
     else:
         font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
@@ -13169,9 +13171,11 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
+    # 언어별 폰트 선택
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
+        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+    elif lang == 'en':
+        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
     else:
         font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
@@ -13271,9 +13275,11 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir, lang='k
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    # 언어별 폰트 선택 (한국어: lang/ko.py에서 관리)
+    # 언어별 폰트 선택
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, "Corporate-Logo-Rounded-Bold-ver3.otf")
+        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+    elif lang == 'en':
+        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
     else:
         font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
     font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
