@@ -18986,6 +18986,34 @@ def get_channel_subscriber_count(youtube, channel_id):
         return None
 
 
+def get_video_stats_from_data_api(youtube, video_id):
+    """
+    YouTube Data API v3로 영상의 조회수/좋아요 등 조회 (공개 정보)
+
+    Analytics API가 권한 문제로 실패할 때 fallback으로 사용
+
+    반환: {'views': 123, 'likes': 10, 'comments': 5} 또는 None
+    """
+    try:
+        response = youtube.videos().list(
+            part='statistics',
+            id=video_id
+        ).execute()
+
+        items = response.get('items', [])
+        if items and len(items) > 0:
+            stats = items[0].get('statistics', {})
+            return {
+                'views': int(stats.get('viewCount', 0)),
+                'likes': int(stats.get('likeCount', 0)),
+                'comments': int(stats.get('commentCount', 0))
+            }
+        return None
+    except Exception as e:
+        print(f"[CTR] Data API 영상 통계 조회 오류: {e}")
+        return None
+
+
 def extract_video_id_from_url(url):
     """YouTube URL에서 video ID 추출"""
     import re
@@ -21127,8 +21155,23 @@ def api_sheets_check_ctr_and_update_titles():
 
                 checked_count += 1
 
-                # CTR 및 조회수/구독 데이터 조회
+                # CTR 및 조회수/구독 데이터 조회 (Analytics API)
                 ctr_data = get_video_ctr_from_analytics(youtube_analytics, channel_id, video_id)
+
+                # Analytics API 실패 시 Data API로 조회수만 가져오기 (fallback)
+                if not ctr_data:
+                    data_api_stats = get_video_stats_from_data_api(youtube, video_id)
+                    if data_api_stats:
+                        ctr_data = {
+                            'views': data_api_stats.get('views', 0),
+                            'impressions': 0,
+                            'ctr': 0,
+                            'subscribers_gained': 0,
+                            'subscribers_lost': 0,
+                            'views_today': 0,
+                            'views_yesterday': 0
+                        }
+                        print(f"[CTR] Data API fallback 사용: video={video_id}, views={ctr_data['views']}")
 
                 if ctr_data:
                     ctr = ctr_data.get('ctr', 0)
@@ -21139,26 +21182,27 @@ def api_sheets_check_ctr_and_update_titles():
                     subs_gained = ctr_data.get('subscribers_gained', 0)
                     subs_lost = ctr_data.get('subscribers_lost', 0)
 
-                    # CTR, 노출수 기록
-                    if 'CTR' in col_map:
+                    # 조회수 기록 (Data API로도 가능)
+                    if '조회수' in col_map and views > 0:
+                        sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '조회수', str(views))
+                        print(f"[CTR] [{sheet_name}] 조회수 기록: {views}")
+
+                    # CTR, 노출수 기록 (Analytics API만 가능)
+                    if 'CTR' in col_map and ctr > 0:
                         sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, 'CTR', f'{ctr:.2f}%')
-                    if '노출수' in col_map:
+                    if '노출수' in col_map and impressions > 0:
                         sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '노출수', str(impressions))
 
-                    # 조회수 기록
-                    if '조회수' in col_map:
-                        sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '조회수', str(views))
-
-                    # 전일대비 (오늘 - 어제)
-                    if '전일대비' in col_map:
+                    # 전일대비 (오늘 - 어제) - Analytics API만 가능
+                    if '전일조회수' in col_map and (views_today > 0 or views_yesterday > 0):
                         diff = views_today - views_yesterday
                         diff_str = f"+{diff}" if diff >= 0 else str(diff)
-                        sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '전일대비', diff_str)
+                        sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '전일조회수', diff_str)
 
-                    # 구독증가/감소
-                    if '구독증가' in col_map:
+                    # 구독증가/감소 - Analytics API만 가능
+                    if '구독증가' in col_map and subs_gained > 0:
                         sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '구독증가', f"+{subs_gained}")
-                    if '구독감소' in col_map:
+                    if '구독감소' in col_map and subs_lost > 0:
                         sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '구독감소', f"-{subs_lost}")
 
                 # 제목 변경은 7일 이상 지난 영상만, 제목변경 이력 없는 경우만
