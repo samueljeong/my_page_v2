@@ -18786,7 +18786,7 @@ def get_sheet_channel_id(rows):
 
     first_row = rows[0]
     if len(first_row) >= 2 and first_row[0] == '채널ID':
-        return first_row[1]
+        return first_row[1].strip() if first_row[1] else None
 
     return None
 
