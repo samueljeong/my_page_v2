@@ -163,9 +163,9 @@ SUBTITLE = {
 
     # 자막 스타일 (ASS 형식)
     'style': {
-        'font_name': 'Noto Sans CJK JP',  # 일본어 전용 폰트 (모든 문자 지원)
-        'font_size': 22,                   # ASS 크기
-        'font_size_burn': 40,              # burn-in 크기
+        'font_name': 'Corporate Logo Rounded ver3',  # 일본어 전용 폰트
+        'font_size': 22,                              # ASS 크기
+        'font_size_burn': 40,                         # burn-in 크기
         'primary_color': '&H00FFFF',                  # 노란색 (BGR)
         'outline_color': '&H00000000',                # 검은색 테두리
         'back_color': '&H80000000',                   # 반투명 검은 배경
@@ -287,14 +287,13 @@ OUTRO = {
 # =============================================================================
 FONTS = {
     # 기본 폰트 (일본어 전체에서 사용)
-    # NotoSansCJKjp-Bold는 모든 일본어 문자 지원 (장음, 중점, 한자 등)
-    'default': 'NotoSansCJKjp-Bold.otf',
-    'default_name': 'Noto Sans CJK JP',  # ASS 자막용 폰트 이름
+    'default': 'Corporate-Logo-Rounded-Bold-ver3.otf',
+    'default_name': 'Corporate Logo Rounded ver3',  # ASS 자막용 폰트 이름
 
     # 폰트 우선순위 (첫 번째부터 시도)
     'priority': [
-        'NotoSansCJKjp-Bold.otf',                # Noto Sans CJK JP (기본 - 완전한 문자 지원)
-        'Corporate-Logo-Rounded-Bold-ver3.otf',  # 둥근 고딕 (폴백)
+        'Corporate-Logo-Rounded-Bold-ver3.otf',  # 기본 (둥근 고딕)
+        'NotoSansCJKjp-Bold.otf',                # Noto Sans CJK JP (폴백)
         'NotoSansJP-Bold.ttf',                   # Noto Sans JP
         'IPAexGothic.ttf',                       # IPA 고딕
     ],
@@ -308,33 +307,33 @@ FONTS = {
 
     # 용도별 폰트 설정
     'subtitle': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'size': 22,
     },
     'thumbnail': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'size': 56,
     },
     'overlay': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'size': 36,
     },
     'outro': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'sizes': [44, 34, 28],
     },
     'lower_third': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'size': 28,
     },
     'news_ticker': {
-        'name': 'Noto Sans CJK JP',
-        'file': 'NotoSansCJKjp-Bold.otf',
+        'name': 'Corporate Logo Rounded ver3',
+        'file': 'Corporate-Logo-Rounded-Bold-ver3.otf',
         'size': 24,
     },
 }

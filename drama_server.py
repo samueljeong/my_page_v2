@@ -13039,14 +13039,14 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (font= 파라미터로 fontconfig 폴백 활성화)
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+        font_name = lang_ja.FONTS['default_name']
     elif lang == 'en':
-        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
+        font_name = lang_en.FONTS['default_name']
     else:
-        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
-    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+        font_name = lang_ko.FONTS['default_name']
+    font_escaped = font_name.replace(':', '\\:')
 
     for overlay in screen_overlays:
         scene_num = overlay.get('scene', 1)
@@ -13125,9 +13125,10 @@ def _generate_screen_overlay_filter(screen_overlays, scenes, fonts_dir, subtitle
         print(f"[OVERLAY] 추가: text='{text}', style={style}, time={start_time:.1f}-{end_time:.1f}s (duration={duration}s)")
 
         # drawtext 필터 생성 (화면 중앙, 박스 배경 추가)
+        # font= 파라미터 사용으로 fontconfig 폴백 활성화 (일본어 문자 깨짐 방지)
         drawtext = (
             f"drawtext=text='{text_escaped}':"
-            f"fontfile='{font_escaped}':"
+            f"font='{font_escaped}':"
             f"fontsize={fontsize}:"
             f"fontcolor={fontcolor}:"
             f"bordercolor={bordercolor}:"
@@ -13171,14 +13172,14 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
         current_time += scene.get('duration', 0)
 
     filters = []
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (font= 파라미터로 fontconfig 폴백 활성화)
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+        font_name = lang_ja.FONTS['default_name']
     elif lang == 'en':
-        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
+        font_name = lang_en.FONTS['default_name']
     else:
-        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
-    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+        font_name = lang_ko.FONTS['default_name']
+    font_escaped = font_name.replace(':', '\\:')
 
     for lt in lower_thirds:
         scene_num = lt.get('scene', 1)
@@ -13217,11 +13218,11 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
             f"enable='between(t,{start_time},{end_time})'"
         )
 
-        # 텍스트 필터
+        # 텍스트 필터 (font= 파라미터로 fontconfig 폴백 활성화)
         text_escaped = text.replace("'", "'\\''").replace(":", "\\:")
         text_filter = (
             f"drawtext=text='{text_escaped}':"
-            f"fontfile='{font_escaped}':"
+            f"font='{font_escaped}':"
             f"fontsize=28:"
             f"fontcolor=white:"
             f"x={x_pos}:"
@@ -13234,7 +13235,7 @@ def _generate_lower_thirds_filter(lower_thirds, scenes, fonts_dir, lang='ko'):
         # 또는 box=1:boxcolor=black@0.7:boxborderw=10 사용
         text_with_bg = (
             f"drawtext=text='{text_escaped}':"
-            f"fontfile='{font_escaped}':"
+            f"font='{font_escaped}':"
             f"fontsize=28:"
             f"fontcolor=white:"
             f"box=1:"
@@ -13275,14 +13276,14 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir, lang='k
     ticker_text = "   ●   ".join(headlines) + "   ●   " + headlines[0]  # 반복을 위해 첫 번째 추가
     ticker_text = ticker_text.replace("'", "'\\''").replace(":", "\\:")
 
-    # 언어별 폰트 선택
+    # 언어별 폰트 선택 (font= 파라미터로 fontconfig 폴백 활성화)
     if lang == 'ja':
-        font_path = os.path.join(fonts_dir, lang_ja.FONTS['default'])
+        font_name = lang_ja.FONTS['default_name']
     elif lang == 'en':
-        font_path = os.path.join(fonts_dir, lang_en.FONTS['default'])
+        font_name = lang_en.FONTS['default_name']
     else:
-        font_path = os.path.join(fonts_dir, lang_ko.FONTS['default'])
-    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+        font_name = lang_ko.FONTS['default_name']
+    font_escaped = font_name.replace(':', '\\:')
 
     # 스크롤 속도: 전체 영상 동안 텍스트가 2-3번 정도 지나가도록
     # x = w - (mod(t * speed, tw + w))
@@ -13291,10 +13292,11 @@ def _generate_news_ticker_filter(news_ticker, total_duration, fonts_dir, lang='k
 
     # 뉴스 티커 스타일: 하단에 어두운 빨간 배경(반투명) + 흰 텍스트
     # 참고: drawbox에서 w=w는 순환 참조 에러 발생, iw(입력 너비) 사용
+    # font= 파라미터 사용으로 fontconfig 폴백 활성화 (일본어 문자 깨짐 방지)
     ticker_filter = (
         f"drawbox=x=0:y=ih-40:w=iw:h=40:color=0x8B0000@0.7:t=fill,"
         f"drawtext=text='{ticker_text}':"
-        f"fontfile='{font_escaped}':"
+        f"font='{font_escaped}':"
         f"fontsize=24:"
         f"fontcolor=white:"
         f"x=w-mod(t*{scroll_speed}\\,tw+w):"
