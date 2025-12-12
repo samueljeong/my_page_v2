@@ -10600,12 +10600,12 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 
 ## 🎯 유튜브 제목 생성 규칙 (중요!)
 
-### 🌍 언어 감지 및 적용 (CRITICAL!)
-대본의 언어를 먼저 감지하고, **해당 언어로** 제목/설명/썸네일 텍스트를 작성하세요:
-- 한국어 대본 → 한국어로 모든 메타데이터 작성
-- 일본어 대본 → 일본어로 모든 메타데이터 작성 (제목, 설명, 썸네일 텍스트, 해시태그)
-- 영어 대본 → 영어로 모든 메타데이터 작성
-- **절대 대본 언어와 다른 언어로 메타데이터를 작성하지 마세요!**
+### 🌍 OUTPUT_LANGUAGE 엄격 준수 (CRITICAL!)
+⚠️ **언어를 스스로 감지하지 마세요!** 사용자 입력의 `OUTPUT LANGUAGE`를 반드시 따르세요!
+- OUTPUT LANGUAGE가 Korean이면 → 한국어로 모든 메타데이터 작성
+- OUTPUT LANGUAGE가 Japanese이면 → 일본어로 모든 메타데이터 작성
+- OUTPUT LANGUAGE가 English이면 → 영어로 모든 메타데이터 작성
+- **대본에 다른 언어가 섞여 있어도, OUTPUT LANGUAGE를 무조건 따르세요!**
 
 ### 기본 규칙 (언어별 길이 기준)
 - **한국어**: 18-32자 (공백 포함)
@@ -10666,8 +10666,9 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 ## 🎯 유튜브 설명란 생성 규칙 (중요!)
 
 ### 🌍 언어 규칙 (CRITICAL!)
-- **대본 언어와 동일한 언어로 설명란 작성!**
-- 일본어 대본 → 일본어 설명란, 영어 대본 → 영어 설명란
+- **OUTPUT LANGUAGE와 동일한 언어로 설명란 작성!**
+- OUTPUT LANGUAGE가 Korean이면 → 한국어 설명란
+- OUTPUT LANGUAGE가 Japanese이면 → 일본어 설명란
 
 ### 목표
 - 검색·추천 노출에 유리한 설명란 작성
@@ -10985,10 +10986,10 @@ The stickman MUST ALWAYS have these facial features in EVERY image:
 {ai_prompts_rules}
 
 ## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
-The "text_overlay" text MUST match the script language!
+The "text_overlay" text MUST match the OUTPUT LANGUAGE!
 ⚠️ IMAGE GENERATION MODELS STRUGGLE WITH LONG TEXT! Keep it SHORT!
 
-### 🌍 언어 규칙: 대본 언어 = 썸네일 텍스트 언어!
+### 🌍 언어 규칙: OUTPUT LANGUAGE = 썸네일 텍스트 언어!
 
 **MAIN TEXT RULES (언어별):**
 - 한국어: 최대 6자 | 일본어: 최대 8자 | 영어: 최대 15자
@@ -11507,10 +11508,10 @@ The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
 - **C**: 대비/비교 - 분할 화면 또는 Before/After 느낌
 
 ## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
-The "text_overlay" text MUST match the script language!
+The "text_overlay" text MUST match the OUTPUT LANGUAGE!
 ⚠️ IMAGE GENERATION MODELS STRUGGLE WITH LONG TEXT! Keep it SHORT!
 
-### 🌍 언어 규칙: 대본 언어 = 썸네일 텍스트 언어!
+### 🌍 언어 규칙: OUTPUT LANGUAGE = 썸네일 텍스트 언어!
 
 **MAIN TEXT RULES (언어별):**
 - 한국어: 최대 6자 | 일본어: 최대 8자 | 영어: 최대 15자
