@@ -20934,7 +20934,7 @@ def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy
     return run_automation_pipeline(dummy_row, row_num or 0)
 
 
-@app.route('/api/sheets/check-ctr-and-update-titles', methods=['POST'])
+@app.route('/api/sheets/check-ctr-and-update-titles', methods=['GET', 'POST'])
 def api_sheets_check_ctr_and_update_titles():
     """
     CTR 기반 자동 제목 변경 API
