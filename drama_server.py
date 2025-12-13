@@ -8442,37 +8442,63 @@ def youtube_callback():
             scopes=token_data['scopes']
         )
 
-        # 채널 정보 조회
-        channel_id = None
-        channel_info = None
+        # 채널 정보 조회 - 해당 계정이 관리하는 모든 채널
+        all_channels = []  # [(channel_id, channel_info), ...]
+        primary_channel_id = None
+        primary_channel_info = None
+
         try:
             from googleapiclient.discovery import build
             youtube = build('youtube', 'v3', credentials=credentials)
-            channels_response = youtube.channels().list(
-                part='snippet',
-                mine=True
-            ).execute()
 
-            items = channels_response.get('items', [])
-            if items:
-                channel = items[0]
-                channel_id = channel['id']
-                channel_info = {
+            # 1. managedByMe=True로 모든 관리 채널 조회
+            try:
+                channels_response = youtube.channels().list(
+                    part='snippet',
+                    managedByMe=True,
+                    maxResults=50
+                ).execute()
+                items = channels_response.get('items', [])
+                print(f"[YOUTUBE-CALLBACK] managedByMe로 {len(items)}개 채널 발견")
+            except Exception as managed_err:
+                print(f"[YOUTUBE-CALLBACK] managedByMe 실패: {managed_err}, mine=True로 재시도")
+                # managedByMe가 실패하면 mine=True로 fallback
+                channels_response = youtube.channels().list(
+                    part='snippet',
+                    mine=True
+                ).execute()
+                items = channels_response.get('items', [])
+
+            for channel in items:
+                ch_id = channel['id']
+                ch_info = {
                     'title': channel['snippet']['title'],
                     'thumbnail': channel['snippet']['thumbnails'].get('default', {}).get('url', '')
                 }
-                print(f"[YOUTUBE-CALLBACK] 채널 정보: {channel_id} - {channel_info['title']}")
-        except Exception as channel_error:
-            print(f"[YOUTUBE-CALLBACK] 채널 정보 조회 실패 (토큰은 저장): {channel_error}")
+                all_channels.append((ch_id, ch_info))
+                print(f"[YOUTUBE-CALLBACK] 채널 발견: {ch_id} - {ch_info['title']}")
 
-        # account_id가 있으면 그걸로 저장, 없으면 channel_id로 저장
-        account_id = oauth_state.get('account_id', '').strip()
-        token_key = account_id if account_id else channel_id
+                # 첫 번째 채널을 primary로 설정
+                if primary_channel_id is None:
+                    primary_channel_id = ch_id
+                    primary_channel_info = ch_info
+
+        except Exception as channel_error:
+            print(f"[YOUTUBE-CALLBACK] 채널 정보 조회 실패: {channel_error}")
 
         # OAuth state에서 프로젝트 접미사 확인 (인증 시작 시 저장됨)
         project_suffix = oauth_state.get('project_suffix', '')
-        save_youtube_token_to_db(token_data, channel_id=token_key, channel_info=channel_info, project_suffix=project_suffix)
-        print(f"[YOUTUBE-CALLBACK] 토큰 저장 완료 (key: {token_key}, project: {'기본' if not project_suffix else project_suffix})")
+
+        # 모든 관리 채널에 대해 토큰 저장
+        if all_channels:
+            for ch_id, ch_info in all_channels:
+                save_youtube_token_to_db(token_data, channel_id=ch_id, channel_info=ch_info, project_suffix=project_suffix)
+                print(f"[YOUTUBE-CALLBACK] 토큰 저장: {ch_id}{project_suffix} - {ch_info['title']}")
+            print(f"[YOUTUBE-CALLBACK] 총 {len(all_channels)}개 채널에 토큰 저장 완료 (project: {'기본' if not project_suffix else project_suffix})")
+        else:
+            # 채널 정보 없으면 default로 저장
+            save_youtube_token_to_db(token_data, channel_id='default', channel_info=None, project_suffix=project_suffix)
+            print(f"[YOUTUBE-CALLBACK] 채널 정보 없음, default로 토큰 저장 (project: {'기본' if not project_suffix else project_suffix})")
 
         print(f"[YOUTUBE-CALLBACK] 인증 완료, /image 페이지로 리다이렉트")
         # Image Lab 페이지로 리다이렉트 (인증 완료)
