@@ -4123,6 +4123,42 @@ def download_shorts_video(video_id: str, output_dir: str) -> tuple:
         except Exception as cobalt_error:
             print(f"[SHORTS] cobalt.tools 실패: {cobalt_error}")
 
+        # Fallback 2: pytubefix 라이브러리 사용
+        print(f"[SHORTS] pytubefix로 시도...")
+        try:
+            from pytubefix import YouTube as PyTube
+            from pytubefix.cli import on_progress
+
+            yt = PyTube(
+                f"https://www.youtube.com/watch?v={video_id}",
+                on_progress_callback=on_progress,
+                use_po_token=True  # Proof of Origin token 사용
+            )
+
+            # 720p 이하 스트림 선택
+            stream = yt.streams.filter(
+                progressive=True,
+                file_extension='mp4'
+            ).order_by('resolution').desc().first()
+
+            if not stream:
+                # progressive 없으면 video only 시도
+                stream = yt.streams.filter(
+                    file_extension='mp4',
+                    only_video=True
+                ).order_by('resolution').desc().first()
+
+            if stream:
+                output_path = os.path.join(output_dir, f"{video_id}.mp4")
+                stream.download(output_path=output_dir, filename=f"{video_id}.mp4")
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+                    print(f"[SHORTS] pytubefix로 다운로드 완료: {output_path}")
+                    return (output_path, None)
+            else:
+                print(f"[SHORTS] pytubefix: 사용 가능한 스트림 없음")
+        except Exception as pytube_error:
+            print(f"[SHORTS] pytubefix 실패: {pytube_error}")
+
         print(f"[SHORTS] 모든 다운로드 전략 실패")
         return (None, "YouTube 봇 감지로 모든 다운로드 방식이 차단되었습니다. 잠시 후 다시 시도해주세요.")
 
