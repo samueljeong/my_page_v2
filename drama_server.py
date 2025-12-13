@@ -12875,7 +12875,7 @@ def _load_job_status(job_id):
             conn.close()
 
             if row:
-                return {
+                result = {
                     'job_id': row['job_id'],
                     'status': row['status'],
                     'progress': row['progress'],
@@ -12884,6 +12884,10 @@ def _load_job_status(job_id):
                     'error': row['error'],
                     'session_id': row['session_id']
                 }
+                # 디버그 로깅 (너무 빈번한 호출 방지를 위해 progress가 변할 때만)
+                print(f"[VIDEO-JOB-DB] Load job {job_id}: status={result['status']}, progress={result['progress']}")
+                return result
+            print(f"[VIDEO-JOB-DB] Job {job_id} not found in PostgreSQL")
             return None
         except Exception as e:
             print(f"[VIDEO-JOB-DB] Error loading from PostgreSQL: {e}, falling back to file")
@@ -12920,7 +12924,16 @@ def _update_job_status(job_id, **kwargs):
                 values.append(job_id)
                 query = f"UPDATE video_jobs SET {', '.join(update_fields)} WHERE job_id = %s"
                 cursor.execute(query, values)
+                rows_affected = cursor.rowcount
                 conn.commit()
+
+                # 디버그 로깅: 업데이트 성공 여부 확인
+                if rows_affected == 0:
+                    print(f"[VIDEO-JOB-DB] WARNING: No rows updated for job {job_id} - job may not exist in DB")
+                else:
+                    progress = kwargs.get('progress', '-')
+                    status = kwargs.get('status', '-')
+                    print(f"[VIDEO-JOB-DB] Updated job {job_id}: progress={progress}, status={status}")
 
             cursor.close()
             conn.close()
