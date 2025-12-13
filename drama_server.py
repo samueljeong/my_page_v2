@@ -8405,6 +8405,7 @@ def youtube_projects_status():
 @app.route('/api/youtube/reset-quota', methods=['GET', 'POST'])
 def api_reset_youtube_quota():
     """YouTube 할당량 초과 플래그 수동 리셋"""
+    global _youtube_quota_exceeded
     reset_youtube_quota_exceeded()
     return jsonify({
         "ok": True,
