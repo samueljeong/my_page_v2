@@ -10034,31 +10034,71 @@ def youtube_upload():
                 # 첫 댓글 작성 (first_comment가 있는 경우)
                 first_comment = data.get('firstComment', '')
                 comment_posted = False
+                comment_id = ''
                 if first_comment:
-                    try:
-                        print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 시작: {first_comment[:50]}...")
-                        comment_request = youtube.commentThreads().insert(
-                            part="snippet",
-                            body={
-                                "snippet": {
-                                    "videoId": video_id,
-                                    "topLevelComment": {
-                                        "snippet": {
-                                            "textOriginal": first_comment
+                    import time
+                    max_retries = 3
+                    retry_delays = [5, 10, 15]  # 5초, 10초, 15초 후 재시도
+
+                    for attempt in range(max_retries):
+                        try:
+                            if attempt > 0:
+                                print(f"[YOUTUBE-UPLOAD] 첫 댓글 재시도 {attempt + 1}/{max_retries} ({retry_delays[attempt]}초 대기 후)...")
+                                time.sleep(retry_delays[attempt])
+                            else:
+                                # 첫 시도 전 5초 대기 (영상 처리 시간 확보)
+                                print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 대기 중 (5초)...")
+                                time.sleep(5)
+
+                            print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 시도 {attempt + 1}: {first_comment[:50]}...")
+                            comment_request = youtube.commentThreads().insert(
+                                part="snippet",
+                                body={
+                                    "snippet": {
+                                        "videoId": video_id,
+                                        "topLevelComment": {
+                                            "snippet": {
+                                                "textOriginal": first_comment
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        )
-                        comment_response = comment_request.execute()
-                        comment_posted = True
-                        comment_id = comment_response.get('id', '')
-                        print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 성공! commentId: {comment_id}")
-                    except Exception as comment_error:
-                        print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 실패: {comment_error}")
-                        import traceback
-                        traceback.print_exc()
-                        # 댓글 작성 실패해도 업로드는 성공한 것으로 처리
+                            )
+                            comment_response = comment_request.execute()
+                            comment_posted = True
+                            comment_id = comment_response.get('id', '')
+                            print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 성공! commentId: {comment_id}")
+                            break  # 성공하면 루프 종료
+
+                        except Exception as comment_error:
+                            error_str = str(comment_error)
+                            print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 실패 (시도 {attempt + 1}/{max_retries}): {error_str}")
+
+                            # 상세 에러 분석
+                            if 'commentsDisabled' in error_str:
+                                print(f"[YOUTUBE-UPLOAD] 원인: 영상 댓글이 비활성화됨")
+                                break  # 재시도 불필요
+                            elif 'forbidden' in error_str.lower() or '403' in error_str:
+                                print(f"[YOUTUBE-UPLOAD] 원인: 권한 부족 (youtube.force-ssl scope 확인 필요)")
+                                break  # 재시도 불필요
+                            elif 'quotaExceeded' in error_str:
+                                print(f"[YOUTUBE-UPLOAD] 원인: API 할당량 초과")
+                                break  # 재시도 불필요
+                            elif 'videoNotFound' in error_str or 'notFound' in error_str.lower():
+                                print(f"[YOUTUBE-UPLOAD] 원인: 영상을 찾을 수 없음 (video_id: {video_id})")
+                                # 마지막 시도가 아니면 재시도
+                                if attempt < max_retries - 1:
+                                    continue
+                            else:
+                                # 알 수 없는 에러는 재시도
+                                if attempt < max_retries - 1:
+                                    continue
+
+                            import traceback
+                            traceback.print_exc()
+
+                    if not comment_posted:
+                        print(f"[YOUTUBE-UPLOAD] 첫 댓글 작성 최종 실패 (모든 재시도 소진)")
 
                 # 메시지 생성
                 upload_message = "YouTube 업로드 완료!"
