@@ -8166,7 +8166,7 @@ def load_oauth_state():
         print(f"[OAUTH-STATE] 파일 로드도 실패: {e}")
     return {}
 
-@app.route('/api/drama/youtube-auth', methods=['POST'])
+@app.route('/api/drama/youtube-auth', methods=['GET', 'POST'])
 def youtube_auth():
     """YouTube OAuth 인증 시작"""
     try:
@@ -8174,8 +8174,12 @@ def youtube_auth():
         from google.oauth2.credentials import Credentials
         import json as json_module
 
-        data = request.get_json() or {}
-        force_project = data.get('forceProject', '')  # '', '_2' 또는 'backup'
+        # GET 또는 POST 모두 지원
+        if request.method == 'GET':
+            force_project = request.args.get('project', '')
+        else:
+            data = request.get_json() or {}
+            force_project = data.get('forceProject', '')
 
         # 강제 프로젝트 지정 시 해당 프로젝트 사용
         if force_project in ['_2', 'backup']:
@@ -8275,6 +8279,10 @@ def youtube_auth():
             'client_secret': client_secret,
             'project_suffix': project_suffix  # 프로젝트 구분 (_2 등)
         })
+
+        # GET 요청이면 바로 리다이렉트, POST면 JSON 응답
+        if request.method == 'GET':
+            return redirect(auth_url)
 
         return jsonify({
             "success": False,
