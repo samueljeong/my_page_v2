@@ -4343,18 +4343,16 @@ def extract_frames_by_interval(video_path: str, output_dir: str, interval: int =
         return frames
 
 
-def analyze_frame_with_gemini(frame_path: str) -> Optional[str]:
-    """OpenRouter Gemini Vision으로 프레임 분석"""
+def analyze_frame_with_gemini(frame_path: str) -> Optional[dict]:
+    """GPT-5.1로 프레임 분석 - 구조화된 데이터 반환"""
     try:
         import requests
         import PIL.Image
         import io
+        from openai import OpenAI
 
-        # OpenRouter API 키 설정
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        if not api_key:
-            print("[SHORTS] OpenRouter API 키가 없습니다")
-            return None
+        # OpenAI 클라이언트
+        client = OpenAI()
 
         # 이미지 로드 및 base64 인코딩
         image = PIL.Image.open(frame_path)
@@ -4364,6 +4362,123 @@ def analyze_frame_with_gemini(frame_path: str) -> Optional[str]:
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
         # 이미지 포맷 감지
+        img_format = image.format or 'PNG'
+        mime_type = f"image/{img_format.lower()}"
+        if img_format.upper() == 'JPG':
+            mime_type = 'image/jpeg'
+
+        prompt = """이 이미지를 매우 상세하게 분석해주세요. 다음 JSON 형식으로 응답해주세요:
+
+{
+  "subject": {
+    "type": "인물/동물/사물 중 하나",
+    "description": "주인공에 대한 상세 설명 (외모, 특징, 의상 등)",
+    "count": 1
+  },
+  "action": {
+    "main": "주요 행동/동작",
+    "detail": "세부 동작 설명",
+    "emotion": "감정/표정"
+  },
+  "background": {
+    "location": "장소 (실내/실외, 구체적 위치)",
+    "elements": ["배경 요소1", "배경 요소2"],
+    "time": "시간대 (낮/밤/새벽 등)"
+  },
+  "style": {
+    "lighting": "조명 스타일",
+    "color": "색감/톤",
+    "mood": "전체 분위기",
+    "camera": "카메라 앵글/구도"
+  },
+  "prompt_en": "영어 이미지 생성 프롬프트 (모든 요소를 포함한 완성된 프롬프트)",
+  "prompt_ko": "한국어 이미지 생성 프롬프트"
+}
+
+중요: JSON만 출력하고 다른 텍스트는 포함하지 마세요."""
+
+        # GPT-5.1 Responses API 호출
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:{mime_type};base64,{image_base64}"
+                        }
+                    ]
+                }
+            ],
+            temperature=0.7
+        )
+
+        # 응답 추출
+        result_text = ""
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
+
+        if result_text:
+            # JSON 파싱 시도
+            try:
+                # JSON 블록 추출 (```json ... ``` 형식 처리)
+                if "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0].strip()
+
+                analysis_data = json.loads(result_text)
+                print(f"[SHORTS] GPT-5.1 분석 완료: {analysis_data.get('subject', {}).get('type', 'unknown')}")
+                return analysis_data
+            except json.JSONDecodeError as je:
+                print(f"[SHORTS] JSON 파싱 실패, 원본 텍스트 사용: {je}")
+                # JSON 파싱 실패 시 기본 구조로 래핑
+                return {
+                    "subject": {"type": "unknown", "description": "", "count": 1},
+                    "action": {"main": "", "detail": "", "emotion": ""},
+                    "background": {"location": "", "elements": [], "time": ""},
+                    "style": {"lighting": "", "color": "", "mood": "", "camera": ""},
+                    "prompt_en": result_text,
+                    "prompt_ko": result_text
+                }
+
+        print(f"[SHORTS] GPT-5.1 응답 없음")
+        return None
+
+    except Exception as e:
+        print(f"[SHORTS] GPT-5.1 분석 오류: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # GPT-5.1 실패 시 Gemini로 폴백
+        return analyze_frame_with_gemini_fallback(frame_path)
+
+
+def analyze_frame_with_gemini_fallback(frame_path: str) -> Optional[dict]:
+    """Gemini로 프레임 분석 (GPT-5.1 폴백)"""
+    try:
+        import requests
+        import PIL.Image
+
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            print("[SHORTS] OpenRouter API 키가 없습니다")
+            return None
+
+        image = PIL.Image.open(frame_path)
+        with open(frame_path, "rb") as f:
+            image_bytes = f.read()
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
         img_format = image.format or 'PNG'
         mime_type = f"image/{img_format.lower()}"
         if img_format.upper() == 'JPG':
@@ -4382,7 +4497,6 @@ def analyze_frame_with_gemini(frame_path: str) -> Optional[str]:
 예시: "Young woman in casual outfit, urban cafe background, natural window lighting, warm color palette, medium shot, candid moment"
 """
 
-        # OpenRouter API 호출
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -4415,13 +4529,21 @@ def analyze_frame_with_gemini(frame_path: str) -> Optional[str]:
             response_data = response.json()
             content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
             if content:
-                return content.strip()
+                prompt_text = content.strip()
+                return {
+                    "subject": {"type": "unknown", "description": "", "count": 1},
+                    "action": {"main": "", "detail": "", "emotion": ""},
+                    "background": {"location": "", "elements": [], "time": ""},
+                    "style": {"lighting": "", "color": "", "mood": "", "camera": ""},
+                    "prompt_en": prompt_text,
+                    "prompt_ko": ""
+                }
 
-        print(f"[SHORTS] OpenRouter API 오류: {response.status_code} - {response.text}")
+        print(f"[SHORTS] Gemini API 오류: {response.status_code}")
         return None
 
     except Exception as e:
-        print(f"[SHORTS] OpenRouter 분석 오류: {e}")
+        print(f"[SHORTS] Gemini 분석 오류: {e}")
         return None
 
 
@@ -4681,30 +4803,34 @@ def video_to_prompts():
                 "message": "프레임 추출에 실패했습니다"
             }), 500
 
-        # 각 프레임 분석
-        print(f"[VIDEO-PROMPT] {len(frames)}개 프레임 분석 중...")
+        # 각 프레임 분석 (GPT-5.1 구조화된 분석)
+        print(f"[VIDEO-PROMPT] {len(frames)}개 프레임 GPT-5.1 분석 중...")
         prompts = []
 
         for frame in frames:
             print(f"[VIDEO-PROMPT] 프레임 {frame['index']} 분석 중 ({frame['time']}초)...")
 
-            raw_prompt = analyze_frame_with_gemini(frame["path"])
+            analysis_result = analyze_frame_with_gemini(frame["path"])
 
-            if raw_prompt:
-                # GPT로 정제 (옵션)
-                if refine:
-                    final_prompt = refine_prompt_with_gpt(raw_prompt)
-                else:
-                    final_prompt = raw_prompt
-
+            if analysis_result:
+                # 구조화된 분석 결과 저장
                 prompts.append({
                     "time": frame["time"],
-                    "prompt": final_prompt
+                    "prompt": analysis_result.get("prompt_en", ""),
+                    "prompt_ko": analysis_result.get("prompt_ko", ""),
+                    "analysis": {
+                        "subject": analysis_result.get("subject", {}),
+                        "action": analysis_result.get("action", {}),
+                        "background": analysis_result.get("background", {}),
+                        "style": analysis_result.get("style", {})
+                    }
                 })
             else:
                 prompts.append({
                     "time": frame["time"],
-                    "prompt": "[분석 실패]"
+                    "prompt": "[분석 실패]",
+                    "prompt_ko": "[분석 실패]",
+                    "analysis": None
                 })
 
         # 영상 길이 계산
