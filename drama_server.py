@@ -266,11 +266,19 @@ def check_youtube_quota_before_pipeline(channel_id=None):
                     ok, err = try_quota_check('_2')
                     if ok:
                         return True, '_2', None
+                    else:
+                        # _2 체크 실패 (예외 없이 반환된 경우)
+                        print(f"[YOUTUBE-QUOTA-CHECK] _2 프로젝트 체크 실패: {err}")
+                        if err and 'quota' in str(err).lower():
+                            return False, '', "두 프로젝트 모두 YouTube API 할당량 초과"
+                        return False, '', f"_2 프로젝트 오류: {err}"
                 except Exception as e2:
+                    print(f"[YOUTUBE-QUOTA-CHECK] _2 프로젝트 예외: {e2}")
                     if 'quota' in str(e2).lower():
                         return False, '', "두 프로젝트 모두 YouTube API 할당량 초과"
                     return False, '', f"_2 프로젝트 오류: {e2}"
-            return False, '', "YouTube API 할당량 초과. 백업 프로젝트 없음."
+            else:
+                return False, '', "YouTube API 할당량 초과. 백업 프로젝트(_2) 미설정."
 
         return False, '', f"YouTube 할당량 체크 실패: {e}"
 
