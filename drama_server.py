@@ -18315,8 +18315,79 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                 is_news = detected_category == 'news'
                 print(f"[AUTOMATION][THUMB] GPT 감지 카테고리: {detected_category} → {'뉴스' if is_news else '스토리(웹툰)'} 스타일")
 
+                # ★ 뉴스 카테고리: 새로운 thumbnail 구조 활용 (이슈 해설 채널용)
+                news_thumbnail_text = thumbnail_data.get('text', {})
+                news_image_spec = thumbnail_data.get('image_spec', {})
+                news_keywords = thumbnail_data.get('keywords', {})
+
+                if is_news and news_image_spec:
+                    # 새로운 뉴스 썸네일 구조 사용
+                    print(f"[AUTOMATION][THUMB] 뉴스 이슈 해설 스타일 - 새 구조 사용")
+
+                    # image_spec에서 설정 추출
+                    has_face = news_image_spec.get('face', True)
+                    scene_type = news_image_spec.get('scene', 'generic')
+                    text_position = news_image_spec.get('text_position', 'left')
+                    expression = news_image_spec.get('expression', 'serious')
+
+                    # 텍스트 추출 (새 구조 우선, 없으면 best_combo 사용)
+                    line1 = news_thumbnail_text.get('line1', '')
+                    line2 = news_thumbnail_text.get('line2', '')
+                    if not line1 and best_combo:
+                        line1 = best_combo.get('chosen_thumbnail_text', '핵심 쟁점')
+
+                    # 키워드 로깅
+                    if news_keywords:
+                        print(f"[AUTOMATION][THUMB] 키워드: primary={news_keywords.get('primary', [])}, category={news_keywords.get('category_focus', '?')}")
+
+                    # scene 타입별 배경 설명
+                    scene_backgrounds = {
+                        'courtroom': 'courthouse or courtroom interior',
+                        'document': 'official documents, papers, or certificates',
+                        'chart': 'graphs, charts, or statistical data visualization',
+                        'city': 'city street or urban landscape',
+                        'office': 'government office or corporate building interior',
+                        'generic': 'professional news studio background'
+                    }
+                    scene_desc = scene_backgrounds.get(scene_type, scene_backgrounds['generic'])
+
+                    # 표정 맵핑 (뉴스 해설용 - 과장 금지)
+                    expression_map = {
+                        'serious': 'serious focused expression',
+                        'worried': 'concerned worried expression',
+                        'thinking': 'thoughtful contemplating expression',
+                        'confused': 'puzzled confused expression',
+                        'focused': 'attentive focused expression'
+                    }
+                    expression_desc = expression_map.get(expression, expression_map['serious'])
+
+                    # 프롬프트 생성 (face 유무에 따라 분기)
+                    if has_face:
+                        prompt = f"""Korean webtoon style illustration, 16:9 aspect ratio.
+Korean webtoon character with {expression_desc} (NOT screaming, NOT exaggerated panic), 40-50 year old Korean man or woman in professional attire.
+Clean bold outlines, {scene_desc} background.
+Text space on {text_position} side (30% of frame).
+Credible news explainer tone, NOT sensational.
+NO extreme expression, NO text, NO letters, NO speech bubbles.
+NO photorealistic, NO stickman."""
+                    else:
+                        prompt = f"""Korean webtoon style illustration, 16:9 aspect ratio.
+{scene_desc.capitalize()}, dramatic but credible news tone.
+Clean bold outlines, vibrant colors.
+Text space on {text_position} side (30% of frame).
+NO characters, focus on scene/objects.
+NO text, NO letters, NO signs, NO readable text.
+NO photorealistic."""
+
+                    thumb_prompt = {
+                        "prompt": prompt,
+                        "text_overlay": {"main": line1, "sub": line2},
+                        "style": "news"
+                    }
+                    print(f"[AUTOMATION][THUMB] 뉴스 썸네일: face={has_face}, scene={scene_type}, text='{line1}'")
+
                 # GPT가 생성한 ai_prompts.A 사용 (story 카테고리는 웹툰 스타일로 생성됨)
-                if ai_prompts and ai_prompts.get('A'):
+                elif ai_prompts and ai_prompts.get('A'):
                     thumb_prompt = ai_prompts.get('A').copy() if isinstance(ai_prompts.get('A'), dict) else ai_prompts.get('A')
                     # best_combo에서 선택된 텍스트가 있으면 text_overlay에 적용
                     if best_combo and best_combo.get('chosen_thumbnail_text'):
@@ -18330,12 +18401,13 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                             print(f"[AUTOMATION][THUMB] best_combo 텍스트 적용: {chosen_text}")
                     print(f"[AUTOMATION][THUMB] GPT 생성 프롬프트 사용 (스타일: {thumb_prompt.get('style', 'unknown')})")
                 elif is_news:
-                    # 폴백: 뉴스 스타일 프롬프트
-                    print(f"[AUTOMATION][THUMB] 폴백: 뉴스 스타일 프롬프트")
-                    fallback_text = best_combo.get('chosen_thumbnail_text', '뉴스 헤드라인') if best_combo else '뉴스 헤드라인'
+                    # 폴백: 뉴스 스타일 프롬프트 (새 구조 없을 때)
+                    print(f"[AUTOMATION][THUMB] 폴백: 뉴스 웹툰 스타일 프롬프트")
+                    fallback_text = best_combo.get('chosen_thumbnail_text', '핵심 쟁점') if best_combo else '핵심 쟁점'
                     thumb_prompt = {
-                        "prompt": "Korean TV news broadcast YouTube thumbnail. 16:9 aspect ratio. Large bold Korean headline text in WHITE or YELLOW. Dark blue gradient background. Professional broadcast journalism aesthetic.",
-                        "text_overlay": {"main": fallback_text, "sub": ""}
+                        "prompt": "Korean webtoon style YouTube thumbnail, 16:9 aspect ratio. Korean webtoon character with SERIOUS FOCUSED expression (NOT screaming), 40-50 year old Korean man in suit. Clean bold outlines, news studio background. Text space on left side. Credible news explainer tone. NO photorealistic, NO stickman.",
+                        "text_overlay": {"main": fallback_text, "sub": ""},
+                        "style": "news"
                     }
                 else:
                     # 폴백: 웹툰 스타일 프롬프트
