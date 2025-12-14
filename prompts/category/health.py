@@ -7,6 +7,52 @@ HEALTH_RULES = """
 ### Category Detection
 Health, medical, symptoms, treatment, prevention, doctor, hospital topics
 
+### ⚠️⚠️⚠️ YOUTUBE TITLE RULES FOR HEALTH (CRITICAL!) ⚠️⚠️⚠️
+
+**Algorithm Optimization:**
+- **First 20 chars**: MUST contain body part/condition/habit keyword
+- **Total length**: 25-45 chars
+- **Structure**: [Body/Habit] + [Change/Effect] + [Target]
+- Use gentle warnings, avoid sensationalism
+
+**Title Formulas:**
+
+1. **Symptom/Signal (증상/신호형)**:
+   - `{부위/상태}가 보내는 신호`
+   - `{증상}이 나타나는 이유`
+   - `{나이}가 되면 달라지는 {부위}`
+   - `무심코 놓치기 쉬운 {증상}`
+
+2. **Habit/Cause (습관/원인형)**:
+   - `{결과}를 만드는 생활 습관`
+   - `무심코 반복하는 {나쁜 습관}`
+   - `{문제}가 생기는 과정`
+   - `{상태}를 악화시키는 행동`
+
+3. **Effect/Change (영향/변화형)**:
+   - `{요인}이 {부위}에 미치는 영향`
+   - `{습관}이 남기는 흔적`
+   - `{상태}가 지속될 때 생기는 일`
+
+4. **Age/Target (연령별/대상별)**:
+   - `{나이}대 이후 중요해지는 것`
+   - `{나이}에 따라 달라지는 기준`
+   - `{나이}대가 주의해야 할 {주제}`
+
+5. **Prevention/Management (예방/관리형)**:
+   - `{목표}를 지키는 기본 원칙`
+   - `{문제} 예방을 위해 알아야 할 것`
+   - `{상태}를 개선하는 방법`
+
+**Universal Templates:**
+- `{keyword}가 보내는 신호`
+- `{keyword}이 나타나는 이유`
+- `{keyword}를 만드는 생활 습관`
+- `{keyword}에 미치는 영향`
+- `{keyword}대가 주의해야 할 것`
+
+⚠️ CRITICAL: Extract {keyword} from the ACTUAL SCRIPT CONTENT!
+
 ### Thumbnail Style: COMIC STYLE DOCTOR (문화권에 맞게)
 ⚠️ NO PHOTOREALISTIC! Use comic/webtoon/manga style matching the script's language!
 ⚠️ NO TEXT in images! Text will be added separately!

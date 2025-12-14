@@ -44,7 +44,8 @@ def detect_category_simple(script: str) -> str:
         script: 대본 텍스트
 
     Returns:
-        'health', 'news', 'story' 중 하나
+        카테고리: 'health', 'news', 'education', 'faith', 'history',
+                 'cooking', 'finance', 'motivation', 'story'
     """
     if not script:
         return 'story'
@@ -52,41 +53,97 @@ def detect_category_simple(script: str) -> str:
     # 앞부분만 분석 (토큰 절약)
     sample = script[:2000].lower()
 
-    # 건강 키워드 (최우선 감지)
-    health_keywords = [
-        '건강', '질병', '증상', '치료', '예방', '의사', '병원', '약', '검사', '진단',
-        '혈압', '혈당', '관절', '심장', '뇌', '영양제', '운동법', '노화', '장수',
-        '치매', '암', '당뇨', '콜레스테롤', '비타민', '면역', '수면', '스트레스',
-        '하면 안됩니다', '하지 마세요', '먹지 마세요', '피하세요',
-        # 일본어 건강 키워드
-        'けんこう', 'びょういん', 'いしゃ', 'くすり', 'けんさ',
-        # 영어 건강 키워드
-        'health', 'doctor', 'hospital', 'symptom', 'treatment', 'disease',
-    ]
+    # 카테고리별 키워드 정의
+    category_keywords = {
+        'faith': [
+            # 한국어
+            '하나님', '예수', '성경', '믿음', '기도', '은혜', '말씀', '찬양', '교회', '목사',
+            '설교', '신앙', '다윗', '모세', '요셉', '예배', '성령', '복음', '구원', '축복',
+            # 일본어
+            'かみさま', 'いのり', 'せいしょ', 'しんこう', 'きょうかい',
+            # 영어
+            'god', 'jesus', 'bible', 'faith', 'prayer', 'church', 'sermon',
+        ],
+        'history': [
+            # 한국어
+            '역사', '조선', '고려', '삼국', '일제', '전쟁', '왕', '황제', '고대', '중세', '근대',
+            '임진왜란', '병자호란', '세종', '이순신', '정조', '영조', '태조', '왕조', '궁궐',
+            # 일본어
+            'れきし', 'せんそう', 'おう', 'こうてい', 'えどじだい',
+            # 영어
+            'history', 'war', 'king', 'emperor', 'dynasty', 'ancient', 'medieval',
+        ],
+        'cooking': [
+            # 한국어
+            '요리', '레시피', '음식', '맛있게', '만들기', '재료', '손질', '조리', '굽기', '볶기',
+            '찌기', '반찬', '국', '찌개', '밥', '면', '고기', '채소', '양념', '소스',
+            # 일본어
+            'りょうり', 'れしぴ', 'たべもの', 'ざいりょう', 'ちょうり',
+            # 영어
+            'recipe', 'cooking', 'food', 'ingredient', 'dish', 'meal',
+        ],
+        'finance': [
+            # 한국어
+            '재테크', '투자', '주식', '부동산', '저축', '금리', '대출', '연금', '세금', '자산',
+            '월급', '적금', 'etf', '펀드', '배당', '수익률', '원금', '이자', '신용',
+            # 일본어
+            'とうし', 'かぶしき', 'ふどうさん', 'ちょちく', 'きんり',
+            # 영어
+            'invest', 'stock', 'finance', 'money', 'saving', 'tax', 'loan',
+        ],
+        'motivation': [
+            # 한국어
+            '자기계발', '습관', '목표', '성공', '실패', '시간관리', '집중력', '번아웃', '동기부여',
+            '성장', '변화', '마인드', '멘탈', '루틴', '생산성', '꿈', '도전', '노력',
+            # 일본어
+            'しゅうかん', 'もくひょう', 'せいこう', 'しっぱい', 'どりょく',
+            # 영어
+            'habit', 'goal', 'success', 'motivation', 'mindset', 'productivity', 'growth',
+        ],
+        'education': [
+            # 한국어
+            '지식', '교육', '학습', '과학', '심리', '뇌과학', '철학', '경제원리', '원리', '이유',
+            '연구', '실험', '이론', '분석', '설명', '개념', '논리', '인지', '사고',
+            # 일본어
+            'ちしき', 'きょういく', 'がくしゅう', 'かがく', 'しんり',
+            # 영어
+            'science', 'psychology', 'brain', 'research', 'study', 'theory', 'analysis',
+        ],
+        'health': [
+            # 한국어
+            '건강', '질병', '증상', '치료', '예방', '의사', '병원', '약', '검사', '진단',
+            '혈압', '혈당', '관절', '심장', '뇌', '영양제', '운동법', '노화', '장수',
+            '치매', '암', '당뇨', '콜레스테롤', '비타민', '면역', '수면', '스트레스',
+            '하면 안됩니다', '하지 마세요', '먹지 마세요', '피하세요',
+            # 일본어
+            'けんこう', 'びょういん', 'いしゃ', 'くすり', 'けんさ', 'しょうじょう',
+            # 영어
+            'health', 'doctor', 'hospital', 'symptom', 'treatment', 'disease', 'medical',
+        ],
+        'news': [
+            # 한국어
+            '대통령', '국회', '정치', '정당', '여당', '야당', '정부',
+            '주가', '환율', '인플레이션', '사건', '사고', '재판', '법원', '검찰', '경찰',
+            '기업', '삼성', '현대', '쿠팡', 'sk', 'lg', '발표', '성명', '기자회견', '속보', '뉴스',
+            # 일본어
+            'せいじ', 'けいざい', 'じけん', 'ニュース', 'そくほう',
+            # 영어
+            'president', 'government', 'breaking', 'news', 'announcement', 'politics',
+        ],
+    }
 
-    # 뉴스 키워드
-    news_keywords = [
-        '대통령', '국회', '정치', '정당', '여당', '야당', '정부',
-        '경제', '주가', '환율', '부동산', '금리', '인플레이션',
-        '사건', '사고', '재판', '법원', '검찰', '경찰',
-        '기업', '삼성', '현대', '쿠팡', 'SK', 'LG',
-        '발표', '성명', '기자회견', '속보', '뉴스',
-        # 일본어 뉴스 키워드
-        'せいじ', 'けいざい', 'じけん', 'ニュース',
-        # 영어 뉴스 키워드
-        'president', 'government', 'economy', 'stock', 'breaking', 'news',
-    ]
+    # 각 카테고리별 키워드 카운트
+    category_scores = {}
+    for category, keywords in category_keywords.items():
+        score = sum(1 for kw in keywords if kw in sample)
+        category_scores[category] = score
 
-    # 키워드 카운트
-    health_count = sum(1 for kw in health_keywords if kw in sample)
-    news_count = sum(1 for kw in news_keywords if kw in sample)
+    # 가장 높은 점수의 카테고리 선택 (최소 2개 이상 매칭)
+    max_category = max(category_scores, key=category_scores.get)
+    max_score = category_scores[max_category]
 
-    # 건강이 3개 이상이면 health
-    if health_count >= 3:
-        return 'health'
-    # 뉴스가 3개 이상이면 news
-    elif news_count >= 3:
-        return 'news'
+    if max_score >= 2:
+        return max_category
 
     # 기본값: story
     return 'story'
