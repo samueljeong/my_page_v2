@@ -9677,6 +9677,7 @@ def youtube_upload():
         publish_at = data.get('publish_at')  # ISO 8601 예약 공개 시간
         channel_id = data.get('channelId')  # 선택된 채널 ID
         playlist_id = data.get('playlistId')  # 플레이리스트 ID (선택)
+        project_suffix_param = data.get('projectSuffix', None)  # 파이프라인에서 전달된 프로젝트 접미사
 
         print(f"[YOUTUBE-UPLOAD] 업로드 요청 수신")
         print(f"  - 영상: {video_path}")
@@ -9686,6 +9687,7 @@ def youtube_upload():
         print(f"  - 채널 ID: {channel_id}")
         print(f"  - 플레이리스트 ID: {playlist_id}")
         print(f"  - 썸네일: {thumbnail_path}")
+        print(f"  - 프로젝트: {project_suffix_param or '(자동 선택)'}")
 
         # 영상 파일 경로 처리
         if video_path and not video_path.startswith('http'):
@@ -9827,9 +9829,15 @@ def youtube_upload():
             from googleapiclient.discovery import build
             from googleapiclient.http import MediaFileUpload
 
-            # 현재 사용할 프로젝트 확인 (할당량 초과 시 _2)
-            _, _, project_suffix = get_youtube_credentials()
-            print(f"[YOUTUBE-UPLOAD] 사용 프로젝트: {'기본' if not project_suffix else project_suffix}")
+            # 프로젝트 접미사 결정: 파이프라인에서 전달된 값 우선, 없으면 자동 선택
+            if project_suffix_param is not None:
+                # 파이프라인에서 미리 체크한 프로젝트 사용 (할당량 체크 결과)
+                project_suffix = project_suffix_param
+                print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (파이프라인 지정): {'기본' if not project_suffix else project_suffix}")
+            else:
+                # 직접 호출 시 자동 선택 (할당량 초과 플래그 기반)
+                _, _, project_suffix = get_youtube_credentials()
+                print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (자동 선택): {'기본' if not project_suffix else project_suffix}")
 
             # DB에서 토큰 로드 (선택된 채널의 토큰 우선, 프로젝트 접미사 적용)
             token_data = load_youtube_token_from_db(channel_id, project_suffix) if channel_id else load_youtube_token_from_db('default', project_suffix)
@@ -20793,7 +20801,8 @@ def run_automation_pipeline(row_data, row_index):
                 "title": title,
                 "description": description,
                 "privacyStatus": actual_visibility,
-                "channelId": channel_id
+                "channelId": channel_id,
+                "projectSuffix": selected_project  # 할당량 체크에서 결정된 프로젝트 사용
             }
 
             # 15분 후 공개 설정
