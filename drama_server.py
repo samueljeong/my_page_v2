@@ -19272,6 +19272,15 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
             return {"ok": False, "error": f"대본 분석 오류: {str(e)}", "video_url": None, "cost": total_cost}
 
         # ========== 2. 병렬 처리: 이미지 + TTS + 썸네일 ==========
+        # 환경변수 사전 검증
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+        if not openrouter_key:
+            print("[AUTOMATION][ERROR] OPENROUTER_API_KEY 환경변수가 설정되지 않았습니다!")
+            return {"ok": False, "error": "OPENROUTER_API_KEY 환경변수가 설정되지 않았습니다. Render 대시보드에서 설정해주세요.", "video_url": None, "cost": total_cost}
+        else:
+            key_preview = f"{openrouter_key[:8]}...{openrouter_key[-4:]}" if len(openrouter_key) > 12 else "***"
+            print(f"[AUTOMATION] OpenRouter API 키 확인: {key_preview}")
+
         print(f"[AUTOMATION] 2. 병렬 처리 시작 (이미지 {len(scenes)}개 + TTS + 썸네일)...")
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -19305,7 +19314,8 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                             print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 완료")
                             return idx, img_data['imageUrl']
                         else:
-                            print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries})")
+                            error_msg = img_data.get('error', '알 수 없는 오류')
+                            print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries}): {error_msg}")
                     except Exception as e:
                         print(f"[AUTOMATION][IMAGE] {idx+1} 오류 (시도 {attempt+1}/{max_retries}): {e}")
 
