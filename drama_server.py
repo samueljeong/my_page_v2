@@ -8982,41 +8982,63 @@ def youtube_upload():
                 full_thumbnail_path = os.path.join(os.path.dirname(__file__), thumbnail_path.lstrip('/'))
 
         # 실제 업로드 시도 (DB 토큰 직접 사용)
-        try:
-            from google.oauth2.credentials import Credentials
-            from google.auth.transport.requests import Request
-            from googleapiclient.discovery import build
-            from googleapiclient.http import MediaFileUpload
+        # 할당량 초과 시 _2 프로젝트로 자동 재시도
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
 
-            # 프로젝트 접미사 결정: 파이프라인에서 전달된 값 우선, 없으면 자동 선택
-            if project_suffix_param is not None:
-                # 파이프라인에서 미리 체크한 프로젝트 사용 (할당량 체크 결과)
-                project_suffix = project_suffix_param
-                print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (파이프라인 지정): {'기본' if not project_suffix else project_suffix}")
-            else:
-                # 직접 호출 시 자동 선택 (할당량 초과 플래그 기반)
-                _, _, project_suffix = get_youtube_credentials()
-                print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (자동 선택): {'기본' if not project_suffix else project_suffix}")
+        # 프로젝트 접미사 결정: 파이프라인에서 전달된 값 우선, 없으면 자동 선택
+        if project_suffix_param is not None:
+            # 파이프라인에서 미리 체크한 프로젝트 사용 (할당량 체크 결과)
+            initial_project_suffix = project_suffix_param
+            print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (파이프라인 지정): {'기본' if not initial_project_suffix else initial_project_suffix}")
+        else:
+            # 직접 호출 시 자동 선택 (할당량 초과 플래그 기반)
+            _, _, initial_project_suffix = get_youtube_credentials()
+            print(f"[YOUTUBE-UPLOAD] 사용 프로젝트 (자동 선택): {'기본' if not initial_project_suffix else initial_project_suffix}")
 
-            # DB에서 토큰 로드 (선택된 채널의 토큰 우선, 프로젝트 접미사 적용)
-            token_data = load_youtube_token_from_db(channel_id, project_suffix) if channel_id else load_youtube_token_from_db('default', project_suffix)
+        # 시도할 프로젝트 목록 생성 (기본 → _2)
+        projects_to_try = [initial_project_suffix]
+        if initial_project_suffix != "_2" and os.getenv('YOUTUBE_CLIENT_ID_2'):
+            projects_to_try.append("_2")  # _2 프로젝트가 있으면 백업으로 추가
 
-            if not token_data or not token_data.get('refresh_token'):
-                print(f"[YOUTUBE-UPLOAD] 에러 - DB에 토큰 없음 (channel_id: {channel_id}, project: {project_suffix or '기본'})")
-                return jsonify({
-                    "ok": False,
-                    "error": f"YouTube 토큰이 없습니다. OAuth 로그인이 필요합니다. (channel_id: {channel_id}, project: {project_suffix or '기본'})",
-                    "needsAuth": True,
-                    "channelId": channel_id
-                }), 200
-            else:
-                # Credentials 객체 생성
+        last_error = None
+        for attempt_idx, project_suffix in enumerate(projects_to_try):
+            if attempt_idx > 0:
+                print(f"\n[YOUTUBE-UPLOAD] === 할당량 초과로 {project_suffix} 프로젝트로 재시도 ({attempt_idx + 1}/{len(projects_to_try)}) ===")
+
+            try:
+                # DB에서 토큰 로드 (선택된 채널의 토큰 우선, 프로젝트 접미사 적용)
+                token_data = load_youtube_token_from_db(channel_id, project_suffix) if channel_id else load_youtube_token_from_db('default', project_suffix)
+
+                if not token_data or not token_data.get('refresh_token'):
+                    print(f"[YOUTUBE-UPLOAD] 에러 - DB에 토큰 없음 (channel_id: {channel_id}, project: {project_suffix or '기본'})")
+                    # 토큰이 없으면 다음 프로젝트 시도
+                    if attempt_idx < len(projects_to_try) - 1:
+                        print(f"[YOUTUBE-UPLOAD] 다음 프로젝트({projects_to_try[attempt_idx + 1]})로 시도...")
+                        continue
+                    return jsonify({
+                        "ok": False,
+                        "error": f"YouTube 토큰이 없습니다. OAuth 로그인이 필요합니다. (channel_id: {channel_id}, project: {project_suffix or '기본'})",
+                        "needsAuth": True,
+                        "channelId": channel_id
+                    }), 200
+
+                # Credentials 객체 생성 (프로젝트에 맞는 client_id/secret 사용)
+                if project_suffix == "_2":
+                    fallback_client_id = os.getenv('YOUTUBE_CLIENT_ID_2')
+                    fallback_client_secret = os.getenv('YOUTUBE_CLIENT_SECRET_2')
+                else:
+                    fallback_client_id = os.getenv('YOUTUBE_CLIENT_ID')
+                    fallback_client_secret = os.getenv('YOUTUBE_CLIENT_SECRET')
+
                 creds = Credentials(
                     token=token_data.get('token'),
                     refresh_token=token_data.get('refresh_token'),
                     token_uri=token_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
-                    client_id=token_data.get('client_id') or os.getenv('YOUTUBE_CLIENT_ID'),
-                    client_secret=token_data.get('client_secret') or os.getenv('YOUTUBE_CLIENT_SECRET'),
+                    client_id=token_data.get('client_id') or fallback_client_id,
+                    client_secret=token_data.get('client_secret') or fallback_client_secret,
                     scopes=token_data.get('scopes', [
                         'https://www.googleapis.com/auth/youtube.upload',
                         'https://www.googleapis.com/auth/youtube.force-ssl'  # 댓글 작성용
@@ -9025,9 +9047,9 @@ def youtube_upload():
 
                 # 토큰 만료 시 갱신
                 if creds.expired and creds.refresh_token:
-                    print("[YOUTUBE-UPLOAD] 토큰 갱신 중...")
+                    print(f"[YOUTUBE-UPLOAD] 토큰 갱신 중... (프로젝트: {project_suffix or '기본'})")
                     creds.refresh(Request())
-                    # 갱신된 토큰 저장
+                    # 갱신된 토큰 저장 (프로젝트 접미사 포함)
                     updated_token = {
                         'token': creds.token,
                         'refresh_token': creds.refresh_token,
@@ -9036,7 +9058,7 @@ def youtube_upload():
                         'client_secret': creds.client_secret,
                         'scopes': list(creds.scopes) if creds.scopes else []
                     }
-                    save_youtube_token_to_db(updated_token, channel_id=channel_id)
+                    save_youtube_token_to_db(updated_token, channel_id=channel_id, project_suffix=project_suffix)
 
                 # YouTube API 클라이언트 생성
                 youtube = build('youtube', 'v3', credentials=creds)
@@ -9318,56 +9340,59 @@ def youtube_upload():
                     }
                 })
 
-        except ImportError as e:
-            print(f"[YOUTUBE-UPLOAD] 라이브러리 없음: {e}")
+            except ImportError as e:
+                print(f"[YOUTUBE-UPLOAD] 라이브러리 없음: {e}")
+                return jsonify({
+                    "ok": False,
+                    "error": f"필수 라이브러리 없음: {str(e)}",
+                    "needsAuth": False
+                }), 200
+            except Exception as upload_error:
+                error_str = str(upload_error).lower()
+                print(f"[YOUTUBE-UPLOAD] 업로드 오류 (프로젝트: {project_suffix or '기본'}): {upload_error}")
+                import traceback
+                traceback.print_exc()
+
+                # 할당량 초과 감지 및 _2 프로젝트로 자동 재시도
+                if 'quota' in error_str or 'quotaexceeded' in error_str:
+                    print(f"[YOUTUBE-UPLOAD] 할당량 초과 감지! (프로젝트: {project_suffix or '기본'})")
+                    set_youtube_quota_exceeded()  # 플래그 저장
+                    last_error = upload_error
+
+                    # 다음 프로젝트가 있으면 재시도
+                    if attempt_idx < len(projects_to_try) - 1:
+                        print(f"[YOUTUBE-UPLOAD] → _2 프로젝트로 자동 재시도합니다...")
+                        continue  # 다음 프로젝트로 재시도
+                    else:
+                        # 모든 프로젝트 소진
+                        print(f"[YOUTUBE-UPLOAD] 모든 프로젝트({projects_to_try})에서 할당량 초과!")
+                        return jsonify({
+                            "ok": False,
+                            "error": f"YouTube API 할당량 초과. 모든 프로젝트({', '.join(p or '기본' for p in projects_to_try)})에서 할당량이 초과되었습니다. 내일 다시 시도해주세요.",
+                            "quotaExceeded": True,
+                            "needsAuth": False
+                        }), 200
+
+                # 할당량 초과가 아닌 다른 오류
+                return jsonify({
+                    "ok": False,
+                    "error": f"업로드 중 오류 발생: {str(upload_error)}",
+                    "needsAuth": False
+                }), 200
+
+        # for 루프가 break 없이 끝남 - 정상적으로는 도달 불가
+        print(f"[YOUTUBE-UPLOAD][WARN] 예상치 못한 코드 경로 - 모든 시도 완료")
+        if last_error:
             return jsonify({
                 "ok": False,
-                "error": f"필수 라이브러리 없음: {str(e)}",
+                "error": f"업로드 실패: {str(last_error)}",
                 "needsAuth": False
             }), 200
-        except Exception as upload_error:
-            error_str = str(upload_error).lower()
-            print(f"[YOUTUBE-UPLOAD] 업로드 오류: {upload_error}")
-            import traceback
-            traceback.print_exc()
-
-            # 할당량 초과 감지 및 _2 프로젝트로 전환
-            if 'quota' in error_str or 'quotaexceeded' in error_str:
-                print("[YOUTUBE-UPLOAD] 할당량 초과 감지!")
-                has_fallback = set_youtube_quota_exceeded()
-                if has_fallback:
-                    return jsonify({
-                        "ok": False,
-                        "error": "YouTube API 할당량 초과. 다음 업로드부터 백업 프로젝트(_2)를 사용합니다. 다시 시도해주세요.",
-                        "quotaExceeded": True,
-                        "needsAuth": True,  # _2 프로젝트 재인증 필요
-                        "needsReauth": True
-                    }), 200
-                else:
-                    return jsonify({
-                        "ok": False,
-                        "error": "YouTube API 할당량 초과. 백업 프로젝트가 없습니다. 내일 다시 시도하거나 YOUTUBE_CLIENT_ID_2 환경변수를 설정해주세요.",
-                        "quotaExceeded": True,
-                        "needsAuth": False
-                    }), 200
-
-            return jsonify({
-                "ok": False,
-                "error": f"업로드 중 오류 발생: {str(upload_error)}",
-                "needsAuth": False
-            }), 200
-
-        # 이 코드는 정상적인 경우 도달하지 않음 (위에서 모두 return됨)
-        # 만약 여기에 도달하면 예상치 못한 코드 경로
-        print(f"[YOUTUBE-UPLOAD][WARN] 예상치 못한 코드 경로 - 테스트 모드로 fallback")
         return jsonify({
             "ok": False,
             "error": "예상치 못한 코드 경로입니다. 서버 로그를 확인해주세요.",
             "metadata": {
                 "title": title,
-                "description": description[:100] + "..." if len(description) > 100 else description,
-                "tags": tags,
-                "categoryId": category_id,
                 "privacyStatus": privacy_status
             }
         })
@@ -9575,6 +9600,17 @@ def _analyze_seo_keywords(script, lang='ko'):
 
         if search_resp.status_code != 200:
             print(f"[SEO] YouTube 검색 실패: {search_resp.status_code}")
+            # 403/429 에러는 할당량 초과 가능성 - 특별 표시
+            if search_resp.status_code in [403, 429]:
+                error_body = search_resp.text.lower()
+                if 'quota' in error_body or 'limit' in error_body or search_resp.status_code == 403:
+                    print("[SEO][WARNING] YouTube API 할당량 초과 감지! 플래그 저장")
+                    # 할당량 플래그 저장 (업로드도 실패할 가능성 높음)
+                    try:
+                        _save_quota_flag()
+                    except Exception as flag_err:
+                        print(f"[SEO] 플래그 저장 실패: {flag_err}")
+                    return {"quota_exceeded": True, "error": "YouTube API 할당량 초과"}
             return None
 
         search_data = search_resp.json()
@@ -9755,6 +9791,14 @@ def api_image_analyze_script():
         seo_data = _analyze_seo_keywords(script, output_language)
         seo_prompt = ""
         if seo_data:
+            # 할당량 초과 감지 시 조기 중단
+            if seo_data.get('quota_exceeded'):
+                print("[IMAGE-ANALYZE][ERROR] YouTube API 할당량 초과 - 파이프라인 중단")
+                return jsonify({
+                    "ok": False,
+                    "error": "YouTube API 할당량 초과. 파이프라인을 중단합니다. 내일 다시 시도하세요.",
+                    "quota_exceeded": True
+                }), 200
             seo_prompt = seo_data.get('seo_prompt', '')
             print(f"[IMAGE-ANALYZE] SEO 분석 완료: {len(seo_data.get('keywords', []))}개 키워드, {len(seo_data.get('recommended_keywords', []))}개 추천 태그")
         else:
