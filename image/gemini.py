@@ -62,6 +62,14 @@ def _get_aspect_instruction(size: str) -> Tuple[str, int, int]:
 
 def _call_openrouter_api(prompt: str, api_key: str, model: str = GEMINI_FLASH) -> Dict[str, Any]:
     """OpenRouter API 호출 (재시도 로직 포함)"""
+    # API 키 검증 로깅
+    if not api_key:
+        print("[GEMINI][ERROR] API 키가 비어있습니다!")
+        return {"ok": False, "error": "OPENROUTER_API_KEY가 설정되지 않았습니다"}
+
+    key_preview = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
+    print(f"[GEMINI][DEBUG] API 호출 시작 - 모델: {model}, 키: {key_preview}, 프롬프트 길이: {len(prompt)}자")
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -85,6 +93,7 @@ def _call_openrouter_api(prompt: str, api_key: str, model: str = GEMINI_FLASH) -
 
     for attempt in range(MAX_RETRIES):
         try:
+            print(f"[GEMINI][DEBUG] API 요청 시도 {attempt + 1}/{MAX_RETRIES}...")
             response = requests.post(
                 OPENROUTER_API_URL,
                 headers=headers,
@@ -92,16 +101,30 @@ def _call_openrouter_api(prompt: str, api_key: str, model: str = GEMINI_FLASH) -
                 timeout=DEFAULT_TIMEOUT
             )
 
+            print(f"[GEMINI][DEBUG] 응답 상태: {response.status_code}")
+
             if response.status_code == 200:
-                return {"ok": True, "data": response.json()}
+                data = response.json()
+                # 응답 구조 로깅
+                choices = data.get("choices", [])
+                if choices:
+                    msg = choices[0].get("message", {})
+                    content = msg.get("content", [])
+                    images = msg.get("images", [])
+                    print(f"[GEMINI][DEBUG] 응답 구조 - choices: {len(choices)}, content 타입: {type(content).__name__}, images: {len(images)}")
+                else:
+                    print(f"[GEMINI][DEBUG] 응답에 choices 없음 - 키: {list(data.keys())[:5]}")
+                return {"ok": True, "data": data}
             elif response.status_code in [429, 502, 503, 504] or "quota" in response.text.lower():
                 last_error = response.text
                 error_type = "서버 오류" if response.status_code >= 500 else "quota/rate limit"
                 print(f"[GEMINI][RETRY] {error_type} ({response.status_code}) (시도 {attempt + 1}/{MAX_RETRIES})")
+                print(f"[GEMINI][DEBUG] 오류 응답: {response.text[:300]}")
                 time.sleep(retry_delay)
                 retry_delay *= 2
                 continue
             else:
+                print(f"[GEMINI][ERROR] API 오류 ({response.status_code}): {response.text[:500]}")
                 return {"ok": False, "error": f"API 오류 ({response.status_code}): {response.text[:200]}"}
 
         except requests.exceptions.Timeout:
