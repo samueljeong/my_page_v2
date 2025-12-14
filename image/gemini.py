@@ -279,7 +279,19 @@ def generate_image(
     # 이미지 추출
     base64_data = _extract_image_from_response(result["data"])
     if not base64_data:
-        return {"ok": False, "error": "Gemini에서 이미지를 생성하지 못했습니다."}
+        # 디버그: API 응답 구조 로깅
+        choices = result["data"].get("choices", [])
+        if choices:
+            message = choices[0].get("message", {})
+            content = message.get("content", [])
+            print(f"[GEMINI][DEBUG] 이미지 추출 실패 - content 타입: {type(content)}, 길이: {len(content) if isinstance(content, list) else 'N/A'}")
+            if isinstance(content, list) and content:
+                print(f"[GEMINI][DEBUG] 첫 번째 content: {str(content[0])[:200]}")
+            elif isinstance(content, str):
+                print(f"[GEMINI][DEBUG] content (text): {content[:200]}")
+        else:
+            print(f"[GEMINI][DEBUG] choices 없음 - 응답: {str(result['data'])[:300]}")
+        return {"ok": False, "error": "Gemini에서 이미지를 생성하지 못했습니다. (응답에 이미지 없음)"}
 
     # 이미지 처리 및 저장
     if output_dir is None:

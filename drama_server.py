@@ -19305,7 +19305,8 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                             print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 완료")
                             return idx, img_data['imageUrl']
                         else:
-                            print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries})")
+                            error_msg = img_data.get('error', '알 수 없는 오류')
+                            print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries}): {error_msg}")
                     except Exception as e:
                         print(f"[AUTOMATION][IMAGE] {idx+1} 오류 (시도 {attempt+1}/{max_retries}): {e}")
 
