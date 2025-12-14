@@ -7141,24 +7141,8 @@ def generate_thumbnail():
         image_url = None
 
         if provider == 'gemini':
-            # Gemini 이미지 생성 (OpenRouter API 사용)
-            openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
-            if not openrouter_api_key:
-                return jsonify({"ok": False, "error": "OpenRouter API 키가 설정되지 않았습니다. 환경변수 OPENROUTER_API_KEY를 설정해주세요."})
-
-            import time
-            import base64
-
-            # OpenRouter API 호출 설정
-            headers = {
-                "Authorization": f"Bearer {openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://drama-generator.app",
-                "X-Title": "Drama Thumbnail Generator"
-            }
-
-            # 스틱맨 스타일 강제 적용 (항상!)
-            # 절대 사실적인 인물이나 할아버지/할머니 등장 금지
+            # Gemini 이미지 생성 (image 모듈 사용)
+            # 스틱맨 스타일 강제 적용
             enhanced_prompt = f"""CRITICAL REQUIREMENTS:
 1. 16:9 WIDESCREEN aspect ratio
 2. ONLY simple white stickman character - round head, two black dot eyes, small mouth, thin eyebrows, black outline body
@@ -7168,148 +7152,16 @@ def generate_thumbnail():
 
 Original request: {image_prompt}
 
-FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple white stickman character. Eye-catching YouTube thumbnail composition. The background is detailed and beautiful, but the character MUST be a simple stickman, NOT a realistic person."""
+FINAL STYLE: Detailed anime background (Ghibli-inspired, warm colors) + Simple white stickman character. Eye-catching YouTube thumbnail composition."""
 
-            payload = {
-                "model": "google/gemini-2.5-flash-image-preview",
-                "modalities": ["text", "image"],
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": enhanced_prompt
-                            }
-                        ]
-                    }
-                ]
-            }
+            # image 모듈의 generate_image 사용
+            result = image_generate(prompt=enhanced_prompt, size="1280x720")
 
-            # 재시도 로직
-            max_retries = 3
-            retry_delay = 5
-
-            response = None
-            last_error = None
-
-            for attempt in range(max_retries):
-                try:
-                    response = req.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers=headers,
-                        json=payload,
-                        timeout=90
-                    )
-
-                    if response.status_code == 200:
-                        break
-                    elif response.status_code in [429, 502, 503, 504]:
-                        last_error = response.text
-                        print(f"[THUMBNAIL][RETRY] OpenRouter 오류 ({response.status_code}) (시도 {attempt + 1}/{max_retries})")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2
-                        continue
-                    else:
-                        break
-                except Exception as e:
-                    last_error = str(e)
-                    print(f"[THUMBNAIL][RETRY] 오류: {e} (시도 {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    continue
-
-            if response is None or response.status_code != 200:
-                error_text = last_error or (response.text if response else "알 수 없는 오류")
-                return jsonify({"ok": False, "error": f"Gemini API 오류: {error_text[:200]}"})
-
-            result = response.json()
-            print(f"[THUMBNAIL][DEBUG] OpenRouter 응답: {json.dumps(result, ensure_ascii=False)[:500]}")
-
-            # 응답에서 이미지 추출
-            base64_image_data = None
-            try:
-                choices = result.get("choices", [])
-                if choices:
-                    message = choices[0].get("message", {})
-
-                    # images 배열 확인
-                    images = message.get("images", [])
-                    if images:
-                        for img in images:
-                            if isinstance(img, str):
-                                # base64 문자열 또는 data URL
-                                if img.startswith("data:"):
-                                    base64_image_data = img.split(",", 1)[1] if "," in img else img
-                                else:
-                                    base64_image_data = img
-                                break
-                            elif isinstance(img, dict):
-                                # dict 형태의 이미지 데이터 처리
-                                if img.get("type") == "image_url":
-                                    url = img.get("image_url", {}).get("url", "")
-                                    if url.startswith("data:"):
-                                        base64_image_data = url.split(",", 1)[1] if "," in url else url
-                                elif "url" in img:
-                                    url = img.get("url", "")
-                                    if url.startswith("data:"):
-                                        base64_image_data = url.split(",", 1)[1] if "," in url else url
-                                elif "data" in img:
-                                    base64_image_data = img.get("data")
-                                elif "b64_json" in img:
-                                    base64_image_data = img.get("b64_json")
-                                if base64_image_data:
-                                    break
-
-                    # content 배열 확인
-                    if not base64_image_data:
-                        content = message.get("content", [])
-                        if isinstance(content, list):
-                            for item in content:
-                                if isinstance(item, dict):
-                                    item_type = item.get("type", "")
-
-                                    if item_type == "image_url":
-                                        url = item.get("image_url", {}).get("url", "")
-                                        if url.startswith("data:"):
-                                            base64_image_data = url.split(",", 1)[1] if "," in url else url
-                                            break
-
-                                    elif item_type == "image":
-                                        image_data = item.get("image", {})
-                                        if isinstance(image_data, dict):
-                                            base64_image_data = image_data.get("data") or image_data.get("base64") or image_data.get("b64_json")
-                                        elif isinstance(image_data, str):
-                                            base64_image_data = image_data
-                                        if base64_image_data:
-                                            break
-
-                                    elif "inline_data" in item:
-                                        inline = item.get("inline_data", {})
-                                        base64_image_data = inline.get("data", "")
-                                        if base64_image_data:
-                                            break
-
-                    # base64 데이터가 있으면 파일로 저장
-                    if base64_image_data:
-                        image_bytes = base64.b64decode(base64_image_data)
-
-                        static_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
-                        os.makedirs(static_dir, exist_ok=True)
-
-                        timestamp = dt.now().strftime("%Y%m%d_%H%M%S_%f")
-                        filename = f"thumbnail_{timestamp}.png"
-                        filepath = os.path.join(static_dir, filename)
-
-                        with open(filepath, 'wb') as f:
-                            f.write(image_bytes)
-
-                        image_url = f"/static/thumbnails/{filename}"
-                        print(f"[THUMBNAIL] 이미지 저장 완료: {image_url}")
-
-            except Exception as e:
-                print(f"[THUMBNAIL][ERROR] 이미지 추출 오류: {e}")
-                import traceback
-                traceback.print_exc()
+            if result.get("ok") and result.get("image_url"):
+                image_url = result.get("image_url")
+                print(f"[THUMBNAIL] Gemini 이미지 생성 완료: {image_url}")
+            else:
+                return jsonify({"ok": False, "error": result.get("error", "Gemini 이미지 생성 실패")})
 
         elif provider == 'dalle':
             # DALL-E 3 이미지 생성
