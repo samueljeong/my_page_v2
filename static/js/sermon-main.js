@@ -23,8 +23,8 @@ window.selectedTitle = ''; // 선택된 제목 저장
 // ===== 기본 설정 =====
 window.config = {
   categories: [
-    {value: "category1", label: "묵상메시지"},
     {value: "general", label: "설교"},
+    {value: "category1", label: "묵상메시지"},
     {value: "education", label: "교육"}
   ],
   categorySettings: {
