@@ -10207,14 +10207,17 @@ The key visual style for scene images is KOREAN WEBTOON/MANHWA:
 - NO photorealistic humans
 - NO Japanese anime style
 - NO 3D rendered characters
-- NO text/letters in the image
+- ⚠️⚠️⚠️ ABSOLUTELY NO TEXT/LETTERS/WORDS IN THE IMAGE! ⚠️⚠️⚠️
+- NO English text, NO Korean text, NO any language text
+- NO labels, NO captions, NO titles in the image
+- The image should be PURELY VISUAL with NO text elements
 
 ## PROMPT STRUCTURE FOR SCENE IMAGES (ALWAYS FOLLOW THIS ORDER)
 "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. " +
 "[Scene description with character action/emotion]. " +
 "Korean webtoon character with EXAGGERATED [emotion] EXPRESSION, 30-50 year old Korean [man/woman]. " +
 "Clean bold outlines, vibrant flat colors, comic-style expression marks. " +
-"[Background description]. NO photorealistic, NO stickman, NO anime, NO 3D render."
+"[Background description]. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image."
 
 ## WEBTOON CHARACTER DESCRIPTION (USE THIS STYLE)
 "Korean webtoon/manhwa style character with exaggerated [emotion] expression (wide eyes, [mouth expression], sweat drops),
@@ -10227,6 +10230,7 @@ The key visual style for scene images is KOREAN WEBTOON/MANHWA:
 - Comic-style expression marks (sweat drops, impact lines)
 - 30-50 year old Korean man or woman
 - NO photorealistic, NO stickman, NO anime, NO 3D
+- ⚠️ NO text, NO letters, NO words, NO labels - image must be purely visual!
 
 ## 🎨 썸네일 전략 규칙 (중요!)
 
@@ -10715,7 +10719,7 @@ The key visual style for scene images is KOREAN WEBTOON/MANHWA:
       "scene_number": 1,
       "chapter_title": "Short chapter title for YouTube (5-15 chars)",
       "narration": "<speak>원본 대본의 정확한 문장.<break time='300ms'/><prosody rate='slow'>감정 표현이 필요한 부분</prosody>에 SSML 태그 추가.</speak>",
-      "image_prompt": "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. [Scene description]. Korean webtoon character with EXAGGERATED [emotion] EXPRESSION, 30-50 year old Korean [man/woman]. Clean bold outlines, vibrant flat colors, comic-style expression marks (sweat drops, impact lines). [Background]. NO photorealistic, NO stickman, NO anime, NO 3D render.",
+      "image_prompt": "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. [Scene description]. Korean webtoon character with EXAGGERATED [emotion] EXPRESSION, 30-50 year old Korean [man/woman]. Clean bold outlines, vibrant flat colors, comic-style expression marks (sweat drops, impact lines). [Background]. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image.",
       "ken_burns": "zoom_in / zoom_out / pan_left / pan_right / pan_up / pan_down"
     }}
   ]
@@ -10979,19 +10983,19 @@ Each scene needs a short chapter title for YouTube chapters:
 </speak>
 ```
 
-## EXAMPLE PROMPTS (한국 웹툰/만화 스타일 - 과장된 표정 필수!)
+## EXAMPLE PROMPTS (한국 웹툰/만화 스타일 - 과장된 표정 필수, 텍스트 금지!)
 
 ### 신문 읽고 충격받는 장면
-"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Office building stairs scene in warm morning light. Korean webtoon character with SHOCKED EXPRESSION (wide eyes, open mouth, sweat drops), 40 year old Korean man reading newspaper. Clean bold outlines, vibrant flat colors, comic-style impact lines. NO photorealistic, NO stickman, NO anime, NO 3D render."
+"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Office building stairs scene in warm morning light. Korean webtoon character with SHOCKED EXPRESSION (wide eyes, open mouth, sweat drops), 40 year old Korean man reading newspaper. Clean bold outlines, vibrant flat colors, comic-style impact lines. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image."
 
 ### 주식 폭락 소식 듣는 장면
-"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Stock trading floor with monitors showing falling charts. Korean webtoon character with WORRIED/PANICKED EXPRESSION (sweating, raised eyebrows, anxious mouth), 45 year old Korean businessman. Clean bold outlines, dramatic lighting, comic-style sweat drops. NO photorealistic, NO stickman, NO anime, NO 3D render."
+"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Stock trading floor with monitors showing falling charts. Korean webtoon character with WORRIED/PANICKED EXPRESSION (sweating, raised eyebrows, anxious mouth), 45 year old Korean businessman. Clean bold outlines, dramatic lighting, comic-style sweat drops. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image."
 
 ### 의사 상담 장면
-"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean clinic office with medical equipment. Korean webtoon character doctor with GENTLE/REASSURING EXPRESSION, 50 year old Korean man in white coat. Clean bold outlines, soft colors, professional atmosphere. NO photorealistic, NO stickman, NO anime, NO 3D render."
+"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean clinic office with medical equipment. Korean webtoon character doctor with GENTLE/REASSURING EXPRESSION, 50 year old Korean man in white coat. Clean bold outlines, soft colors, professional atmosphere. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image."
 
 ### 도시 거리 걷는 장면
-"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean city street with shops and signs. Korean webtoon character with CONTEMPLATIVE EXPRESSION, 40 year old Korean woman walking. Clean bold outlines, vibrant city colors, daily life atmosphere. NO photorealistic, NO stickman, NO anime, NO 3D render."
+"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean city street with shops and signs. Korean webtoon character with CONTEMPLATIVE EXPRESSION, 40 year old Korean woman walking. Clean bold outlines, vibrant city colors, daily life atmosphere. NO photorealistic, NO stickman, NO anime, NO 3D render, NO text, NO letters, NO words in image."
 """
 
         # 콘텐츠 타입별 시스템 프롬프트 분기 (실사 스타일)
@@ -11302,9 +11306,10 @@ Rules:
 4. Character face MUST have: exaggerated expression matching the emotion - CONSISTENT character style in every scene!
 5. NO photorealistic humans, NO stickman/stick figures, NO Japanese anime style!
 6. Express emotion through exaggerated facial expressions (wide eyes, open mouth, sweat drops, impact lines)
-7. Add these tags to every image_prompt: Korean webtoon style, manhwa illustration, exaggerated expression, clean bold outlines, NO photorealistic, NO stickman
-8. {thumb_instruction}
-9. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
+7. Add these tags to every image_prompt: Korean webtoon style, manhwa illustration, exaggerated expression, clean bold outlines, NO photorealistic, NO stickman, NO text, NO letters, NO words in image
+8. ⚠️ ABSOLUTELY NO TEXT/LETTERS/WORDS IN THE IMAGE! The image must be purely visual without any text overlay!
+9. {thumb_instruction}
+10. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
 
 image_prompt MUST be in English."""
         else:
@@ -11329,7 +11334,8 @@ Rules:
 2. {thumbnail_instruction}
 3. image_prompt MUST be in English, following the prompt writing principles above.
 4. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
-5. ⚠️ ALL CHARACTERS = KOREAN WEBTOON/MANHWA STYLE! No photorealistic humans, no stickman. Use Korean webtoon style characters with exaggerated expressions."""
+5. ⚠️ ALL CHARACTERS = KOREAN WEBTOON/MANHWA STYLE! No photorealistic humans, no stickman. Use Korean webtoon style characters with exaggerated expressions.
+6. ⚠️ ABSOLUTELY NO TEXT/LETTERS/WORDS IN THE IMAGE! The image must be purely visual without any text overlay!"""
 
         print(f"[IMAGE-ANALYZE] GPT-5.1 generating prompts... (style: {image_style}, content: {content_type}, audience: {audience}, language: {output_language})")
 
