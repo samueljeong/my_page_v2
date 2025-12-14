@@ -28,7 +28,7 @@ IMAGE_COUNT_CONFIG = {
         "10~15min": 11,
         "15min+": 12,
     },
-    "chars_per_minute": 150,  # 한국어 TTS 기준
+    "chars_per_minute": 1200,  # 한국어 TTS 기준 (실측: 7000자 ≈ 5-6분)
 }
 
 
