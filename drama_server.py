@@ -4592,7 +4592,7 @@ def api_step3_tts_pipeline():
     }
     """
     try:
-        from step3_tts_and_subtitles import run_tts_pipeline
+        from tts import run_tts_pipeline
 
         data = request.get_json()
         if not data:
