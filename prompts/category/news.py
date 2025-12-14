@@ -7,6 +7,73 @@ NEWS_RULES = """
 ### Category Detection
 Politics, economy, social issues, companies, legal matters, current events
 
+### ⚠️⚠️⚠️ YOUTUBE TITLE RULES FOR NEWS (CRITICAL!) ⚠️⚠️⚠️
+
+**Algorithm Optimization:**
+- **First 20 chars**: MUST contain the main keyword (YouTube prioritizes this!)
+- **Total length**: 25-45 chars (mobile optimized)
+- **Structure**: [Keyword] + [Situation] + [Curiosity]
+- Optimize for BOTH CTR and search visibility
+
+**Required Elements:**
+- Include at least 2 of: WHO / WHAT / WHY
+- Hide the conclusion, CREATE CURIOSITY
+- Minimize particles/connectors
+
+**BANNED (Never use):**
+- Low-quality clickbait: "충격", "대박", "소름", "경악" / "衝撃", "ヤバい"
+- Misleading titles that don't match content
+- Emotional sentences without keywords
+- Over 60 chars
+
+**Title Formulas (Choose based on content):**
+
+1. **Breaking/Urgent (속보형)** - for real-time issues:
+   - Pattern: `{keyword} 속보, {core content} 발표`
+   - Pattern: `[긴급] {keyword} {fact} 확인됐다`
+
+2. **Analysis/Explanation (해설형)** - for complex issues:
+   - Pattern: `{keyword} 왜 이렇게 됐나, {reason} 때문`
+   - Pattern: `{keyword} 판단 엇갈린 핵심 이유`
+
+3. **Impact/Summary (영향형)** - for policy changes:
+   - Pattern: `{keyword} 발표, {target} 영향 총정리`
+   - Pattern: `{keyword} 이후 달라진 점 정리`
+
+4. **Discovery/Twist (반전형)** - for exclusive reports:
+   - Pattern: `{keyword} 알고 보니 {unexpected fact}`
+   - Pattern: `{keyword} 공식 발표에 없던 정황`
+
+5. **Comparison (비교형)** - for debates:
+   - Pattern: `{keyword} 한국 vs 해외 반응 비교`
+   - Pattern: `{keyword} 전문가 전망 엇갈린 이유`
+
+**Category-Specific Templates:**
+
+For Politics: `{정책} 발표, 여야 반응 갈린 이유` / `{인물} 발언 이후 논란 커진 배경`
+For Economy: `{지표} 발표, 시장 반응 엇갈린 이유` / `{수치} 돌파, 내 생활 영향은`
+For Society: `{사건} 속보, 현재 상황 정리` / `{제도} 시행 이후 혼란 커진 이유`
+For International: `{국가} 발표, 한국 영향 분석` / `{회담} 결과, 합의 내용 정리`
+
+**Target Audience Optimization:**
+
+Senior (50+):
+- Pattern: `{제도} 바뀌었다, 50대 이상 꼭 확인`
+- Pattern: `{혜택} 신청 기한 임박, 놓치면 손해`
+
+Youth (20-30s):
+- Pattern: `{취업} 시장 변화, 유망 분야는`
+- Pattern: `{주거} 정책 발표, 청년 혜택 정리`
+
+**Universal Templates (just replace keyword):**
+- `{keyword} 발표, 핵심 내용 정리`
+- `{keyword} 이후 달라진 점`
+- `{keyword} 논란, 쟁점 총정리`
+- `{keyword} 전망, 전문가 분석`
+- `{keyword} 영향, 누가 해당되나`
+
+⚠️ CRITICAL: Extract {keyword} from the ACTUAL SCRIPT CONTENT!
+
 ### Thumbnail Style: COMIC STYLE (문화권에 맞게)
 ⚠️ NO PHOTOREALISTIC! Use comic/webtoon/manga style matching the script's language!
 ⚠️ NO TEXT in images! Text will be added separately!
