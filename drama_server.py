@@ -8740,6 +8740,14 @@ def api_youtube_auth_page():
         force_new_auth = request.args.get('force', '0') == '1'
         # account_id 파라미터 (이메일 또는 식별자)
         account_id = request.args.get('account_id', '').strip()
+        # project 파라미터 (_2 프로젝트 수동 선택)
+        manual_project = request.args.get('project', '').strip()
+        if manual_project == '_2':
+            # _2 프로젝트로 강제 전환
+            client_id = os.getenv('YOUTUBE_CLIENT_ID_2') or os.getenv('GOOGLE_CLIENT_ID_2')
+            client_secret = os.getenv('YOUTUBE_CLIENT_SECRET_2') or os.getenv('GOOGLE_CLIENT_SECRET_2')
+            project_suffix = '_2'
+            print(f"[YOUTUBE-AUTH-GET] project=_2 수동 선택 - _2 프로젝트로 인증")
 
         if force_new_auth:
             print("[YOUTUBE-AUTH-GET] force=1 - 새 계정 인증 강제 진행")
@@ -8813,13 +8821,14 @@ def api_youtube_auth_page():
             prompt=oauth_prompt  # select_account: 계정 선택, consent: 동의 화면 (refresh_token 확보)
         )
 
-        # 상태 저장 (account_id 포함)
+        # 상태 저장 (account_id, project_suffix 포함)
         save_oauth_state({
             'state': state,
             'redirect_uri': redirect_uri,
             'client_id': client_id,
             'client_secret': client_secret,
-            'account_id': account_id  # 이메일 또는 식별자
+            'account_id': account_id,  # 이메일 또는 식별자
+            'project_suffix': project_suffix  # _2 프로젝트 구분
         })
 
         print(f"[YOUTUBE-AUTH-GET] Google OAuth URL로 리다이렉트")
