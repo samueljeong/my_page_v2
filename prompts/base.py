@@ -1,20 +1,28 @@
 # -*- coding: utf-8 -*-
 """공통 프롬프트 규칙 - 모든 언어/카테고리에 적용"""
 
-# 한국 웹툰 캐릭터 규칙 (씬 이미지용)
-WEBTOON_RULES = """
-## CORE CONCEPT - KOREAN WEBTOON STYLE (CRITICAL!)
-The key visual style for scene images is KOREAN WEBTOON/MANHWA:
-1. Style = KOREAN WEBTOON (not Japanese anime, not stickman, not photorealistic)
-2. Characters = Korean webtoon/manhwa style with EXAGGERATED EXPRESSIONS
-3. Age = 30-50 year old Korean man or woman (match the story)
-4. Features = Clean bold outlines, vibrant flat colors, comic-style expression marks
+# 이미지 스타일 규칙 (언어별 문화권에 맞게 적용)
+IMAGE_STYLE_RULES = """
+## CORE CONCEPT - CULTURALLY APPROPRIATE COMIC STYLE (CRITICAL!)
+⚠️ Image style MUST match the script's language/culture!
 
-## WEBTOON CHARACTER DESCRIPTION (USE THIS STYLE)
-"Korean webtoon/manhwa style character with exaggerated [emotion] expression (wide eyes, [mouth expression], sweat drops),
-30-50 year old Korean [man/woman], clean bold outlines, vibrant colors"
+**Style by Language:**
+- Korean script → Korean WEBTOON/manhwa style, Korean characters, Korean settings
+- Japanese script → Japanese MANGA style, Japanese characters, Japanese settings
+- English script → Western COMIC style, Western characters, Western settings
 
-**Emotion expressions:**
+**CRITICAL: Match cultural elements to the language!**
+- Korean video: Korean people, Korean clothing, Korean architecture
+- Japanese video: Japanese people, Japanese clothing (kimono when appropriate), Japanese architecture
+- English video: Western people, Western clothing, Western architecture
+
+**DO NOT mix cultures!**
+- ❌ Korean script with Japanese kimono = WRONG
+- ❌ Japanese script with Korean hanbok = WRONG
+- ❌ English script with Asian architecture = WRONG (unless story requires it)
+
+## CHARACTER STYLE GUIDELINES
+Use EXAGGERATED EXPRESSIONS for high engagement:
 - Shocked: wide eyes, open mouth, sweat drops, impact lines
 - Sad: gentle sad eyes, slight frown, tears
 - Happy: bright eyes, big smile, sparkles
@@ -23,23 +31,16 @@ The key visual style for scene images is KOREAN WEBTOON/MANHWA:
 - Surprised: huge eyes, small open mouth, raised eyebrows
 
 ## MANDATORY STYLE KEYWORDS (MUST INCLUDE IN EVERY image_prompt)
-- Korean WEBTOON/manhwa style illustration
+- [Culture] comic/webtoon/manga style illustration
 - 16:9 aspect ratio
-- Korean webtoon character with EXAGGERATED [emotion] EXPRESSION
-- 30-50 year old Korean man or woman
+- Character with EXAGGERATED [emotion] EXPRESSION
+- Age-appropriate character matching the story
 - Clean bold outlines, vibrant flat colors
 - Comic-style expression marks (sweat drops, impact lines)
-- NO photorealistic, NO stickman, NO anime, NO 3D render
+- NO photorealistic, NO stickman, NO 3D render
 - NO text, NO letters, NO words, NO speech bubbles (CRITICAL!)
 
-## SCENE IMAGE PROMPT TEMPLATE
-"Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio.
-[Background description related to scene].
-Korean webtoon character with EXAGGERATED [emotion] EXPRESSION ([specific expression details]),
-30-50 year old Korean [man/woman].
-Clean bold outlines, vibrant flat colors, comic-style expression marks.
-NO text, NO letters, NO speech bubbles.
-NO photorealistic, NO stickman, NO anime, NO 3D render."
+## IMPORTANT: Refer to LANGUAGE section for specific image prompt template!
 """
 
 # SSML 규칙 (나레이션용)
@@ -151,7 +152,7 @@ SCENE_STRUCTURE = """
     "scene_number": 1,
     "chapter_title": "short title (5-15 chars)",
     "narration": "<speak>EXACT original script text with SSML tags</speak>",
-    "image_prompt": "Korean WEBTOON/manhwa style illustration...",
+    "image_prompt": "[Culture-appropriate] comic style illustration... (see LANGUAGE section for template)",
     "ken_burns": "zoom_in | zoom_out | pan_left | pan_right | pan_up | pan_down"
   }
 ]
@@ -185,11 +186,12 @@ OUTPUT_JSON_STRUCTURE = """
 # 기본 지침
 BASE_INSTRUCTIONS = """
 ## KEY RULES
-1. SCENE image_prompt = Korean WEBTOON/manhwa style (NO photorealistic, NO stickman!)
-2. THUMBNAIL ai_prompts = Korean WEBTOON/manhwa style (ALL categories!)
+1. SCENE image_prompt = Comic style matching the script's culture (NO photorealistic, NO stickman!)
+2. THUMBNAIL ai_prompts = Comic style matching the script's culture (ALL categories!)
 3. NARRATION = EXACT script text + SSML tags (DO NOT summarize!)
 4. image_prompt = ALWAYS in English
 5. All other text (title, description, thumbnail) = OUTPUT LANGUAGE
+6. Cultural elements MUST match the script's language (Korean→Korean, Japanese→Japanese, English→Western)
 
 ## ⚠️ CRITICAL: NO TEXT IN IMAGES! ⚠️
 - NEVER include any text, letters, words, or speech bubbles in image prompts!
@@ -203,7 +205,7 @@ def get_base_prompt():
     """공통 프롬프트 조합"""
     return "\n".join([
         BASE_INSTRUCTIONS,
-        WEBTOON_RULES,
+        IMAGE_STYLE_RULES,
         SSML_RULES,
         KEN_BURNS_RULES,
         BGM_RULES,

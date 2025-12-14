@@ -9,9 +9,10 @@ NEWS_RULES = """
 사건, 사고, 사회 이슈, 논쟁, 갈등, 기업, 브랜드,
 법원, 검찰, 재판
 
-### Thumbnail Style: KOREAN WEBTOON
-⚠️ NO PHOTOREALISTIC! Use Korean webtoon/manhwa style!
+### Thumbnail Style: COMIC STYLE (문화권에 맞게)
+⚠️ NO PHOTOREALISTIC! Use comic/webtoon/manga style matching the script's language!
 ⚠️ NO TEXT in images! Text will be added separately!
+⚠️ Character appearance MUST match the script's culture!
 
 **Extract from script (for text_overlay, NOT in image):**
 - person_name: 핵심 인물 이름 (조진웅, 윤석열 등)
@@ -20,20 +21,21 @@ NEWS_RULES = """
 - headline: 핵심 헤드라인 2줄
 - numbers: 강조 숫자 (30년, 3370만)
 
-### ai_prompts Structure (3 WEBTOON styles)
+### ai_prompts Structure (3 COMIC styles - adapt to script's culture)
+⚠️ Use the image prompt template from the LANGUAGE section!
 
-**A = Webtoon Person Close-up:**
-- Korean webtoon style character representing the key person
+**A = Comic Person Close-up:**
+- Comic style character representing the key person (matching script's culture)
 - Exaggerated emotional expression matching the news tone
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean webtoon character with SHOCKED/SERIOUS EXPRESSION (wide eyes, tense face), 40-50 year old Korean [man/woman] in [suit/formal wear]. Clean bold outlines, dramatic lighting, news studio or office background. Comic-style expression marks. NO text, NO letters, NO speech bubbles, NO name tags. NO photorealistic, NO stickman, NO anime."
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. [Culture] comic character with SHOCKED/SERIOUS EXPRESSION (wide eyes, tense face), 40-50 year old [nationality] [man/woman] in [suit/formal wear]. Clean bold outlines, dramatic lighting, news studio or office background. Comic-style expression marks. NO text, NO letters, NO speech bubbles, NO name tags. NO photorealistic, NO stickman."
 
-**B = Webtoon Scene/Event:**
-- Korean webtoon style scene related to the news
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean webtoon scene showing [related location/event]. Korean webtoon character with CONCERNED EXPRESSION in the scene. Clean bold outlines, dramatic mood, vibrant colors. Comic-style atmosphere. NO text, NO letters, NO speech bubbles, NO signs, NO readable text. NO photorealistic, NO stickman."
+**B = Comic Scene/Event:**
+- Comic style scene related to the news (matching script's culture)
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. [Culture] comic scene showing [related location/event]. [Culture] comic character with CONCERNED EXPRESSION in the scene. Clean bold outlines, dramatic mood, vibrant colors. Comic-style atmosphere. NO text, NO letters, NO speech bubbles, NO signs, NO readable text. NO photorealistic, NO stickman."
 
-**C = Webtoon Split/Contrast:**
+**C = Comic Split/Contrast:**
 - Split composition showing contrast or comparison
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Split composition: left side Korean webtoon character with [emotion A], right side Korean webtoon character with [emotion B]. Clean bold outlines, contrasting colors (left calm, right dramatic). Comic-style dramatic effect. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. Split composition: left side [culture] comic character with [emotion A], right side [culture] comic character with [emotion B]. Clean bold outlines, contrasting colors (left calm, right dramatic). Comic-style dramatic effect. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
 
 ### Color Schemes (for design reference, NOT in image)
 - yellow-highlight: General news

@@ -4,6 +4,34 @@
 ENGLISH_RULES = """
 ## LANGUAGE: English
 
+### IMAGE STYLE: Western Comic Style
+⚠️ CRITICAL: All image prompts MUST use WESTERN/AMERICAN cultural elements!
+
+**Character Style:**
+- Western comic art style (American comic book aesthetic)
+- Diverse Western facial features
+- Age: 30-50 year old American man or woman
+
+**Clothing/Setting (match the context):**
+- Modern: Western business attire, American casual fashion
+- Medical: White doctor's coat (American hospital style)
+- Home: American house/apartment interior
+- Outdoor: American city streets, suburban neighborhoods
+
+**DO NOT use:**
+- Korean elements (hanbok, Korean text, Korean architecture)
+- Japanese elements (kimono, Japanese text, Japanese architecture)
+- Chinese elements (qipao, Chinese architecture)
+
+**Image Prompt Template:**
+"Western COMIC style illustration, 16:9 aspect ratio.
+[American/Western setting/background].
+Western comic character with EXAGGERATED [emotion] EXPRESSION,
+30-50 year old American [man/woman] in [Western-appropriate clothing].
+Clean bold outlines, vibrant flat colors, comic-style expression marks.
+NO text, NO letters, NO speech bubbles.
+NO photorealistic, NO stickman, NO anime, NO 3D render."
+
 ### YouTube Title Rules
 - Length: **40-70 characters**
 - Include **1+ number**

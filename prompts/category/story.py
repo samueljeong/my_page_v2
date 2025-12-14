@@ -11,25 +11,27 @@ STORY_RULES = """
 - Drama/movie-like narrative structure
 - NOT health, NOT news = STORY
 
-### Thumbnail Style: KOREAN WEBTOON
+### Thumbnail Style: COMIC STYLE (문화권에 맞게)
 ⚠️ NO TEXT in images! Text will be added separately!
-Korean webtoon/manhwa style with exaggerated expressions!
+⚠️ Character appearance MUST match the script's culture!
+Comic/webtoon/manga style with exaggerated expressions!
 High CTR through dramatic emotional expressions!
 
-### ai_prompts Structure (3 WEBTOON styles)
+### ai_prompts Structure (3 COMIC styles - adapt to script's culture)
+⚠️ Use the image prompt template from the LANGUAGE section!
 
-**A = Webtoon Emotion Focus:**
+**A = Comic Emotion Focus:**
 - Exaggerated shocked/surprised expression
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean webtoon character with EXAGGERATED SHOCKED/SURPRISED EXPRESSION (mouth wide open, big eyes, sweating), 30-40 year old Korean [man/woman]. Clean bold outlines, vibrant flat colors. Comic-style expression marks (sweat drops, impact lines). Background related to the topic. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. [Culture] comic character with EXAGGERATED SHOCKED/SURPRISED EXPRESSION (mouth wide open, big eyes, sweating), 30-40 year old [nationality] [man/woman]. Clean bold outlines, vibrant flat colors. Comic-style expression marks (sweat drops, impact lines). Background related to the topic. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
 
-**B = Webtoon Scene Focus:**
+**B = Comic Scene Focus:**
 - Key moment of story
 - Character on right, space for overlay on left
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean webtoon scene showing the key moment of the story. Korean webtoon character with exaggerated expression on right side. Comic-style effect lines (radial lines, impact effects). Bright vibrant colors. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. [Culture] comic scene showing the key moment of the story. [Culture] comic character with exaggerated expression on right side. Comic-style effect lines (radial lines, impact effects). Bright vibrant colors. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman."
 
-**C = Webtoon Dramatic:**
+**C = Comic Dramatic:**
 - High contrast, dramatic composition
-- Prompt: "Korean WEBTOON/manhwa style illustration, 16:9 aspect ratio. Korean webtoon character with dramatic emotional expression. High contrast colors, comic book aesthetic. Character shows strong emotion matching the story. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman, NO 3D render."
+- Prompt template: "[Culture] comic style illustration, 16:9 aspect ratio. [Culture] comic character with dramatic emotional expression. High contrast colors, comic book aesthetic. Character shows strong emotion matching the story. NO text, NO letters, NO speech bubbles. NO photorealistic, NO stickman, NO 3D render."
 
 ### text_overlay for Story (applied separately, NOT in image)
 {
