@@ -16579,8 +16579,8 @@ def api_thumbnail_ai_generate_single():
         for kw in ['stickman', 'stick man', 'photorealistic', 'realistic', 'photograph', 'photo', 'Ghibli', 'anime']:
             clean_prompt = clean_prompt.replace(kw, '').replace(kw.lower(), '').replace(kw.capitalize(), '')
 
-        # 일반 영상 채널 타입 (knowledge, health, christian, history)
-        general_channel_types = ['knowledge', 'health', 'christian', 'history']
+        # 일반 영상 채널 타입 (knowledge, health, christian, history, story)
+        general_channel_types = ['knowledge', 'health', 'christian', 'history', 'story']
 
         # ★ 뉴스 스타일이거나 프롬프트에 이미 상세 지시가 있으면 그대로 사용
         if style == 'news' or 'webtoon style illustration' in clean_prompt.lower():
@@ -18506,8 +18506,8 @@ NO photorealistic."""
                     }
                     print(f"[AUTOMATION][THUMB] 뉴스 썸네일: face={has_face}, scene={scene_type}, text='{line1}'")
 
-                # ★ 일반 영상 채널 (knowledge, health, christian, history) - 새 시스템 사용
-                elif detected_category in ['knowledge', 'health', 'christian', 'history']:
+                # ★ 일반 영상 채널 (knowledge, health, christian, history, story) - 새 시스템 사용
+                elif detected_category in ['knowledge', 'health', 'christian', 'history', 'story']:
                     print(f"[AUTOMATION][THUMB] 일반 영상 채널 스타일 - {detected_category}")
 
                     # 텍스트 추출

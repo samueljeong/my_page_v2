@@ -167,6 +167,19 @@ CHANNEL_PRESETS = {
         "notes": "dramatic but not sensational",
         "default_face": False,
     },
+    "story": {
+        "channel_type": "story",
+        "style": "emotional webtoon",
+        "mood": "empathetic",
+        "expression": "concern",
+        "emotion_level": "restrained",
+        "background": "soft contextual background",
+        "effects": "minimal emotional lines",
+        "character_size": "40-50%",
+        "color_tone": "warm and relatable",
+        "notes": "relatable emotion, no exaggeration, focus on empathy",
+        "default_face": True,
+    },
 }
 
 
