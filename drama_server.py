@@ -18412,7 +18412,14 @@ NO photorealistic."""
                 elif is_news:
                     # 폴백: 뉴스 스타일 프롬프트 (새 구조 없을 때)
                     print(f"[AUTOMATION][THUMB] 폴백: 뉴스 웹툰 스타일 프롬프트")
-                    fallback_text = best_combo.get('chosen_thumbnail_text', '핵심 쟁점') if best_combo else '핵심 쟁점'
+                    # 텍스트 우선순위: best_combo > ai_prompts.A > 제목
+                    fallback_text = ''
+                    if best_combo:
+                        fallback_text = best_combo.get('chosen_thumbnail_text', '')
+                    if not fallback_text and ai_prompts and ai_prompts.get('A'):
+                        fallback_text = ai_prompts['A'].get('text_overlay', {}).get('main', '')
+                    if not fallback_text:
+                        fallback_text = (title or '')[:10]
                     thumb_prompt = {
                         "prompt": "Korean webtoon style YouTube thumbnail, 16:9 aspect ratio. Korean webtoon character with SERIOUS FOCUSED expression (NOT screaming), 40-50 year old Korean man in suit. Clean bold outlines, news studio background. Text space on left side. Credible news explainer tone. NO photorealistic, NO stickman.",
                         "text_overlay": {"main": fallback_text, "sub": ""},
@@ -18421,7 +18428,14 @@ NO photorealistic."""
                 else:
                     # 폴백: 웹툰 스타일 프롬프트
                     print(f"[AUTOMATION][THUMB] 폴백: 웹툰 스타일 프롬프트")
-                    fallback_text = best_combo.get('chosen_thumbnail_text', '메인 텍스트') if best_combo else '메인 텍스트'
+                    # 텍스트 우선순위: best_combo > ai_prompts.A > 제목
+                    fallback_text = ''
+                    if best_combo:
+                        fallback_text = best_combo.get('chosen_thumbnail_text', '')
+                    if not fallback_text and ai_prompts and ai_prompts.get('A'):
+                        fallback_text = ai_prompts['A'].get('text_overlay', {}).get('main', '')
+                    if not fallback_text:
+                        fallback_text = (title or '')[:10]
                     thumb_prompt = {
                         "prompt": "Korean WEBTOON style YouTube thumbnail, 16:9 aspect ratio. Korean webtoon/manhwa style character with EXAGGERATED SHOCKED/SURPRISED EXPRESSION. Clean bold outlines, vibrant flat colors. Comic-style expression marks. NO photorealistic, NO stickman.",
                         "text_overlay": {"main": fallback_text, "sub": ""}
