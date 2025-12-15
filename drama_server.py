@@ -26,6 +26,14 @@ from lang import en as lang_en
 # GPT-5.1 프롬프트 모듈 (토큰 최적화)
 from prompts import build_system_prompt, detect_category_simple, detect_language_simple
 
+# 일반 영상용 웹툰 썸네일 시스템 (뉴스 외)
+from prompts.thumbnail import (
+    CHANNEL_PRESETS,
+    determine_face_visibility,
+    get_channel_preset,
+    build_gemini_prompt,
+)
+
 # YouTube 토큰/할당량 관리 모듈
 import youtube_auth
 from youtube_auth import (
@@ -16571,6 +16579,9 @@ def api_thumbnail_ai_generate_single():
         for kw in ['stickman', 'stick man', 'photorealistic', 'realistic', 'photograph', 'photo', 'Ghibli', 'anime']:
             clean_prompt = clean_prompt.replace(kw, '').replace(kw.lower(), '').replace(kw.capitalize(), '')
 
+        # 일반 영상 채널 타입 (knowledge, health, christian, history)
+        general_channel_types = ['knowledge', 'health', 'christian', 'history']
+
         # ★ 뉴스 스타일이거나 프롬프트에 이미 상세 지시가 있으면 그대로 사용
         if style == 'news' or 'webtoon style illustration' in clean_prompt.lower():
             # 뉴스/이슈 해설용 - 프롬프트 그대로 사용 (이미 상세하게 작성됨)
@@ -16579,8 +16590,37 @@ def api_thumbnail_ai_generate_single():
             if 'NO text' not in enhanced_prompt.upper():
                 enhanced_prompt += "\n\nABSOLUTE RESTRICTIONS: NO text, NO letters, NO words in image."
             print(f"[THUMBNAIL-AI] 뉴스/상세 프롬프트 모드 - 텍스트는 PIL로 합성")
+
+        # ★ 일반 영상 채널 (knowledge, health, christian, history) - 새 시스템 사용
+        elif style == 'general' or category in general_channel_types:
+            channel_type = category if category in general_channel_types else 'knowledge'
+            text_position = prompt_data.get('text_position', 'right')
+            face = prompt_data.get('face', None)
+            title = prompt_data.get('title', '')
+
+            # Face 자동 결정 (face가 명시되지 않은 경우)
+            if face is None:
+                face, score, reason = determine_face_visibility(
+                    channel_type=channel_type,
+                    thumbnail_text=main_text + ' ' + sub_text,
+                    title=title,
+                    script_keywords=prompt_data.get('keywords', [])
+                )
+                print(f"[THUMBNAIL-AI] Face 자동 결정: {face} (score={score}, reason={reason})")
+
+            # Gemini 렌더링 프롬프트 빌드
+            enhanced_prompt = build_gemini_prompt(
+                channel_type=channel_type,
+                line1=main_text,
+                line2=sub_text,
+                text_position=text_position,
+                face=face,
+                custom_expression=prompt_data.get('expression')
+            )
+            print(f"[THUMBNAIL-AI] 일반 영상 모드 - 채널: {channel_type}, face: {face}, 위치: {text_position}")
+
         else:
-            # 일반 스토리용 - 기존 웹툰 스타일 프롬프트
+            # 기존 스토리용 - 웹툰 스타일 프롬프트 (과장된 표정 허용)
             enhanced_prompt = f"""Create a {character_nationality} WEBTOON style YouTube thumbnail (16:9 landscape).
 
 ★★★ CRITICAL STYLE: {character_nationality.upper()} WEBTOON/MANHWA ILLUSTRATION ★★★
@@ -18465,6 +18505,57 @@ NO photorealistic."""
                         "style": "news"
                     }
                     print(f"[AUTOMATION][THUMB] 뉴스 썸네일: face={has_face}, scene={scene_type}, text='{line1}'")
+
+                # ★ 일반 영상 채널 (knowledge, health, christian, history) - 새 시스템 사용
+                elif detected_category in ['knowledge', 'health', 'christian', 'history']:
+                    print(f"[AUTOMATION][THUMB] 일반 영상 채널 스타일 - {detected_category}")
+
+                    # 텍스트 추출
+                    line1 = ''
+                    line2 = ''
+                    if best_combo and best_combo.get('chosen_thumbnail_text'):
+                        chosen_text = best_combo.get('chosen_thumbnail_text', '')
+                        if '\n' in chosen_text:
+                            parts = chosen_text.split('\n', 1)
+                            line1 = parts[0]
+                            line2 = parts[1] if len(parts) > 1 else ''
+                        else:
+                            line1 = chosen_text
+                    elif ai_prompts and ai_prompts.get('A') and isinstance(ai_prompts.get('A'), dict):
+                        text_overlay = ai_prompts.get('A', {}).get('text_overlay', {})
+                        line1 = text_overlay.get('main', '')
+                        line2 = text_overlay.get('sub', '')
+
+                    if not line1:
+                        line1 = '핵심 포인트'
+
+                    # Face 자동 결정
+                    face, score, reason = determine_face_visibility(
+                        channel_type=detected_category,
+                        thumbnail_text=line1 + ' ' + line2,
+                        title=youtube_meta.get('title', ''),
+                        script_keywords=[]
+                    )
+                    print(f"[AUTOMATION][THUMB] Face 자동 결정: {face} (score={score}, reason={reason})")
+
+                    # Gemini 렌더링 프롬프트 빌드
+                    prompt = build_gemini_prompt(
+                        channel_type=detected_category,
+                        line1=line1,
+                        line2=line2,
+                        text_position='right',
+                        face=face
+                    )
+
+                    thumb_prompt = {
+                        "prompt": prompt,
+                        "text_overlay": {"main": line1, "sub": line2},
+                        "style": "general",
+                        "face": face,
+                        "text_position": "right",
+                        "title": youtube_meta.get('title', '')
+                    }
+                    print(f"[AUTOMATION][THUMB] 일반 영상 썸네일: face={face}, text='{line1}'")
 
                 # GPT가 생성한 ai_prompts.A 사용 (story 카테고리는 웹툰 스타일로 생성됨)
                 elif ai_prompts and ai_prompts.get('A'):
