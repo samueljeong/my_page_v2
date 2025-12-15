@@ -51,5 +51,20 @@
     "analysis_model": "gpt-5.1",
     "image_model": "google/gemini-3-pro-image-preview",
     "temperature": 0.8
+  },
+
+  "text_overlay_settings": {
+    "description": "PIL 텍스트 오버레이 위치/스타일 설정 (시니어 최적화)",
+    "position": "bottom_center",
+    "y_start_ratio": 0.65,
+    "y_end_ratio": 0.95,
+    "x_align": "center",
+    "main_font_size_ratio": 0.11,
+    "sub_font_size_ratio": 0.07,
+    "outline_width": 3,
+    "colors": {
+      "news": {"text": [255, 255, 255], "outline": [0, 0, 0]},
+      "story": {"text": [255, 215, 0], "outline": [0, 0, 0]}
+    }
   }
 }
