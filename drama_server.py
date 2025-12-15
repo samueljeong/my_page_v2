@@ -16345,14 +16345,23 @@ def api_thumbnail_ai_generate():
 
         print(f"[THUMBNAIL-AI] 이미지 생성 - 세션: {session_id}, 변형: {variant}")
 
-        # GPT가 생성한 프롬프트를 그대로 사용 (이미 text style 포함됨)
-        # text_overlay는 GPT 프롬프트에 이미 반영되어 있으므로 중복 지시 제거
+        # text_overlay에서 텍스트 추출
+        text_overlay = data.get('text_overlay', {})
+        main_text = text_overlay.get('main', '')
 
-        # 최종 프롬프트 구성 - 단순화
-        enhanced_prompt = f"""{prompt}
+        # 최종 프롬프트 구성 - 텍스트 스타일을 최우선으로 명시
+        enhanced_prompt = f"""★★★ MANDATORY TEXT STYLE (HIGHEST PRIORITY) ★★★
+TEXT COLOR: Pure WHITE (#FFFFFF) with THICK BLACK outline/stroke (3-4px)
+TEXT POSITION: LEFT side of image ONLY
+TEXT SIZE: Very large, bold, 30-40% of image width
+ABSOLUTELY FORBIDDEN: Yellow text, colored text, text without outline
+
+{prompt}
 
 16:9 landscape aspect ratio. {style} style illustration.
-CRITICAL: WHITE text with THICK BLACK outline only. Character on RIGHT, text on LEFT."""
+Character/subject on RIGHT side (30-40% of frame).
+Korean text on LEFT side: "{main_text}" - split into 2-4 lines.
+★ TEXT MUST BE WHITE WITH BLACK OUTLINE - NO EXCEPTIONS ★"""
 
         # Gemini 3 Pro로 이미지 생성 (image 모듈 사용)
         result = generate_image_base64(prompt=enhanced_prompt, model=GEMINI_PRO)
