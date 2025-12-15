@@ -16805,14 +16805,16 @@ def api_thumbnail_ai_generate_single():
                 outline_color = tuple(color_setting.get('outline', [0, 0, 0]))
 
                 # ★ 설정 파일에서 위치 설정 읽기
-                y_start_ratio = text_settings.get('y_start_ratio', 0.65)
+                y_start_ratio = text_settings.get('y_start_ratio', 0.68)
                 y_end_ratio = text_settings.get('y_end_ratio', 0.95)
                 x_align = text_settings.get('x_align', 'center')
+                line_spacing_ratio = text_settings.get('line_spacing_ratio', 0.04)
+                line_spacing = int(height * line_spacing_ratio)
 
                 # 텍스트 높이 계산 (서브텍스트 포함 시)
                 text_total_height = main_font_size
                 if sub_text:
-                    text_total_height += sub_font_size + int(height * 0.02)
+                    text_total_height += sub_font_size + line_spacing
 
                 # 설정된 영역 내 중앙 배치
                 bottom_area_start = int(height * y_start_ratio)
@@ -16844,7 +16846,7 @@ def api_thumbnail_ai_generate_single():
 
                 # ★ 서브 텍스트 그리기 (있으면, 가로 중앙 정렬)
                 if sub_text:
-                    y_sub = y_start + main_font_size + int(height * 0.02)
+                    y_sub = y_start + main_font_size + line_spacing  # 설정 파일 기반 줄 간격
                     sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
                     sub_text_width = sub_bbox[2] - sub_bbox[0]
                     sub_x = (width - sub_text_width) // 2  # 가로 중앙
