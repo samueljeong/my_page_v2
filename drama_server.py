@@ -16119,23 +16119,26 @@ def api_thumbnail_ai_analyze():
 
         # 언어 감지 (대본 기준)
         def detect_language(text):
-            """대본의 주요 언어를 감지
+            """대본의 주요 언어를 감지 (비율 기반)
 
-            일본어 뉴스/비즈니스 대본은 한자(漢字) 비율이 높고 히라가나/가타카나가 적음.
-            따라서 한글이 없고 히라가나/가타카나가 1개 이상 있으면 일본어로 판단.
+            히라가나/가타카나가 한글보다 많으면 일본어로 판단.
+            한글이 더 많으면 한국어로 판단.
             """
             import re
             # 한국어 감지
             ko_pattern = re.compile(r'[\uAC00-\uD7AF]')
-            ko_count = len(ko_pattern.findall(text[:1000]))
+            ko_count = len(ko_pattern.findall(text[:2000]))
             # 일본어 감지 (히라가나/가타카나)
             ja_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF]')
-            ja_count = len(ja_pattern.findall(text[:1000]))
+            ja_count = len(ja_pattern.findall(text[:2000]))
 
-            # 한국어 우선 (한글이 있으면 한국어)
-            if ko_count > 0:
+            print(f"[THUMBNAIL-AI] 언어 감지 - 한글: {ko_count}자, 일본어: {ja_count}자")
+
+            # 비율 기반 판단: 더 많은 쪽 선택
+            if ja_count > ko_count:
+                return 'ja', '日本語', 'Japanese'
+            elif ko_count > 0:
                 return 'ko', '한국어', 'Korean'
-            # 일본어: 히라가나/가타카나가 1개 이상 있으면 일본어
             elif ja_count > 0:
                 return 'ja', '日本語', 'Japanese'
             # 기본값: 영어
