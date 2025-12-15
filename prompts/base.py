@@ -164,6 +164,7 @@ SCENE_STRUCTURE = """
     "scene_number": 1,
     "chapter_title": "short title (5-15 chars)",
     "narration": "<speak>EXACT original script text with SSML tags</speak>",
+    "subtitle_text": "핵심 키워드만 14자 이내 (VRCS 규칙 적용)",
     "image_prompt": "[Culture-appropriate] comic style illustration... (see LANGUAGE section for template)",
     "ken_burns": "zoom_in | zoom_out | pan_left | pan_right | pan_up | pan_down"
   }
@@ -173,6 +174,13 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 - DO NOT summarize or paraphrase
 - COPY-PASTE the exact sentences
 - ADD SSML tags for emotion
+
+CRITICAL: "subtitle_text" is SHORT version for on-screen display!
+- Extract KEY NOUNS only (names, numbers, actions)
+- Remove particles: 이/가/을/를/은/는/에서/으로
+- Remove endings: ~습니다/~겠습니다
+- MAX 14 characters (Korean), 1 line only
+- Example: "특검에 따르면 정보사 요원들이 선관위 직원 30여 명을 체포" → "정보사 선관위 30명 체포"
 """
 
 # 전체 출력 JSON 구조

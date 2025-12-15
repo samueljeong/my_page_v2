@@ -10938,11 +10938,20 @@ def api_image_generate_assets_zip():
             # SSML 감지: SSML이면 TTS는 전체로 처리하여 감정 표현 유지
             has_ssml = is_ssml_content(narration)
 
+            # ★ VRCS: subtitle_text가 있으면 짧은 핵심 자막 사용
+            vrcs_subtitle = scene.get('subtitle_text', '').strip()
+
             # 자막용 텍스트 분할 (SSML 태그 제거 후)
             plain_narration = strip_ssml_tags(narration) if has_ssml else narration
-            subtitle_sentences = split_sentences(plain_narration, detected_lang)
-            if not subtitle_sentences:
-                subtitle_sentences = [plain_narration]
+            if vrcs_subtitle:
+                # VRCS 모드: GPT가 생성한 짧은 자막 사용 (14자 이내)
+                subtitle_sentences = [vrcs_subtitle]
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: VRCS 자막 사용 - '{vrcs_subtitle}'")
+            else:
+                # 기존 모드: narration을 문장별로 분할
+                subtitle_sentences = split_sentences(plain_narration, detected_lang)
+                if not subtitle_sentences:
+                    subtitle_sentences = [plain_narration]
 
             scene_audios = []
             scene_start_time = current_time  # 씬 시작 시간
@@ -18355,7 +18364,8 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                     scenes_for_tts.append({
                         "scene_number": i + 1,
                         "text": scene.get('narration', ''),
-                        "image_url": scene.get('image_url', '')
+                        "image_url": scene.get('image_url', ''),
+                        "subtitle_text": scene.get('subtitle_text', '')  # VRCS 짧은 자막
                     })
 
                 assets_resp = req.post(f"{base_url}/api/image/generate-assets-zip", json={
