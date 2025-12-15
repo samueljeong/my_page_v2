@@ -221,6 +221,17 @@ TTS = {
     'default_voice': 'ko-KR-Neural2-C',  # 기본: 남성
     'fallback_voice': 'ko-KR-Wavenet-A', # 대체 음성
 
+    # Gemini TTS 음성 (2025년 신규) - "gemini:음성명" 형식으로 사용
+    # 사용법: Google Sheets N열에 "gemini:Kore" 입력
+    'gemini_voices': {
+        'Kore': '여성, 차분하고 따뜻한 톤',
+        'Charon': '남성, 깊고 신뢰감 있는 톤',
+        'Puck': '남성, 활기차고 친근한 톤',
+        'Fenrir': '남성, 힘있고 웅장한 톤',
+        'Aoede': '여성, 부드럽고 감성적인 톤',
+    },
+    'gemini_default_voice': 'Kore',  # Gemini 기본 음성
+
     # 음성 설정
     'speaking_rate': 0.9,       # 말하기 속도 (0.9 = 약간 느리게, 시니어 타겟)
     'pitch': 0.0,               # 음높이 조절
@@ -229,6 +240,8 @@ TTS = {
     'cost_per_million_chars': {
         'neural2': 16.0,        # $16/100만 글자
         'wavenet': 4.0,         # $4/100만 글자
+        'gemini_flash': 0.6,    # Gemini Flash TTS (토큰 기반 환산)
+        'gemini_pro': 10.0,     # Gemini Pro TTS (토큰 기반 환산)
     },
 }
 
