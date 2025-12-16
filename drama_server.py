@@ -11028,15 +11028,15 @@ def api_image_generate_assets_zip():
                     text = convert_numbers_to_korean(text)
 
                 # SSML 태그 제거 (Gemini는 SSML 미지원)
-                ssml_tags = ['<speak>', '</speak>', '<prosody', '</prosody>', '<emphasis', '</emphasis>', '<break']
                 clean_text = text
-                for tag in ssml_tags:
-                    if tag.startswith('</'):
-                        clean_text = clean_text.replace(tag, '')
-                    elif tag == '<break':
-                        clean_text = re.sub(r'<break[^>]*/?>', ' ', clean_text)
-                    else:
-                        clean_text = re.sub(rf'{tag}[^>]*>', '', clean_text)
+                # 모든 XML/SSML 태그 제거
+                clean_text = re.sub(r'<[^>]+>', '', clean_text)
+                clean_text = clean_text.strip()
+
+                # 태그 제거 후 텍스트가 비면 원본 사용
+                if not clean_text:
+                    print(f"[TTS-GEMINI] SSML 태그 제거 후 빈 텍스트, 원본 사용: {text[:50]}...")
+                    clean_text = re.sub(r'<[^>]+>', '', text).strip() or text
 
                 result = generate_gemini_tts(
                     text=clean_text.strip(),
@@ -11054,8 +11054,8 @@ def api_image_generate_assets_zip():
                         return result['audio_data']
                 else:
                     print(f"[TTS-GEMINI] 실패: {result.get('error')}, Google Cloud TTS로 폴백")
-                    # Gemini 실패 시 Google Cloud TTS로 폴백
-                    voice_name = lang_ko.TTS['default_voice']
+                    # Gemini 실패 시 Google Cloud TTS로 폴백 (fallback_voice 사용)
+                    voice_name = lang_ko.TTS.get('fallback_voice', 'ko-KR-Neural2-C')
 
             # ===== Google Cloud TTS 처리 =====
             # SSML 태그 감지
