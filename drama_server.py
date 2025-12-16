@@ -10739,6 +10739,9 @@ def api_image_generate_assets_zip():
 
         def get_voice_for_language(lang, base_voice):
             """언어에 맞는 TTS 음성 반환 (lang/*.py에서 관리)"""
+            # Chirp 3 HD 음성이면 그대로 반환
+            if is_chirp3_voice(base_voice):
+                return base_voice
             # Gemini TTS 음성이면 그대로 반환
             if is_gemini_voice(base_voice):
                 return base_voice
