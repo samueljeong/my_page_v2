@@ -3981,12 +3981,34 @@ def generate_gemini_tts(text, voice_name="Kore", model="gemini-2.5-flash-preview
             }
         }
 
-        response = requests.post(url, json=payload, timeout=120)
+        # 429 Rate Limit 재시도 로직
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = requests.post(url, json=payload, timeout=120)
 
-        if response.status_code != 200:
-            error_text = response.text[:500]
-            print(f"[GEMINI-TTS] API 오류: {response.status_code} - {error_text}")
-            return {"ok": False, "error": f"Gemini TTS API 오류: {response.status_code}"}
+            if response.status_code == 429:
+                # Rate limit - 대기 후 재시도
+                error_text = response.text
+                # "Please retry in 39.077546084s" 형태에서 시간 추출
+                import re
+                retry_match = re.search(r'retry in (\d+\.?\d*)', error_text)
+                wait_time = float(retry_match.group(1)) if retry_match else 45.0
+                wait_time = min(wait_time + 5, 60)  # 여유 5초 추가, 최대 60초
+
+                if attempt < max_retries - 1:
+                    print(f"[GEMINI-TTS] Rate limit (429), {wait_time:.0f}초 대기 후 재시도 ({attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[GEMINI-TTS] Rate limit 재시도 초과")
+                    return {"ok": False, "error": "Gemini TTS Rate limit 초과 (재시도 실패)"}
+
+            elif response.status_code != 200:
+                error_text = response.text[:500]
+                print(f"[GEMINI-TTS] API 오류: {response.status_code} - {error_text}")
+                return {"ok": False, "error": f"Gemini TTS API 오류: {response.status_code}"}
+
+            break  # 성공
 
         result = response.json()
 
@@ -11122,11 +11144,23 @@ def api_image_generate_assets_zip():
         if not scenes:
             return jsonify({"ok": False, "error": "씬 데이터가 없습니다"}), 400
 
-        api_key = os.getenv("GOOGLE_CLOUD_API_KEY", "")
-        if not api_key:
-            return jsonify({"ok": False, "error": "GOOGLE_CLOUD_API_KEY가 설정되지 않았습니다"}), 500
+        # API 키 체크 (Gemini TTS vs Google Cloud TTS)
+        google_cloud_api_key = os.getenv("GOOGLE_CLOUD_API_KEY", "")
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")  # Gemini TTS용
 
-        print(f"[ASSETS-ZIP] Starting sentence-by-sentence TTS for {len(scenes)} scenes")
+        # Gemini 음성인 경우 GOOGLE_API_KEY 필요, 아니면 GOOGLE_CLOUD_API_KEY 필요
+        using_gemini = is_gemini_voice(base_voice)
+        if using_gemini:
+            if not google_api_key:
+                return jsonify({"ok": False, "error": "GOOGLE_API_KEY가 설정되지 않았습니다 (Gemini TTS용)"}), 500
+            api_key = google_api_key
+            print(f"[ASSETS-ZIP] Gemini TTS 사용: {base_voice}")
+        else:
+            if not google_cloud_api_key:
+                return jsonify({"ok": False, "error": "GOOGLE_CLOUD_API_KEY가 설정되지 않았습니다"}), 500
+            api_key = google_cloud_api_key
+
+        print(f"[ASSETS-ZIP] Starting TTS for {len(scenes)} scenes (voice: {base_voice})")
 
         # 결과 저장용
         all_sentence_audios = []  # [(scene_idx, sent_idx, audio_bytes, duration, text), ...]
@@ -11151,8 +11185,16 @@ def api_image_generate_assets_zip():
             ssml_tags = ['<speak>', '<prosody', '<emphasis', '<break']
             return any(tag in text for tag in ssml_tags)
 
-        # 1. 각 씬의 문장별 TTS 생성
+        # Gemini TTS Rate Limit 방지 딜레이 (10 req/min → 6초 간격)
+        TTS_DELAY_SECONDS = 7 if using_gemini else 0
+
+        # 1. 각 씬의 TTS 생성 (씬 단위)
         for scene_idx, scene in enumerate(scenes):
+            # Rate limit 방지: 첫 번째 씬 이후 딜레이
+            if scene_idx > 0 and TTS_DELAY_SECONDS > 0:
+                print(f"[ASSETS-ZIP] Rate limit 방지 대기 {TTS_DELAY_SECONDS}초...")
+                time.sleep(TTS_DELAY_SECONDS)
+
             narration = scene.get('text', '')
             image_url = scene.get('image_url', '')
             if not narration:
@@ -11271,16 +11313,30 @@ def api_image_generate_assets_zip():
                     has_ssml = False  # 폴백하여 아래 문장별 처리로
 
             if not has_ssml:
-                # 일반 모드: 문장별 TTS 생성 (정확한 싱크)
+                # ★ 최적화: 씬 전체를 하나의 TTS로 처리 (API 호출 횟수 대폭 감소)
                 sentences = tts_sentences
-                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences, lang={detected_lang}")
+                print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: {len(sentences)} sentences → 씬 단위 TTS")
 
-                for sent_idx, sentence in enumerate(sentences):
-                    audio_bytes = generate_tts_for_sentence(sentence, voice_name, language_code, api_key)
+                # 모든 문장을 하나로 결합
+                combined_text = ' '.join(sentences)
 
-                    if audio_bytes:
-                        duration = get_mp3_duration(audio_bytes)
-                        scene_audios.append(audio_bytes)
+                # 씬 전체에 대해 한 번의 TTS 호출
+                audio_bytes = generate_tts_for_sentence(combined_text, voice_name, language_code, api_key)
+
+                if audio_bytes:
+                    total_duration = get_mp3_duration(audio_bytes)
+                    scene_audios.append(audio_bytes)
+                    all_sentence_audios.append((scene_idx, 0, audio_bytes))
+
+                    # 문장별 duration 계산 (글자 수 비율)
+                    total_chars = sum(len(s) for s in sentences)
+                    if total_chars == 0:
+                        total_chars = 1
+
+                    for sent_idx, sentence in enumerate(sentences):
+                        # 글자 수 비율로 duration 계산
+                        char_ratio = len(sentence) / total_chars
+                        sent_duration = total_duration * char_ratio
 
                         # ★ VRCS 2.0: subtitle_on=true인 문장만 자막 추가
                         if sent_idx in subtitle_map:
@@ -11288,9 +11344,9 @@ def api_image_generate_assets_zip():
 
                             # ★ VRCS 타이밍: 자막이 0.3초 먼저 시작, 0.2초 늦게 끝남
                             sub_start = max(0, current_time - VRCS_SUBTITLE_LEAD)
-                            sub_end = current_time + duration + VRCS_SUBTITLE_TRAIL
+                            sub_end = current_time + sent_duration + VRCS_SUBTITLE_TRAIL
                             sub_relative_start = max(0, scene_relative_time - VRCS_SUBTITLE_LEAD)
-                            sub_relative_end = scene_relative_time + duration + VRCS_SUBTITLE_TRAIL
+                            sub_relative_end = scene_relative_time + sent_duration + VRCS_SUBTITLE_TRAIL
 
                             srt_entries.append({
                                 'index': len(srt_entries) + 1,
@@ -11305,20 +11361,18 @@ def api_image_generate_assets_zip():
                             })
 
                             if vrcs_mode:
-                                print(f"  Sent {sent_idx + 1}: {duration:.2f}s - 자막 ON - '{subtitle_text}'")
+                                print(f"  Sent {sent_idx + 1}: {sent_duration:.2f}s - 자막 ON - '{subtitle_text}'")
                             else:
-                                print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {sentence[:30]}...")
+                                print(f"  Sent {sent_idx + 1}: {sent_duration:.2f}s - {sentence[:30]}...")
                         else:
                             # 자막 OFF - TTS만 재생
                             if vrcs_mode:
-                                print(f"  Sent {sent_idx + 1}: {duration:.2f}s - 자막 OFF")
-                            else:
-                                print(f"  Sent {sent_idx + 1}: {duration:.2f}s - {sentence[:30]}...")
+                                print(f"  Sent {sent_idx + 1}: {sent_duration:.2f}s - 자막 OFF")
 
-                        current_time += duration
-                        scene_relative_time += duration
-
-                        all_sentence_audios.append((scene_idx, sent_idx, audio_bytes))
+                        current_time += sent_duration
+                        scene_relative_time += sent_duration
+                else:
+                    print(f"[ASSETS-ZIP] Scene {scene_idx + 1}: TTS 실패")
 
             # 씬 메타데이터 저장
             scene_duration = current_time - scene_start_time
