@@ -3981,12 +3981,34 @@ def generate_gemini_tts(text, voice_name="Kore", model="gemini-2.5-flash-preview
             }
         }
 
-        response = requests.post(url, json=payload, timeout=120)
+        # 429 Rate Limit 재시도 로직
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = requests.post(url, json=payload, timeout=120)
 
-        if response.status_code != 200:
-            error_text = response.text[:500]
-            print(f"[GEMINI-TTS] API 오류: {response.status_code} - {error_text}")
-            return {"ok": False, "error": f"Gemini TTS API 오류: {response.status_code}"}
+            if response.status_code == 429:
+                # Rate limit - 대기 후 재시도
+                error_text = response.text
+                # "Please retry in 39.077546084s" 형태에서 시간 추출
+                import re
+                retry_match = re.search(r'retry in (\d+\.?\d*)', error_text)
+                wait_time = float(retry_match.group(1)) if retry_match else 45.0
+                wait_time = min(wait_time + 5, 60)  # 여유 5초 추가, 최대 60초
+
+                if attempt < max_retries - 1:
+                    print(f"[GEMINI-TTS] Rate limit (429), {wait_time:.0f}초 대기 후 재시도 ({attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[GEMINI-TTS] Rate limit 재시도 초과")
+                    return {"ok": False, "error": "Gemini TTS Rate limit 초과 (재시도 실패)"}
+
+            elif response.status_code != 200:
+                error_text = response.text[:500]
+                print(f"[GEMINI-TTS] API 오류: {response.status_code} - {error_text}")
+                return {"ok": False, "error": f"Gemini TTS API 오류: {response.status_code}"}
+
+            break  # 성공
 
         result = response.json()
 
@@ -11163,8 +11185,16 @@ def api_image_generate_assets_zip():
             ssml_tags = ['<speak>', '<prosody', '<emphasis', '<break']
             return any(tag in text for tag in ssml_tags)
 
-        # 1. 각 씬의 문장별 TTS 생성
+        # Gemini TTS Rate Limit 방지 딜레이 (10 req/min → 6초 간격)
+        TTS_DELAY_SECONDS = 7 if using_gemini else 0
+
+        # 1. 각 씬의 TTS 생성 (씬 단위)
         for scene_idx, scene in enumerate(scenes):
+            # Rate limit 방지: 첫 번째 씬 이후 딜레이
+            if scene_idx > 0 and TTS_DELAY_SECONDS > 0:
+                print(f"[ASSETS-ZIP] Rate limit 방지 대기 {TTS_DELAY_SECONDS}초...")
+                time.sleep(TTS_DELAY_SECONDS)
+
             narration = scene.get('text', '')
             image_url = scene.get('image_url', '')
             if not narration:
