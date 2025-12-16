@@ -116,8 +116,21 @@ VIDEO_EFFECTS_STRUCTURE = """
   "sound_effects": [{"scene": N, "type": "...", "moment": "..."}],
   "shorts": {"highlight_scenes": [N, M], "hook_text": "...", "title": "... #Shorts"},
   "transitions": {"style": "crossfade", "duration": 0.5},
-  "first_comment": "engaging question (50-100 chars)"
+  "first_comment": "engaging question (50-100 chars)",
+
+  "vrcs_enabled": true,
+  "tts_base_speed": 1.0,
+  "subtitle_density": "sparse",
+  "rhythm_reset_interval": 40,
+  "ending_slowdown": true
 }
+
+### VRCS 설정 필드 설명
+- vrcs_enabled: VRCS 시스템 활성화 (항상 true)
+- tts_base_speed: 기본 TTS 속도 (1.0 = 보통, 0.95 = 약간 느림)
+- subtitle_density: 자막 밀도 ("sparse" = 3문장 중 1개)
+- rhythm_reset_interval: 리듬 리셋 간격 (초 단위, 기본 40초)
+- ending_slowdown: 엔딩 20초 TTS 감속 여부
 
 ⚠️ REMOVED FEATURES (DO NOT GENERATE):
 - screen_overlays: 사용하지 않음
@@ -166,19 +179,18 @@ SCENE_STRUCTURE = """
     "scene_number": 1,
     "chapter_title": "short title (5-15 chars)",
     "narration": "<speak>EXACT original script text with SSML tags</speak>",
+    "vrcs_section": "opening | midroll | ending",
     "subtitle_segments": [
       {
         "sentence": "First sentence from narration (exact text, no SSML)",
-        "subtitle_on": false
-      },
-      {
-        "sentence": "Second sentence with important info (numbers, dates, names)",
         "subtitle_on": true,
-        "subtitle_text": "핵심 14자 요약"
+        "subtitle_text": "차분히 정리",
+        "vrcs_reason": "opening_safety"
       },
       {
-        "sentence": "Third sentence (background or emotion)",
-        "subtitle_on": false
+        "sentence": "Second sentence (background)",
+        "subtitle_on": false,
+        "vrcs_reason": "background_desc"
       }
     ],
     "image_prompt": "[Culture-appropriate] comic style illustration... (see LANGUAGE section for template)",
@@ -191,28 +203,85 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 - COPY-PASTE the exact sentences
 - ADD SSML tags for emotion
 
-## VRCS SUBTITLE RULES (문장별 자막 ON/OFF)
+## ⚠️ VRCS 시간 기반 자막 규칙 (CRITICAL!) ⚠️
+
+### 영상 구간별 자막 패턴 (vrcs_section)
+
+#### 🟢 OPENING (초반 30초) - 안심 유도
+| 시간 | 자막 | 필수 문구 |
+|------|------|----------|
+| 0-5초 | ON | "차분히 정리합니다" 또는 "쉽게 설명합니다" |
+| 5-12초 | OFF | (방향 제시, 자막 없이 TTS만) |
+| 12-20초 | ON | "지금 핵심은" 또는 키워드 1개 |
+| 20-30초 | ON | "마지막에 정리합니다" 또는 "끝에 답이 있습니다" |
+
+**opening 규칙:**
+- 첫 문장: 반드시 subtitle_on=true + 안전 문구
+- 전문용어/숫자 연속 금지
+- 감정 고조 금지
+
+#### 🟡 MIDROLL (중반 30초~엔딩 20초 전) - 리듬 유지
+| 패턴 | 자막 | 설명 |
+|------|------|------|
+| 설명 블록 | OFF 위주 | 3문장 중 1개만 ON |
+| 40초마다 리셋 | ON | "여기까지 정리하면" 또는 "지금 핵심은" |
+| 개념 전환 시 | ON | 새 개념 시작 알림 |
+
+**midroll 규칙:**
+- 기본: 3문장 중 1개만 subtitle_on=true
+- 40초 간격으로 정리 자막 삽입 (리듬 리셋)
+- 개념 2개 이상 동시 설명 금지
+
+#### 🔴 ENDING (마지막 20초) - 정리 마무리
+| 시간 | 자막 | 필수 문구 |
+|------|------|----------|
+| -20초~-15초 | ON | "여기까지 정리하면" 또는 "오늘 핵심은" |
+| -15초~-8초 | ON | 핵심 요약 키워드 |
+| -8초~-3초 | OFF | (감정 안정, 자막 없이) |
+| -3초~끝 | ON (선택) | "다음 이야기" (자연스러운 연결) |
+
+**ending 규칙:**
+- 새로운 정보 금지
+- 구독/좋아요 연속 요구 금지
+- 차분한 마무리
 
 ### subtitle_segments 생성 규칙
 1. narration을 문장 단위로 분리 (마침표, 물음표, 느낌표 기준)
-2. 각 문장에 대해 subtitle_on 판단 (아래 조건 참고)
-3. subtitle_on=true인 문장만 subtitle_text 생성 (14자 이내 요약)
+2. 해당 씬의 vrcs_section 확인 (opening/midroll/ending)
+3. 시간 기반 규칙에 따라 subtitle_on 결정
+4. subtitle_on=true면 subtitle_text 생성 (14자 이내)
+5. vrcs_reason 필드에 판단 근거 기록
 
-### subtitle_on = TRUE 조건 (하나라도 충족 시)
-- 전환어 포함: "그런데", "하지만", "정리하면", "중요한 건", "핵심은", "여기서"
-- 고밀도 정보: 숫자, 날짜, 고유명사, 비교 표현
-- 긴 문장: 예상 TTS 3.5초 이상 (약 50자 이상)
+### vrcs_reason 값 (판단 근거)
+- "opening_safety": 초반 안전 문구
+- "opening_direction": 초반 방향 제시
+- "midroll_reset": 40초 리듬 리셋
+- "midroll_concept": 새 개념 시작
+- "midroll_density": 고밀도 정보 (숫자/날짜/이름)
+- "ending_summary": 엔딩 정리
+- "ending_keyword": 엔딩 핵심 키워드
+- "transition_word": 전환어 포함
+- "background_desc": 배경 설명 (OFF)
+- "emotion_only": 감정 묘사 (OFF)
+- "repetition": 반복 내용 (OFF)
+
+### subtitle_on = TRUE 조건
+1. **시간 기반 (우선)**: opening/ending 필수 구간
+2. **전환어**: "그런데", "하지만", "정리하면", "중요한 건", "핵심은"
+3. **고밀도 정보**: 숫자, 날짜, 고유명사, 비교 표현
+4. **리듬 리셋**: 40초마다 정리 자막
 
 ### subtitle_on = FALSE 조건
 - 감정 묘사만 있는 문장
 - 단순 배경 설명
 - 이미 반복된 내용
-- 시각적으로 명확한 상황
+- opening 5-12초 구간
+- ending -8초~-3초 구간
 
-### 자막 밀도 규칙 (CRITICAL!)
-- 약 3문장 중 1개만 subtitle_on=true
-- 절대 모든 문장에 자막 금지 (all_sentences: never)
-- 씬당 subtitle_on=true 문장은 1-2개로 제한
+### 자막 밀도 규칙
+- opening: 4문장 중 2-3개 ON
+- midroll: 3문장 중 1개 ON (+ 40초마다 리셋)
+- ending: 3문장 중 2개 ON
 
 ### subtitle_text 변환 규칙
 1. 조사 제거: 이/가/을/를/은/는/에서/으로
@@ -222,13 +291,23 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 5. MAX 14자 (Korean)
 6. 명사구 형태 (문장 아님)
 
+### 안전 문구 세트 (opening/ending에서 사용)
+- "차분히 정리합니다"
+- "쉽게 설명합니다"
+- "지금 핵심은"
+- "여기까지 정리하면"
+- "마지막에 정리합니다"
+- "끝에 답이 있습니다"
+- "핵심은 이것입니다"
+
 ### 변환 예시
-| 원문 (sentence) | subtitle_on | subtitle_text |
-|----------------|-------------|---------------|
-| "1월 초에 결심공판을 거쳐서 2월 중순에 1심 선고가 예상됩니다" | true | "2월 중순 1심 선고" |
-| "곽종근 전 특수전사령관이 법정에서 증언했습니다" | true | "곽종근 전 사령관 증언" |
-| "이 소식에 많은 사람들이 놀랐습니다" | false | (없음) |
-| "정말 충격적인 상황이었습니다" | false | (없음) |
+| 원문 (sentence) | vrcs_section | subtitle_on | vrcs_reason | subtitle_text |
+|----------------|--------------|-------------|-------------|---------------|
+| "오늘은 차분히 정리해보겠습니다" | opening | true | opening_safety | "차분히 정리" |
+| "이 사건의 배경을 먼저 살펴보면..." | opening | false | background_desc | - |
+| "여기서 중요한 건 2월 선고입니다" | midroll | true | midroll_density | "2월 선고 핵심" |
+| "정말 놀라운 상황이었습니다" | midroll | false | emotion_only | - |
+| "여기까지 정리하면 이렇습니다" | ending | true | ending_summary | "핵심 정리" |
 """
 
 # 전체 출력 JSON 구조
