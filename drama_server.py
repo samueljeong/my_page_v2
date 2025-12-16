@@ -4152,7 +4152,7 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
     try:
         from google.cloud import texttospeech
 
-        print(f"[CHIRP3-TTS] 시작 - 음성: {voice_name}, 텍스트: {len(text)}자")
+        print(f"[CHIRP3-TTS] 시작 - 음성: {voice_name}, 텍스트: {len(text)}자", flush=True)
 
         client = texttospeech.TextToSpeechClient()
 
@@ -4173,7 +4173,7 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
             audio_config=audio_config,
         )
 
-        print(f"[CHIRP3-TTS] 성공 - {len(response.audio_content)} bytes")
+        print(f"[CHIRP3-TTS] 성공 - {len(response.audio_content)} bytes", flush=True)
 
         return {
             "ok": True,
@@ -4181,7 +4181,7 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
         }
 
     except Exception as e:
-        print(f"[CHIRP3-TTS] 오류: {e}")
+        print(f"[CHIRP3-TTS] 오류: {e}", flush=True)
         return {"ok": False, "error": str(e)}
 
 
@@ -11135,7 +11135,7 @@ def api_image_generate_assets_zip():
             # ===== Chirp 3 HD 처리 (최고 품질 + 빠른 속도) =====
             if is_chirp3_voice(voice_name):
                 chirp3_config = parse_chirp3_voice(voice_name, language_code)
-                print(f"[TTS-CHIRP3] 사용: {chirp3_config['voice']}")
+                print(f"[TTS-CHIRP3] 사용: {chirp3_config['voice']}", flush=True)
 
                 # 한국어 숫자 변환
                 if language_code.startswith('ko'):
@@ -18464,15 +18464,15 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
         # 비용 추적 변수 초기화
         total_cost = 0.0
 
-        print(f"[AUTOMATION] ========== 파이프라인 시작 (API 재사용) ==========")
-        print(f"[AUTOMATION] 행 {row_index}")
-        print(f"  - 작업시간: {work_time}")
-        print(f"  - 채널: {channel_name or channel_id}")
-        print(f"  - 예약시간: {publish_time or '(없음 - 즉시 공개)'}")
-        print(f"  - 대본 길이: {len(script)} 글자")
-        print(f"  - 제목: {title or '(AI 생성 예정)'}")
-        print(f"  - 공개설정: {visibility}")
-        print(f"  - 음성: {voice}")
+        print(f"[AUTOMATION] ========== 파이프라인 시작 (API 재사용) ==========", flush=True)
+        print(f"[AUTOMATION] 행 {row_index}", flush=True)
+        print(f"  - 작업시간: {work_time}", flush=True)
+        print(f"  - 채널: {channel_name or channel_id}", flush=True)
+        print(f"  - 예약시간: {publish_time or '(없음 - 즉시 공개)'}", flush=True)
+        print(f"  - 대본 길이: {len(script)} 글자", flush=True)
+        print(f"  - 제목: {title or '(AI 생성 예정)'}", flush=True)
+        print(f"  - 공개설정: {visibility}", flush=True)
+        print(f"  - 음성: {voice}", flush=True)
         print(f"  - 타겟: {audience}")
         print(f"  - 카테고리: {category or '(일반)'}")
         print(f"  - 플레이리스트: {playlist_id or '(없음)'}")
@@ -18489,7 +18489,7 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
         base_url = "http://127.0.0.1:" + str(os.environ.get("PORT", 5059))
 
         # ========== 1. 대본 분석 (/api/image/analyze-script) ==========
-        print(f"[AUTOMATION] 1. 대본 분석 시작...")
+        print(f"[AUTOMATION] 1. 대본 분석 시작...", flush=True)
         try:
             # [TUBELENS] 채널별 썸네일/쇼츠 스타일 분석 (7일 캐시)
             channel_style = ""
@@ -18934,14 +18934,14 @@ NO photorealistic."""
                 return None
 
         # ★ TTS 먼저 실행 (저비용, 실패 시 이미지 생성 비용 절약)
-        print(f"[AUTOMATION] 2a. TTS 생성 시작 (이미지보다 먼저 실행)...")
+        print(f"[AUTOMATION] 2a. TTS 생성 시작 (이미지보다 먼저 실행)...", flush=True)
         tts_success = generate_tts()
 
         # TTS 실패 시 즉시 중단 (비싼 이미지 생성 방지)
         if not tts_success or not any(s.get('audio_url') for s in scenes):
             return {"ok": False, "error": f"TTS 생성 실패: {'; '.join(parallel_errors)}", "video_url": None, "cost": total_cost}
 
-        print(f"[AUTOMATION] 2b. TTS 성공, 이미지/썸네일 병렬 생성 시작...")
+        print(f"[AUTOMATION] 2b. TTS 성공, 이미지/썸네일 병렬 생성 시작...", flush=True)
 
         # TTS 성공 후 이미지/썸네일 병렬 실행
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -18966,10 +18966,10 @@ NO photorealistic."""
         elif image_success_count < len(scenes):
             print(f"[AUTOMATION] 경고: 이미지 {image_success_count}/{len(scenes)}개만 생성됨")
 
-        print(f"[AUTOMATION] 2. 병렬 처리 완료")
+        print(f"[AUTOMATION] 2. 병렬 처리 완료", flush=True)
 
         # ========== 3. 영상 생성 (/api/image/generate-video) ==========
-        print(f"[AUTOMATION] 3. 영상 생성 시작...")
+        print(f"[AUTOMATION] 3. 영상 생성 시작...", flush=True)
 
         video_url_local = None
         video_generation_error = None
@@ -19029,7 +19029,7 @@ NO photorealistic."""
             return {"ok": False, "error": video_generation_error or "영상 생성 실패", "video_url": None, "cost": total_cost}
 
         # ========== 4. YouTube 업로드 ==========
-        print(f"[AUTOMATION] 4. YouTube 업로드 시작...")
+        print(f"[AUTOMATION] 4. YouTube 업로드 시작...", flush=True)
 
         # GPT가 생성한 예상 챕터 제거 (실제 duration 기반 챕터로 대체)
         # 예상 챕터는 "00:00 제목" 또는 "0:00 제목" 형식의 연속된 줄로 시작함
@@ -19514,6 +19514,9 @@ def api_sheets_check_and_process():
     1. 예약시간이 있는 경우: 예약시간 빠른 순
     2. 예약시간이 없는 경우: 시트 순서
     """
+    import sys
+    print(f"[SHEETS] ===== check-and-process 호출됨 =====", flush=True)
+
     # ========== 동시 실행 방지 Lock ==========
     # 다른 worker에서 이미 파이프라인이 실행 중이면 즉시 반환
     if not pipeline_lock.acquire(blocking=False):
