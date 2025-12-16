@@ -11186,6 +11186,7 @@ def api_image_generate_assets_zip():
             return any(tag in text for tag in ssml_tags)
 
         # Gemini TTS Rate Limit 방지 딜레이 (10 req/min → 6초 간격)
+        import time as time_module
         TTS_DELAY_SECONDS = 7 if using_gemini else 0
 
         # 1. 각 씬의 TTS 생성 (씬 단위)
@@ -11193,7 +11194,7 @@ def api_image_generate_assets_zip():
             # Rate limit 방지: 첫 번째 씬 이후 딜레이
             if scene_idx > 0 and TTS_DELAY_SECONDS > 0:
                 print(f"[ASSETS-ZIP] Rate limit 방지 대기 {TTS_DELAY_SECONDS}초...")
-                time.sleep(TTS_DELAY_SECONDS)
+                time_module.sleep(TTS_DELAY_SECONDS)
 
             narration = scene.get('text', '')
             image_url = scene.get('image_url', '')
@@ -11205,8 +11206,8 @@ def api_image_generate_assets_zip():
             voice_name = get_voice_for_language(detected_lang, base_voice)
             language_code = get_language_code(detected_lang)
 
-            # SSML 감지: SSML이면 TTS는 전체로 처리하여 감정 표현 유지
-            has_ssml = is_ssml_content(narration)
+            # SSML 모드 비활성화 (Gemini TTS는 SSML 미지원, 속도 저하 원인)
+            has_ssml = False  # is_ssml_content(narration)
 
             # ★ VRCS 2.0: subtitle_segments로 문장별 ON/OFF 제어
             subtitle_segments = scene.get('subtitle_segments', [])
@@ -19588,7 +19589,23 @@ def api_sheets_check_and_process():
             'scheduled_time': get_row_value(row_data, col_map, '예약시간'),
         }
 
-        result = run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, selected_project=project_suffix)
+        print(f"[SHEETS] ★★★ 파이프라인 호출 직전 ★★★")
+        print(f"[SHEETS]   - 시트: {sheet_name}, 행: {row_num}")
+        print(f"[SHEETS]   - 채널: {channel_id}")
+        print(f"[SHEETS]   - 대본 길이: {len(pipeline_data.get('script', ''))}자")
+
+        try:
+            result = run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, selected_project=project_suffix)
+            print(f"[SHEETS] ★★★ 파이프라인 완료 ★★★ - ok: {result.get('ok')}")
+        except Exception as pipeline_err:
+            import traceback
+            print(f"[SHEETS] ★★★ 파이프라인 예외 발생 ★★★")
+            print(f"[SHEETS] 에러: {type(pipeline_err).__name__}: {pipeline_err}")
+            traceback.print_exc()
+            # 시트에 실패 기록
+            sheets_update_cell_by_header(service, sheet_id, sheet_name, row_num, col_map, '상태', '실패')
+            sheets_update_cell_by_header(service, sheet_id, sheet_name, row_num, col_map, '에러메시지', f'예외: {str(pipeline_err)[:200]}')
+            raise  # 다시 던져서 상위에서 처리
 
         # ========== 6. 결과 기록 ==========
         # 비용 기록 (원화로 변환, 1 USD = 1,350 KRW)
