@@ -253,17 +253,36 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 5. vrcs_reason 필드에 판단 근거 기록
 
 ### vrcs_reason 값 (판단 근거)
-- "opening_safety": 초반 안전 문구
-- "opening_direction": 초반 방향 제시
+
+#### 시간 기반 (ON)
+- "opening_safety": 초반 안전 문구 (0-5초)
+- "opening_direction": 초반 방향 제시 (12-20초)
+- "opening_promise": 초반 약속 (20-30초)
 - "midroll_reset": 40초 리듬 리셋
 - "midroll_concept": 새 개념 시작
 - "midroll_density": 고밀도 정보 (숫자/날짜/이름)
-- "ending_summary": 엔딩 정리
-- "ending_keyword": 엔딩 핵심 키워드
-- "transition_word": 전환어 포함
-- "background_desc": 배경 설명 (OFF)
-- "emotion_only": 감정 묘사 (OFF)
-- "repetition": 반복 내용 (OFF)
+- "ending_summary": 엔딩 정리 (-20초~-15초)
+- "ending_keyword": 엔딩 핵심 키워드 (-15초~-8초)
+- "ending_connect": 엔딩 자연스러운 연결 (-3초~끝)
+
+#### 내용 기반 (ON)
+- "transition_word": 전환어 포함 ("그런데", "하지만", "핵심은")
+- "high_info_density": 숫자/날짜/고유명사 밀집
+- "comparison": 비교/대조 표현
+- "conclusion": 결론/결과 제시
+
+#### 감정 기반 (주로 OFF)
+- "emotion_tension": 긴장/서스펜스 (OFF - 화면 연출 대체)
+- "emotion_sadness": 슬픔/감동 (OFF - 몰입 방해 금지)
+- "emotion_hope": 희망/해결 (ON - 메시지 강조)
+- "emotion_shock": 충격/반전 (ON - 짧게 2-4자)
+- "emotion_only": 감정 묘사만 (OFF)
+
+#### 기타 (OFF)
+- "background_desc": 배경 설명
+- "repetition": 반복 내용
+- "opening_pause": 초반 5-12초 구간
+- "ending_pause": 엔딩 -8초~-3초 구간
 
 ### subtitle_on = TRUE 조건
 1. **시간 기반 (우선)**: opening/ending 필수 구간
@@ -291,6 +310,64 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 5. MAX 14자 (Korean)
 6. 명사구 형태 (문장 아님)
 
+### ⭐ subtitle_text 품질 가이드 (고급)
+
+#### 자막 스타일별 패턴
+| 상황 | 패턴 | 예시 |
+|------|------|------|
+| 숫자/통계 | "[숫자] + [단위/대상]" | "3가지 핵심", "2월 선고" |
+| 인물 언급 | "[직함/관계] + [행동]" | "전 사령관 증언", "의사 경고" |
+| 비교/대조 | "[A] vs [B]" 또는 "[차이점]" | "과거와 현재", "결정적 차이" |
+| 결과/결론 | "[핵심 결과]" | "최종 판결", "결론은 이것" |
+| 경고/주의 | "[대상] + 주의" | "고혈압 주의", "이것만 피하세요" |
+| 방법/팁 | "[방법] + [효과]" | "이 방법 효과적", "3단계 해결" |
+
+#### 카테고리별 자막 톤
+| 카테고리 | 톤 | 자막 스타일 예시 |
+|---------|-----|-----------------|
+| news | 객관적, 사실 중심 | "검찰 수사 착수", "1심 선고 예정" |
+| health | 권위적, 명확 | "의사 권고사항", "절대 금지 3가지" |
+| story | 감성적, 공감 | "그날의 선택", "인생 전환점" |
+| faith | 따뜻함, 위로 | "은혜의 순간", "믿음의 여정" |
+| history | 서사적, 웅장 | "역사적 결정", "운명의 그날" |
+| finance | 실용적, 구체적 | "연 5% 수익", "필수 체크 3가지" |
+
+#### 자막 품질 체크리스트
+- ✅ 14자 이내인가?
+- ✅ 핵심 정보(숫자/이름/날짜)가 포함되었나?
+- ✅ 명사구 형태인가? (문장 아님)
+- ✅ 조사/어미가 제거되었나?
+- ✅ 시청자가 한눈에 이해할 수 있나?
+
+### ⭐ 감정/톤 기반 자막 규칙
+
+#### 감정별 자막 ON/OFF 판단
+| 감정/톤 | 자막 | 이유 |
+|--------|------|------|
+| 😰 긴장/서스펜스 | OFF | 화면 연출로 대체 (자막이 긴장감 저해) |
+| 😢 슬픔/감동 | OFF | 감정 몰입 방해 금지 |
+| 😊 희망/해결 | ON | 핵심 메시지 강조 |
+| 😮 충격/반전 | ON (짧게) | "결정적 순간", "반전" 등 2-4자 |
+| 🤔 설명/분석 | ON | 핵심 정보 전달 |
+| 😌 정리/마무리 | ON | 요약 키워드 |
+
+#### TTS 톤과 자막 연동
+| TTS 톤 | 자막 스타일 | 예시 |
+|--------|-----------|------|
+| 차분한 해설 | 명사형 종결 | "2월 선고 예정" |
+| 긴박한 속보 | 동사형 종결 (짧게) | "긴급 체포" |
+| 감정적 강조 | 자막 OFF | (화면 연출로 대체) |
+| 정리/요약 | 키워드만 | "쟁점 3가지" |
+| 위로/공감 | 자막 OFF 또는 짧게 | "함께합니다" |
+
+#### SSML 태그와 자막 연동
+| SSML 태그 | 의미 | 자막 판단 |
+|-----------|------|----------|
+| `<prosody rate="slow">` | 강조/중요 | subtitle_on=true |
+| `<prosody rate="fast">` | 긴박/흥분 | subtitle_on=false |
+| `<emphasis level="strong">` | 핵심 강조 | subtitle_on=true |
+| `<break time="500ms"/>` | 여운/전환 | 다음 문장 subtitle_on 고려 |
+
 ### 안전 문구 세트 (opening/ending에서 사용)
 - "차분히 정리합니다"
 - "쉽게 설명합니다"
@@ -300,14 +377,17 @@ CRITICAL: "narration" MUST contain EXACT text from the script!
 - "끝에 답이 있습니다"
 - "핵심은 이것입니다"
 
-### 변환 예시
-| 원문 (sentence) | vrcs_section | subtitle_on | vrcs_reason | subtitle_text |
-|----------------|--------------|-------------|-------------|---------------|
-| "오늘은 차분히 정리해보겠습니다" | opening | true | opening_safety | "차분히 정리" |
-| "이 사건의 배경을 먼저 살펴보면..." | opening | false | background_desc | - |
-| "여기서 중요한 건 2월 선고입니다" | midroll | true | midroll_density | "2월 선고 핵심" |
-| "정말 놀라운 상황이었습니다" | midroll | false | emotion_only | - |
-| "여기까지 정리하면 이렇습니다" | ending | true | ending_summary | "핵심 정리" |
+### 변환 예시 (확장)
+| 원문 (sentence) | vrcs_section | 감정/톤 | subtitle_on | vrcs_reason | subtitle_text |
+|----------------|--------------|--------|-------------|-------------|---------------|
+| "오늘은 차분히 정리해보겠습니다" | opening | 차분 | true | opening_safety | "차분히 정리" |
+| "이 사건의 배경을 먼저 살펴보면..." | opening | 설명 | false | background_desc | - |
+| "그 순간, 모든 것이 바뀌었습니다" | midroll | 긴장 | false | emotion_tension | - |
+| "여기서 중요한 건 2월 선고입니다" | midroll | 분석 | true | midroll_density | "2월 선고 핵심" |
+| "정말 가슴이 먹먹해지는 순간이었습니다" | midroll | 슬픔 | false | emotion_only | - |
+| "결국 3가지 해결책이 있습니다" | midroll | 정리 | true | midroll_concept | "해결책 3가지" |
+| "여기까지 정리하면 이렇습니다" | ending | 정리 | true | ending_summary | "핵심 정리" |
+| "다음 이야기도 기대해주세요" | ending | 기대 | true | ending_connect | "다음 이야기" |
 """
 
 # 전체 출력 JSON 구조
