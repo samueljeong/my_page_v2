@@ -11339,8 +11339,8 @@ def api_image_generate_assets_zip():
             # ★ VRCS 2.0: subtitle_segments로 문장별 ON/OFF 제어
             subtitle_segments = scene.get('subtitle_segments', [])
 
-            # 자막용 텍스트 분할 (SSML 태그 제거 후)
-            plain_narration = strip_ssml_tags(narration) if has_ssml else narration
+            # 자막용 텍스트 분할 (★ 항상 SSML 태그 제거 - has_ssml과 무관)
+            plain_narration = strip_ssml_tags(narration)
 
             # ★ 핵심 수정: 항상 대본 전체를 문장 분할하여 TTS 수행
             # subtitle_segments는 자막 표시 여부만 제어 (TTS 대상을 제한하면 안됨!)
@@ -11414,6 +11414,12 @@ def api_image_generate_assets_zip():
                             sub_relative_start = max(0, scene_relative_time - VRCS_SUBTITLE_LEAD)
                             sub_relative_end = scene_relative_time + sent_duration + VRCS_SUBTITLE_TRAIL
 
+                            # ★ 자막 겹침 방지: 이전 자막 종료 시간이 현재 시작 시간을 초과하면 조정
+                            if srt_entries and srt_entries[-1]['end'] > sub_start:
+                                srt_entries[-1]['end'] = sub_start
+                            if scene_subtitles and scene_subtitles[-1]['end'] > sub_relative_start:
+                                scene_subtitles[-1]['end'] = sub_relative_start
+
                             srt_entries.append({
                                 'index': len(srt_entries) + 1,
                                 'start': sub_start,
@@ -11471,6 +11477,12 @@ def api_image_generate_assets_zip():
                             sub_end = current_time + duration + VRCS_SUBTITLE_TRAIL
                             sub_relative_start = max(0, scene_relative_time - VRCS_SUBTITLE_LEAD)
                             sub_relative_end = scene_relative_time + duration + VRCS_SUBTITLE_TRAIL
+
+                            # ★ 자막 겹침 방지: 이전 자막 종료 시간이 현재 시작 시간을 초과하면 조정
+                            if srt_entries and srt_entries[-1]['end'] > sub_start:
+                                srt_entries[-1]['end'] = sub_start
+                            if scene_subtitles and scene_subtitles[-1]['end'] > sub_relative_start:
+                                scene_subtitles[-1]['end'] = sub_relative_start
 
                             srt_entries.append({
                                 'index': len(srt_entries) + 1,
