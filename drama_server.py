@@ -10565,8 +10565,14 @@ Rules:
 1. Generate exactly {image_count} scenes (no more, no less)
 2. {thumbnail_instruction}
 3. image_prompt MUST be in English, following the prompt writing principles above.
-4. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
-5. ⚠️ ALL CHARACTERS = KOREAN WEBTOON/MANHWA STYLE! No photorealistic humans, no stickman. Use Korean webtoon style characters with exaggerated expressions."""
+4. ⚠️ ALL CHARACTERS = KOREAN WEBTOON/MANHWA STYLE! No photorealistic humans, no stickman.
+
+⚠️⚠️⚠️ CRITICAL - NARRATION RULE ⚠️⚠️⚠️
+- DIVIDE the script into {image_count} equal parts
+- Each scene's "narration" = COPY-PASTE that part of the ORIGINAL SCRIPT
+- DO NOT summarize! DO NOT write new sentences!
+- Script is {len(script)} chars → each narration should be ~{len(script) // image_count} chars
+- If your total narration is less than {len(script) * 0.9} chars, YOU ARE DOING IT WRONG!"""
 
         print(f"[IMAGE-ANALYZE] GPT-4o generating prompts... (style: {image_style}, content: {content_type}, audience: {audience}, language: {output_language})")
 
