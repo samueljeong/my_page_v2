@@ -18525,14 +18525,26 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                         "subtitle_segments": scene.get('subtitle_segments', [])  # VRCS 2.0 문장별 자막
                     })
 
-                assets_resp = req.post(f"{base_url}/api/image/generate-assets-zip", json={
+                # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                assets_request_data = {
                     "session_id": session_id,
                     "scenes": scenes_for_tts,
                     "voice": voice,
                     "include_images": False
-                }, timeout=300)
+                }
 
-                assets_data = assets_resp.json()
+                with app.test_request_context(
+                    '/api/image/generate-assets-zip',
+                    method='POST',
+                    json=assets_request_data,
+                    content_type='application/json'
+                ):
+                    assets_response = api_image_generate_assets_zip()
+                    if isinstance(assets_response, tuple):
+                        assets_data = assets_response[0].get_json()
+                    else:
+                        assets_data = assets_response.get_json()
+
                 if not assets_data.get('ok'):
                     raise Exception(f"TTS 실패: {assets_data.get('error')}")
 
@@ -18716,14 +18728,25 @@ NO photorealistic."""
                         "text_overlay": {"main": fallback_text, "sub": fallback_sub}
                     }
 
-                thumb_resp = req.post(f"{base_url}/api/thumbnail-ai/generate-single", json={
+                # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                thumb_request_data = {
                     "session_id": f"thumb_{session_id}",
                     "prompt": thumb_prompt,
                     "category": detected_category,
                     "lang": detected_lang
-                }, timeout=180)
+                }
 
-                thumb_data = thumb_resp.json()
+                with app.test_request_context(
+                    '/api/thumbnail-ai/generate-single',
+                    method='POST',
+                    json=thumb_request_data,
+                    content_type='application/json'
+                ):
+                    thumb_response = api_thumbnail_ai_generate_single()
+                    if isinstance(thumb_response, tuple):
+                        thumb_data = thumb_response[0].get_json()
+                    else:
+                        thumb_data = thumb_response.get_json()
                 if thumb_data.get('ok') and thumb_data.get('image_url'):
                     thumbnail_url = thumb_data['image_url']
                     total_cost += 0.03
@@ -18779,14 +18802,25 @@ NO photorealistic."""
                     print(f"[AUTOMATION] 3. 영상 생성 재시도 ({video_attempt + 1}/{max_video_retries}) - 3분 후 시작...")
                     time_module.sleep(180)  # 재시도 전 3분 대기
 
-                video_resp = req.post(f"{base_url}/api/image/generate-video", json={
+                # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                video_request_data = {
                     "session_id": session_id,
                     "scenes": scenes,
                     "language": "ko",  # 한글 자막용 NanumGothic 폰트 적용
                     "video_effects": video_effects  # 새 기능: BGM, 효과음, 자막 강조, Ken Burns 등
-                }, timeout=600)
+                }
 
-                video_data = video_resp.json()
+                with app.test_request_context(
+                    '/api/image/generate-video',
+                    method='POST',
+                    json=video_request_data,
+                    content_type='application/json'
+                ):
+                    video_response = api_image_generate_video()
+                    if isinstance(video_response, tuple):
+                        video_data = video_response[0].get_json()
+                    else:
+                        video_data = video_response.get_json()
                 if not video_data.get('ok') and not video_data.get('job_id'):
                     video_generation_error = f"영상 생성 시작 실패: {video_data.get('error')}"
                     print(f"[AUTOMATION] 3. 시도 {video_attempt + 1} 실패: {video_generation_error}")
@@ -18798,8 +18832,16 @@ NO photorealistic."""
                 # 10분 영상에 ~20분 소요되므로 여유있게 40분
                 for _ in range(1200):  # 1200 * 2초 = 40분
                     time_module.sleep(2)
-                    status_resp = req.get(f"{base_url}/api/image/video-status/{job_id}", timeout=30)
-                    status_data = status_resp.json()
+                    # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                    with app.test_request_context(
+                        f'/api/image/video-status/{job_id}',
+                        method='GET'
+                    ):
+                        status_response = api_image_video_status(job_id)
+                        if isinstance(status_response, tuple):
+                            status_data = status_response[0].get_json()
+                        else:
+                            status_data = status_response.get_json()
 
                     if status_data.get('status') == 'completed':
                         video_url_local = status_data.get('video_url')
@@ -19015,10 +19057,23 @@ NO photorealistic."""
                 except Exception as parse_err:
                     print(f"[AUTOMATION] 예약시간 처리 오류: {parse_err}")
 
-            upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=600)
+            # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+            with app.test_request_context(
+                '/api/youtube/upload',
+                method='POST',
+                json=upload_payload,
+                content_type='application/json'
+            ):
+                upload_response = youtube_upload()
+                if isinstance(upload_response, tuple):
+                    upload_data = upload_response[0].get_json()
+                    upload_status_code = upload_response[1]
+                else:
+                    upload_data = upload_response.get_json()
+                    upload_status_code = 200
 
-            print(f"[AUTOMATION] YouTube 업로드 응답 상태: {upload_resp.status_code}")
-            upload_data = upload_resp.json()
+            print(f"[AUTOMATION] YouTube 업로드 응답 상태: {upload_status_code}")
+            print(f"[AUTOMATION] upload_data type: {type(upload_data)}, content: {str(upload_data)[:200] if upload_data else 'None'}")
             print(f"[AUTOMATION] YouTube 업로드 응답: ok={upload_data.get('ok')}, mode={upload_data.get('mode', 'N/A')}, videoUrl={upload_data.get('videoUrl', 'N/A')[:50] if upload_data.get('videoUrl') else 'N/A'}")
 
             # 테스트 모드 감지 (실제 업로드 안됨)
@@ -19169,8 +19224,18 @@ NO photorealistic."""
                                 shorts_upload_payload["publish_at"] = publish_at_iso
                                 print(f"[SHORTS-BG] 쇼츠도 메인 영상과 동시 공개 예정: {publish_at_iso}")
 
-                            shorts_resp = bg_req.post(f"{base_url}/api/youtube/upload", json=shorts_upload_payload, timeout=300)
-                            shorts_data = shorts_resp.json()
+                            # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                            with app.test_request_context(
+                                '/api/youtube/upload',
+                                method='POST',
+                                json=shorts_upload_payload,
+                                content_type='application/json'
+                            ):
+                                shorts_response = youtube_upload()
+                                if isinstance(shorts_response, tuple):
+                                    shorts_data = shorts_response[0].get_json()
+                                else:
+                                    shorts_data = shorts_response.get_json()
 
                             if shorts_data.get('ok'):
                                 shorts_url = shorts_data.get('videoUrl', '')
