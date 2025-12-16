@@ -18448,7 +18448,7 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
             print(f"[AUTOMATION][IMAGE] 이미지 생성 시작 ({len(scenes)}개, 4개씩 병렬)...")
 
             def generate_single_image(idx, scene):
-                """단일 이미지 생성 (실패 시 3회 재시도)"""
+                """단일 이미지 생성 (실패 시 3회 재시도) - 직접 함수 호출"""
                 prompt = scene.get('image_prompt', '')
                 if not prompt:
                     return idx, None
@@ -18456,18 +18456,14 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                 max_retries = 3
                 for attempt in range(max_retries):
                     try:
-                        img_resp = req.post(f"{base_url}/api/drama/generate-image", json={
-                            "prompt": prompt,
-                            "size": "1280x720",
-                            "imageProvider": "gemini"
-                        }, timeout=120)
+                        # HTTP 호출 대신 직접 함수 호출 (self-deadlock 방지)
+                        result = image_generate(prompt=prompt, size="1280x720", model=GEMINI_PRO)
 
-                        img_data = img_resp.json()
-                        if img_data.get('ok') and img_data.get('imageUrl'):
+                        if result.get('ok') and result.get('image_url'):
                             print(f"[AUTOMATION][IMAGE] {idx+1}/{len(scenes)} 완료")
-                            return idx, img_data['imageUrl']
+                            return idx, result['image_url']
                         else:
-                            error_msg = img_data.get('error', '알 수 없는 오류')
+                            error_msg = result.get('error', '알 수 없는 오류')
                             print(f"[AUTOMATION][IMAGE] {idx+1} 실패 (시도 {attempt+1}/{max_retries}): {error_msg}")
                     except Exception as e:
                         print(f"[AUTOMATION][IMAGE] {idx+1} 오류 (시도 {attempt+1}/{max_retries}): {e}")
