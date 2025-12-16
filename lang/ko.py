@@ -218,7 +218,7 @@ TTS = {
         'male': 'ko-KR-Neural2-C',      # 남성 (고품질)
         'female': 'ko-KR-Neural2-A',    # 여성 (고품질)
     },
-    'default_voice': 'gemini:pro:Charon',  # 기본: Gemini Pro 남성 (깊고 신뢰감 있는 톤)
+    'default_voice': 'gemini:Charon',  # 기본: Gemini Flash 남성 (빠르고 저렴)
     'fallback_voice': 'ko-KR-Neural2-C', # 대체 음성 (Gemini 실패 시)
 
     # Gemini TTS 음성 (2025년 신규) - "gemini:음성명" 형식으로 사용
