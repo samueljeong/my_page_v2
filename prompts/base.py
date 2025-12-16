@@ -145,20 +145,31 @@ YOUTUBE_META_STRUCTURE = """
 # 씬 출력 구조 (단순화됨 - VRCS 제거)
 SCENE_STRUCTURE = """
 ## SCENE OUTPUT STRUCTURE
+
+⚠️⚠️⚠️ CRITICAL INSTRUCTION FOR NARRATION ⚠️⚠️⚠️
+The "narration" field MUST contain the EXACT ORIGINAL SCRIPT TEXT!
+- DIVIDE the script into scenes - DO NOT SUMMARIZE!
+- Each scene's narration = a PORTION of the original script
+- Total narration across ALL scenes = ENTIRE original script
+- Example: 24,000 char script ÷ 12 scenes = ~2,000 chars per scene
+
+❌ WRONG: "광개토대왕은 영토를 확장했습니다" (143 chars - summarized!)
+✅ RIGHT: [Copy 2000+ chars from original script for this scene]
+
 "scenes": [
   {
     "scene_number": 1,
     "chapter_title": "short title (5-15 chars)",
-    "narration": "EXACT original script text (plain text, no tags)",
-    "image_prompt": "[Culture-appropriate] comic style illustration... (see LANGUAGE section for template)",
+    "narration": "[PASTE 1500-2500 chars of ORIGINAL SCRIPT TEXT HERE - NOT A SUMMARY!]",
+    "image_prompt": "[Culture-appropriate] comic style illustration...",
     "ken_burns": "zoom_in | zoom_out | pan_left | pan_right | pan_up | pan_down"
   }
 ]
 
-CRITICAL: "narration" MUST contain EXACT text from the script!
-- DO NOT summarize or paraphrase
-- COPY-PASTE the exact sentences
-- Plain text only (no SSML tags - TTS doesn't use them)
+VERIFICATION: If your script is 24,000 chars and you have 12 scenes:
+- Each narration should be ~2,000 chars
+- Total narration = ~24,000 chars (matches original script!)
+- If total narration < 10,000 chars → YOU ARE SUMMARIZING (WRONG!)
 """
 
 # 전체 출력 JSON 구조
@@ -186,10 +197,16 @@ BASE_INSTRUCTIONS = """
 ## KEY RULES
 1. SCENE image_prompt = Comic style matching the script's culture (NO photorealistic, NO stickman!)
 2. THUMBNAIL ai_prompts = Comic style matching the script's culture (ALL categories!)
-3. NARRATION = EXACT script text (DO NOT summarize!)
+3. ⚠️ NARRATION = EXACT ORIGINAL SCRIPT TEXT! (NEVER summarize - COPY the script!)
 4. image_prompt = ALWAYS in English
 5. All other text (title, description, thumbnail) = OUTPUT LANGUAGE
 6. Cultural elements MUST match the script's language (Korean→Korean, Japanese→Japanese, English→Western)
+
+## ⚠️⚠️⚠️ MOST IMPORTANT: NARRATION RULE ⚠️⚠️⚠️
+- The "narration" field in each scene = EXACT COPY of original script text
+- DO NOT write new sentences! DO NOT summarize!
+- DIVIDE the script into N scenes, each containing ~2000 chars of ORIGINAL text
+- Total chars in all narrations combined MUST EQUAL the original script length!
 
 ## ⚠️ CRITICAL: NO TEXT IN IMAGES! ⚠️
 - NEVER include any text, letters, words, or speech bubbles in image prompts!
