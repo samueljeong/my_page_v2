@@ -28,6 +28,7 @@ from .utils import (
     detect_keywords,
     passes_era_filter,
     format_keywords_for_sheet,
+    get_kst_now,
 )
 
 
@@ -107,7 +108,7 @@ def collect_materials(
         print(f"[HISTORY] Google 보조 검색: {len(search_items)}개 추가")
 
     # 3) 중복 제거 및 필터링
-    now = datetime.now(timezone.utc).isoformat()
+    now = get_kst_now().isoformat()
     new_count = 0
     duplicate_count = 0
 
