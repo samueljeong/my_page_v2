@@ -110,25 +110,25 @@ def _parse_llm_response(text: str) -> tuple:
     shorts_hook = ""
     thumb_copy = ""
 
-    # 핵심포인트 추출 (오프닝 감정유도 포함)
+    # 핵심포인트 + 오프닝 감정유도 추출 (엔딩 전까지)
     core_match = re.search(
-        r'핵심포인트.*?(?=썸네일|$)',
+        r'핵심포인트.*?(?=엔딩|$)',
         text,
         re.DOTALL | re.IGNORECASE
     )
     if core_match:
         core_points = core_match.group(0).strip()
 
-    # 엔딩 루틴예고 추출 → shorts_hook_lines
+    # 엔딩 루틴예고 추출 (썸네일 전까지)
     shorts_match = re.search(
-        r'엔딩\s*루틴예고.*?(?=썸네일|$)',
+        r'엔딩\s*루틴.*?(?=썸네일|$)',
         text,
         re.DOTALL | re.IGNORECASE
     )
     if shorts_match:
         shorts_hook = shorts_match.group(0).strip()
 
-    # 썸네일 문구 추출 → thumbnail_copy
+    # 썸네일 문구 추출
     thumb_match = re.search(
         r'썸네일.*',
         text,
