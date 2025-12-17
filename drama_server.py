@@ -4798,6 +4798,42 @@ def api_generate_subtitle():
 
         sentences = [s for s in final_sentences if s.strip()]
 
+        # ★ 짧은 자막 합치기 (10글자 미만은 인접 문장과 합침)
+        MIN_SUBTITLE_LEN = 10
+        if len(sentences) > 1:
+            merged = []
+            i = 0
+            while i < len(sentences):
+                current = sentences[i]
+                # 충분히 길면 그냥 추가
+                if len(current) >= MIN_SUBTITLE_LEN:
+                    merged.append(current)
+                    i += 1
+                    continue
+                # 짧으면 다음과 합치기
+                if i + 1 < len(sentences):
+                    next_sent = sentences[i + 1]
+                    combined = current + " " + next_sent
+                    if len(combined) <= MAX_CHARS:
+                        merged.append(combined)
+                    else:
+                        # 두 줄로 (줄바꿈)
+                        merged.append(current + "\n" + next_sent)
+                    i += 2
+                elif merged:
+                    # 마지막 짧은 문장은 이전과 합침
+                    prev = merged.pop()
+                    combined = prev + " " + current
+                    if len(combined) <= MAX_CHARS:
+                        merged.append(combined)
+                    else:
+                        merged.append(prev + "\n" + current)
+                    i += 1
+                else:
+                    merged.append(current)
+                    i += 1
+            sentences = merged
+
         # 문장이 없으면 전체 텍스트를 하나의 문장으로
         if not sentences and text.strip():
             sentences = [text.strip()[:MAX_CHARS]]
@@ -10449,10 +10485,23 @@ The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
 
 **캐릭터 스타일:**
 - 웹툰 스타일 캐릭터 (webtoon style character)
-- 과장된 표정 (exaggerated shocked/surprised expression)
-- 큰 눈, 입 벌린 충격 표정, 땀방울
+- ⚠️ 극단적으로 과장된 표정 필수! (THIS IS A THUMBNAIL - EXAGGERATE!)
 - 30-40대 남성/여성 (상황에 맞게, 국적은 위 규칙 따름)
 - 선명한 외곽선, 깔끔한 채색
+
+**★★★ 표정 필수 요구사항 (가장 중요!) ★★★**
+⚠️ 썸네일은 클릭을 유도해야 합니다! 무표정/차분한 표정 절대 금지!
+- 눈: 평소의 2배 크기로 극단적으로 크게, 흰자위가 보이게
+- 입: 크게 벌려서 이빨이 보이거나, 꽉 다물고 긴장한 표정
+- 눈썹: 극단적으로 치켜올리거나(놀람) 깊이 찌푸리기(충격/분노)
+- 얼굴: 땀방울, 눈물, 홍조, 감정선 등 만화적 효과 필수
+- 몸: 뺨에 손 대기, 머리 쥐어뜯기, 손가락 가리키기 등 과장된 포즈
+- 참고: 한국 웹툰 리액션 장면, 😱😨😲 이모지 표정 수준으로 과장!
+
+**⛔ 절대 금지 (무조건 피할 것!):**
+- 차분한 표정, 무표정, 살짝 미소
+- 평화로운 표정, 미묘한 감정
+- 현실적인 표정 비율 (만화니까 과장해야 함!)
 
 **배경 스타일:**
 - 주제와 관련된 배경/소품 포함
@@ -10467,20 +10516,22 @@ The "ai_prompts" field generates 3 different YouTube thumbnails for A/B testing.
 ### ★★★ 프롬프트 작성 규칙 ★★★
 **반드시 포함할 키워드:**
 - "[국적] webtoon style illustration" (예: "Korean/Japanese/Western webtoon style")
-- "exaggerated shocked expression" 또는 "surprised face"
-- "comic style, clean lines, vibrant colors"
+- "EXTREMELY exaggerated shocked expression" (극단적 과장 필수!)
+- "eyes wide open 2x larger than normal, mouth wide open showing teeth" (구체적 표정 묘사)
+- "comic style expression marks, sweat drops, impact lines"
+- "NO calm face, NO neutral expression" (무표정 금지 명시!)
 - "YouTube thumbnail, 16:9"
 
 **프롬프트 예시 (한국어 대본):**
-- "Korean webtoon style illustration, shocked Korean man in his 30s with exaggerated surprised expression, sweating, mouth wide open, standing in front of clothing store with colorful padded jackets, comic style impact lines, clean lines, vibrant colors, YouTube thumbnail 16:9"
+- "Korean webtoon style illustration, Korean man in his 30s with EXTREMELY EXAGGERATED SHOCKED EXPRESSION - eyes 2x larger than normal with visible whites, mouth WIDE OPEN showing teeth, eyebrows raised extremely high, multiple sweat drops, hands on cheeks in disbelief, standing in front of clothing store with colorful padded jackets, comic style impact lines radiating from face, clean lines, vibrant colors, NO calm face, YouTube thumbnail 16:9"
 
 **프롬프트 예시 (일본어 대본):**
-- "Japanese webtoon style illustration, shocked Japanese man in his 30s with exaggerated surprised expression, sweating, mouth wide open, standing in front of office building, comic style impact lines, clean lines, vibrant colors, YouTube thumbnail 16:9"
+- "Japanese webtoon style illustration, Japanese man in his 30s with EXTREMELY EXAGGERATED SHOCKED EXPRESSION - eyes 2x larger than normal, pupils dilated, jaw dropped with mouth wide open, visible sweat drops, dramatic body language, standing in front of office building, comic style impact lines, clean lines, vibrant colors, NO neutral expression, YouTube thumbnail 16:9"
 
 ### ★★★ A/B/C 스타일 가이드 ★★★
-- **A**: 캐릭터 중심 - 과장된 표정의 캐릭터 + 관련 배경
-- **B**: 상황 중심 - 캐릭터 + 문제 상황을 보여주는 소품/배경
-- **C**: 대비/비교 - 분할 화면 또는 Before/After 느낌
+- **A**: 캐릭터 중심 - 극단적으로 과장된 표정의 캐릭터 (😱 수준) + 관련 배경
+- **B**: 상황 중심 - 충격받은 캐릭터 + 문제 상황을 보여주는 소품/배경
+- **C**: 대비/비교 - 분할 화면 또는 Before/After 느낌 (캐릭터 표정은 여전히 과장!)
 
 ## ⚠️ CRITICAL: TEXT_OVERLAY RULES (썸네일 텍스트 규칙) ⚠️
 The "text_overlay" text MUST match the OUTPUT LANGUAGE!
@@ -10527,19 +10578,30 @@ Split this script into exactly {image_count} scenes and generate "KOREAN WEBTOON
 Target audience: {'General (20-40s)' if audience == 'general' else 'Senior (50-70s)'}
 
 Core Style (MUST follow):
-- Character = Korean WEBTOON/manhwa style with EXAGGERATED EXPRESSIONS (shocked face, wide eyes, open mouth, sweat drops)
+- Character = Korean WEBTOON/manhwa style with EXTREMELY EXAGGERATED EXPRESSIONS
 - Character age = 30-50 year old Korean man or woman (match the story context)
 - Style = Clean bold outlines, vibrant flat colors, comic-style expression marks
 - Background = Detailed backgrounds related to the scene context
 
+★★★ THUMBNAIL CHARACTER EXPRESSION (MOST IMPORTANT!) ★★★
+This is for YouTube thumbnails - characters MUST have OVER-THE-TOP dramatic expressions!
+- Eyes: 2x larger than normal, visible whites of eyes, pupils tiny or dilated
+- Mouth: Wide open showing teeth OR tightly clenched with tension
+- Eyebrows: Extremely raised (surprised) OR deeply furrowed (shocked)
+- Face: Sweat drops, tears, emotion lines, blush marks
+- Body: Hands on cheeks, pulling hair, dramatic pointing, defensive pose
+- Reference: Like 😱😨😲 emoji expressions
+
+⛔ FORBIDDEN: NO calm face, NO neutral expression, NO slight smile, NO subtle emotions!
+
 Rules:
 1. Generate exactly {image_count} scenes (no more, no less)
 2. Character MUST be KOREAN WEBTOON/MANHWA style - NO photorealistic, NO stickman!
-3. Character: "Korean WEBTOON/manhwa style character with EXAGGERATED EXPRESSION, 30-50 year old Korean man or woman, clean bold outlines"
-4. Character face MUST have: exaggerated expression matching the emotion - CONSISTENT character style in every scene!
+3. Character: "Korean WEBTOON/manhwa style character with EXTREMELY EXAGGERATED EXPRESSION (eyes 2x larger, mouth wide open), 30-50 year old Korean man or woman, clean bold outlines"
+4. Character face MUST have: EXTREME exaggerated expression - NO calm or neutral faces allowed!
 5. NO photorealistic humans, NO stickman/stick figures, NO Japanese anime style!
-6. Express emotion through exaggerated facial expressions (wide eyes, open mouth, sweat drops, impact lines)
-7. Add these tags to every image_prompt: Korean webtoon style, manhwa illustration, exaggerated expression, clean bold outlines, NO photorealistic, NO stickman
+6. Express emotion through EXTREME facial expressions (eyes 2x size, jaw dropped, visible sweat drops, impact lines radiating from face)
+7. Add these tags to every image_prompt: Korean webtoon style, manhwa illustration, EXTREMELY exaggerated shocked expression, eyes wide open, mouth open, clean bold outlines, NO photorealistic, NO stickman, NO calm face
 8. {thumb_instruction}
 9. ⚠️ NARRATION = EXACT SCRIPT TEXT! Copy-paste the original sentences from the script. DO NOT summarize or paraphrase!
 
@@ -10879,7 +10941,63 @@ def api_image_generate_assets_zip():
                     chunks = split_by_meaning_fallback(sentence, max_chars)
                     result.extend(chunks)
 
+            # ★ 후처리: 짧은 자막 합치기 (10글자 미만은 이전/다음과 합침)
+            MIN_SUBTITLE_LEN = 10  # 최소 자막 길이
+            result = merge_short_subtitles(result, MIN_SUBTITLE_LEN, max_chars)
+
             return result
+
+        def merge_short_subtitles(chunks, min_len=10, max_len=35):
+            """짧은 자막을 이전/다음과 합치기
+
+            - 10글자 미만 자막은 인접 자막과 합침
+            - 합쳐도 max_len을 초과하면 두 줄로 표시 (줄바꿈)
+            """
+            if not chunks or len(chunks) <= 1:
+                return chunks
+
+            merged = []
+            i = 0
+
+            while i < len(chunks):
+                current = chunks[i]
+
+                # 현재가 충분히 길면 그냥 추가
+                if len(current) >= min_len:
+                    merged.append(current)
+                    i += 1
+                    continue
+
+                # 짧은 자막: 다음과 합치기 시도
+                if i + 1 < len(chunks):
+                    next_chunk = chunks[i + 1]
+                    combined = current + " " + next_chunk
+
+                    if len(combined) <= max_len:
+                        # 한 줄로 합침
+                        merged.append(combined)
+                        i += 2  # 다음 청크도 건너뜀
+                    else:
+                        # 두 줄로 합침 (줄바꿈 사용)
+                        merged.append(current + "\\N" + next_chunk)
+                        i += 2
+                # 마지막 짧은 자막: 이전과 합치기
+                elif merged:
+                    prev = merged.pop()
+                    combined = prev + " " + current
+
+                    if len(combined) <= max_len:
+                        merged.append(combined)
+                    else:
+                        # 두 줄로 합침
+                        merged.append(prev + "\\N" + current)
+                    i += 1
+                else:
+                    # 첫 번째이면서 짧은 경우 그냥 추가
+                    merged.append(current)
+                    i += 1
+
+            return merged
 
         def split_by_meaning_fallback(text, max_chars=35, lang='ko'):
             """GPT 실패 시 폴백: 의미 단위로 텍스트 분리
@@ -10995,6 +11113,13 @@ def api_image_generate_assets_zip():
               200원 → 이백원, 15층 → 십오층
             """
             import re
+
+            # ★ 전처리: 쉼표가 포함된 숫자 처리 (1,350 → 1350)
+            # 숫자+쉼표+숫자 패턴에서 쉼표 제거 (천 단위 구분자)
+            text = re.sub(r'(\d),(\d{3})', r'\1\2', text)
+            # 연속된 쉼표 패턴도 처리 (1,234,567 → 1234567)
+            while re.search(r'(\d),(\d{3})', text):
+                text = re.sub(r'(\d),(\d{3})', r'\1\2', text)
 
             # 고유어 숫자 (1~99)
             native_units = ['번', '개', '명', '살', '시', '마리', '잔', '병', '권', '대', '채', '장', '벌', '켤레', '그루', '송이', '군데', '가지', '줄', '쌍']
@@ -19048,7 +19173,7 @@ NO photorealistic."""
                         print(f"[AUTOMATION][THUMB] thumbnail_data.image_prompt 사용: {base_prompt[:80]}...")
                     else:
                         thumb_prompt = {
-                            "prompt": "Korean WEBTOON style YouTube thumbnail, 16:9 aspect ratio. Korean webtoon/manhwa style character with EXAGGERATED SHOCKED/SURPRISED EXPRESSION. Clean bold outlines, vibrant flat colors. Comic-style expression marks. NO photorealistic, NO stickman.",
+                            "prompt": "Korean WEBTOON style YouTube thumbnail, 16:9 aspect ratio. Korean webtoon/manhwa style character with EXTREMELY EXAGGERATED SHOCKED EXPRESSION - eyes 2x larger than normal with visible whites, mouth WIDE OPEN showing teeth, eyebrows raised extremely high, multiple sweat drops, hands on cheeks in disbelief. Clean bold outlines, vibrant flat colors. Comic-style expression marks, impact lines radiating from face. NO photorealistic, NO stickman, NO calm face, NO neutral expression.",
                             "text_overlay": {"main": fallback_text, "sub": fallback_sub}
                         }
 
@@ -20659,43 +20784,37 @@ def api_news_test_rss():
 @app.route('/api/history/run-pipeline', methods=['GET', 'POST'])
 def api_history_run_pipeline():
     """
-    한국사 자동화 파이프라인 실행 (시대별)
+    한국사 자동화 파이프라인 실행 (에피소드 자동 관리)
     브라우저에서 직접 호출 가능 (GET 지원)
 
-    자료 수집 → 시대별 후보 선정 → OPUS 입력 생성
+    ★ 자동으로 PENDING 10개 유지
+    ★ 시대 순서: 고조선 → 부여 → 삼국 → 남북국 → 고려 → 조선전기 → 조선후기 → 대한제국
+    ★ AI가 시대별 에피소드 수 결정
 
     파라미터:
-    - era: 시대 키 (GOJOSEON, BUYEO, SAMGUK, NAMBUK, GORYEO, JOSEON_EARLY, JOSEON_LATE, DAEHAN)
-    - force: "1"이면 오늘 이미 실행했어도 강제 실행
+    - force: "1"이면 PENDING 10개 이상이어도 1개 추가
 
     환경변수:
-    - HISTORY_SHEET_ID: 한국사용 Google Sheets ID (없으면 AUTOMATION_SHEET_ID 사용)
-    - LLM_ENABLED: "1"이면 TOP 1에 LLM 핵심포인트 생성
-    - LLM_MIN_SCORE: LLM 호출 최소 점수 (기본 0)
+    - NEWS_SHEET_ID: 뉴스 파이프라인과 같은 시트 사용 (권장)
+    - HISTORY_SHEET_ID: 한국사 전용 시트 (선택)
+    - LLM_ENABLED: "1"이면 AI가 에피소드 수 결정 및 핵심포인트 생성
     - MAX_RESULTS: 수집할 최대 자료 수 (기본 30)
     - TOP_K: 선정할 후보 수 (기본 5)
 
-    시트 구조 (시대별 탭):
-    - {ERA}_RAW: 수집된 원문 자료
-    - {ERA}_CANDIDATES: 점수화된 후보
-    - {ERA}_OPUS_INPUT: Opus에 붙여넣을 완제품 프롬프트
+    시트 구조:
+    - HISTORY_OPUS_INPUT: 에피소드별 대본 자료 (★ 단일 통합 시트)
+      - episode: 전체 에피소드 번호 (1, 2, 3, ...)
+      - era: 시대 키
+      - era_episode: 시대 내 에피소드 번호 (1화, 2화, ...)
+      - total_episodes: 해당 시대 총 에피소드 수 (AI 결정)
+      - status: PENDING/DONE
+    - {ERA}_RAW: 원문 자료 (시대별)
+    - {ERA}_CANDIDATES: 후보 자료 (시대별)
     """
     print("[HISTORY] ===== run-pipeline 호출됨 =====")
 
     try:
-        from scripts.history_pipeline import run_history_pipeline, ERAS
-
-        # 시대 파라미터
-        era = request.args.get('era') or os.environ.get('HISTORY_ERA', 'GOJOSEON')
-        era = era.upper()
-
-        # 시대 유효성 검사
-        if era not in ERAS:
-            return jsonify({
-                "ok": False,
-                "error": f"알 수 없는 시대: {era}",
-                "valid_eras": list(ERAS.keys())
-            }), 400
+        from scripts.history_pipeline import run_history_pipeline
 
         # 서비스 계정 인증
         service = get_sheets_service_account()
@@ -20705,54 +20824,51 @@ def api_history_run_pipeline():
                 "error": "Google Sheets 서비스 계정이 설정되지 않았습니다"
             }), 400
 
-        # 시트 ID
-        sheet_id = os.environ.get('HISTORY_SHEET_ID') or os.environ.get('AUTOMATION_SHEET_ID')
+        # 시트 ID (뉴스 파이프라인과 같은 시트 사용 가능)
+        sheet_id = (
+            os.environ.get('HISTORY_SHEET_ID') or
+            os.environ.get('NEWS_SHEET_ID') or
+            os.environ.get('AUTOMATION_SHEET_ID')
+        )
         if not sheet_id:
             return jsonify({
                 "ok": False,
-                "error": "HISTORY_SHEET_ID 또는 AUTOMATION_SHEET_ID 환경변수가 필요합니다"
+                "error": "HISTORY_SHEET_ID, NEWS_SHEET_ID, 또는 AUTOMATION_SHEET_ID 환경변수가 필요합니다"
             }), 400
 
         # 설정
         force = request.args.get('force', '0') == '1'
-        llm_enabled = os.environ.get('LLM_ENABLED', '0') == '1'
-        llm_min_score = float(os.environ.get('LLM_MIN_SCORE', '0'))
         max_results = int(os.environ.get('MAX_RESULTS', '30'))
         top_k = int(os.environ.get('TOP_K', '5'))
 
-        print(f"[HISTORY] 시대: {era}, force: {force}, LLM: {llm_enabled}")
-        print(f"[HISTORY] 시트 ID: {sheet_id}")
+        print(f"[HISTORY] force: {force}, 시트 ID: {sheet_id}")
 
-        # 파이프라인 실행
+        # 파이프라인 실행 (자동 에피소드 관리)
         result = run_history_pipeline(
             sheet_id=sheet_id,
             service=service,
-            era=era,
             max_results=max_results,
             top_k=top_k,
-            llm_enabled=llm_enabled,
-            llm_min_score=llm_min_score,
             force=force
         )
 
         if result.get("success"):
             return jsonify({
                 "ok": True,
-                "era": era,
-                "era_name": result.get("era_name"),
-                "raw_count": result.get("raw_count", 0),
-                "candidate_count": result.get("candidate_count", 0),
-                "opus_generated": result.get("opus_generated", False),
-                "archived": result.get("archived", 0),
-                "sheets_created": result.get("sheets_created", []),
-                "sheets_saved": result.get("sheets_saved", []),
-                "message": f"{result.get('era_name')} 파이프라인 실행 완료"
+                "pending_before": result.get("pending_before", 0),
+                "pending_after": result.get("pending_after", 0),
+                "episodes_added": result.get("episodes_added", 0),
+                "current_era": result.get("current_era"),
+                "current_episode": result.get("current_episode", 0),
+                "all_complete": result.get("all_complete", False),
+                "details": result.get("details", []),
+                "message": f"{result.get('episodes_added', 0)}개 에피소드 추가, PENDING {result.get('pending_after', 0)}개"
             })
         else:
             return jsonify({
                 "ok": False,
-                "era": era,
-                "error": result.get("error", "알 수 없는 오류")
+                "error": result.get("error", "알 수 없는 오류"),
+                "details": result.get("details", [])
             }), 500
 
     except ImportError as e:
