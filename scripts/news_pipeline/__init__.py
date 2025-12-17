@@ -37,6 +37,7 @@ from .opus import (
 
 from .sheets import (
     append_rows,
+    SheetsSaveError,
 )
 
 from .run import (
@@ -70,6 +71,7 @@ __all__ = [
     'generate_opus_input',
     # Sheets
     'append_rows',
+    'SheetsSaveError',
     # Main
     'run_news_pipeline',
 ]
