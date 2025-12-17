@@ -20278,20 +20278,20 @@ def _verify_news_cron_key():
     return provided_key == expected_key
 
 
-def _check_today_already_run(service, sheet_id: str) -> bool:
+def _check_today_already_run(service, sheet_id: str, channel: str = "ECON") -> bool:
     """
     오늘 이미 파이프라인이 실행되었는지 확인 (idempotency)
-    OPUS_INPUT 탭의 run_id를 확인
+    OPUS_INPUT_{CHANNEL} 탭의 run_id를 확인
     """
     from datetime import datetime, timedelta, timezone
     kst = timezone(timedelta(hours=9))
     today = datetime.now(kst).strftime("%Y-%m-%d")
 
     try:
-        # OPUS_INPUT에서 최근 10개 행 확인
+        opus_tab = f"OPUS_INPUT_{channel}"
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range='OPUS_INPUT!A2:A11'  # run_id 컬럼
+            range=f'{opus_tab}!A2:A11'
         ).execute()
         rows = result.get('values', [])
 
@@ -20304,16 +20304,27 @@ def _check_today_already_run(service, sheet_id: str) -> bool:
         return False
 
 
-def _ensure_news_sheets_exist(service, sheet_id: str) -> dict:
+def _ensure_news_sheets_exist(service, sheet_id: str, channel: str = "ECON") -> dict:
     """
-    뉴스 파이프라인용 3개 탭 존재 확인
+    뉴스 파이프라인용 탭 존재 확인 (채널별)
     없으면 자동 생성
+
+    구조:
+    - RAW_FEED: 공용
+    - CANDIDATES_{CHANNEL}: 채널별
+    - OPUS_INPUT_{CHANNEL}: 채널별
     """
-    required_tabs = ['RAW_FEED', 'CANDIDATES', 'OPUS_INPUT']
+    # 공용 탭 + 채널별 탭
+    required_tabs = [
+        'RAW_FEED',
+        f'CANDIDATES_{channel}',
+        f'OPUS_INPUT_{channel}'
+    ]
+
     headers = {
         'RAW_FEED': ['ingested_at', 'source', 'feed_name', 'title', 'link', 'published_at', 'summary', 'keywords', 'hash'],
-        'CANDIDATES': ['run_id', 'rank', 'category', 'angle', 'score_total', 'score_recency', 'score_relevance', 'score_uniqueness', 'title', 'link', 'published_at', 'why_selected'],
-        'OPUS_INPUT': ['run_id', 'selected_rank', 'category', 'issue_one_line', 'core_points', 'script_brief', 'shorts_hook_lines', 'thumbnail_copy', 'status', 'opus_script']
+        f'CANDIDATES_{channel}': ['run_id', 'rank', 'category', 'angle', 'score_total', 'score_recency', 'score_relevance', 'score_uniqueness', 'title', 'link', 'published_at', 'why_selected'],
+        f'OPUS_INPUT_{channel}': ['run_id', 'selected_rank', 'category', 'issue_one_line', 'core_points', 'script_brief', 'shorts_hook_lines', 'thumbnail_copy', 'status', 'opus_script']
     }
 
     result = {"checked": [], "created": [], "error": None}
@@ -20364,29 +20375,31 @@ def _ensure_news_sheets_exist(service, sheet_id: str) -> dict:
 @app.route('/api/news/run-pipeline', methods=['POST'])
 def api_news_run_pipeline():
     """
-    뉴스 자동화 파이프라인 실행
+    뉴스 자동화 파이프라인 실행 (채널별)
     Render Cron Job에서 매일 호출 (예: 오전 7시 KST)
 
-    Google News RSS → 후보 선정 → OPUS 입력 생성
+    Google News RSS → 채널별 후보 선정 → OPUS 입력 생성
+
+    파라미터:
+    - channel: 채널 키 (ECON, POLICY, SOCIETY, WORLD) - 기본값 ECON
+    - force: "1"이면 오늘 이미 실행했어도 강제 실행
 
     환경변수:
     - NEWS_SHEET_ID: 뉴스용 Google Sheets ID (없으면 AUTOMATION_SHEET_ID 사용)
     - NEWS_CRON_KEY: 보안 키 (설정 시 X-Cron-Key 헤더 필수)
+    - NEWS_CHANNEL: 기본 채널 (기본 ECON)
     - LLM_ENABLED: "1"이면 TOP 1에 LLM 핵심포인트 생성
     - LLM_MIN_SCORE: LLM 호출 최소 점수 (기본 0, 비용 절감용)
     - MAX_PER_FEED: 피드당 최대 기사 수 (기본 30)
     - TOP_K: 선정할 후보 수 (기본 5)
 
-    시트 구조 (3개 탭 - 자동 생성됨):
-    - RAW_FEED: RSS 원본 기사
-    - CANDIDATES: TOP K 후보
-    - OPUS_INPUT: 대본 작성용 입력
+    시트 구조 (A안: 마스터 시트 1개 + 채널별 탭):
+    - RAW_FEED: RSS 원본 기사 (공용)
+    - CANDIDATES_{CHANNEL}: 채널별 후보
+    - OPUS_INPUT_{CHANNEL}: 채널별 대본 입력
 
-    보안:
-    - NEWS_CRON_KEY 설정 시 X-Cron-Key 헤더 검증
-
-    Idempotency:
-    - 같은 날 2회 이상 실행 시 스킵 (OPUS_INPUT의 run_id 확인)
+    활성 채널: ECON (경제)
+    확장 예정: POLICY, SOCIETY, WORLD
     """
     print("[NEWS] ===== run-pipeline 호출됨 =====")
 
@@ -20401,6 +20414,10 @@ def api_news_run_pipeline():
     try:
         from scripts.news_pipeline import run_news_pipeline
 
+        # 채널 파라미터 (쿼리스트링 또는 환경변수)
+        channel = request.args.get('channel') or os.environ.get('NEWS_CHANNEL', 'ECON')
+        channel = channel.upper()
+
         # 서비스 계정 인증
         service = get_sheets_service_account()
         if not service:
@@ -20409,7 +20426,7 @@ def api_news_run_pipeline():
                 "error": "Google Sheets 서비스 계정이 설정되지 않았습니다"
             }), 400
 
-        # 시트 ID (뉴스용 또는 기존 자동화용)
+        # 시트 ID
         sheet_id = os.environ.get('NEWS_SHEET_ID') or os.environ.get('AUTOMATION_SHEET_ID')
         if not sheet_id:
             return jsonify({
@@ -20417,19 +20434,20 @@ def api_news_run_pipeline():
                 "error": "NEWS_SHEET_ID 또는 AUTOMATION_SHEET_ID 환경변수가 필요합니다"
             }), 400
 
-        # 시트 탭 존재 확인/생성
-        sheets_result = _ensure_news_sheets_exist(service, sheet_id)
+        # 시트 탭 존재 확인/생성 (채널별)
+        sheets_result = _ensure_news_sheets_exist(service, sheet_id, channel)
         if sheets_result["created"]:
             print(f"[NEWS] 새로 생성된 탭: {sheets_result['created']}")
 
-        # 오늘 이미 실행했는지 확인 (idempotency)
+        # 오늘 이미 실행했는지 확인 (채널별 idempotency)
         force = request.args.get('force', '0') == '1'
-        if not force and _check_today_already_run(service, sheet_id):
-            print("[NEWS] 오늘 이미 실행됨 - 스킵 (force=1로 강제 실행 가능)")
+        if not force and _check_today_already_run(service, sheet_id, channel):
+            print(f"[NEWS] 오늘 이미 실행됨 ({channel}) - 스킵")
             return jsonify({
                 "ok": True,
                 "skipped": True,
-                "message": "오늘 이미 파이프라인이 실행되었습니다",
+                "channel": channel,
+                "message": f"오늘 이미 {channel} 채널 파이프라인이 실행되었습니다",
                 "hint": "force=1 파라미터로 강제 실행 가능"
             })
 
@@ -20439,12 +20457,13 @@ def api_news_run_pipeline():
         llm_enabled = os.environ.get('LLM_ENABLED', '0') == '1'
         llm_min_score = int(os.environ.get('LLM_MIN_SCORE', '0'))
 
-        print(f"[NEWS] 설정: sheet_id={sheet_id[:20]}..., max_per_feed={max_per_feed}, top_k={top_k}, llm_enabled={llm_enabled}, llm_min_score={llm_min_score}")
+        print(f"[NEWS] 설정: channel={channel}, sheet_id={sheet_id[:20]}..., max_per_feed={max_per_feed}, top_k={top_k}")
 
         # 파이프라인 실행
         result = run_news_pipeline(
             sheet_id=sheet_id,
             service=service,
+            channel=channel,
             max_per_feed=max_per_feed,
             top_k=top_k,
             llm_enabled=llm_enabled,
@@ -20473,27 +20492,35 @@ def api_news_run_pipeline():
 def api_news_test_rss():
     """
     RSS 수집 테스트 (시트 저장 없이 결과만 반환)
+
+    파라미터:
+    - channel: 채널 키 (ECON, POLICY, SOCIETY, WORLD) - 기본값 ECON
+    - max_per_feed: 피드당 최대 기사 수 (기본 10)
+    - top_k: 후보 수 (기본 5)
     """
     try:
         from scripts.news_pipeline import ingest_rss_feeds, score_and_select_candidates
 
+        channel = request.args.get('channel', 'ECON').upper()
         max_per_feed = int(request.args.get('max_per_feed', '10'))
         top_k = int(request.args.get('top_k', '5'))
 
         # RSS 수집
         raw_rows, items = ingest_rss_feeds(max_per_feed)
 
-        # 후보 선정
-        candidates = score_and_select_candidates(items, top_k)
+        # 채널별 후보 선정
+        candidates = score_and_select_candidates(items, channel, top_k)
 
         return jsonify({
             "ok": True,
+            "channel": channel,
             "raw_count": len(raw_rows),
             "candidate_count": len(candidates),
             "candidates": [
                 {
                     "rank": c[1],
                     "category": c[2],
+                    "angle": c[3],
                     "score": c[4],
                     "title": c[8],
                     "link": c[9]

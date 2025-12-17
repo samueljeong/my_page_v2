@@ -1,23 +1,25 @@
 """
-뉴스 자동화 파이프라인 MVP
+뉴스 자동화 파이프라인 (A안: 마스터 시트 1개 + 채널별 탭 분리)
 
-목표: Google News RSS → 후보 선정 → OPUS 입력 생성
-- LLM 최소화: 후보 선정은 규칙 기반, TOP 1만 LLM
-- Google Sheets = 큐 (RAW_FEED / CANDIDATES / OPUS_INPUT)
-- MVP: 키워드 + 신선도 + 중복도 (TF-IDF ❌)
+구조:
+- RAW_FEED: 공용 (모든 채널이 공유)
+- CANDIDATES_{CHANNEL}: 채널별 후보
+- OPUS_INPUT_{CHANNEL}: 채널별 대본 입력
+
+현재 활성 채널: ECON (경제)
+확장 예정: POLICY, SOCIETY, WORLD
 
 사용법:
     from scripts.news_pipeline import run_news_pipeline
-    result = run_news_pipeline(sheet_id, service)
+    result = run_news_pipeline(sheet_id, service, channel="ECON")
 """
 
 import os
 import re
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
 
-# feedparser, dateutil은 requirements.txt에 추가 필요
 try:
     import feedparser
 except ImportError:
@@ -30,7 +32,88 @@ except ImportError:
 
 
 # ============================================================
-# 설정: Google News RSS 피드 (쿼리 기반)
+# 채널 설정 (확장 가능 구조)
+# ============================================================
+
+# 지원 채널 목록 (하드코딩 금지 - 여기서만 정의)
+CHANNELS = {
+    "ECON": {
+        "name": "경제",
+        "description": "내 돈·내 자산에 영향을 주는 경제 뉴스",
+        "active": True,
+    },
+    "POLICY": {
+        "name": "정책",
+        "description": "세금·복지·요금 등 생활 정책",
+        "active": False,  # 확장 예정
+    },
+    "SOCIETY": {
+        "name": "사회",
+        "description": "고용·의료·교육 등 사회 이슈",
+        "active": False,
+    },
+    "WORLD": {
+        "name": "국제",
+        "description": "글로벌 경제·금융 동향",
+        "active": False,
+    },
+}
+
+# 채널별 필터링 규칙
+CHANNEL_FILTERS = {
+    "ECON": {
+        "include": [
+            "금리", "기준금리", "환율", "물가", "인플레이션",
+            "부동산", "집값", "전세", "월세", "아파트",
+            "연금", "노후", "은퇴", "퇴직금",
+            "주식", "채권", "증시", "코스피", "코스닥",
+            "대출", "예금", "적금", "이자",
+        ],
+        "exclude": [
+            "정치 공방", "여야 대립", "탄핵",  # 순수 정치
+        ],
+        "weight": 2.0,  # 관련도 가중치
+    },
+    "POLICY": {
+        "include": [
+            "세금", "연금", "건강보험", "보험료", "복지",
+            "전기요금", "가스요금", "지원금", "보조금",
+        ],
+        "exclude": [],
+        "weight": 1.5,
+    },
+    "SOCIETY": {
+        "include": [
+            "고용", "실업", "임금", "의료", "교육",
+            "사기", "전세사기",
+        ],
+        "exclude": [],
+        "weight": 1.5,
+    },
+    "WORLD": {
+        "include": [
+            "미국", "연준", "중국", "일본", "유럽",
+            "달러", "유가", "수출",
+        ],
+        "exclude": ["전쟁", "분쟁"],  # 지정학 리스크는 별도 판단
+        "weight": 1.0,
+    },
+}
+
+# 요일별 권장 앵글
+WEEKDAY_ANGLES = {
+    0: "월요일: 지난주 흐름 + 이번 주 예고",
+    1: "화요일: 이슈 정리",
+    2: "수요일: 이슈 정리",
+    3: "목요일: 이슈 정리",
+    4: "금요일: 이슈 정리 + 주간 마무리",
+    5: "토요일: 주간 복기 / 해설형",
+    6: "일요일: 큰 흐름 + 다음 주 예고",
+}
+
+
+# ============================================================
+# RSS 피드 설정 (공용)
 # ============================================================
 
 def google_news_rss_url(query: str) -> str:
@@ -39,7 +122,7 @@ def google_news_rss_url(query: str) -> str:
     return f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
 
 
-# 피드 설정: (피드명, 검색쿼리)
+# 피드 설정: (피드명, 검색쿼리) - 모든 채널 공용
 NEWS_FEEDS = [
     ("economy_daily", "기준금리 OR 대출 OR 예금 OR 물가 OR 환율 OR 부동산"),
     ("policy_life", "세금 OR 연금 OR 건강보험료 OR 전기요금 OR 가스요금 OR 복지"),
@@ -72,6 +155,18 @@ def compute_hash(title: str, link: str) -> str:
     return hashlib.sha256(s).hexdigest()[:16]
 
 
+def get_tab_name(base: str, channel: str) -> str:
+    """채널별 탭 이름 생성 (규칙 기반)"""
+    return f"{base}_{channel}"
+
+
+def get_weekday_angle() -> str:
+    """오늘 요일에 맞는 권장 앵글 반환"""
+    kst = timezone(timedelta(hours=9))
+    weekday = datetime.now(kst).weekday()
+    return WEEKDAY_ANGLES.get(weekday, "이슈 정리")
+
+
 def guess_category(title: str, summary: str) -> str:
     """규칙 기반 카테고리 분류"""
     text = f"{title} {summary}"
@@ -85,33 +180,52 @@ def guess_category(title: str, summary: str) -> str:
     return best_cat
 
 
-def calculate_relevance_score(title: str, summary: str, category: str) -> int:
-    """관련도 점수 계산 (제목에 있으면 가중치)"""
+def calculate_relevance_score(title: str, summary: str, channel: str) -> int:
+    """채널별 관련도 점수 계산"""
     text = f"{title} {summary}"
-    keywords = CATEGORY_KEYWORDS.get(category, [])
+    filter_config = CHANNEL_FILTERS.get(channel, {})
+    include_keywords = filter_config.get("include", [])
+    weight = filter_config.get("weight", 1.0)
+
     score = 0
-
-    for k in keywords:
+    for k in include_keywords:
         if k in text:
-            score += 2 if k in title else 1
+            score += 3 if k in title else 1  # 제목에 있으면 가중치
 
-    return score
+    return int(score * weight)
 
 
 def calculate_recency_score(published_at: str, now: datetime) -> int:
     """신선도 점수 계산 (최근일수록 높음)"""
     if not published_at or not dtparser:
-        return 2  # 날짜 없으면 기본값
+        return 2
 
     try:
         dt = dtparser.parse(published_at)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         hours = (now - dt).total_seconds() / 3600
-        # 60시간 이내면 점수 부여 (10점 만점)
         return max(0, 10 - int(hours / 6))
     except Exception:
         return 2
+
+
+def passes_channel_filter(title: str, summary: str, channel: str) -> bool:
+    """채널 필터 통과 여부 (include 1개 이상 + exclude 없음)"""
+    text = f"{title} {summary}"
+    filter_config = CHANNEL_FILTERS.get(channel, {})
+
+    include_keywords = filter_config.get("include", [])
+    exclude_keywords = filter_config.get("exclude", [])
+
+    # exclude 키워드가 있으면 제외
+    for k in exclude_keywords:
+        if k in text:
+            return False
+
+    # include 키워드가 최소 1개 있어야 통과
+    has_include = any(k in text for k in include_keywords)
+    return has_include
 
 
 # ============================================================
@@ -120,11 +234,9 @@ def calculate_recency_score(published_at: str, now: datetime) -> int:
 
 def ingest_rss_feeds(max_per_feed: int = 30) -> tuple[list, list]:
     """
-    RSS 피드에서 기사 수집
+    RSS 피드에서 기사 수집 (공용)
 
     반환: (raw_rows, items)
-        - raw_rows: RAW_FEED 시트에 저장할 행들
-        - items: 후속 처리용 기사 딕셔너리 리스트
     """
     if not feedparser:
         print("[NEWS] feedparser 모듈이 설치되지 않음")
@@ -149,7 +261,6 @@ def ingest_rss_feeds(max_per_feed: int = 30) -> tuple[list, list]:
                 summary = normalize_text(getattr(e, "summary", ""))
                 published = getattr(e, "published", None) or getattr(e, "updated", None)
 
-                # 날짜 파싱
                 published_at = ""
                 if published and dtparser:
                     try:
@@ -159,24 +270,24 @@ def ingest_rss_feeds(max_per_feed: int = 30) -> tuple[list, list]:
 
                 h = compute_hash(title, link)
 
-                # 주요 키워드 추출 (간단 버전)
+                # 주요 키워드 추출
                 hit_keywords = []
                 for kw in ["금리", "대출", "연금", "세금", "건보", "부동산", "환율", "물가"]:
                     if kw in (title + summary):
                         hit_keywords.append(kw)
                 kw_hit = "|".join(hit_keywords)
 
-                # RAW_FEED 행
+                # RAW_FEED 행 (공용)
                 raw_rows.append([
-                    now.isoformat(),  # ingested_at
-                    "google_news_rss",  # source
+                    now.isoformat(),
+                    "google_news_rss",
                     feed_name,
                     title,
                     link,
                     published_at,
                     summary,
                     kw_hit,
-                    h  # hash
+                    h
                 ])
 
                 items.append({
@@ -209,23 +320,35 @@ def deduplicate_items(items: list) -> list:
     return unique
 
 
-def score_and_select_candidates(items: list, top_k: int = 5) -> list:
+def score_and_select_candidates(items: list, channel: str, top_k: int = 5) -> list:
     """
-    점수화 + TOP K 후보 선정 (규칙 기반, LLM ❌)
+    채널별 점수화 + TOP K 후보 선정 (규칙 기반)
 
-    반환: CANDIDATES 시트에 저장할 행들
+    Args:
+        items: 기사 리스트
+        channel: 채널 키 (ECON, POLICY, SOCIETY, WORLD)
+        top_k: 선정할 후보 수
     """
     now = datetime.now(timezone.utc)
-    run_id = now.astimezone().strftime("%Y-%m-%d")
+    kst = timezone(timedelta(hours=9))
+    run_id = datetime.now(kst).strftime("%Y-%m-%d")
+    weekday_angle = get_weekday_angle()
 
     # 중복 제거
     unique_items = deduplicate_items(items)
 
-    # 점수화
+    # 채널 필터링 + 점수화
     scored = []
+    filtered_count = 0
+
     for item in unique_items:
+        # 채널 필터 통과 여부
+        if not passes_channel_filter(item["title"], item["summary"], channel):
+            filtered_count += 1
+            continue
+
         category = guess_category(item["title"], item["summary"])
-        relevance = calculate_relevance_score(item["title"], item["summary"], category)
+        relevance = calculate_relevance_score(item["title"], item["summary"], channel)
         recency = calculate_recency_score(item["published_at"], now)
         total = relevance * 2 + recency
 
@@ -237,6 +360,8 @@ def score_and_select_candidates(items: list, top_k: int = 5) -> list:
             "item": item,
         })
 
+    print(f"[NEWS] 채널 필터({channel}): {filtered_count}개 제외, {len(scored)}개 통과")
+
     # 점수순 정렬
     scored.sort(key=lambda x: x["total"], reverse=True)
     top = scored[:top_k]
@@ -245,76 +370,81 @@ def score_and_select_candidates(items: list, top_k: int = 5) -> list:
     candidate_rows = []
     for rank, s in enumerate(top, start=1):
         item = s["item"]
-        angle = "내 돈·내 생활에 어떤 영향인가?"
+        angle = f"내 돈·내 생활에 어떤 영향인가? ({weekday_angle})"
         why = f"관련도({s['relevance']})/신선도({s['recency']}) 기반 상위 후보. '{s['category']}'로 분류."
 
         candidate_rows.append([
-            run_id,           # run_id
-            rank,             # rank
-            s["category"],    # category
-            angle,            # angle
-            s["total"],       # score_total
-            s["recency"],     # score_recency
-            s["relevance"],   # score_relevance
-            "",               # score_uniqueness (MVP에서 미사용)
-            item["title"],    # title
-            item["link"],     # link
-            item["published_at"],  # published_at
-            why,              # why_selected
+            run_id,
+            rank,
+            s["category"],
+            angle,
+            s["total"],
+            s["recency"],
+            s["relevance"],
+            "",  # score_uniqueness
+            item["title"],
+            item["link"],
+            item["published_at"],
+            why,
         ])
 
-    print(f"[NEWS] TOP {len(candidate_rows)} 후보 선정 완료")
+    print(f"[NEWS] TOP {len(candidate_rows)} 후보 선정 완료 (채널: {channel})")
     return candidate_rows
 
 
-def generate_opus_input(candidate_rows: list, llm_enabled: bool = False, llm_min_score: int = 0) -> list:
+def generate_opus_input(
+    candidate_rows: list,
+    channel: str,
+    llm_enabled: bool = False,
+    llm_min_score: int = 0
+) -> list:
     """
-    OPUS 입력 생성 (TOP 1만 LLM 사용)
-
-    Args:
-        candidate_rows: CANDIDATES 행들
-        llm_enabled: LLM 사용 여부
-        llm_min_score: LLM 호출 최소 점수 (비용 절감용)
-
-    반환: OPUS_INPUT 시트에 저장할 행들
+    OPUS 입력 생성 (TOP 1만 처리)
     """
     if not candidate_rows:
         return []
 
-    # TOP 1만 처리
     top1 = candidate_rows[0]
     run_id = top1[0]
     category = top1[2]
-    score_total = top1[4]  # score_total
+    angle = top1[3]
+    score_total = top1[4]
     title = top1[8]
     link = top1[9]
 
-    # 요약 정보 (CANDIDATES에는 없으므로 title로 대체)
     summary = ""
+    weekday_angle = get_weekday_angle()
 
-    # LLM 호출 조건: llm_enabled AND score >= llm_min_score
+    # LLM 호출 조건
     should_call_llm = llm_enabled and (llm_min_score == 0 or score_total >= llm_min_score)
 
     if should_call_llm:
         print(f"[NEWS] LLM 호출 (점수 {score_total} >= 최소 {llm_min_score})")
-        core_points, brief, shorts, thumb = _llm_make_opus_input(category, title, summary, link)
+        core_points, brief, shorts, thumb = _llm_make_opus_input(category, title, summary, link, channel)
     elif llm_enabled and score_total < llm_min_score:
         print(f"[NEWS] LLM 스킵 (점수 {score_total} < 최소 {llm_min_score})")
         core_points, brief, shorts, thumb = "", "", "", ""
     else:
-        # LLM 없이 기본 템플릿
-        core_points = f"""[수동 작성 필요]
-이슈: {title}
-카테고리: {category}
-링크: {link}
+        # LLM 없이 기본 템플릿 (Opus 붙여넣기용)
+        channel_name = CHANNELS.get(channel, {}).get("name", channel)
+        core_points = f"""[핵심포인트 - 수동 작성]
+• 이슈: {title}
+• 카테고리: {category} ({channel_name} 채널)
+• 출처: {link}
 
-핵심포인트 8개를 직접 작성하세요."""
+핵심포인트 5~7개:
+1.
+2.
+3.
+4.
+5. """
 
-        brief = """2~3분 대본 작성 지침:
-- 속보 요약 ❌
-- 맥락 + 파장 중심 정리 ⭕
-- 50대 이상 시청자 대상
-- "내 돈/내 생활" 관점"""
+        brief = f"""[대본 지시문]
+- 분량: 2~3분 (1,800~2,400자)
+- 톤: {weekday_angle}
+- 관점: "내 돈/내 생활"에 미치는 영향
+- 구조: 서론(불안/의문) → 본론(핵심 정리) → 전망 → 마무리(루틴 예고)
+- 금지: 속보 요약, 과장, 공포 조장"""
 
         shorts = ""
         thumb = ""
@@ -323,25 +453,21 @@ def generate_opus_input(candidate_rows: list, llm_enabled: bool = False, llm_min
         run_id,
         1,  # selected_rank
         category,
-        title[:40],  # issue_one_line
+        title[:50],  # issue_one_line
         core_points,
         brief,
         shorts,
         thumb,
-        "NEW",  # status
-        "",  # opus_script (사람이 작성)
+        "PENDING",  # status (NEW → PENDING)
+        "",  # opus_script
     ]]
 
     print(f"[NEWS] OPUS_INPUT 생성 완료: {title[:30]}...")
     return opus_row
 
 
-def _llm_make_opus_input(category: str, title: str, summary: str, link: str) -> tuple:
-    """
-    LLM으로 핵심포인트 생성 (TOP 1만, 저비용 모델)
-
-    반환: (core_points, brief, shorts, thumb)
-    """
+def _llm_make_opus_input(category: str, title: str, summary: str, link: str, channel: str) -> tuple:
+    """LLM으로 핵심포인트 생성"""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         print("[NEWS] OPENAI_API_KEY 환경변수 없음, LLM 스킵")
@@ -351,23 +477,30 @@ def _llm_make_opus_input(category: str, title: str, summary: str, link: str) -> 
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
 
+        channel_name = CHANNELS.get(channel, {}).get("name", channel)
+        weekday_angle = get_weekday_angle()
+
         prompt = f"""너는 '속보가 아니라 정리' 뉴스 채널의 기획자다.
-목표: 2~3분 분량(대본 1,800~2,400자 정도)으로, 50대 이상 시청자가 '내 돈/내 생활' 관점에서 이해하도록 정리한다.
+
+채널: {channel_name}
+오늘 톤: {weekday_angle}
+
+목표: 2~3분 분량(대본 1,800~2,400자)으로, 50대 이상 시청자가 '내 돈/내 생활' 관점에서 이해하도록 정리한다.
 
 카테고리: {category}
 이슈 제목: {title}
-요약(있으면): {summary}
+요약: {summary}
 링크: {link}
 
 출력 형식:
-1) 핵심포인트 8개 (불릿)
-2) Opus에 붙여넣을 대본 지시문(서론/본론/전망/마무리 구조, '정리' 중심, 과장 금지)
-3) 쇼츠→롱폼 유도 문구 5개('다음 파장' 예고형)
-4) 썸네일 문구 3안(사건명 X / 시청자 상태 O)"""
+1) 핵심포인트 6~8개 (불릿, 각 1문장)
+2) 오프닝 감정 유도 2문장 (불안/의문)
+3) 엔딩 루틴 예고 2문장
+4) Opus에 붙여넣을 대본 지시문
+5) 썸네일 문구 3안 (사건명 X, 시청자 상태 O)"""
 
         model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
-        # Responses API 사용 (gpt-5.1 호환)
         if "gpt-5" in model:
             response = client.responses.create(
                 model=model,
@@ -387,7 +520,6 @@ def _llm_make_opus_input(category: str, title: str, summary: str, link: str) -> 
                             text_chunks.append(getattr(content, "text", ""))
                 text = "\n".join(text_chunks).strip()
         else:
-            # 일반 Chat Completions API
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -398,7 +530,6 @@ def _llm_make_opus_input(category: str, title: str, summary: str, link: str) -> 
             )
             text = response.choices[0].message.content.strip()
 
-        # MVP: 파싱 없이 전체 텍스트 반환
         core_points = text
         brief = "위 핵심포인트 기반으로 2~3분 대본 작성. 속보 요약 금지, 맥락+파장 중심 정리."
         shorts = ""
@@ -419,41 +550,45 @@ def _llm_make_opus_input(category: str, title: str, summary: str, link: str) -> 
 def run_news_pipeline(
     sheet_id: str,
     service,
+    channel: str = "ECON",
     max_per_feed: int = 30,
     top_k: int = 5,
     llm_enabled: bool = False,
     llm_min_score: int = 0
 ) -> dict:
     """
-    뉴스 파이프라인 전체 실행
+    뉴스 파이프라인 전체 실행 (채널별)
 
     Args:
         sheet_id: Google Sheets ID
         service: Google Sheets API 서비스 객체
+        channel: 채널 키 (ECON, POLICY, SOCIETY, WORLD)
         max_per_feed: 피드당 최대 기사 수
         top_k: 선정할 후보 수
-        llm_enabled: LLM 사용 여부 (TOP 1만)
-        llm_min_score: LLM 호출 최소 점수 (비용 절감용)
-
-    반환: {
-        "success": bool,
-        "raw_count": int,
-        "candidate_count": int,
-        "opus_generated": bool,
-        "error": str or None
-    }
+        llm_enabled: LLM 사용 여부
+        llm_min_score: LLM 호출 최소 점수
     """
     result = {
         "success": False,
+        "channel": channel,
         "raw_count": 0,
         "candidate_count": 0,
         "opus_generated": False,
         "error": None,
     }
 
+    # 채널 유효성 검사
+    if channel not in CHANNELS:
+        result["error"] = f"알 수 없는 채널: {channel}. 유효 채널: {list(CHANNELS.keys())}"
+        return result
+
+    if not CHANNELS[channel].get("active", False):
+        result["error"] = f"비활성 채널: {channel}"
+        return result
+
     try:
-        # 1) RSS 수집
-        print("[NEWS] === 1단계: RSS 수집 ===")
+        # 1) RSS 수집 (공용)
+        print(f"[NEWS] === 1단계: RSS 수집 (채널: {channel}) ===")
         raw_rows, items = ingest_rss_feeds(max_per_feed)
         result["raw_count"] = len(raw_rows)
 
@@ -461,37 +596,39 @@ def run_news_pipeline(
             result["error"] = "RSS 수집 결과 없음"
             return result
 
-        # RAW_FEED에 저장
+        # RAW_FEED에 저장 (공용 탭)
         if service and sheet_id:
             _append_rows(service, sheet_id, "RAW_FEED!A1", raw_rows)
             print(f"[NEWS] RAW_FEED에 {len(raw_rows)}개 행 저장")
 
-        # 2) 후보 선정
-        print("[NEWS] === 2단계: 후보 선정 ===")
-        candidate_rows = score_and_select_candidates(items, top_k)
+        # 2) 채널별 후보 선정
+        print(f"[NEWS] === 2단계: 후보 선정 ({channel}) ===")
+        candidate_rows = score_and_select_candidates(items, channel, top_k)
         result["candidate_count"] = len(candidate_rows)
 
         if not candidate_rows:
-            result["error"] = "후보 선정 결과 없음"
+            result["error"] = f"채널 {channel}에 적합한 후보 없음"
             return result
 
-        # CANDIDATES에 저장
+        # CANDIDATES_{CHANNEL}에 저장
+        candidates_tab = get_tab_name("CANDIDATES", channel)
         if service and sheet_id:
-            _append_rows(service, sheet_id, "CANDIDATES!A1", candidate_rows)
-            print(f"[NEWS] CANDIDATES에 {len(candidate_rows)}개 행 저장")
+            _append_rows(service, sheet_id, f"{candidates_tab}!A1", candidate_rows)
+            print(f"[NEWS] {candidates_tab}에 {len(candidate_rows)}개 행 저장")
 
-        # 3) OPUS 입력 생성 (TOP 1만)
-        print("[NEWS] === 3단계: OPUS 입력 생성 ===")
-        opus_rows = generate_opus_input(candidate_rows, llm_enabled, llm_min_score)
+        # 3) OPUS 입력 생성
+        print(f"[NEWS] === 3단계: OPUS 입력 생성 ({channel}) ===")
+        opus_rows = generate_opus_input(candidate_rows, channel, llm_enabled, llm_min_score)
 
         if opus_rows:
             result["opus_generated"] = True
+            opus_tab = get_tab_name("OPUS_INPUT", channel)
             if service and sheet_id:
-                _append_rows(service, sheet_id, "OPUS_INPUT!A1", opus_rows)
-                print(f"[NEWS] OPUS_INPUT에 저장 완료")
+                _append_rows(service, sheet_id, f"{opus_tab}!A1", opus_rows)
+                print(f"[NEWS] {opus_tab}에 저장 완료")
 
         result["success"] = True
-        print("[NEWS] === 파이프라인 완료 ===")
+        print(f"[NEWS] === 파이프라인 완료 ({channel}) ===")
 
     except Exception as e:
         result["error"] = str(e)
@@ -544,10 +681,10 @@ if __name__ == "__main__":
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
-    # 환경변수에서 설정 로드
     sheet_id = os.environ.get("NEWS_SHEET_ID") or os.environ.get("SHEET_ID")
     service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     llm_enabled = os.environ.get("LLM_ENABLED", "0") == "1"
+    channel = os.environ.get("NEWS_CHANNEL", "ECON")
 
     if not sheet_id:
         print("ERROR: NEWS_SHEET_ID 또는 SHEET_ID 환경변수 필요")
@@ -557,7 +694,6 @@ if __name__ == "__main__":
         print("ERROR: GOOGLE_SERVICE_ACCOUNT_JSON 환경변수 필요")
         exit(1)
 
-    # Google Sheets 서비스 생성
     creds_info = json.loads(service_account_json)
     creds = service_account.Credentials.from_service_account_info(
         creds_info,
@@ -565,10 +701,10 @@ if __name__ == "__main__":
     )
     service = build("sheets", "v4", credentials=creds)
 
-    # 파이프라인 실행
     result = run_news_pipeline(
         sheet_id=sheet_id,
         service=service,
+        channel=channel,
         max_per_feed=int(os.environ.get("MAX_PER_FEED", "30")),
         top_k=int(os.environ.get("TOP_K", "5")),
         llm_enabled=llm_enabled
