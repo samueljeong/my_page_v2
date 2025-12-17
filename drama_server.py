@@ -20268,13 +20268,14 @@ def api_sheets_update():
 def _verify_news_cron_key():
     """
     NEWS_CRON_KEY 검증 (보안)
-    환경변수가 설정되어 있으면 X-Cron-Key 헤더와 비교
+    환경변수가 설정되어 있으면 X-Cron-Key 헤더 또는 key 쿼리 파라미터와 비교
     """
     expected_key = os.environ.get('NEWS_CRON_KEY')
     if not expected_key:
         return True  # 키 미설정 시 검증 스킵 (개발용)
 
-    provided_key = request.headers.get('X-Cron-Key')
+    # 헤더 또는 쿼리 파라미터에서 키 확인
+    provided_key = request.headers.get('X-Cron-Key') or request.args.get('key')
     return provided_key == expected_key
 
 
@@ -20372,17 +20373,19 @@ def _ensure_news_sheets_exist(service, sheet_id: str, channel: str = "ECON") -> 
     return result
 
 
-@app.route('/api/news/run-pipeline', methods=['POST'])
+@app.route('/api/news/run-pipeline', methods=['GET', 'POST'])
 def api_news_run_pipeline():
     """
     뉴스 자동화 파이프라인 실행 (채널별)
     Render Cron Job에서 매일 호출 (예: 오전 7시 KST)
+    브라우저에서 직접 호출 가능 (GET 지원)
 
     Google News RSS → 채널별 후보 선정 → OPUS 입력 생성
 
     파라미터:
     - channel: 채널 키 (ECON, POLICY, SOCIETY, WORLD) - 기본값 ECON
     - force: "1"이면 오늘 이미 실행했어도 강제 실행
+    - key: 인증 키 (쿼리 파라미터, X-Cron-Key 헤더 대체)
 
     환경변수:
     - NEWS_SHEET_ID: 뉴스용 Google Sheets ID (없으면 AUTOMATION_SHEET_ID 사용)
