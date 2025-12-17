@@ -21,7 +21,7 @@ from .utils import get_tab_name
 from .rss import ingest_rss_feeds
 from .scoring import score_and_select_candidates
 from .opus import generate_opus_input
-from .sheets import append_rows
+from .sheets import append_rows, SheetsSaveError
 
 
 def run_news_pipeline(
@@ -54,6 +54,7 @@ def run_news_pipeline(
         "raw_count": 0,
         "candidate_count": 0,
         "opus_generated": False,
+        "sheets_saved": [],  # 성공적으로 저장된 시트 목록
         "error": None,
     }
 
@@ -78,8 +79,14 @@ def run_news_pipeline(
 
         # RAW_FEED에 저장
         if service and sheet_id:
-            append_rows(service, sheet_id, "RAW_FEED!A1", raw_rows)
-            print(f"[NEWS] RAW_FEED에 {len(raw_rows)}개 행 저장")
+            try:
+                append_rows(service, sheet_id, "RAW_FEED!A1", raw_rows)
+                result["sheets_saved"].append("RAW_FEED")
+                print(f"[NEWS] RAW_FEED에 {len(raw_rows)}개 행 저장 완료")
+            except SheetsSaveError as e:
+                result["error"] = f"RAW_FEED 저장 실패: {e}"
+                print(f"[NEWS] RAW_FEED 저장 실패: {e}")
+                return result
 
         # 2) 채널별 후보 선정
         print(f"[NEWS] === 2단계: 후보 선정 ({channel}) ===")
@@ -93,8 +100,14 @@ def run_news_pipeline(
         # CANDIDATES_{CHANNEL}에 저장
         candidates_tab = get_tab_name("CANDIDATES", channel)
         if service and sheet_id:
-            append_rows(service, sheet_id, f"{candidates_tab}!A1", candidate_rows)
-            print(f"[NEWS] {candidates_tab}에 {len(candidate_rows)}개 행 저장")
+            try:
+                append_rows(service, sheet_id, f"{candidates_tab}!A1", candidate_rows)
+                result["sheets_saved"].append(candidates_tab)
+                print(f"[NEWS] {candidates_tab}에 {len(candidate_rows)}개 행 저장 완료")
+            except SheetsSaveError as e:
+                result["error"] = f"{candidates_tab} 저장 실패: {e}"
+                print(f"[NEWS] {candidates_tab} 저장 실패: {e}")
+                return result
 
         # 3) OPUS 입력 생성
         print(f"[NEWS] === 3단계: OPUS 입력 생성 ({channel}) ===")
@@ -104,8 +117,14 @@ def run_news_pipeline(
             result["opus_generated"] = True
             opus_tab = get_tab_name("OPUS_INPUT", channel)
             if service and sheet_id:
-                append_rows(service, sheet_id, f"{opus_tab}!A1", opus_rows)
-                print(f"[NEWS] {opus_tab}에 저장 완료")
+                try:
+                    append_rows(service, sheet_id, f"{opus_tab}!A1", opus_rows)
+                    result["sheets_saved"].append(opus_tab)
+                    print(f"[NEWS] {opus_tab}에 저장 완료")
+                except SheetsSaveError as e:
+                    result["error"] = f"{opus_tab} 저장 실패: {e}"
+                    print(f"[NEWS] {opus_tab} 저장 실패: {e}")
+                    return result
 
         result["success"] = True
         print(f"[NEWS] === 파이프라인 완료 ({channel}) ===")
