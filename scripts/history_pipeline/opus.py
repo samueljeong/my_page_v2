@@ -172,7 +172,7 @@ def _build_opus_prompt_pack(
 - 채널/시대: 한국사 / {era_name} ({period})
 - 자료 출처: {title}
 - URL: {url}
-- 오늘의 핵심 질문: 왜 {era_name}이 한국 역사의 시작점으로 중요한가?
+- 오늘의 핵심 질문: {era_name} 시대는 어떻게 형성되고 변화했는가?
 
 ════════════════════════════════════════
 [STRUCTURE POINTS] (5~7개, 구조 중심)
@@ -229,8 +229,8 @@ def _generate_default_core_facts(
 - 어떤 선택의 갈림길이 있었나?
 
 [#BODY2_HUMAN_ALLOWED] 스토리 전개
-- 주요 인물의 행동과 심리
-- 사건의 드라마틱한 전개
+- 주요 인물이 한 행동과 결정 (구체적 행위)
+- 사건의 전개 과정 (원인→결과)
 
 [#IMPACT] 역사적 의의
 - 이후 역사에 미친 영향
@@ -327,8 +327,8 @@ def _llm_generate_core_facts(
 - (결정적 순간/선택의 갈림길)
 
 [#BODY2_HUMAN_ALLOWED] 스토리 전개 힌트
-- (여기서부터 인물 심리/행동 묘사 가능)
-- (드라마틱한 전개 포인트)
+- (인물이 한 구체적 행동과 결정)
+- (사건 전개 과정: 원인→결과)
 
 [#IMPACT] 역사적 의의
 - (이후 역사에 미친 영향)
@@ -746,8 +746,8 @@ def _generate_episode_core_facts(
 - 결정적 순간은 언제였나?
 
 [#BODY2_HUMAN_ALLOWED] 스토리 전개
-- 주요 인물의 행동과 심리
-- 드라마틱한 전개
+- 주요 인물이 한 행동과 결정 (구체적 행위)
+- 사건의 전개 과정 (원인→결과)
 
 [#IMPACT] 역사적 의의
 - 이후 역사에 미친 영향
@@ -844,7 +844,7 @@ def _build_episode_opus_prompt_pack(
 - 시대: {era_name} ({period})
 - 자료 출처: {title}
 - URL: {url}
-- 오늘의 핵심 질문: {topic}에 대해 무엇을 알아야 하는가?
+- 오늘의 핵심 질문: {topic}의 구조와 변화 - 누가, 어떻게, 왜?
 
 ════════════════════════════════════════
 [STRUCTURE POINTS]
