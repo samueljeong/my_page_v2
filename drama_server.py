@@ -18472,6 +18472,9 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
         category = (row_data[15] if len(row_data) > 15 else '').strip()  # P열: 카테고리 (뉴스 등)
         # Q(16): 쇼츠URL(출력)
         playlist_id = (row_data[17] if len(row_data) > 17 else '').strip()  # R열: 플레이리스트ID (선택)
+        # ★ 사용자 입력값 (GPT 생성값 대신 사용)
+        user_title = (row_data[18] if len(row_data) > 18 else '').strip()  # 사용자 입력 제목
+        user_thumbnail_text = (row_data[19] if len(row_data) > 19 else '').strip()  # 사용자 입력 썸네일 문구
 
         # [TUBELENS] 날짜만 입력된 경우 카테고리별 최적 시간 자동 추가
         # news -> 08:00, story/drama -> 19:00, 기본 -> 19:00
@@ -18492,6 +18495,8 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
         print(f"  - 타겟: {audience}")
         print(f"  - 카테고리: {category or '(일반)'}")
         print(f"  - 플레이리스트: {playlist_id or '(없음)'}")
+        print(f"  - ★ 사용자 입력 제목: {user_title or '(없음 - GPT 생성)'}")
+        print(f"  - ★ 사용자 입력 썸네일문구: {user_thumbnail_text or '(없음 - GPT 생성)'}")
 
         if not script or len(script.strip()) < 10:
             return {"ok": False, "error": "대본이 너무 짧습니다 (최소 10자)", "video_url": None}
@@ -18657,7 +18662,11 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                 for opt in title_options:
                     print(f"  - [{opt.get('style', '?')}] {opt.get('title', '')}")
 
-            if not title:
+            # ★ 사용자 입력 제목이 있으면 우선 사용
+            if user_title:
+                title = user_title
+                print(f"[AUTOMATION] ★ 사용자 입력 제목 사용: {title}")
+            elif not title:
                 title = generated_title or f"자동 생성 영상 #{row_index}"
 
             # [TUBELENS] SEO 점수 계산 및 로깅
@@ -18668,6 +18677,48 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                     print(f"  {detail}")
             except Exception as seo_err:
                 print(f"[TUBELENS] SEO 점수 계산 실패 (무시): {seo_err}")
+
+            # ★★★ 대본 강제 분할: GPT가 요약하지 못하도록 원본 대본을 씬별로 균등 분할 ★★★
+            # GPT가 프롬프트 지시를 무시하고 요약하는 문제 해결
+            if scenes and script:
+                original_len = len(script)
+                scene_count = len(scenes)
+
+                # 문장 단위로 분할 (자연스러운 끊김)
+                import re as re_split
+                # 문장 종결 패턴: 마침표/물음표/느낌표 + 공백 또는 끝
+                sentences = re_split.split(r'(?<=[.?!。？！])\s+', script)
+                sentences = [s.strip() for s in sentences if s.strip()]
+
+                if sentences:
+                    # 각 씬에 배정할 문장 수 계산
+                    sentences_per_scene = max(1, len(sentences) // scene_count)
+
+                    for i, scene in enumerate(scenes):
+                        start_idx = i * sentences_per_scene
+                        if i == scene_count - 1:
+                            # 마지막 씬은 남은 모든 문장
+                            end_idx = len(sentences)
+                        else:
+                            end_idx = start_idx + sentences_per_scene
+
+                        scene_narration = ' '.join(sentences[start_idx:end_idx])
+                        old_narration_len = len(scene.get('narration', ''))
+                        scene['narration'] = scene_narration
+
+                    # 검증 로깅
+                    total_forced_len = sum(len(s.get('narration', '')) for s in scenes)
+                    print(f"[AUTOMATION] ★ 대본 강제 분할 완료:")
+                    print(f"  - 원본: {original_len}자 → 분할 후: {total_forced_len}자 (유실: {original_len - total_forced_len}자)")
+                    print(f"  - 문장 수: {len(sentences)}개 → 씬당 ~{sentences_per_scene}문장")
+                else:
+                    # 문장 분리 실패 시 글자수로 균등 분할
+                    chunk_size = len(script) // scene_count
+                    for i, scene in enumerate(scenes):
+                        start = i * chunk_size
+                        end = len(script) if i == scene_count - 1 else (i + 1) * chunk_size
+                        scene['narration'] = script[start:end]
+                    print(f"[AUTOMATION] ★ 대본 글자수 분할 (문장 분리 실패): {original_len}자 → {scene_count}씬")
 
             # 비용: GPT-5.1 대본 분석 (~$0.03)
             total_cost += 0.03
@@ -18811,16 +18862,30 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
                     text_position = news_image_spec.get('text_position', 'left')
                     expression = news_image_spec.get('expression', 'serious')
 
-                    # 텍스트 추출 (우선순위: text.line1 > best_combo > ai_prompts.A > 제목)
-                    line1 = news_thumbnail_text.get('line1', '')
-                    line2 = news_thumbnail_text.get('line2', '')
-                    if not line1 and best_combo:
-                        line1 = best_combo.get('chosen_thumbnail_text', '')
-                    if not line1 and ai_prompts and ai_prompts.get('A'):
-                        line1 = ai_prompts['A'].get('text_overlay', {}).get('main', '')
-                    if not line1:
-                        # 최후 수단: 제목에서 앞 10자 사용
-                        line1 = (title or '')[:10]
+                    # ★ 텍스트 추출 (우선순위: 사용자입력 > text.line1 > best_combo > ai_prompts.A > 제목)
+                    line1 = ''
+                    line2 = ''
+
+                    # 0. 사용자 입력 썸네일 문구가 있으면 최우선 사용
+                    if user_thumbnail_text:
+                        # 줄바꿈으로 line1/line2 분리
+                        if '\n' in user_thumbnail_text:
+                            parts = user_thumbnail_text.split('\n', 1)
+                            line1 = parts[0].strip()
+                            line2 = parts[1].strip() if len(parts) > 1 else ''
+                        else:
+                            line1 = user_thumbnail_text
+                        print(f"[AUTOMATION][THUMB] ★ 사용자 입력 썸네일 문구 사용: '{line1}' / '{line2}'")
+                    else:
+                        line1 = news_thumbnail_text.get('line1', '')
+                        line2 = news_thumbnail_text.get('line2', '')
+                        if not line1 and best_combo:
+                            line1 = best_combo.get('chosen_thumbnail_text', '')
+                        if not line1 and ai_prompts and ai_prompts.get('A'):
+                            line1 = ai_prompts['A'].get('text_overlay', {}).get('main', '')
+                        if not line1:
+                            # 최후 수단: 제목에서 앞 10자 사용
+                            line1 = (title or '')[:10]
 
                     # 키워드 로깅
                     if news_keywords:
@@ -18876,12 +18941,22 @@ NO photorealistic."""
                 elif ai_prompts and ai_prompts.get('A'):
                     thumb_prompt = ai_prompts.get('A').copy() if isinstance(ai_prompts.get('A'), dict) else ai_prompts.get('A')
 
-                    # ★ 텍스트 우선순위: thumbnail_data.text > best_combo > ai_prompts.A.text_overlay > 제목
+                    # ★ 텍스트 우선순위: 사용자입력 > thumbnail_data.text > best_combo > ai_prompts.A.text_overlay > 제목
                     final_line1 = ''
                     final_line2 = ''
 
+                    # 0. 사용자 입력 썸네일 문구가 있으면 최우선 사용
+                    if user_thumbnail_text:
+                        # 줄바꿈으로 line1/line2 분리
+                        if '\n' in user_thumbnail_text:
+                            parts = user_thumbnail_text.split('\n', 1)
+                            final_line1 = parts[0].strip()
+                            final_line2 = parts[1].strip() if len(parts) > 1 else ''
+                        else:
+                            final_line1 = user_thumbnail_text
+                        print(f"[AUTOMATION][THUMB] ★ 사용자 입력 썸네일 문구 사용: '{final_line1}' / '{final_line2}'")
                     # 1. thumbnail_data.text에서 추출 (news, story, health 카테고리에서 GPT가 생성)
-                    if news_thumbnail_text.get('line1'):
+                    elif news_thumbnail_text.get('line1'):
                         final_line1 = news_thumbnail_text.get('line1', '')
                         final_line2 = news_thumbnail_text.get('line2', '')
                         print(f"[AUTOMATION][THUMB] thumbnail_data.text 텍스트 적용: '{final_line1}' / '{final_line2}'")
@@ -18913,10 +18988,18 @@ NO photorealistic."""
                 elif is_news:
                     # 폴백: 뉴스 스타일 프롬프트 (새 구조 없을 때)
                     print(f"[AUTOMATION][THUMB] 폴백: 뉴스 웹툰 스타일 프롬프트")
-                    # 텍스트 우선순위: thumbnail_data.text > best_combo > ai_prompts.A > 제목
+                    # ★ 텍스트 우선순위: 사용자입력 > thumbnail_data.text > best_combo > ai_prompts.A > 제목
                     fallback_text = ''
                     fallback_sub = ''
-                    if news_thumbnail_text.get('line1'):
+                    if user_thumbnail_text:
+                        if '\n' in user_thumbnail_text:
+                            parts = user_thumbnail_text.split('\n', 1)
+                            fallback_text = parts[0].strip()
+                            fallback_sub = parts[1].strip() if len(parts) > 1 else ''
+                        else:
+                            fallback_text = user_thumbnail_text
+                        print(f"[AUTOMATION][THUMB] ★ 사용자 입력 썸네일 문구 사용: '{fallback_text}'")
+                    elif news_thumbnail_text.get('line1'):
                         fallback_text = news_thumbnail_text.get('line1', '')
                         fallback_sub = news_thumbnail_text.get('line2', '')
                     elif best_combo:
@@ -18933,10 +19016,18 @@ NO photorealistic."""
                 else:
                     # 폴백: 웹툰 스타일 프롬프트
                     print(f"[AUTOMATION][THUMB] 폴백: 웹툰 스타일 프롬프트")
-                    # 텍스트 우선순위: thumbnail_data.text > best_combo > ai_prompts.A > 제목
+                    # ★ 텍스트 우선순위: 사용자입력 > thumbnail_data.text > best_combo > ai_prompts.A > 제목
                     fallback_text = ''
                     fallback_sub = ''
-                    if news_thumbnail_text.get('line1'):
+                    if user_thumbnail_text:
+                        if '\n' in user_thumbnail_text:
+                            parts = user_thumbnail_text.split('\n', 1)
+                            fallback_text = parts[0].strip()
+                            fallback_sub = parts[1].strip() if len(parts) > 1 else ''
+                        else:
+                            fallback_text = user_thumbnail_text
+                        print(f"[AUTOMATION][THUMB] ★ 사용자 입력 썸네일 문구 사용: '{fallback_text}'")
+                    elif news_thumbnail_text.get('line1'):
                         fallback_text = news_thumbnail_text.get('line1', '')
                         fallback_sub = news_thumbnail_text.get('line2', '')
                     elif best_combo:
@@ -19773,6 +19864,10 @@ def api_sheets_check_and_process():
         sheets_update_cell_by_header(service, sheet_id, sheet_name, row_num, col_map, '작업시간', now.strftime('%Y-%m-%d %H:%M:%S'))
 
         # 파이프라인 실행 (새 구조에 맞게 데이터 전달)
+        # ★ 사용자 입력값 우선: '제목(입력)', '썸네일문구(입력)' 컬럼이 있으면 GPT 생성값 대신 사용
+        user_title = get_row_value(row_data, col_map, '제목(입력)', '')
+        user_thumbnail_text = get_row_value(row_data, col_map, '썸네일문구(입력)', '')
+
         pipeline_data = {
             'channel_id': channel_id,
             'script': get_row_value(row_data, col_map, '대본'),
@@ -19780,7 +19875,15 @@ def api_sheets_check_and_process():
             'privacy': get_row_value(row_data, col_map, '공개설정', 'private'),
             'playlist_id': get_row_value(row_data, col_map, '플레이리스트ID'),
             'scheduled_time': get_row_value(row_data, col_map, '예약시간'),
+            # ★ 사용자 입력값 (있으면 GPT 생성값 대신 사용)
+            'user_title': user_title,
+            'user_thumbnail_text': user_thumbnail_text,
         }
+
+        if user_title:
+            print(f"[SHEETS] ★ 사용자 입력 제목 사용: {user_title[:50]}...")
+        if user_thumbnail_text:
+            print(f"[SHEETS] ★ 사용자 입력 썸네일문구 사용: {user_thumbnail_text}")
 
         print(f"[SHEETS] ★★★ 파이프라인 호출 직전 ★★★")
         print(f"[SHEETS]   - 시트: {sheet_name}, 행: {row_num}")
@@ -19864,7 +19967,9 @@ def run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, sele
         'title': 제목 (선택),
         'privacy': 공개설정,
         'playlist_id': 플레이리스트 ID (선택),
-        'scheduled_time': 예약시간 (선택)
+        'scheduled_time': 예약시간 (선택),
+        'user_title': 사용자 입력 제목 (선택) - GPT 생성 제목 대신 사용,
+        'user_thumbnail_text': 사용자 입력 썸네일 문구 (선택) - GPT 생성 문구 대신 사용
     }
     selected_project: 미리 선택된 YouTube 프로젝트 ('', '_2')
     """
@@ -19882,18 +19987,24 @@ def run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, sele
         scheduled_time=pipeline_data.get('scheduled_time'),
         sheet_name=sheet_name,
         row_num=row_num,
-        selected_project=selected_project
+        selected_project=selected_project,
+        # ★ 사용자 입력값 전달
+        user_title=pipeline_data.get('user_title'),
+        user_thumbnail_text=pipeline_data.get('user_thumbnail_text')
     )
 
 
 def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy='private',
                                           playlist_id=None, scheduled_time=None,
-                                          sheet_name=None, row_num=None, selected_project=''):
+                                          sheet_name=None, row_num=None, selected_project='',
+                                          user_title=None, user_thumbnail_text=None):
     """
     자동화 파이프라인 실행 (명시적 파라미터 버전)
     기존 run_automation_pipeline의 로직을 재사용하면서 새 구조 지원
 
     selected_project: 미리 선택된 YouTube 프로젝트 ('', '_2')
+    user_title: 사용자 입력 제목 (GPT 생성 제목 대신 사용)
+    user_thumbnail_text: 사용자 입력 썸네일 문구 (GPT 생성 문구 대신 사용)
     """
     # 기존 함수의 row 형식으로 변환하여 호출
     # 기존 컬럼 구조: [상태, 작업시간, 채널ID, 채널명, 예약시간, 대본, 제목, ...]
@@ -19918,7 +20029,9 @@ def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy
         'senior',         # 14: 타겟
         '',               # 15: 카테고리
         '',               # 16: 쇼츠URL
-        playlist_id or '' # 17: 플레이리스트ID
+        playlist_id or '', # 17: 플레이리스트ID
+        user_title or '', # 18: 사용자 입력 제목 ★
+        user_thumbnail_text or '' # 19: 사용자 입력 썸네일 문구 ★
     ]
 
     # 기존 파이프라인 호출 (selected_project 전달)
