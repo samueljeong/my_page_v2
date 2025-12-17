@@ -33,56 +33,56 @@ ERAS: Dict[str, Dict[str, Any]] = {
         "name_en": "Gojoseon",
         "period": "BC 2333 ~ BC 108",
         "description": "한반도 최초의 국가, 단군조선과 위만조선",
-        "active": True,  # 첫 번째 시대부터 시작
+        "active": True,
     },
     "BUYEO": {
         "name": "부여/옥저/동예",
         "name_en": "Buyeo Period",
         "period": "BC 2세기 ~ AD 494",
         "description": "고조선 멸망 후 등장한 여러 나라",
-        "active": False,
+        "active": True,
     },
     "SAMGUK": {
         "name": "삼국시대",
         "name_en": "Three Kingdoms",
         "period": "BC 57 ~ AD 668",
         "description": "고구려, 백제, 신라의 경쟁과 발전",
-        "active": False,
+        "active": True,
     },
     "NAMBUK": {
         "name": "남북국시대",
         "name_en": "North-South States",
         "period": "AD 698 ~ AD 926",
         "description": "통일신라와 발해의 병존",
-        "active": False,
+        "active": True,
     },
     "GORYEO": {
         "name": "고려",
         "name_en": "Goryeo Dynasty",
         "period": "AD 918 ~ AD 1392",
         "description": "왕건의 건국부터 조선 건국까지",
-        "active": False,
+        "active": True,
     },
     "JOSEON_EARLY": {
         "name": "조선 전기",
         "name_en": "Early Joseon",
         "period": "AD 1392 ~ AD 1592",
         "description": "조선 건국부터 임진왜란 이전",
-        "active": False,
+        "active": True,
     },
     "JOSEON_LATE": {
         "name": "조선 후기",
         "name_en": "Late Joseon",
         "period": "AD 1592 ~ AD 1897",
         "description": "임진왜란 이후부터 대한제국 선포 이전",
-        "active": False,
+        "active": True,
     },
     "DAEHAN": {
         "name": "대한제국",
         "name_en": "Korean Empire",
         "period": "AD 1897 ~ AD 1910",
         "description": "근대화 시도와 국권 상실",
-        "active": False,
+        "active": True,
     },
 }
 
@@ -237,13 +237,16 @@ SEARCH_QUERY_TEMPLATES = [
 # Google Sheets 시트 구조
 # ============================================================
 
-# 시트 접두사 (시대 키와 조합)
+# 시대별 시트 접두사 (시대 키와 조합)
+# RAW/CANDIDATES는 시대별로 분리
 SHEET_PREFIXES = {
     "RAW": "원문 수집 데이터",
     "CANDIDATES": "점수화된 후보",
-    "OPUS_INPUT": "대본 작성용 입력",
     "ARCHIVE": "아카이브",
 }
+
+# OPUS 입력은 단일 통합 시트 (시대 무관하게 누적)
+HISTORY_OPUS_INPUT_SHEET = "HISTORY_OPUS_INPUT"
 
 # 각 시트의 헤더 정의
 SHEET_HEADERS = {
@@ -272,17 +275,25 @@ SHEET_HEADERS = {
         "summary",           # 요약
         "why_selected",      # 선정 근거
     ],
+    # HISTORY_OPUS_INPUT (단일 통합 시트) 헤더
     "OPUS_INPUT": [
-        "run_date",          # 실행 날짜 (YYYY-MM-DD)
+        "episode",           # ★ 전체 에피소드 번호 (1, 2, 3, ...)
         "era",               # 시대 키
+        "era_episode",       # ★ 시대 내 에피소드 번호 (고조선 1화, 2화, ...)
+        "total_episodes",    # ★ 해당 시대 총 에피소드 수 (AI가 결정)
         "era_name",          # 시대 한글명
-        "title",             # 자료 제목
+        "title",             # 에피소드 제목
         "source_url",        # 출처 URL
         "materials_pack",    # 자료 발췌/요약 묶음 (핵심포인트 포함)
         "opus_prompt_pack",  # ★ Opus에 붙여넣을 완제품 (한 셀 복붙)
+        "thumbnail_copy",    # 썸네일 문구 추천
         "status",            # PENDING/DONE
+        "created_at",        # 생성 시간 (ISO)
     ],
 }
+
+# PENDING 유지 개수 (항상 이 개수만큼 PENDING 상태 유지)
+PENDING_TARGET_COUNT = 10
 
 
 # ============================================================
