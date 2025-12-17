@@ -177,6 +177,7 @@ def run_history_pipeline(
                         "era": era,
                         "error": "자료 수집 실패"
                     })
+                    result["error"] = "자료 수집 실패"
                     break
 
                 # RAW 저장
@@ -267,7 +268,8 @@ def run_history_pipeline(
 
         result["episodes_added"] = episodes_added
         result["pending_after"] = result["pending_before"] + episodes_added
-        result["success"] = True
+        # 에러가 없으면 성공
+        result["success"] = result.get("error") is None
 
         print(f"[HISTORY] ========================================")
         print(f"[HISTORY] 완료: {episodes_added}개 에피소드 추가")
