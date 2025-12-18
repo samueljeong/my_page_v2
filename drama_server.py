@@ -11065,8 +11065,25 @@ def api_image_generate_assets_zip():
                             break
 
                 # 4. 공백에서 분리 (일본어는 스킵)
+                # ★ 의존명사(수, 것, 줄, 데, 때, 곳, 뿐 등) 앞에서는 분리 안 함
                 if best_split is None and lang != 'ja':
-                    space_pos = search_range[:max_chars].rfind(' ')
+                    search_text = search_range[:max_chars]
+                    # 의존명사 패턴: 공백 + 의존명사 + (공백 또는 조사)
+                    dependent_nouns = ['수', '것', '줄', '데', '때', '곳', '뿐', '만큼', '대로', '바', '리']
+
+                    # 뒤에서부터 공백 찾기
+                    space_pos = search_text.rfind(' ')
+                    while space_pos >= min_chunk_len:
+                        # 공백 다음 단어 확인
+                        after_space = search_text[space_pos+1:space_pos+4]  # 최대 3글자
+                        first_word = after_space.split()[0] if after_space.split() else ''
+
+                        # 의존명사로 시작하면 더 앞의 공백으로 이동
+                        if first_word and any(first_word.startswith(dn) for dn in dependent_nouns):
+                            space_pos = search_text[:space_pos].rfind(' ')
+                        else:
+                            break
+
                     if space_pos >= min_chunk_len:
                         best_split = space_pos
 
