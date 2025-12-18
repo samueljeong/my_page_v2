@@ -592,19 +592,25 @@ CHANNEL_FILTERS = {
 | published_at | 발행 시간 |
 | why_selected | 선정 근거 |
 
-**TAB: OPUS_INPUT_{CHANNEL}** - 채널별 대본 작성용
+**TAB: OPUS_INPUT_{CHANNEL}** - 채널별 대본 작성용 (TOP 3 후보)
+
+**★ 2025-12-18 업데이트**: 매일 TOP 3 후보를 저장하여 사용자가 선택할 수 있도록 변경
+- 카테고리 다양성 우선: 같은 카테고리 연속 방지 (경제→정책→사회)
+- LLM 핵심포인트는 TOP 1에만 적용 (비용 절감)
+
 | 컬럼 | 설명 |
 |------|------|
 | run_id | 실행 날짜 |
-| selected_rank | 선정 순위 (보통 1) |
-| category | 카테고리 |
+| selected_rank | 순위 (1, 2, 3) |
+| category | 카테고리 (다양성 확보) |
 | issue_one_line | 이슈 한 줄 요약 |
-| core_points | 핵심포인트 (LLM 생성) |
+| core_points | 핵심포인트 (TOP 1만 LLM 생성) |
 | script_brief | 대본 지시문 |
-| shorts_hook_lines | 쇼츠 유도 문구 |
 | thumbnail_copy | 썸네일 문구 |
-| status | NEW/WRITING/DONE |
-| opus_script | 완성 대본 (사람 입력) |
+| opus_prompt_pack | Opus에 붙여넣을 완제품 |
+| status | PENDING/WRITING/DONE |
+| created_at | 생성 시간 |
+| selected | ★ 사용자 선택 표시 (✓) |
 
 ### API 엔드포인트
 
@@ -623,7 +629,8 @@ CHANNEL_FILTERS = {
 | `LLM_ENABLED` | 선택 | "1"이면 TOP 1에 LLM 핵심포인트 생성 |
 | `LLM_MIN_SCORE` | 선택 | LLM 호출 최소 점수 (기본 0, 비용 절감용) |
 | `MAX_PER_FEED` | 선택 | 피드당 최대 기사 수 (기본 30) |
-| `TOP_K` | 선택 | 선정할 후보 수 (기본 5) |
+| `TOP_K` | 선택 | CANDIDATES에 선정할 후보 수 (기본 5) |
+| `OPUS_TOP_N` | 선택 | ★ OPUS_INPUT에 저장할 후보 수 (기본 3) |
 | `OPENAI_MODEL` | 선택 | LLM 모델 (기본 gpt-4o-mini) |
 
 ### 안전장치

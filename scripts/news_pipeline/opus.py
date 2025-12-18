@@ -25,16 +25,18 @@ def generate_opus_input(
     candidate_rows: list,
     channel: str,
     llm_enabled: bool = False,
-    llm_min_score: int = 0
+    llm_min_score: int = 0,
+    top_n: int = 3
 ) -> list:
     """
-    OPUS 입력 생성 (TOP 1만 처리)
+    OPUS 입력 생성 (TOP N 후보 모두 저장, 사용자 선택 가능)
 
     Args:
         candidate_rows: CANDIDATES 행 데이터
         channel: 채널 키
         llm_enabled: LLM 사용 여부
         llm_min_score: LLM 호출 최소 점수
+        top_n: 저장할 후보 수 (기본 3)
 
     Returns:
         OPUS_INPUT 시트용 행 데이터 리스트
@@ -42,34 +44,37 @@ def generate_opus_input(
     if not candidate_rows:
         return []
 
-    top1 = candidate_rows[0]
-    run_id = top1[0]
-    category = top1[2]
-    score_total = float(top1[4]) if top1[4] else 0
-    title = top1[8]
-    link = top1[9]
-    summary = ""
-
-    # score_total을 1~5 중요도로 변환 (0~100점 → 1~5)
-    priority = min(5, max(1, int(score_total / 20) + 1))
+    # 카테고리 다양성 확보: 같은 카테고리가 연속되지 않도록 재정렬
+    diversified = _diversify_by_category(candidate_rows, top_n)
 
     weekday_angle = get_weekday_angle()
     channel_name = CHANNELS.get(channel, {}).get("name", channel)
+    created_at = datetime.now(timezone.utc).isoformat()
 
-    # LLM 호출 조건
-    should_call_llm = llm_enabled and (llm_min_score == 0 or score_total >= llm_min_score)
+    opus_rows = []
 
-    if should_call_llm:
-        print(f"[NEWS] LLM 호출 (점수 {score_total} >= 최소 {llm_min_score})")
-        core_points, brief, thumb = _llm_make_opus_input(
-            category, title, summary, link, channel
-        )
-    elif llm_enabled and score_total < llm_min_score:
-        print(f"[NEWS] LLM 스킵 (점수 {score_total} < 최소 {llm_min_score})")
-        core_points, brief, thumb = "", "", ""
-    else:
-        # LLM 없이 기본 템플릿
-        core_points = f"""[핵심포인트]
+    for rank, candidate in enumerate(diversified, start=1):
+        run_id = candidate[0]
+        category = candidate[2]
+        score_total = float(candidate[4]) if candidate[4] else 0
+        title = candidate[8]
+        link = candidate[9]
+        summary = ""
+
+        # score_total을 1~5 중요도로 변환 (0~100점 → 1~5)
+        priority = min(5, max(1, int(score_total / 20) + 1))
+
+        # LLM은 TOP 1에만 적용 (비용 절감)
+        should_call_llm = (rank == 1) and llm_enabled and (llm_min_score == 0 or score_total >= llm_min_score)
+
+        if should_call_llm:
+            print(f"[NEWS] LLM 호출 (rank {rank}, 점수 {score_total})")
+            core_points, brief, thumb = _llm_make_opus_input(
+                category, title, summary, link, channel
+            )
+        else:
+            # LLM 없이 기본 템플릿
+            core_points = f"""[핵심포인트]
 • 이슈: {title}
 • 출처: {link}
 • 중요도: {priority}/5
@@ -82,38 +87,68 @@ def generate_opus_input(
 4.
 5."""
 
-        brief = f"""[대본 지시문]
+            brief = f"""[대본 지시문]
 - 분량: {SCRIPT_DURATION_MIN}~{SCRIPT_DURATION_MAX}분 ({SCRIPT_LEN_MIN:,}~{SCRIPT_LEN_MAX:,}자)
 - 요일: {weekday_angle}
 - 관점: "내 돈/내 생활"에 미치는 영향
 - 구조: 서론(불안/의문) → 본론(핵심 정리) → 전망 → 마무리
 - 금지: 속보 요약, 과장, 공포 조장"""
 
-        thumb = ""
+            thumb = ""
 
-    # opus_prompt_pack 생성 (썸네일 제외, Opus 복붙용)
-    opus_prompt_pack = _build_opus_prompt_pack(
-        channel_name, category, title, link, weekday_angle, core_points
-    )
+        # opus_prompt_pack 생성 (썸네일 제외, Opus 복붙용)
+        opus_prompt_pack = _build_opus_prompt_pack(
+            channel_name, category, title, link, weekday_angle, core_points
+        )
 
-    # 생성 시간
-    created_at = datetime.now(timezone.utc).isoformat()
+        opus_rows.append([
+            run_id,
+            rank,             # selected_rank (1, 2, 3)
+            category,
+            title[:50],       # issue_one_line
+            core_points,
+            brief,
+            thumb,            # thumbnail_copy
+            opus_prompt_pack, # ★ Opus에 붙여넣을 완제품 (썸네일 제외)
+            "PENDING",        # status
+            created_at,       # created_at
+            "",               # selected (사용자가 체크)
+        ])
 
-    opus_row = [[
-        run_id,
-        1,  # selected_rank
-        category,
-        title[:50],       # issue_one_line
-        core_points,
-        brief,
-        thumb,            # thumbnail_copy
-        opus_prompt_pack, # ★ Opus에 붙여넣을 완제품 (썸네일 제외)
-        "PENDING",        # status
-        created_at,       # created_at
-    ]]
+        print(f"[NEWS] OPUS_INPUT #{rank} 생성: [{category}] {title[:30]}...")
 
-    print(f"[NEWS] OPUS_INPUT 생성 완료: {title[:30]}...")
-    return opus_row
+    print(f"[NEWS] OPUS_INPUT 총 {len(opus_rows)}개 후보 생성 완료")
+    return opus_rows
+
+
+def _diversify_by_category(candidate_rows: list, top_n: int) -> list:
+    """
+    카테고리 다양성 확보: 서로 다른 카테고리 우선 선정
+
+    예: [경제, 경제, 정책, 사회, 경제] → [경제, 정책, 사회]
+    """
+    if len(candidate_rows) <= top_n:
+        return candidate_rows
+
+    selected = []
+    used_categories = set()
+    remaining = list(candidate_rows)
+
+    # 1차: 서로 다른 카테고리 우선 선정
+    for candidate in candidate_rows:
+        category = candidate[2]
+        if category not in used_categories:
+            selected.append(candidate)
+            used_categories.add(category)
+            remaining.remove(candidate)
+            if len(selected) >= top_n:
+                break
+
+    # 2차: 부족하면 점수순으로 채우기
+    while len(selected) < top_n and remaining:
+        selected.append(remaining.pop(0))
+
+    return selected[:top_n]
 
 
 def _build_opus_prompt_pack(
