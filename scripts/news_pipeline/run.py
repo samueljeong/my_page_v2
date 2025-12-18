@@ -31,7 +31,8 @@ def run_news_pipeline(
     max_per_feed: int = 30,
     top_k: int = 5,
     llm_enabled: bool = False,
-    llm_min_score: int = 0
+    llm_min_score: int = 0,
+    opus_top_n: int = 3
 ) -> dict:
     """
     뉴스 파이프라인 전체 실행 (채널별)
@@ -44,6 +45,7 @@ def run_news_pipeline(
         top_k: 선정할 후보 수
         llm_enabled: LLM 사용 여부
         llm_min_score: LLM 호출 최소 점수
+        opus_top_n: OPUS_INPUT에 저장할 후보 수 (기본 3)
 
     Returns:
         실행 결과 딕셔너리
@@ -116,9 +118,9 @@ def run_news_pipeline(
                 print(f"[NEWS] {candidates_tab} 저장 실패: {e}")
                 return result
 
-        # 3) OPUS 입력 생성
-        print(f"[NEWS] === 3단계: OPUS 입력 생성 ({channel}) ===")
-        opus_rows = generate_opus_input(candidate_rows, channel, llm_enabled, llm_min_score)
+        # 3) OPUS 입력 생성 (TOP N 후보)
+        print(f"[NEWS] === 3단계: OPUS 입력 생성 ({channel}, TOP {opus_top_n}) ===")
+        opus_rows = generate_opus_input(candidate_rows, channel, llm_enabled, llm_min_score, opus_top_n)
 
         if opus_rows:
             result["opus_generated"] = True
@@ -180,7 +182,8 @@ if __name__ == "__main__":
         channel=channel,
         max_per_feed=int(os.environ.get("MAX_PER_FEED", "30")),
         top_k=int(os.environ.get("TOP_K", "5")),
-        llm_enabled=llm_enabled
+        llm_enabled=llm_enabled,
+        opus_top_n=int(os.environ.get("OPUS_TOP_N", "3"))
     )
 
     print(f"\n결과: {json.dumps(result, ensure_ascii=False, indent=2)}")
