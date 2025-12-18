@@ -11069,7 +11069,7 @@ def api_image_generate_assets_zip():
                 if best_split is None and lang != 'ja':
                     search_text = search_range[:max_chars]
                     # 의존명사 패턴: 공백 + 의존명사 + (공백 또는 조사)
-                    dependent_nouns = ['수', '것', '줄', '데', '때', '곳', '뿐', '만큼', '대로', '바', '리']
+                    dependent_nouns = ['수', '것', '줄', '데', '때', '곳', '뿐', '만큼', '대로', '바', '리', '게', '지', '듯', '채', '김', '터', '법', '셈']
 
                     # 뒤에서부터 공백 찾기
                     space_pos = search_text.rfind(' ')
