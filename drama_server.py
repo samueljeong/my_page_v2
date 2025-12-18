@@ -4301,8 +4301,12 @@ def api_generate_tts():
                     """SSML에서 사용할 수 있도록 XML 특수 문자 이스케이프"""
                     return html.escape(text, quote=False)
 
+                # ★ 소수점 보호: 숫자.숫자 패턴을 임시 마커로 치환 (2.6% → 2<DECIMAL>6%)
+                decimal_pattern = r'(\d)\.(\d)'
+                text_safe = re.sub(decimal_pattern, r'\1<DECIMAL>\2', text_chunk)
+
                 # 문장 단위로 분할
-                sentences = re.split(r'([.!?。！？])', text_chunk)
+                sentences = re.split(r'([.!?。！？])', text_safe)
                 merged = []
                 i = 0
                 while i < len(sentences):
@@ -4316,6 +4320,9 @@ def api_generate_tts():
 
                 result_parts = []
                 has_emotion = False
+
+                # ★ 소수점 복원
+                merged = [s.replace('<DECIMAL>', '.') for s in merged]
 
                 for sentence in merged:
                     sentence = sentence.strip()
@@ -4357,9 +4364,13 @@ def api_generate_tts():
             def split_text_by_bytes(text, max_bytes):
                 """텍스트를 바이트 제한에 맞게 분할"""
                 chunks = []
-                # 문장 단위로 먼저 분할 (마침표, 느낌표, 물음표 기준)
+                # ★ 소수점 보호: 숫자.숫자 패턴을 임시 마커로 치환 (2.6% → 2<DECIMAL>6%)
                 import re
-                sentences = re.split(r'([.!?。！？])', text)
+                decimal_pattern = r'(\d)\.(\d)'
+                text_safe = re.sub(decimal_pattern, r'\1<DECIMAL>\2', text)
+
+                # 문장 단위로 먼저 분할 (마침표, 느낌표, 물음표 기준)
+                sentences = re.split(r'([.!?。！？])', text_safe)
                 # 구분자를 문장에 다시 붙이기
                 merged_sentences = []
                 i = 0
@@ -4371,6 +4382,9 @@ def api_generate_tts():
                         if sentences[i].strip():
                             merged_sentences.append(sentences[i])
                         i += 1
+
+                # ★ 소수점 복원
+                merged_sentences = [s.replace('<DECIMAL>', '.') for s in merged_sentences]
 
                 current_chunk = ""
                 for sentence in merged_sentences:
@@ -10928,9 +10942,16 @@ def api_image_generate_assets_zip():
 
         def split_korean_semantic_fallback(text, max_chars=20):
             """GPT 실패 시 폴백: 한국어 의미 기준 분리"""
+            # ★ 소수점 보호: 숫자.숫자 패턴을 임시 마커로 치환 (2.6% → 2<DECIMAL>6%)
+            decimal_pattern = r'(\d)\.(\d)'
+            text_safe = re.sub(decimal_pattern, r'\1<DECIMAL>\2', text.strip())
+
             # 먼저 문장 단위로 분리
-            sentences = re.split(r'(?<=[.!?])\s*', text.strip())
+            sentences = re.split(r'(?<=[.!?])\s*', text_safe)
             sentences = [s.strip() for s in sentences if s.strip()]
+
+            # ★ 소수점 복원
+            sentences = [s.replace('<DECIMAL>', '.') for s in sentences]
 
             result = []
             for sentence in sentences:
@@ -11069,7 +11090,7 @@ def api_image_generate_assets_zip():
                 if best_split is None and lang != 'ja':
                     search_text = search_range[:max_chars]
                     # 의존명사 패턴: 공백 + 의존명사 + (공백 또는 조사)
-                    dependent_nouns = ['수', '것', '줄', '데', '때', '곳', '뿐', '만큼', '대로', '바', '리']
+                    dependent_nouns = ['수', '것', '줄', '데', '때', '곳', '뿐', '만큼', '대로', '바', '리', '게', '지', '듯', '채', '김', '터', '법', '셈']
 
                     # 뒤에서부터 공백 찾기
                     space_pos = search_text.rfind(' ')
@@ -11296,12 +11317,15 @@ def api_image_generate_assets_zip():
             """단일 문장에 대한 TTS 생성 (Chirp 3 HD, Gemini TTS, Google Cloud TTS 지원)"""
 
             # ===== TTS 전처리 (줄바꿈, 소수점, 쉼표) =====
-            # 0) 줄바꿈 제거 (\n, \\n 모두)
-            text = text.replace('\\n', ' ').replace('\n', ' ')
+            # 0) 줄바꿈 제거 (모든 형태: \n, \\n, \N, \\N)
+            text = text.replace('\\N', ' ').replace('\\n', ' ')  # 이스케이프된 형태 먼저
+            text = text.replace('\N', ' ').replace('\n', ' ')    # 실제 문자
+            text = re.sub(r'[/\\][nN]', ' ', text)               # 슬래시 형태까지
             # 1) 소수점을 "점"으로 변환 (1.5톤 → 1점5톤)
             text = re.sub(r'(\d+)\.(\d+)', lambda m: m.group(0).replace('.', '점'), text)
-            # 2) 쉼표 뒤 공백 확보 (자연스러운 휴지)
-            text = re.sub(r',(\S)', r', \1', text)
+            # 2) 쉼표를 마침표로 대체 (TTS 휴지 강화)
+            # 쉼표 뒤에 충분한 휴지가 없어서 발음이 빠름 → 마침표로 대체하여 휴지 확보
+            text = text.replace(',', '.')
             # 3) 연속 공백 정리
             text = re.sub(r'\s+', ' ', text).strip()
 
