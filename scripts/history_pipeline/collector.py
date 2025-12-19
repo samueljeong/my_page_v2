@@ -74,52 +74,19 @@ def collect_topic_materials(
     print(f"[HISTORY] 에피소드: {episode}화 - {topic_info['title']}")
     print(f"[HISTORY] 주제: {topic_info['topic']}")
 
-    # 수집 결과
-    materials = []
-    full_content_parts = []
-    sources = []
-
-    # 1. 참고 링크에서 내용 추출
-    reference_links = topic_info.get("reference_links", [])
-    for link in reference_links:
-        print(f"[HISTORY] 링크 수집 중: {link}")
-        content = _fetch_content_from_url(link)
-        if content:
-            materials.append({
-                "url": link,
-                "content": content,
-                "source_type": _classify_source(link),
-            })
-            full_content_parts.append(f"[출처: {link}]\n{content}")
-            sources.append(link)
-        time.sleep(0.5)  # API 호출 간격
-
-    # 2. 키워드로 추가 검색 (한국민족문화대백과) - 주요 공식 소스
+    # ★ 2024-12 변경: Opus가 직접 검색하므로 자료 수집 스킵
+    # 키워드와 주제 정보만 반환, Opus가 한국민족문화대백과사전에서 직접 검색
     keywords = topic_info.get("keywords", [])
-    for keyword in keywords[:6]:
-        print(f"[HISTORY] 대백과 키워드 검색: {keyword}")
-        search_results = _search_encykorea(keyword, max_results=3)
-        for result in search_results:
-            if result["url"] not in sources:
-                materials.append(result)
-                if result.get("content"):
-                    full_content_parts.append(f"[출처: 한국민족문화대백과 - {result.get('title', '')}]\n{result['content']}")
-                    sources.append(result["url"])
-        time.sleep(0.3)
 
-    # NOTE: 한국사DB, 문화재청, 국립중앙박물관은 404/500 에러로 비활성화 (2024-12)
-    # 대백과사전만으로 충분한 자료 수집 가능 (7000자+)
+    print(f"[HISTORY] 키워드: {', '.join(keywords[:5])}")
+    print(f"[HISTORY] → Opus가 직접 한국민족문화대백과사전에서 검색 예정")
 
-    # 전체 내용 합치기
-    full_content = "\n\n---\n\n".join(full_content_parts)
-
-    print(f"[HISTORY] 수집 완료: {len(materials)}개 자료, {len(full_content)}자")
-
+    # 빈 자료로 반환 (Opus가 직접 수집)
     return {
         "topic": topic_info,
-        "materials": materials,
-        "full_content": full_content,
-        "sources": sources,
+        "materials": [],  # Opus가 직접 수집
+        "full_content": "",  # Opus가 직접 수집
+        "sources": [],  # Opus가 직접 수집
         "era": era,
         "era_name": era_name,
         "episode": episode,
