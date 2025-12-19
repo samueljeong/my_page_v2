@@ -92,25 +92,69 @@ def get_wikipedia_content(title: str) -> Optional[Dict[str, Any]]:
         문서 정보 딕셔너리 또는 None
     """
     try:
-        # 1) 문서 내용 가져오기
-        params = {
-            "action": "query",
-            "titles": title.replace("_", " "),
-            "prop": "extracts|info|categories",
-            "exintro": False,  # 전체 내용
-            "explaintext": True,  # 평문으로
-            "inprop": "url",
-            "cllimit": 10,
-            "format": "json",
-            "utf8": 1,
-        }
-
         headers = {
             "User-Agent": WIKI_USER_AGENT,
             "Accept": "application/json",
         }
 
         print(f"[MYSTERY] Wikipedia 문서 가져오는 중: {title}")
+
+        # 1) Wikipedia REST API로 전체 내용 가져오기 (더 긴 내용 반환)
+        rest_url = f"https://en.wikipedia.org/api/rest_v1/page/html/{quote_plus(title)}"
+
+        try:
+            response = requests.get(rest_url, headers=headers, timeout=30)
+
+            if response.status_code == 200:
+                # HTML에서 텍스트 추출
+                html_content = response.text
+
+                # 스크립트, 스타일 태그 제거
+                html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+                html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+
+                # 참조, 각주 제거 (보통 [1], [2] 형태)
+                html_content = re.sub(r'<sup[^>]*class="[^"]*reference[^"]*"[^>]*>.*?</sup>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+
+                # 테이블 제거 (데이터가 복잡해서)
+                html_content = re.sub(r'<table[^>]*>.*?</table>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+
+                # 모든 HTML 태그를 공백으로
+                text_content = re.sub(r'<[^>]+>', ' ', html_content)
+
+                # 연속 공백 정리
+                text_content = re.sub(r'\s+', ' ', text_content).strip()
+
+                # HTML 엔티티 디코딩
+                text_content = html.unescape(text_content)
+
+                if len(text_content) > 5000:
+                    print(f"[MYSTERY] REST API 성공: {len(text_content):,}자")
+
+                    return {
+                        "title": title.replace("_", " "),
+                        "url": f"https://en.wikipedia.org/wiki/{title}",
+                        "content": text_content[:50000],  # 최대 50,000자
+                        "categories": [],
+                        "length": len(text_content[:50000]),
+                    }
+        except Exception as e:
+            print(f"[MYSTERY] REST API 실패, 기본 API로 시도: {e}")
+
+        # 2) 기본 API로 fallback (짧은 내용)
+        params = {
+            "action": "query",
+            "titles": title.replace("_", " "),
+            "prop": "extracts|info|categories",
+            "exintro": False,  # 전체 내용
+            "explaintext": True,  # 평문으로
+            "exchars": 50000,  # 최대 문자 수
+            "inprop": "url",
+            "cllimit": 10,
+            "format": "json",
+            "utf8": 1,
+        }
+
         response = requests.get(WIKI_API_BASE, params=params, headers=headers, timeout=30)
 
         if response.status_code != 200:
