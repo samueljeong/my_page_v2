@@ -79,23 +79,48 @@ def collect_topic_materials(
     full_content_parts = []
     sources = []
 
-    # 1. 참고 링크에서 내용 추출
+    # 키워드 목록 (검증용)
+    keywords = topic_info.get("keywords", [])
+    keywords_lower = [k.lower() for k in keywords]
+    topic_lower = topic_info.get("topic", "").lower()
+    title_lower = topic_info.get("title", "").lower()
+
+    def is_content_relevant(content: str) -> bool:
+        """내용이 주제와 관련 있는지 검증"""
+        if not content:
+            return False
+        content_lower = content.lower()
+        # 키워드 중 하나라도 포함되면 관련 있음
+        for kw in keywords_lower:
+            if kw in content_lower:
+                return True
+        # 주제나 제목이 포함되면 관련 있음
+        if topic_lower and topic_lower in content_lower:
+            return True
+        if title_lower and any(word in content_lower for word in title_lower.split() if len(word) > 1):
+            return True
+        return False
+
+    # 1. 참고 링크에서 내용 추출 (키워드 검증 포함)
     reference_links = topic_info.get("reference_links", [])
     for link in reference_links:
         print(f"[HISTORY] 링크 수집 중: {link}")
         content = _fetch_content_from_url(link)
         if content:
-            materials.append({
-                "url": link,
-                "content": content,
-                "source_type": _classify_source(link),
-            })
-            full_content_parts.append(f"[출처: {link}]\n{content}")
-            sources.append(link)
+            # 내용이 주제와 관련 있는지 검증
+            if is_content_relevant(content):
+                materials.append({
+                    "url": link,
+                    "content": content,
+                    "source_type": _classify_source(link),
+                })
+                full_content_parts.append(f"[출처: {link}]\n{content}")
+                sources.append(link)
+            else:
+                print(f"[HISTORY] ⚠️ 링크 내용이 주제와 무관하여 스킵: {link[:50]}...")
         time.sleep(0.5)  # API 호출 간격
 
     # 2. 키워드로 추가 검색 (한국민족문화대백과) - 주요 공식 소스
-    keywords = topic_info.get("keywords", [])
     for keyword in keywords[:6]:
         print(f"[HISTORY] 대백과 키워드 검색: {keyword}")
         search_results = _search_encykorea(keyword, max_results=3)
