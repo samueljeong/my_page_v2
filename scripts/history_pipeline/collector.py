@@ -94,10 +94,10 @@ def collect_topic_materials(
             sources.append(link)
         time.sleep(0.5)  # API 호출 간격
 
-    # 2. 키워드로 추가 검색 (한국민족문화대백과) - 확장
+    # 2. 키워드로 추가 검색 (한국민족문화대백과) - 주요 소스
     keywords = topic_info.get("keywords", [])
-    for keyword in keywords[:6]:  # 상위 6개 키워드
-        print(f"[HISTORY] 키워드 검색: {keyword}")
+    for keyword in keywords[:8]:  # 상위 8개 키워드로 확장
+        print(f"[HISTORY] 대백과 키워드 검색: {keyword}")
         search_results = _search_encykorea(keyword, max_results=3)
         for result in search_results:
             # 중복 체크
@@ -109,9 +109,9 @@ def collect_topic_materials(
         time.sleep(0.3)
 
     # 3. 조합 키워드 검색 (시대명 + 키워드)
-    for keyword in keywords[:3]:
+    for keyword in keywords[:4]:  # 4개로 확장
         combined_keyword = f"{era_name} {keyword}"
-        print(f"[HISTORY] 조합 검색: {combined_keyword}")
+        print(f"[HISTORY] 대백과 조합 검색: {combined_keyword}")
         search_results = _search_encykorea(combined_keyword, max_results=2)
         for result in search_results:
             if result["url"] not in sources:
@@ -121,50 +121,73 @@ def collect_topic_materials(
                     sources.append(result["url"])
         time.sleep(0.3)
 
-    # 4. 위키백과 검색 (주제 + 핵심 키워드)
-    wiki_keywords = [topic_info.get("topic", ""), topic_info.get("title", "")] + keywords[:2]
-    for keyword in wiki_keywords:
-        if not keyword:
-            continue
-        print(f"[HISTORY] 위키백과 검색: {keyword}")
-        wiki_results = _search_wikipedia_ko(keyword, max_results=2)
-        for result in wiki_results:
+    # 3-2. 주제 + 시대 조합 검색 (추가)
+    topic_keyword = topic_info.get("topic", "")
+    if topic_keyword:
+        combined_topic = f"{era_name} {topic_keyword}"
+        print(f"[HISTORY] 대백과 주제 검색: {combined_topic}")
+        search_results = _search_encykorea(combined_topic, max_results=3)
+        for result in search_results:
             if result["url"] not in sources:
                 materials.append(result)
                 if result.get("content"):
-                    full_content_parts.append(f"[출처: 위키백과 - {result['title']}]\n{result['content']}")
+                    full_content_parts.append(f"[출처: {result['url']}]\n{result['content']}")
                     sources.append(result["url"])
         time.sleep(0.3)
 
-    # 5. 국사편찬위원회 한국사DB 검색
-    history_keywords = [topic_info.get("title", ""), topic_info.get("topic", "")] + keywords[:2]
-    for keyword in history_keywords[:3]:
-        if not keyword:
-            continue
-        print(f"[HISTORY] 한국사DB 검색: {keyword}")
-        history_results = _search_history_db(keyword, max_results=2)
-        for result in history_results:
-            if result["url"] not in sources:
-                materials.append(result)
-                if result.get("content"):
-                    full_content_parts.append(f"[출처: 국사편찬위원회 - {result['title']}]\n{result['content']}")
-                    sources.append(result["url"])
-        time.sleep(0.3)
+    # 4. 위키백과 검색 (주제 + 핵심 키워드) - 실패해도 계속 진행
+    try:
+        wiki_keywords = [topic_info.get("topic", ""), topic_info.get("title", "")] + keywords[:2]
+        for keyword in wiki_keywords[:2]:  # 2개만 시도 (403 오류 시 빠르게 건너뛰기)
+            if not keyword:
+                continue
+            print(f"[HISTORY] 위키백과 검색: {keyword}")
+            wiki_results = _search_wikipedia_ko(keyword, max_results=2)
+            for result in wiki_results:
+                if result["url"] not in sources:
+                    materials.append(result)
+                    if result.get("content"):
+                        full_content_parts.append(f"[출처: 위키백과 - {result['title']}]\n{result['content']}")
+                        sources.append(result["url"])
+            time.sleep(0.3)
+    except Exception as e:
+        print(f"[HISTORY] 위키백과 검색 스킵: {e}")
 
-    # 6. 문화재청 국가문화유산포털 검색
-    heritage_keywords = keywords[:3]
-    for keyword in heritage_keywords:
-        if not keyword:
-            continue
-        print(f"[HISTORY] 문화재청 검색: {keyword}")
-        heritage_results = _search_heritage(keyword, max_results=2)
-        for result in heritage_results:
-            if result["url"] not in sources:
-                materials.append(result)
-                if result.get("content"):
-                    full_content_parts.append(f"[출처: 문화재청 - {result['title']}]\n{result['content']}")
-                    sources.append(result["url"])
-        time.sleep(0.3)
+    # 5. 국사편찬위원회 한국사DB 검색 - 실패해도 계속 진행
+    try:
+        history_keywords = [topic_info.get("title", ""), topic_info.get("topic", "")] + keywords[:2]
+        for keyword in history_keywords[:2]:  # 2개만 시도
+            if not keyword:
+                continue
+            print(f"[HISTORY] 한국사DB 검색: {keyword}")
+            history_results = _search_history_db(keyword, max_results=2)
+            for result in history_results:
+                if result["url"] not in sources:
+                    materials.append(result)
+                    if result.get("content"):
+                        full_content_parts.append(f"[출처: 국사편찬위원회 - {result['title']}]\n{result['content']}")
+                        sources.append(result["url"])
+            time.sleep(0.3)
+    except Exception as e:
+        print(f"[HISTORY] 한국사DB 검색 스킵: {e}")
+
+    # 6. 문화재청 국가문화유산포털 검색 - 실패해도 계속 진행
+    try:
+        heritage_keywords = keywords[:2]  # 2개만 시도
+        for keyword in heritage_keywords:
+            if not keyword:
+                continue
+            print(f"[HISTORY] 문화재청 검색: {keyword}")
+            heritage_results = _search_heritage(keyword, max_results=2)
+            for result in heritage_results:
+                if result["url"] not in sources:
+                    materials.append(result)
+                    if result.get("content"):
+                        full_content_parts.append(f"[출처: 문화재청 - {result['title']}]\n{result['content']}")
+                        sources.append(result["url"])
+            time.sleep(0.3)
+    except Exception as e:
+        print(f"[HISTORY] 문화재청 검색 스킵: {e}")
 
     # 7. e뮤지엄 검색 (API 키 있을 경우)
     emuseum_results = _search_emuseum(era_name, keywords[:2])
