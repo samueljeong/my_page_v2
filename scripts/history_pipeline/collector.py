@@ -94,44 +94,31 @@ def collect_topic_materials(
             sources.append(link)
         time.sleep(0.5)  # API 호출 간격
 
-    # 2. 키워드로 추가 검색 (한국민족문화대백과) - 주요 소스
+    # 2. 키워드로 추가 검색 (한국민족문화대백과) - 5개 키워드
     keywords = topic_info.get("keywords", [])
-    for keyword in keywords[:8]:  # 상위 8개 키워드로 확장
+    for keyword in keywords[:5]:
         print(f"[HISTORY] 대백과 키워드 검색: {keyword}")
-        search_results = _search_encykorea(keyword, max_results=3)
+        search_results = _search_encykorea(keyword, max_results=2)
         for result in search_results:
-            # 중복 체크
             if result["url"] not in sources:
                 materials.append(result)
                 if result.get("content"):
-                    full_content_parts.append(f"[출처: {result['url']}]\n{result['content']}")
+                    full_content_parts.append(f"[출처: 한국민족문화대백과 - {result.get('title', '')}]\n{result['content']}")
                     sources.append(result["url"])
         time.sleep(0.3)
 
-    # 3. 조합 키워드 검색 (시대명 + 키워드)
-    for keyword in keywords[:4]:  # 4개로 확장
-        combined_keyword = f"{era_name} {keyword}"
-        print(f"[HISTORY] 대백과 조합 검색: {combined_keyword}")
-        search_results = _search_encykorea(combined_keyword, max_results=2)
-        for result in search_results:
+    # 3. 나무위키 검색 (주제, 제목, 핵심 키워드)
+    namu_keywords = [topic_info.get("topic", ""), topic_info.get("title", "")] + keywords[:2]
+    for keyword in namu_keywords[:3]:
+        if not keyword:
+            continue
+        print(f"[HISTORY] 나무위키 검색: {keyword}")
+        namu_results = _search_namu_wiki(keyword, max_results=1)
+        for result in namu_results:
             if result["url"] not in sources:
                 materials.append(result)
                 if result.get("content"):
-                    full_content_parts.append(f"[출처: {result['url']}]\n{result['content']}")
-                    sources.append(result["url"])
-        time.sleep(0.3)
-
-    # 3-2. 주제 + 시대 조합 검색 (추가)
-    topic_keyword = topic_info.get("topic", "")
-    if topic_keyword:
-        combined_topic = f"{era_name} {topic_keyword}"
-        print(f"[HISTORY] 대백과 주제 검색: {combined_topic}")
-        search_results = _search_encykorea(combined_topic, max_results=3)
-        for result in search_results:
-            if result["url"] not in sources:
-                materials.append(result)
-                if result.get("content"):
-                    full_content_parts.append(f"[출처: {result['url']}]\n{result['content']}")
+                    full_content_parts.append(f"[출처: 나무위키 - {result.get('title', '')}]\n{result['content']}")
                     sources.append(result["url"])
         time.sleep(0.3)
 
@@ -410,12 +397,12 @@ def _fetch_generic_content(url: str) -> Optional[str]:
 
 def _search_wikipedia_ko(keyword: str, max_results: int = 2) -> List[Dict[str, Any]]:
     """
-    한국어 위키백과 검색 (백업 소스)
+    한국어 위키백과 검색 (User-Agent 수정)
     """
     items = []
 
     try:
-        # 위키백과 API 검색
+        # 위키백과 API 검색 - 적절한 User-Agent 필수
         search_url = "https://ko.wikipedia.org/w/api.php"
         params = {
             "action": "query",
@@ -426,7 +413,13 @@ def _search_wikipedia_ko(keyword: str, max_results: int = 2) -> List[Dict[str, A
             "utf8": 1,
         }
 
-        response = requests.get(search_url, params=params, timeout=10)
+        # 위키백과는 적절한 User-Agent가 필요
+        headers = {
+            "User-Agent": "HistoryPipelineBot/1.0 (https://drama-s2ns.onrender.com; contact@example.com) Python/3.9",
+            "Accept": "application/json",
+        }
+
+        response = requests.get(search_url, params=params, headers=headers, timeout=10)
 
         if response.status_code != 200:
             print(f"[HISTORY] 위키백과 검색 실패: {response.status_code}")
@@ -441,7 +434,6 @@ def _search_wikipedia_ko(keyword: str, max_results: int = 2) -> List[Dict[str, A
 
         for result in search_results:
             title = result.get("title", "")
-            pageid = result.get("pageid", 0)
             snippet = result.get("snippet", "")
 
             # 스니펫에서 HTML 태그 제거
@@ -476,13 +468,18 @@ def _fetch_wikipedia_content(title: str) -> Optional[str]:
             "action": "query",
             "titles": title,
             "prop": "extracts",
-            "exintro": False,  # 전체 내용
-            "explaintext": True,  # 플레인텍스트
+            "exintro": False,
+            "explaintext": True,
             "format": "json",
             "utf8": 1,
         }
 
-        response = requests.get(api_url, params=params, timeout=10)
+        headers = {
+            "User-Agent": "HistoryPipelineBot/1.0 (https://drama-s2ns.onrender.com; contact@example.com) Python/3.9",
+            "Accept": "application/json",
+        }
+
+        response = requests.get(api_url, params=params, headers=headers, timeout=10)
 
         if response.status_code != 200:
             return None
@@ -495,13 +492,57 @@ def _fetch_wikipedia_content(title: str) -> Optional[str]:
                 continue
             extract = page_data.get("extract", "")
             if extract:
-                return extract[:4000]  # 최대 4000자
+                return extract[:4000]
 
         return None
 
     except Exception as e:
         print(f"[HISTORY] 위키백과 내용 추출 오류: {e}")
         return None
+
+
+def _search_namu_wiki(keyword: str, max_results: int = 2) -> List[Dict[str, Any]]:
+    """
+    나무위키 검색 (추가 소스)
+    """
+    items = []
+
+    try:
+        # 나무위키 문서 직접 접근
+        encoded_keyword = quote_plus(keyword)
+        doc_url = f"https://namu.wiki/w/{encoded_keyword}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+        }
+
+        response = requests.get(doc_url, headers=headers, timeout=10, allow_redirects=True)
+
+        if response.status_code == 200:
+            page_html = response.text
+
+            # 본문 추출
+            content_match = re.search(r'<article[^>]*>(.*?)</article>', page_html, re.DOTALL | re.IGNORECASE)
+            if content_match:
+                content = re.sub(r'<[^>]+>', ' ', content_match.group(1))
+                content = re.sub(r'\s+', ' ', content).strip()
+                content = html.unescape(content)
+
+                if len(content) > 200:
+                    items.append({
+                        "title": keyword,
+                        "url": doc_url,
+                        "content": content[:4000],
+                        "source_type": "encyclopedia",
+                        "source_name": "나무위키",
+                    })
+                    print(f"[HISTORY] 나무위키: {keyword[:30]}... ({len(content[:4000])}자)")
+
+    except Exception as e:
+        print(f"[HISTORY] 나무위키 검색 오류 ({keyword}): {e}")
+
+    return items
 
 
 def _search_history_db(keyword: str, max_results: int = 3) -> List[Dict[str, Any]]:
