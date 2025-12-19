@@ -21139,6 +21139,186 @@ def api_history_status():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ========== 해외 미스테리 자동화 파이프라인 API ==========
+
+@app.route('/api/mystery/run-pipeline', methods=['GET', 'POST'])
+def api_mystery_run_pipeline():
+    """
+    해외 미스테리 자동화 파이프라인 실행
+
+    ★ PENDING 5개 자동 유지
+    ★ 영어 위키백과에서 미스테리 사건 수집
+    ★ Opus가 한국어 대본으로 각색
+
+    파라미터:
+    - force: "1"이면 PENDING 충분해도 추가
+    - max_add: 한 번에 추가할 최대 개수 (기본 3)
+
+    환경변수:
+    - MYSTERY_SHEET_ID: 미스테리 전용 시트
+    - NEWS_SHEET_ID 또는 AUTOMATION_SHEET_ID: 공용 시트
+
+    시트 구조:
+    - MYSTERY_OPUS_INPUT: 에피소드별 대본 자료
+      - episode: 에피소드 번호
+      - title_en/title_ko: 영문/한글 제목
+      - wiki_url: 위키백과 URL
+      - full_content: 수집된 전체 내용
+      - opus_prompt: Opus용 프롬프트
+      - status: PENDING/WRITING/DONE
+    """
+    print("[MYSTERY] ===== run-pipeline 호출됨 =====")
+
+    try:
+        from scripts.mystery_pipeline import run_mystery_pipeline
+
+        # 서비스 계정 인증
+        service = get_sheets_service_account()
+        if not service:
+            return jsonify({
+                "ok": False,
+                "error": "Google Sheets 서비스 계정이 설정되지 않았습니다"
+            }), 400
+
+        # 시트 ID
+        sheet_id = (
+            os.environ.get('MYSTERY_SHEET_ID') or
+            os.environ.get('NEWS_SHEET_ID') or
+            os.environ.get('AUTOMATION_SHEET_ID')
+        )
+        if not sheet_id:
+            return jsonify({
+                "ok": False,
+                "error": "MYSTERY_SHEET_ID, NEWS_SHEET_ID, 또는 AUTOMATION_SHEET_ID 환경변수가 필요합니다"
+            }), 400
+
+        # 설정
+        force = request.args.get('force', '0') == '1'
+        max_add = int(request.args.get('max_add', '3'))
+
+        print(f"[MYSTERY] force: {force}, max_add: {max_add}, 시트 ID: {sheet_id}")
+
+        # 파이프라인 실행
+        result = run_mystery_pipeline(
+            sheet_id=sheet_id,
+            service=service,
+            force=force,
+            max_add=max_add
+        )
+
+        if result.get("success"):
+            return jsonify({
+                "ok": True,
+                "pending_before": result.get("pending_before", 0),
+                "pending_after": result.get("pending_after", 0),
+                "episodes_added": result.get("episodes_added", 0),
+                "added_mysteries": result.get("added_mysteries", []),
+                "available_count": result.get("available_count", 0),
+                "message": f"{result.get('episodes_added', 0)}개 추가, PENDING {result.get('pending_after', 0)}개"
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "알 수 없는 오류"),
+            }), 500
+
+    except ImportError as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "error": f"모듈 로드 실패: {e}"
+        }), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/mystery/test', methods=['GET'])
+def api_mystery_test():
+    """
+    미스테리 수집 테스트 (시트 저장 없이 결과만 반환)
+
+    파라미터:
+    - title: 위키백과 문서 제목 (기본 Dyatlov_Pass_incident)
+    """
+    try:
+        from scripts.mystery_pipeline.run import test_collect_mystery
+
+        title = request.args.get('title', 'Dyatlov_Pass_incident')
+
+        print(f"[MYSTERY] 테스트 수집: {title}")
+
+        result = test_collect_mystery(title)
+
+        if result.get("success"):
+            return jsonify({
+                "ok": True,
+                "title_en": result.get("title_en"),
+                "title_ko": result.get("title_ko"),
+                "category": result.get("category"),
+                "year": result.get("year"),
+                "country": result.get("country"),
+                "hook": result.get("hook"),
+                "url": result.get("url"),
+                "summary": result.get("summary"),
+                "content_length": len(result.get("content", "")),
+                "opus_prompt_preview": result.get("opus_prompt", "")[:1000] + "...",
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "수집 실패"),
+            }), 400
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/mystery/list', methods=['GET'])
+def api_mystery_list():
+    """
+    사용 가능한 미스테리 목록 반환
+
+    파라미터:
+    - category: 특정 카테고리만 (DISAPPEARANCE/DEATH/LOCATION/CRIME/PHENOMENON)
+    """
+    try:
+        from scripts.mystery_pipeline.config import FEATURED_MYSTERIES, MYSTERY_CATEGORIES
+
+        category = request.args.get('category', '').upper()
+
+        mysteries = []
+        for m in FEATURED_MYSTERIES:
+            if category and m.get("category") != category:
+                continue
+
+            mysteries.append({
+                "title": m.get("title"),
+                "title_ko": m.get("title_ko"),
+                "category": m.get("category"),
+                "category_name": MYSTERY_CATEGORIES.get(m.get("category"), {}).get("name", ""),
+                "year": m.get("year"),
+                "country": m.get("country"),
+                "hook": m.get("hook"),
+            })
+
+        return jsonify({
+            "ok": True,
+            "count": len(mysteries),
+            "categories": list(MYSTERY_CATEGORIES.keys()),
+            "mysteries": mysteries,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ===== Fontconfig 설정 (일본어 폰트 인식용) =====
 def setup_fontconfig():
     """프로젝트 fonts 디렉토리를 fontconfig에 등록"""
