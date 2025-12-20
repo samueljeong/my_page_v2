@@ -18712,6 +18712,7 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
         # ★ 사용자 입력값 (GPT 생성값 대신 사용)
         user_title = (row_data[18] if len(row_data) > 18 else '').strip()  # 사용자 입력 제목
         user_thumbnail_text = (row_data[19] if len(row_data) > 19 else '').strip()  # 사용자 입력 썸네일 문구
+        citation_links = (row_data[20] if len(row_data) > 20 else '').strip()  # 인용링크 (유튜브 설명에 포함)
 
         # [TUBELENS] 날짜만 입력된 경우 카테고리별 최적 시간 자동 추가
         # news -> 08:00, story/drama -> 19:00, 기본 -> 19:00
@@ -19485,6 +19486,11 @@ NO photorealistic."""
             description = description + hashtags_text
             print(f"[AUTOMATION] 해시태그 추가: {' '.join(hashtags)}")
 
+        # ★ 인용링크 추가 (사용자 수동 입력 - 시트에서 가져옴)
+        if citation_links:
+            description = description + "\n\n" + citation_links
+            print(f"[AUTOMATION] ★ 인용링크 추가 완료 ({len(citation_links)}자)")
+
         # [TUBELENS] 설명란 SEO 최적화 (CTA 자동 추가)
         try:
             description = enhance_description_for_youtube(description, title, hashtags, lang=detected_lang)
@@ -20115,6 +20121,8 @@ def api_sheets_check_and_process():
             # ★ 사용자 입력값 (있으면 GPT 생성값 대신 사용)
             'user_title': user_title,
             'user_thumbnail_text': user_thumbnail_text,
+            # ★ 인용링크 (유튜브 설명에 포함)
+            'citation_links': get_row_value(row_data, col_map, '인용링크', ''),
         }
 
         if user_title:
@@ -20206,7 +20214,8 @@ def run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, sele
         'playlist_id': 플레이리스트 ID (선택),
         'scheduled_time': 예약시간 (선택),
         'user_title': 사용자 입력 제목 (선택) - GPT 생성 제목 대신 사용,
-        'user_thumbnail_text': 사용자 입력 썸네일 문구 (선택) - GPT 생성 문구 대신 사용
+        'user_thumbnail_text': 사용자 입력 썸네일 문구 (선택) - GPT 생성 문구 대신 사용,
+        'citation_links': 인용링크 (선택) - 유튜브 설명에 포함
     }
     selected_project: 미리 선택된 YouTube 프로젝트 ('', '_2')
     """
@@ -20227,14 +20236,17 @@ def run_automation_pipeline_v2(pipeline_data, sheet_name, row_num, col_map, sele
         selected_project=selected_project,
         # ★ 사용자 입력값 전달
         user_title=pipeline_data.get('user_title'),
-        user_thumbnail_text=pipeline_data.get('user_thumbnail_text')
+        user_thumbnail_text=pipeline_data.get('user_thumbnail_text'),
+        # ★ 인용링크 전달 (유튜브 설명에 포함)
+        citation_links=pipeline_data.get('citation_links'),
     )
 
 
 def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy='private',
                                           playlist_id=None, scheduled_time=None,
                                           sheet_name=None, row_num=None, selected_project='',
-                                          user_title=None, user_thumbnail_text=None):
+                                          user_title=None, user_thumbnail_text=None,
+                                          citation_links=None):
     """
     자동화 파이프라인 실행 (명시적 파라미터 버전)
     기존 run_automation_pipeline의 로직을 재사용하면서 새 구조 지원
@@ -20242,6 +20254,7 @@ def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy
     selected_project: 미리 선택된 YouTube 프로젝트 ('', '_2')
     user_title: 사용자 입력 제목 (GPT 생성 제목 대신 사용)
     user_thumbnail_text: 사용자 입력 썸네일 문구 (GPT 생성 문구 대신 사용)
+    citation_links: 인용링크 (유튜브 설명에 포함)
     """
     # 기존 함수의 row 형식으로 변환하여 호출
     # 기존 컬럼 구조: [상태, 작업시간, 채널ID, 채널명, 예약시간, 대본, 제목, ...]
@@ -20268,7 +20281,8 @@ def run_automation_pipeline_with_channel(channel_id, script, title=None, privacy
         '',               # 16: 쇼츠URL
         playlist_id or '', # 17: 플레이리스트ID
         user_title or '', # 18: 사용자 입력 제목 ★
-        user_thumbnail_text or '' # 19: 사용자 입력 썸네일 문구 ★
+        user_thumbnail_text or '', # 19: 사용자 입력 썸네일 문구 ★
+        citation_links or '' # 20: 인용링크 ★
     ]
 
     # 기존 파이프라인 호출 (selected_project 전달)
@@ -21402,11 +21416,7 @@ UNIFIED_SHEETS_CONFIG = {
         "collect_headers": [
             "era",              # 시대
             "episode_slot",     # 슬롯 번호
-            "structure_role",   # 형성기/제도기/변동기/유산기/연결기
-            "core_question",    # 핵심 질문
-            "facts",            # 관찰 가능한 사실
-            "human_choices",    # 인간의 선택 가능 지점
-            "impact_candidates",# 구조 변화 후보
+            "core_question",    # 핵심 질문/에피소드 제목
             "source_url",       # 출처 URL
             "opus_prompt_pack", # Opus 프롬프트
             "thumbnail_copy",   # 썸네일 문구 추천
@@ -21432,6 +21442,7 @@ UNIFIED_SHEETS_CONFIG = {
 VIDEO_AUTOMATION_HEADERS = [
     "상태",             # 대기/처리중/완료/실패
     "대본",             # 영상 대본 (★ 핵심)
+    "인용링크",         # 유튜브 설명에 포함할 출처 링크 (사용자 수동 입력)
     "제목(GPT생성)",    # GPT가 생성한 제목
     "제목(입력)",       # 사용자 입력 제목 (GPT 대신 사용)
     "썸네일문구(입력)", # 사용자 입력 썸네일 문구
