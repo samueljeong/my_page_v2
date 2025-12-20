@@ -410,20 +410,26 @@ def process_step():
                 is_json = False
 
         if not is_json:
-            system_content = get_system_prompt_for_step(step_name)
+            # Step1인 경우: 본문 연구 전용 프롬프트 사용
+            if step_type == "step1":
+                from .prompt import build_step1_research_prompt
+                system_content = build_step1_research_prompt()
+                print(f"[PROCESS] Step1 연구 모드 프롬프트 적용")
+            else:
+                system_content = get_system_prompt_for_step(step_name)
 
-            if master_guide:
-                system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
-                system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
-                system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
+                if master_guide:
+                    system_content += f"\n\n【 카테고리 총괄 지침 】\n{master_guide}\n\n"
+                    system_content += f"【 현재 단계 역할 】\n{step_name}\n\n"
+                    system_content += "위 총괄 지침을 참고하여, 현재 단계의 역할과 비중에 맞게 '자료만' 작성하세요."
 
-            if guide:
-                system_content += f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                system_content += f"【 최우선 지침: {step_name} 단계 세부 지침 】\n"
-                system_content += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                system_content += guide
-                system_content += f"\n\n위 지침을 절대적으로 우선하여 따라야 합니다."
-                system_content += f"\n이 지침이 기본 역할과 충돌하면, 이 지침을 따르세요."
+                if guide:
+                    system_content += f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    system_content += f"【 최우선 지침: {step_name} 단계 세부 지침 】\n"
+                    system_content += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    system_content += guide
+                    system_content += f"\n\n위 지침을 절대적으로 우선하여 따라야 합니다."
+                    system_content += f"\n이 지침이 기본 역할과 충돌하면, 이 지침을 따르세요."
 
         # 사용자 메시지 구성
         user_content = f"[성경구절]\n{reference}\n\n"
@@ -442,8 +448,14 @@ def process_step():
                 strongs_analysis = analyze_verse_strongs(reference, top_n=5)
                 strongs_text = format_strongs_for_prompt(strongs_analysis)
                 if strongs_text:
-                    user_content += f"\n{strongs_text}\n"
-                    print(f"[PROCESS] Step1 원어 분석 추가: {len(strongs_analysis.get('key_words', []))}개 단어")
+                    # Strong's 우선순위 강제 문구 추가
+                    user_content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    user_content += "【 ⚠️ Strong's 원어 자료 (보조 참고용) 】\n"
+                    user_content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    user_content += "※ 주의: Strong's는 참고로만 사용하며, 본문 구조/문맥/역사 배경 설명을 먼저 완료하라.\n"
+                    user_content += "※ 원어 분석은 최대 5개 단어만 선택하고, 설교 적용은 쓰지 말라(관찰만).\n\n"
+                    user_content += f"{strongs_text}\n"
+                    print(f"[PROCESS] Step1 원어 분석 추가 (우선순위 강제): {len(strongs_analysis.get('key_words', []))}개 단어")
 
                 # 2. 주석 참고 자료 (GPT 기반 생성)
                 # 비용 절감을 위해 기본적으로 비활성화, 필요시 활성화
