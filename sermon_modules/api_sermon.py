@@ -34,6 +34,11 @@ from .auth import (
 from .prompt import (
     get_system_prompt_for_step, build_prompt_from_json, build_step3_prompt_from_json
 )
+from .strongs import analyze_verse_strongs, format_strongs_for_prompt
+from .commentary import (
+    init_commentary_service, get_verse_commentary, format_commentary_for_prompt
+)
+from .context import get_current_context, format_context_for_prompt, init_context_service
 
 api_sermon_bp = Blueprint('api_sermon', __name__, url_prefix='/api/sermon')
 
@@ -45,6 +50,10 @@ def init_sermon_api(client):
     """OpenAI 클라이언트 주입"""
     global _client
     _client = client
+    # Commentary 서비스 초기화 (GPT 기반 주석 생성용)
+    init_commentary_service(client)
+    # Context 서비스 초기화 (예화 검증용)
+    init_context_service(client)
 
 
 def get_client():
@@ -425,6 +434,49 @@ def process_step():
 
         if text:
             user_content += f"[성경 본문]\n{text}\n\n"
+
+        # Step1인 경우: 원어 분석 및 주석 데이터 자동 추가
+        if step_type == "step1" and reference:
+            try:
+                # 1. Strong's 원어 분석
+                strongs_analysis = analyze_verse_strongs(reference, top_n=5)
+                strongs_text = format_strongs_for_prompt(strongs_analysis)
+                if strongs_text:
+                    user_content += f"\n{strongs_text}\n"
+                    print(f"[PROCESS] Step1 원어 분석 추가: {len(strongs_analysis.get('key_words', []))}개 단어")
+
+                # 2. 주석 참고 자료 (GPT 기반 생성)
+                # 비용 절감을 위해 기본적으로 비활성화, 필요시 활성화
+                enable_commentary = data.get("enableCommentary", False)
+                if enable_commentary:
+                    commentary_result = get_verse_commentary(
+                        reference,
+                        verse_text=text,
+                        styles=["matthew_henry", "john_gill"]
+                    )
+                    commentary_text = format_commentary_for_prompt(commentary_result)
+                    if commentary_text:
+                        user_content += f"\n{commentary_text}\n"
+                        print(f"[PROCESS] Step1 주석 참고 추가: {len(commentary_result.get('commentaries', []))}개 스타일")
+            except Exception as e:
+                print(f"[PROCESS] 원어/주석 분석 실패 (무시): {e}")
+
+        # Step2인 경우: 시대 컨텍스트 자동 추가
+        if step_type == "step2" or (step_id and "step2" in step_id.lower()):
+            try:
+                # 청중 유형 추출 (data에서 또는 기본값)
+                audience_type = data.get("audienceType", "전체")
+                enable_context = data.get("enableContext", True)  # 기본 활성화
+
+                if enable_context:
+                    context_result = get_current_context(audience_type=audience_type)
+                    context_text = format_context_for_prompt(context_result, sermon_topic=title or "")
+                    if context_text:
+                        user_content += f"\n{context_text}\n"
+                        news_count = sum(len(v) for v in context_result.get("news", {}).values())
+                        print(f"[PROCESS] Step2 시대 컨텍스트 추가: {audience_type} 청중, {news_count}개 뉴스")
+            except Exception as e:
+                print(f"[PROCESS] 시대 컨텍스트 분석 실패 (무시): {e}")
 
         if previous_results:
             user_content += "[이전 단계 결과 (참고용)]\n"

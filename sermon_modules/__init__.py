@@ -55,7 +55,43 @@ from .auth import (
 from .prompt import (
     get_system_prompt_for_step,
     build_prompt_from_json,
-    build_step3_prompt_from_json
+    build_step3_prompt_from_json,
+    get_step2_prompt_for_style,
+    get_step3_prompt_for_style,
+    get_style_structure_template,
+    get_style_checklist,
+    get_style_illustration_guide
+)
+
+from .styles import (
+    get_style,
+    get_style_info,
+    get_available_styles,
+    READABILITY_GUIDE
+)
+
+from .strongs import (
+    analyze_verse_strongs,
+    format_strongs_for_prompt,
+    get_strongs_lookup
+)
+
+from .commentary import (
+    get_verse_commentary,
+    format_commentary_for_prompt,
+    init_commentary_service,
+    COMMENTARY_STYLES
+)
+
+from .context import (
+    get_current_context,
+    format_context_for_prompt,
+    get_audience_types,
+    init_context_service,
+    validate_illustration,
+    suggest_illustrations,
+    AUDIENCE_INTERESTS,
+    CONTROVERSIAL_KEYWORDS
 )
 
 __version__ = '1.0.0'
@@ -70,4 +106,15 @@ __all__ = [
     'get_user_credits', 'use_credit', 'add_credits', 'set_credits', 'AUTH_ENABLED',
     # prompt
     'get_system_prompt_for_step', 'build_prompt_from_json', 'build_step3_prompt_from_json',
+    'get_step2_prompt_for_style', 'get_step3_prompt_for_style',
+    'get_style_structure_template', 'get_style_checklist', 'get_style_illustration_guide',
+    # styles
+    'get_style', 'get_style_info', 'get_available_styles', 'READABILITY_GUIDE',
+    # strongs
+    'analyze_verse_strongs', 'format_strongs_for_prompt', 'get_strongs_lookup',
+    # commentary
+    'get_verse_commentary', 'format_commentary_for_prompt', 'init_commentary_service', 'COMMENTARY_STYLES',
+    # context
+    'get_current_context', 'format_context_for_prompt', 'get_audience_types', 'AUDIENCE_INTERESTS',
+    'init_context_service', 'validate_illustration', 'suggest_illustrations', 'CONTROVERSIAL_KEYWORDS',
 ]

@@ -1,10 +1,16 @@
 """
 sermon_modules/prompt.py
 프롬프트 빌더 함수들
+
+스타일별 분기 지원:
+- three_points (3대지): 전통적인 3포인트 설교
+- topical (주제설교): 주제 중심 설교
+- expository (강해설교): 본문 해설 중심 설교
 """
 
 import json
 from .utils import is_json_guide, parse_json_guide
+from .styles import get_style, get_available_styles, READABILITY_GUIDE
 
 
 def get_system_prompt_for_step(step_name):
@@ -35,6 +41,84 @@ CRITICAL RULES:
 - 지침이 없는 경우에만 일반적인 설교 자료 형식 사용
 
 ⚠️ 중요: 사용자의 세부 지침이 제공되면 그것을 절대적으로 우선하여 따라야 합니다."""
+
+
+# ═══════════════════════════════════════════════════════════════
+# 스타일별 프롬프트 함수들
+# ═══════════════════════════════════════════════════════════════
+
+def get_step2_prompt_for_style(style_id: str, step1_result: dict = None, context_data: dict = None) -> str:
+    """
+    스타일별 Step2 구조 설계 프롬프트 반환
+
+    Args:
+        style_id: 스타일 ID (three_points, topical, expository)
+        step1_result: Step1 분석 결과
+        context_data: 시대 컨텍스트 데이터
+
+    Returns:
+        스타일에 맞는 Step2 구조 설계 프롬프트
+    """
+    style = get_style(style_id)
+    return style.build_step2_prompt(step1_result=step1_result, context_data=context_data)
+
+
+def get_step3_prompt_for_style(style_id: str, step2_result: dict = None, duration: str = "20분") -> str:
+    """
+    스타일별 Step3/Step4 설교문 작성 프롬프트 반환
+
+    Args:
+        style_id: 스타일 ID (three_points, topical, expository)
+        step2_result: Step2 구조 설계 결과
+        duration: 설교 분량
+
+    Returns:
+        스타일에 맞는 Step3 작성 프롬프트 (가독성 가이드 포함)
+    """
+    style = get_style(style_id)
+    return style.build_step3_prompt(step2_result=step2_result, duration=duration)
+
+
+def get_style_structure_template(style_id: str) -> dict:
+    """
+    스타일별 구조 템플릿 반환 (Step2 출력용)
+
+    Args:
+        style_id: 스타일 ID
+
+    Returns:
+        해당 스타일의 JSON 구조 템플릿
+    """
+    style = get_style(style_id)
+    return style.get_structure_template()
+
+
+def get_style_checklist(style_id: str) -> list:
+    """
+    스타일별 체크리스트 반환 (Step3용)
+
+    Args:
+        style_id: 스타일 ID
+
+    Returns:
+        해당 스타일의 체크리스트 항목 리스트
+    """
+    style = get_style(style_id)
+    return style.get_step3_checklist()
+
+
+def get_style_illustration_guide(style_id: str) -> str:
+    """
+    스타일별 예화 배치 가이드 반환
+
+    Args:
+        style_id: 스타일 ID
+
+    Returns:
+        해당 스타일의 예화 배치 가이드
+    """
+    style = get_style(style_id)
+    return style.get_illustration_guide()
 
 
 def build_prompt_from_json(json_guide, step_type="step1"):
@@ -97,12 +181,28 @@ def build_prompt_from_json(json_guide, step_type="step1"):
     return prompt
 
 
-def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_result):
-    """Step3용 프롬프트 생성 - Step1/2 데이터를 충실히 전달"""
+def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_result, style_id: str = None):
+    """
+    Step3용 프롬프트 생성 - Step1/2 데이터를 충실히 전달
+
+    Args:
+        json_guide: JSON 지침
+        meta_data: 메타 정보 (duration, worship_type, target, sermon_style 등)
+        step1_result: Step1 분석 결과
+        step2_result: Step2 구조 설계 결과
+        style_id: 설교 스타일 ID (없으면 meta_data에서 추출)
+
+    Returns:
+        Step3용 완성된 프롬프트
+    """
     duration = meta_data.get("duration", "")
     worship_type = meta_data.get("worship_type", "")
     special_notes = meta_data.get("special_notes", "")
     target = meta_data.get("target", "")
+
+    # 스타일 ID 결정 (파라미터 > meta_data > 기본값)
+    if not style_id:
+        style_id = meta_data.get("sermon_style", "three_points")
 
     prompt = ""
 
@@ -354,15 +454,39 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
             prompt += "\n"
 
     # ========================================
-    # 최종 작성 지침
+    # 스타일별 작성 가이드 (신규)
     # ========================================
     prompt += "=" * 60 + "\n"
-    prompt += "【 ★★★ 최종 작성 지침 ★★★ 】\n"
+    prompt += f"【 ★★★ 설교 스타일별 작성 가이드 ({style_id}) ★★★ 】\n"
     prompt += "=" * 60 + "\n\n"
 
-    prompt += "✅ 필수 체크리스트:\n"
+    # 스타일별 작성 가이드 추가
+    style_writing_guide = get_step3_prompt_for_style(style_id, step2_result, duration or "20분")
+    prompt += style_writing_guide
+    prompt += "\n\n"
+
+    # 스타일별 예화 가이드 추가
+    style_illustration_guide = get_style_illustration_guide(style_id)
+    prompt += style_illustration_guide
+    prompt += "\n\n"
+
+    # ========================================
+    # 최종 체크리스트 (스타일별 + 공통)
+    # ========================================
+    prompt += "=" * 60 + "\n"
+    prompt += "【 ★★★ 최종 체크리스트 ★★★ 】\n"
+    prompt += "=" * 60 + "\n\n"
+
+    # 스타일별 체크리스트
+    prompt += "▶ 스타일별 필수 체크:\n"
+    style_checklist = get_style_checklist(style_id)
+    for item in style_checklist:
+        prompt += f"  □ {item}\n"
+    prompt += "\n"
+
+    # 공통 체크리스트
+    prompt += "▶ 공통 필수 체크:\n"
     prompt += "  □ Step1의 '핵심_메시지'가 설교 전체에 일관되게 흐르는가?\n"
-    prompt += "  □ Step2의 대지 구조(서론→1대지→2대지→3대지→결론)를 정확히 따랐는가?\n"
     prompt += "  □ Step1의 '주요_절_해설'과 '핵심_단어_분석'을 적절히 활용했는가?\n"
     if duration:
         prompt += f"  □ 분량이 {duration}에 맞는가?\n"
@@ -372,8 +496,10 @@ def build_step3_prompt_from_json(json_guide, meta_data, step1_result, step2_resu
         prompt += f"  □ 예배 유형({worship_type})에 맞는 톤인가?\n"
     prompt += "  □ 마크다운 없이 순수 텍스트로 작성했는가?\n"
     prompt += "  □ 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n"
+    prompt += "  □ 성경 구절이 가독성 가이드에 맞게 줄바꿈 처리되었는가?\n"
 
     prompt += "\n⚠️ 중요: Step1과 Step2의 분석 결과를 충실히 반영하여, "
     prompt += "일관성 있고 깊이 있는 설교문을 작성하세요.\n"
+    prompt += "⚠️ 특히 가독성 가이드를 반드시 따르세요 (성경 구절 줄바꿈, 짧은 문장).\n"
 
     return prompt
