@@ -308,6 +308,25 @@ async function executeGptPro() {
       }
     });
 
+    // Step1, Step2 추가 정보 수집 (Strong's 원어 분석, 시대 컨텍스트)
+    let step1ExtraInfo = null;
+    let step2ExtraInfo = null;
+
+    step1Steps.forEach(s => {
+      if (window.stepExtraInfo?.[s.id]) {
+        step1ExtraInfo = window.stepExtraInfo[s.id];
+      }
+    });
+
+    step2Steps.forEach(s => {
+      if (window.stepExtraInfo?.[s.id]) {
+        step2ExtraInfo = window.stepExtraInfo[s.id];
+      }
+    });
+
+    console.log('[Step3] step1ExtraInfo:', step1ExtraInfo ? Object.keys(step1ExtraInfo) : 'none');
+    console.log('[Step3] step2ExtraInfo:', step2ExtraInfo ? Object.keys(step2ExtraInfo) : 'none');
+
     // 모델 설정
     const modelSettings = getModelSettings(window.currentCategory);
     const model = modelSettings?.gptPro || 'gpt-5';
@@ -368,6 +387,8 @@ async function executeGptPro() {
       customPrompt: window.DEFAULT_STEP3_PROMPT,
       step1Result: step1Result,
       step2Result: step2Result,
+      step1ExtraInfo: step1ExtraInfo,
+      step2ExtraInfo: step2ExtraInfo,
       writingStyle: writingStyleRules,
       scriptureCitation: scriptureCitationRules
     };

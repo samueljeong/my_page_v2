@@ -843,6 +843,10 @@ def gpt_pro():
         writing_style = data.get("writingStyle")
         scripture_citation = data.get("scriptureCitation")
 
+        # Step1/Step2 추가 정보 (Strong's 원어 분석, 시대 컨텍스트)
+        step1_extra_info = data.get("step1ExtraInfo")
+        step2_extra_info = data.get("step2ExtraInfo")
+
         # JSON 모드 여부 확인
         is_json_mode = (isinstance(step1_result, dict) and len(step1_result) > 0) or \
                        (isinstance(step2_result, dict) and len(step2_result) > 0)
@@ -850,6 +854,7 @@ def gpt_pro():
         print(f"[GPT-PRO/Step3] JSON 모드: {is_json_mode}, step1_result 타입: {type(step1_result)}, step2_result 타입: {type(step2_result)}")
         print(f"[GPT-PRO/Step3] 처리 시작 - 스타일: {style_name}, 모델: {gpt_pro_model}, 토큰: {max_tokens}")
         print(f"[GPT-PRO/Step3] writing_style: {'있음' if writing_style else '없음'}, scripture_citation: {'있음' if scripture_citation else '없음'}")
+        print(f"[GPT-PRO/Step3] step1_extra_info: {'있음' if step1_extra_info else '없음'}, step2_extra_info: {'있음' if step2_extra_info else '없음'}")
 
         has_title = bool(title and title.strip())
 
@@ -1027,6 +1032,55 @@ def gpt_pro():
                     "6. 마크다운, 불릿 기호 대신 순수 텍스트 단락을 사용하세요.\n"
                     "7. 충분히 길고 상세하며 풍성한 내용으로 작성해주세요."
                 )
+
+        # Step1/Step2 추가 정보를 프롬프트에 포함
+        if step1_extra_info or step2_extra_info:
+            user_content += "\n\n" + "=" * 50
+            user_content += "\n【 ★★★ 추가 분석 자료 (설교에 활용하세요) ★★★ 】"
+            user_content += "\n" + "=" * 50
+
+            # Strong's 원어 분석
+            if step1_extra_info and step1_extra_info.get('strongs_analysis'):
+                strongs = step1_extra_info['strongs_analysis']
+                key_words = strongs.get('key_words', [])
+                if key_words:
+                    user_content += "\n\n▶ Strong's 원어 분석 (핵심 단어)"
+                    if strongs.get('text'):
+                        user_content += f"\n   영문 (KJV): {strongs['text']}"
+                    for i, word in enumerate(key_words[:5], 1):
+                        lemma = word.get('lemma', '')
+                        translit = word.get('translit', '')
+                        strongs_num = word.get('strongs', '')
+                        definition = word.get('definition', '')[:150]
+                        user_content += f"\n   {i}. {lemma} ({translit}, {strongs_num})"
+                        if word.get('english'):
+                            user_content += f" - {word['english']}"
+                        if definition:
+                            user_content += f"\n      → {definition}"
+
+            # 시대 컨텍스트
+            if step2_extra_info and step2_extra_info.get('context_data'):
+                context = step2_extra_info['context_data']
+                user_content += "\n\n▶ 현재 시대 컨텍스트 (도입부/예화/적용에 활용)"
+                user_content += f"\n   청중 유형: {context.get('audience', '전체')}"
+
+                # 주요 뉴스
+                news = context.get('news', {})
+                if news:
+                    cat_names = {'economy': '경제', 'politics': '정치', 'society': '사회', 'world': '국제', 'culture': '문화'}
+                    user_content += "\n   주요 시사 이슈:"
+                    for cat, items in news.items():
+                        if items:
+                            for item in items[:1]:  # 카테고리당 1개만
+                                title_text = item.get('title', '')[:50]
+                                user_content += f"\n   - [{cat_names.get(cat, cat)}] {title_text}"
+
+                # 청중 관심사
+                concerns = context.get('concerns', [])
+                if concerns:
+                    user_content += f"\n   청중의 주요 관심사: {', '.join(concerns[:3])}"
+
+            user_content += "\n" + "=" * 50
 
         if duration:
             user_content += f"\n\n⚠️ 매우 중요 - 분량 제한: {duration} 분량 안에서 충분히 상세하고 풍성한 내용으로 작성하세요!"
