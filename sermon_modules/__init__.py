@@ -58,6 +58,19 @@ from .prompt import (
     build_step3_prompt_from_json
 )
 
+from .strongs import (
+    analyze_verse_strongs,
+    format_strongs_for_prompt,
+    get_strongs_lookup
+)
+
+from .commentary import (
+    get_verse_commentary,
+    format_commentary_for_prompt,
+    init_commentary_service,
+    COMMENTARY_STYLES
+)
+
 __version__ = '1.0.0'
 __all__ = [
     # db
@@ -70,4 +83,8 @@ __all__ = [
     'get_user_credits', 'use_credit', 'add_credits', 'set_credits', 'AUTH_ENABLED',
     # prompt
     'get_system_prompt_for_step', 'build_prompt_from_json', 'build_step3_prompt_from_json',
+    # strongs
+    'analyze_verse_strongs', 'format_strongs_for_prompt', 'get_strongs_lookup',
+    # commentary
+    'get_verse_commentary', 'format_commentary_for_prompt', 'init_commentary_service', 'COMMENTARY_STYLES',
 ]
