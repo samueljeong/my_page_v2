@@ -12829,14 +12829,14 @@ def _get_bgm_file(mood, bgm_dir=None):
     return selected
 
 
-def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.23):
+def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
     """비디오에 BGM 믹싱 (나레이션 유지, BGM은 작게)
 
     Args:
         video_path: 원본 비디오 경로
         bgm_path: BGM 오디오 경로
         output_path: 출력 비디오 경로
-        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.23 = 23%)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
 
     Returns:
         성공 여부 (bool)
@@ -12890,7 +12890,7 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.23):
         return False
 
 
-def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bgm_volume=0.23):
+def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bgm_volume=0.15):
     """비디오에 씬별 BGM 믹싱 (감정 흐름에 따라 BGM 전환)
 
     Args:
@@ -12898,7 +12898,7 @@ def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bg
         scenes: 씬 목록 (duration 정보 포함)
         video_effects: video_effects 객체 (bgm_mood, scene_bgm_changes 포함)
         output_path: 출력 비디오 경로
-        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.23 = 23%)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
 
     Returns:
         성공 여부 (bool)
