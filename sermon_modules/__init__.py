@@ -71,6 +71,17 @@ from .commentary import (
     COMMENTARY_STYLES
 )
 
+from .context import (
+    get_current_context,
+    format_context_for_prompt,
+    get_audience_types,
+    init_context_service,
+    validate_illustration,
+    suggest_illustrations,
+    AUDIENCE_INTERESTS,
+    CONTROVERSIAL_KEYWORDS
+)
+
 __version__ = '1.0.0'
 __all__ = [
     # db
@@ -87,4 +98,7 @@ __all__ = [
     'analyze_verse_strongs', 'format_strongs_for_prompt', 'get_strongs_lookup',
     # commentary
     'get_verse_commentary', 'format_commentary_for_prompt', 'init_commentary_service', 'COMMENTARY_STYLES',
+    # context
+    'get_current_context', 'format_context_for_prompt', 'get_audience_types', 'AUDIENCE_INTERESTS',
+    'init_context_service', 'validate_illustration', 'suggest_illustrations', 'CONTROVERSIAL_KEYWORDS',
 ]

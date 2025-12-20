@@ -38,6 +38,7 @@ from .strongs import analyze_verse_strongs, format_strongs_for_prompt
 from .commentary import (
     init_commentary_service, get_verse_commentary, format_commentary_for_prompt
 )
+from .context import get_current_context, format_context_for_prompt, init_context_service
 
 api_sermon_bp = Blueprint('api_sermon', __name__, url_prefix='/api/sermon')
 
@@ -51,6 +52,8 @@ def init_sermon_api(client):
     _client = client
     # Commentary 서비스 초기화 (GPT 기반 주석 생성용)
     init_commentary_service(client)
+    # Context 서비스 초기화 (예화 검증용)
+    init_context_service(client)
 
 
 def get_client():
@@ -457,6 +460,23 @@ def process_step():
                         print(f"[PROCESS] Step1 주석 참고 추가: {len(commentary_result.get('commentaries', []))}개 스타일")
             except Exception as e:
                 print(f"[PROCESS] 원어/주석 분석 실패 (무시): {e}")
+
+        # Step2인 경우: 시대 컨텍스트 자동 추가
+        if step_type == "step2" or (step_id and "step2" in step_id.lower()):
+            try:
+                # 청중 유형 추출 (data에서 또는 기본값)
+                audience_type = data.get("audienceType", "전체")
+                enable_context = data.get("enableContext", True)  # 기본 활성화
+
+                if enable_context:
+                    context_result = get_current_context(audience_type=audience_type)
+                    context_text = format_context_for_prompt(context_result, sermon_topic=title or "")
+                    if context_text:
+                        user_content += f"\n{context_text}\n"
+                        news_count = sum(len(v) for v in context_result.get("news", {}).values())
+                        print(f"[PROCESS] Step2 시대 컨텍스트 추가: {audience_type} 청중, {news_count}개 뉴스")
+            except Exception as e:
+                print(f"[PROCESS] 시대 컨텍스트 분석 실패 (무시): {e}")
 
         if previous_results:
             user_content += "[이전 단계 결과 (참고용)]\n"
