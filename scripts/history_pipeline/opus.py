@@ -45,7 +45,7 @@ HISTORY_OPUS_FIELDS = [
     "_skip_materials",      # [7] materials_pack (스킵)
     "opus_prompt_pack",     # [8] opus_prompt_pack
     "thumbnail_copy",       # [9] thumbnail_copy
-    "상태",                 # [10] "PENDING" → 상태 열에 저장
+    "상태",                 # [10] "준비" → 상태 열에 저장
     "_skip_created",        # [11] created_at (스킵)
 ]
 

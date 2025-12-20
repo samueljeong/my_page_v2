@@ -341,12 +341,17 @@ def get_topic_by_global_episode(episode: int) -> Optional[Dict[str, Any]]:
 
 def get_series_progress(service, spreadsheet_id: str) -> Dict[str, Any]:
     """
-    시리즈 진행 상황 조회 (HISTORY_OPUS_INPUT 시트 기반)
+    시리즈 진행 상황 조회 (통합 시트 HISTORY 기반)
+
+    통합 시트 구조:
+    - 행 1: 채널ID | UCxxx
+    - 행 2: 헤더 (era, episode_slot, core_question, ..., 상태, ...)
+    - 행 3~: 데이터
 
     Returns:
         {
             "total_episodes": 시트에 저장된 에피소드 수,
-            "pending_count": PENDING 상태 에피소드 수,
+            "pending_count": '준비' 상태 에피소드 수,
             "last_episode": 마지막 에피소드 번호,
             "current_era": 현재 진행 중인 시대,
             "current_era_episode": 현재 시대의 마지막 에피소드 번호,
@@ -365,44 +370,41 @@ def get_series_progress(service, spreadsheet_id: str) -> Dict[str, Any]:
     }
 
     try:
-        # 전체 데이터 읽기
+        # 통합 시트에서 데이터 읽기 (행 2: 헤더, 행 3~: 데이터)
         response = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range=f"{HISTORY_OPUS_INPUT_SHEET}!A:L"
+            range=f"'{UNIFIED_HISTORY_SHEET}'!A2:Z"
         ).execute()
 
         rows = response.get('values', [])
 
         if len(rows) <= 1:
             # 헤더만 있거나 비어있음
+            print(f"[HISTORY] 통합 시트 '{UNIFIED_HISTORY_SHEET}'에 데이터 없음")
             return result
 
-        headers = rows[0]
-        data_rows = rows[1:]
+        headers = rows[0]  # 행 2 = 헤더
+        data_rows = rows[1:]  # 행 3~ = 데이터
 
         result["total_episodes"] = len(data_rows)
         result["all_rows"] = data_rows
 
-        # 컬럼 인덱스 찾기
+        # 컬럼 인덱스 찾기 (통합 시트 헤더 기준)
         col_idx = {h: i for i, h in enumerate(headers)}
 
-        episode_idx = col_idx.get("episode", 0)
-        era_idx = col_idx.get("era", 1)
-        era_episode_idx = col_idx.get("era_episode", 2)
-        status_idx = col_idx.get("status", 10)
+        era_idx = col_idx.get("era", 0)
+        era_episode_idx = col_idx.get("episode_slot", 1)
+        status_idx = col_idx.get("상태", -1)  # 통합 시트는 한글 헤더 사용
 
-        # PENDING 개수 세기
-        for row in data_rows:
-            if len(row) > status_idx and row[status_idx] == "PENDING":
-                result["pending_count"] += 1
+        # '준비' 상태 개수 세기 (수집 완료 상태)
+        if status_idx >= 0:
+            for row in data_rows:
+                if len(row) > status_idx and row[status_idx] == "준비":
+                    result["pending_count"] += 1
 
         # 마지막 에피소드 정보
         if data_rows:
             last_row = data_rows[-1]
-            try:
-                result["last_episode"] = int(last_row[episode_idx]) if len(last_row) > episode_idx and last_row[episode_idx] else 0
-            except (ValueError, IndexError):
-                result["last_episode"] = len(data_rows)
 
             if len(last_row) > era_idx:
                 result["current_era"] = last_row[era_idx]
@@ -412,11 +414,24 @@ def get_series_progress(service, spreadsheet_id: str) -> Dict[str, Any]:
             except (ValueError, IndexError):
                 result["current_era_episode"] = 0
 
-        print(f"[HISTORY] 진행 상황: 에피소드 {result['last_episode']}/{result['planned_total']}개, PENDING {result['pending_count']}개, 현재 시대 {result['current_era']}")
+            # 전역 에피소드 번호 계산 (시대별 누적)
+            # ERA_ORDER를 따라가면서 현재 시대까지의 에피소드 수를 합산
+            total_ep = 0
+            for era_key in ERA_ORDER:
+                era_topics = HISTORY_TOPICS.get(era_key, [])
+                if era_key == result["current_era"]:
+                    total_ep += result["current_era_episode"]
+                    break
+                total_ep += len(era_topics)
+            result["last_episode"] = total_ep
+
+        print(f"[HISTORY] 진행 상황: 에피소드 {result['last_episode']}/{result['planned_total']}개, 준비 {result['pending_count']}개, 현재 시대 {result['current_era']}")
         return result
 
     except Exception as e:
         print(f"[HISTORY] 진행 상황 조회 실패: {e}")
+        import traceback
+        traceback.print_exc()
         return result
 
 
