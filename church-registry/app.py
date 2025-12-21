@@ -80,6 +80,10 @@ class Member(db.Model):
     status = db.Column(db.String(20), default='active')  # active, inactive, newcomer
     notes = db.Column(db.Text)  # 메모
 
+    # 성도 구분
+    member_type = db.Column(db.String(20))  # 장년: 성도, 집사, 권사, 장로, 전도사, 목사, 명예집사, 명예권사
+    department = db.Column(db.String(20))   # 교회학교: 유아부, 유치부, 아동부, 청소년부, 청년부 (장년은 null)
+
     # 사진
     photo_url = db.Column(db.String(500))  # 프로필 사진 URL
 
@@ -219,6 +223,9 @@ def member_new():
         status = request.form.get('status', 'active')
         group_id = request.form.get('group_id')
         notes = request.form.get('notes', '').strip()
+        member_type = request.form.get('member_type', '')
+        department = request.form.get('department', '')
+        photo_url = request.form.get('photo_url', '')
 
         # 날짜 처리
         birth_date = None
@@ -252,7 +259,10 @@ def member_new():
             registration_date=registration_date,
             group_id=int(group_id) if group_id else None,
             status=status,
-            notes=notes
+            notes=notes,
+            member_type=member_type if member_type else None,
+            department=department if department else None,
+            photo_url=photo_url if photo_url else None
         )
 
         db.session.add(member)
@@ -289,6 +299,16 @@ def member_edit(member_id):
 
         group_id = request.form.get('group_id')
         member.group_id = int(group_id) if group_id else None
+
+        # 성도 구분
+        member_type = request.form.get('member_type', '')
+        member.member_type = member_type if member_type else None
+        department = request.form.get('department', '')
+        member.department = department if department else None
+
+        # 사진 URL
+        photo_url = request.form.get('photo_url', '')
+        member.photo_url = photo_url if photo_url else None
 
         # 날짜 처리
         if request.form.get('birth_date'):

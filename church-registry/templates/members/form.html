@@ -3,143 +3,526 @@
 {% block title %}{{ '교인 수정' if member else '새 교인 등록' }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>
-        <i class="bi bi-person-{{ 'gear' if member else 'plus' }}"></i>
-        {{ '교인 수정' if member else '새 교인 등록' }}
-    </h2>
-    <a href="{{ url_for('member_list') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> 목록으로
-    </a>
+<style>
+    /* 사진 업로드 영역 */
+    .photo-upload-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .photo-dropzone {
+        width: 150px;
+        height: 200px; /* 3:4 비율 (여권 사진) */
+        border: 2px dashed #d2d2d7;
+        border-radius: var(--apple-radius);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: #fafafa;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .photo-dropzone:hover {
+        border-color: var(--apple-blue);
+        background: #f0f7ff;
+    }
+
+    .photo-dropzone.dragover {
+        border-color: var(--apple-blue);
+        background: #e3f2fd;
+        transform: scale(1.02);
+    }
+
+    .photo-dropzone.has-photo {
+        border: none;
+        box-shadow: var(--apple-shadow);
+    }
+
+    .photo-dropzone img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .photo-placeholder {
+        text-align: center;
+        color: var(--apple-text-secondary);
+    }
+
+    .photo-placeholder i {
+        font-size: 36px;
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .photo-placeholder span {
+        font-size: 12px;
+        display: block;
+    }
+
+    .photo-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+    }
+
+    .photo-btn {
+        padding: 8px 16px;
+        font-size: 13px;
+        border-radius: 20px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .photo-btn-upload {
+        background: var(--apple-blue);
+        color: white;
+    }
+
+    .photo-btn-upload:hover {
+        background: var(--apple-blue-hover);
+    }
+
+    .photo-btn-remove {
+        background: #f5f5f7;
+        color: #dc2626;
+        display: none;
+    }
+
+    .photo-btn-remove:hover {
+        background: #fee2e2;
+    }
+
+    .photo-btn-remove.show {
+        display: inline-block;
+    }
+
+    /* 사진 확대 모달 */
+    .photo-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        cursor: zoom-out;
+    }
+
+    .photo-modal img {
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: var(--apple-radius);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .photo-modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+
+    .photo-modal-close:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .upload-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: rgba(0, 113, 227, 0.2);
+        display: none;
+    }
+
+    .upload-progress-bar {
+        height: 100%;
+        background: var(--apple-blue);
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+</style>
+
+<div class="container">
+    <!-- 페이지 헤더 -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="bi bi-person-{{ 'gear' if member else 'plus-fill' }}"></i>
+                {{ '교인 수정' if member else '새 교인 등록' }}
+            </h1>
+            <p class="page-subtitle">{{ '교인 정보를 수정합니다' if member else '새로운 교인 정보를 입력해주세요' }}</p>
+        </div>
+        <a href="{{ url_for('member_list') }}" class="btn-cancel">
+            <i class="bi bi-arrow-left"></i> 목록으로
+        </a>
+    </div>
+
+    <form method="POST" id="memberForm">
+        <input type="hidden" id="photo_url" name="photo_url" value="{{ member.photo_url if member else '' }}">
+
+        <div class="two-column">
+            <!-- 기본 정보 -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <i class="bi bi-person"></i>
+                    기본 정보
+                </div>
+
+                <!-- 사진 업로드 -->
+                <div class="photo-upload-section">
+                    <div class="photo-dropzone" id="photoDropzone" onclick="document.getElementById('photoInput').click()">
+                        {% if member and member.photo_url %}
+                        <img src="{{ member.photo_url }}" alt="프로필 사진" id="photoPreview">
+                        {% else %}
+                        <div class="photo-placeholder" id="photoPlaceholder">
+                            <i class="bi bi-camera"></i>
+                            <span>사진을 드래그하거나<br>클릭하여 업로드</span>
+                        </div>
+                        <img src="" alt="" id="photoPreview" style="display: none;">
+                        {% endif %}
+                        <div class="upload-progress" id="uploadProgress">
+                            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                        </div>
+                    </div>
+                    <input type="file" id="photoInput" accept="image/*" style="display: none;">
+                    <div class="photo-actions">
+                        <button type="button" class="photo-btn photo-btn-upload" onclick="document.getElementById('photoInput').click()">
+                            <i class="bi bi-upload"></i> 사진 선택
+                        </button>
+                        <button type="button" class="photo-btn photo-btn-remove {{ 'show' if member and member.photo_url else '' }}" id="removePhotoBtn" onclick="removePhoto()">
+                            <i class="bi bi-trash"></i> 삭제
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="name" class="form-label">
+                        이름 <span class="required">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="name" name="name"
+                           value="{{ member.name if member else '' }}"
+                           placeholder="이름을 입력하세요" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone" class="form-label">전화번호</label>
+                    <input type="tel" class="form-control" id="phone" name="phone"
+                           value="{{ member.phone if member else '' }}"
+                           placeholder="010-0000-0000">
+                </div>
+
+                <div class="form-group">
+                    <label for="email" class="form-label">이메일</label>
+                    <input type="email" class="form-control" id="email" name="email"
+                           value="{{ member.email if member else '' }}"
+                           placeholder="example@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="address" class="form-label">주소</label>
+                    <input type="text" class="form-control" id="address" name="address"
+                           value="{{ member.address if member else '' }}"
+                           placeholder="주소를 입력하세요">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="birth_date" class="form-label">생년월일</label>
+                        <input type="date" class="form-control" id="birth_date" name="birth_date"
+                               value="{{ member.birth_date.strftime('%Y-%m-%d') if member and member.birth_date else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="gender" class="form-label">성별</label>
+                        <select class="form-select" id="gender" name="gender">
+                            <option value="">선택하세요</option>
+                            <option value="남" {{ 'selected' if member and member.gender == '남' else '' }}>남성</option>
+                            <option value="여" {{ 'selected' if member and member.gender == '여' else '' }}>여성</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 교회 정보 -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <i class="bi bi-building"></i>
+                    교회 정보
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="registration_date" class="form-label">등록일</label>
+                        <input type="date" class="form-control" id="registration_date" name="registration_date"
+                               value="{{ member.registration_date.strftime('%Y-%m-%d') if member and member.registration_date else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="baptism_date" class="form-label">세례일</label>
+                        <input type="date" class="form-control" id="baptism_date" name="baptism_date"
+                               value="{{ member.baptism_date.strftime('%Y-%m-%d') if member and member.baptism_date else '' }}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="group_id" class="form-label">소속 그룹</label>
+                    <select class="form-select" id="group_id" name="group_id">
+                        <option value="">선택하세요</option>
+                        {% for group in groups %}
+                        <option value="{{ group.id }}" {{ 'selected' if member and member.group_id == group.id else '' }}>
+                            {{ group.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="member_type" class="form-label">장년 성도 구분</label>
+                        <select class="form-select" id="member_type" name="member_type">
+                            <option value="">선택하세요</option>
+                            <option value="성도" {{ 'selected' if member and member.member_type == '성도' else '' }}>성도</option>
+                            <option value="집사" {{ 'selected' if member and member.member_type == '집사' else '' }}>집사</option>
+                            <option value="권사" {{ 'selected' if member and member.member_type == '권사' else '' }}>권사</option>
+                            <option value="장로" {{ 'selected' if member and member.member_type == '장로' else '' }}>장로</option>
+                            <option value="전도사" {{ 'selected' if member and member.member_type == '전도사' else '' }}>전도사</option>
+                            <option value="목사" {{ 'selected' if member and member.member_type == '목사' else '' }}>목사</option>
+                            <option value="명예집사" {{ 'selected' if member and member.member_type == '명예집사' else '' }}>명예집사</option>
+                            <option value="명예권사" {{ 'selected' if member and member.member_type == '명예권사' else '' }}>명예권사</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="department" class="form-label">교회학교 구분</label>
+                        <select class="form-select" id="department" name="department">
+                            <option value="">선택하세요 (장년은 선택 안함)</option>
+                            <option value="유아부" {{ 'selected' if member and member.department == '유아부' else '' }}>유아부</option>
+                            <option value="유치부" {{ 'selected' if member and member.department == '유치부' else '' }}>유치부</option>
+                            <option value="아동부" {{ 'selected' if member and member.department == '아동부' else '' }}>아동부</option>
+                            <option value="청소년부" {{ 'selected' if member and member.department == '청소년부' else '' }}>청소년부</option>
+                            <option value="청년부" {{ 'selected' if member and member.department == '청년부' else '' }}>청년부</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="status" class="form-label">상태</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="active" {{ 'selected' if not member or member.status == 'active' else '' }}>활동</option>
+                        <option value="inactive" {{ 'selected' if member and member.status == 'inactive' else '' }}>비활동</option>
+                        <option value="newcomer" {{ 'selected' if member and member.status == 'newcomer' else '' }}>새신자</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="notes" class="form-label">메모</label>
+                    <textarea class="form-control" id="notes" name="notes"
+                              placeholder="특이사항이나 메모를 입력하세요">{{ member.notes if member else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="form-actions">
+            <button type="submit" class="btn-submit">
+                <i class="bi bi-check-lg"></i>
+                {{ '수정 완료' if member else '등록하기' }}
+            </button>
+            <a href="{{ url_for('member_list') }}" class="btn-cancel">취소</a>
+        </div>
+    </form>
 </div>
 
-<form method="POST" class="needs-validation" novalidate>
-    <div class="row">
-        <!-- 기본 정보 -->
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="bi bi-person"></i> 기본 정보
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">이름 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name"
-                               value="{{ member.name if member else '' }}" required>
-                        <div class="invalid-feedback">이름을 입력해주세요.</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="phone" class="form-label">전화번호</label>
-                        <input type="tel" class="form-control" id="phone" name="phone"
-                               value="{{ member.phone if member else '' }}"
-                               placeholder="010-0000-0000">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="email" class="form-label">이메일</label>
-                        <input type="email" class="form-control" id="email" name="email"
-                               value="{{ member.email if member else '' }}">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="address" class="form-label">주소</label>
-                        <input type="text" class="form-control" id="address" name="address"
-                               value="{{ member.address if member else '' }}">
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="birth_date" class="form-label">생년월일</label>
-                            <input type="date" class="form-control" id="birth_date" name="birth_date"
-                                   value="{{ member.birth_date.strftime('%Y-%m-%d') if member and member.birth_date else '' }}">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="gender" class="form-label">성별</label>
-                            <select class="form-select" id="gender" name="gender">
-                                <option value="">선택</option>
-                                <option value="남" {{ 'selected' if member and member.gender == '남' else '' }}>남</option>
-                                <option value="여" {{ 'selected' if member and member.gender == '여' else '' }}>여</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 교회 정보 -->
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="bi bi-church"></i> 교회 정보
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="registration_date" class="form-label">등록일</label>
-                            <input type="date" class="form-control" id="registration_date" name="registration_date"
-                                   value="{{ member.registration_date.strftime('%Y-%m-%d') if member and member.registration_date else '' }}">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="baptism_date" class="form-label">세례일</label>
-                            <input type="date" class="form-control" id="baptism_date" name="baptism_date"
-                                   value="{{ member.baptism_date.strftime('%Y-%m-%d') if member and member.baptism_date else '' }}">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="group_id" class="form-label">소속 그룹</label>
-                        <select class="form-select" id="group_id" name="group_id">
-                            <option value="">선택</option>
-                            {% for group in groups %}
-                            <option value="{{ group.id }}" {{ 'selected' if member and member.group_id == group.id else '' }}>
-                                {{ group.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="status" class="form-label">상태</label>
-                        <select class="form-select" id="status" name="status">
-                            <option value="active" {{ 'selected' if not member or member.status == 'active' else '' }}>활동</option>
-                            <option value="inactive" {{ 'selected' if member and member.status == 'inactive' else '' }}>비활동</option>
-                            <option value="newcomer" {{ 'selected' if member and member.status == 'newcomer' else '' }}>새신자</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="notes" class="form-label">메모</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="4">{{ member.notes if member else '' }}</textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 버튼 -->
-    <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check-lg"></i> {{ '수정' if member else '등록' }}
-        </button>
-        <a href="{{ url_for('member_list') }}" class="btn btn-outline-secondary">취소</a>
-    </div>
-</form>
+<!-- 사진 확대 모달 -->
+<div class="photo-modal" id="photoModal" onclick="closePhotoModal()">
+    <button class="photo-modal-close" onclick="closePhotoModal()">
+        <i class="bi bi-x"></i>
+    </button>
+    <img src="" alt="확대 사진" id="photoModalImage">
+</div>
 
 <script>
-// Bootstrap 유효성 검사
-(function () {
-    'use strict'
-    var forms = document.querySelectorAll('.needs-validation')
-    Array.prototype.slice.call(forms).forEach(function (form) {
-        form.addEventListener('submit', function (event) {
-            if (!form.checkValidity()) {
-                event.preventDefault()
-                event.stopPropagation()
-            }
-            form.classList.add('was-validated')
-        }, false)
-    })
-})()
+const dropzone = document.getElementById('photoDropzone');
+const photoInput = document.getElementById('photoInput');
+const photoPreview = document.getElementById('photoPreview');
+const photoPlaceholder = document.getElementById('photoPlaceholder');
+const photoUrlInput = document.getElementById('photo_url');
+const removePhotoBtn = document.getElementById('removePhotoBtn');
+const uploadProgress = document.getElementById('uploadProgress');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const photoModal = document.getElementById('photoModal');
+const photoModalImage = document.getElementById('photoModalImage');
+
+// 드래그 앤 드롭 이벤트
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropzone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropzone.addEventListener(eventName, () => {
+        dropzone.classList.add('dragover');
+    });
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropzone.addEventListener(eventName, () => {
+        dropzone.classList.remove('dragover');
+    });
+});
+
+dropzone.addEventListener('drop', (e) => {
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+        handleFile(files[0]);
+    }
+});
+
+// 파일 선택 이벤트
+photoInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+    }
+});
+
+// 파일 처리
+function handleFile(file) {
+    // 미리보기
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        photoPreview.src = e.target.result;
+        photoPreview.style.display = 'block';
+        if (photoPlaceholder) photoPlaceholder.style.display = 'none';
+        dropzone.classList.add('has-photo');
+        removePhotoBtn.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+
+    // 서버 업로드
+    uploadToServer(file);
+}
+
+// 서버 업로드
+async function uploadToServer(file) {
+    const formData = new FormData();
+    formData.append('photo', file);
+    formData.append('member_id', '{{ member.id if member else "new" }}');
+
+    uploadProgress.style.display = 'block';
+    uploadProgressBar.style.width = '30%';
+
+    try {
+        const response = await fetch('/api/upload-photo', {
+            method: 'POST',
+            body: formData
+        });
+
+        uploadProgressBar.style.width = '70%';
+
+        const result = await response.json();
+
+        if (result.success) {
+            photoUrlInput.value = result.url;
+            uploadProgressBar.style.width = '100%';
+            setTimeout(() => {
+                uploadProgress.style.display = 'none';
+                uploadProgressBar.style.width = '0%';
+            }, 500);
+        } else {
+            alert('사진 업로드 실패: ' + result.error);
+            uploadProgress.style.display = 'none';
+        }
+    } catch (error) {
+        alert('사진 업로드 중 오류가 발생했습니다.');
+        uploadProgress.style.display = 'none';
+    }
+}
+
+// 사진 삭제
+function removePhoto() {
+    photoPreview.src = '';
+    photoPreview.style.display = 'none';
+    if (photoPlaceholder) photoPlaceholder.style.display = 'flex';
+    dropzone.classList.remove('has-photo');
+    removePhotoBtn.classList.remove('show');
+    photoUrlInput.value = '';
+    photoInput.value = '';
+}
+
+// 사진 클릭 시 확대 (업로드된 사진이 있을 때만)
+dropzone.addEventListener('click', (e) => {
+    if (photoPreview.src && photoPreview.style.display !== 'none') {
+        e.stopPropagation();
+        openPhotoModal(photoPreview.src);
+    }
+});
+
+// 사진 확대 모달
+function openPhotoModal(src) {
+    photoModalImage.src = src;
+    photoModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closePhotoModal() {
+    photoModal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePhotoModal();
+});
+
+// 폼 유효성 검사
+document.getElementById('memberForm').addEventListener('submit', function(e) {
+    const name = document.getElementById('name').value.trim();
+    if (!name) {
+        e.preventDefault();
+        alert('이름을 입력해주세요.');
+        document.getElementById('name').focus();
+    }
+});
+
+// 전화번호 자동 포맷팅
+document.getElementById('phone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/[^0-9]/g, '');
+    if (value.length > 3 && value.length <= 7) {
+        value = value.slice(0, 3) + '-' + value.slice(3);
+    } else if (value.length > 7) {
+        value = value.slice(0, 3) + '-' + value.slice(3, 7) + '-' + value.slice(7, 11);
+    }
+    e.target.value = value;
+});
+
+// 기존 사진이 있으면 클릭 이벤트 활성화
+{% if member and member.photo_url %}
+dropzone.classList.add('has-photo');
+{% endif %}
 </script>
 {% endblock %}
