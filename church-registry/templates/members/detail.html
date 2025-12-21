@@ -23,7 +23,7 @@
             </div>
             <div class="detail-title">
                 <h1>
-                    {{ member.name }}
+                    {{ member.display_name }}
                     <span class="status-badge status-{{ member.status }}" style="font-size: 14px; vertical-align: middle;">
                         {% if member.status == 'active' %}활동
                         {% elif member.status == 'inactive' %}비활동
@@ -31,9 +31,10 @@
                     </span>
                 </h1>
                 <p style="color: var(--apple-text-secondary); margin: 0;">
+                    {% if member.registration_number %}등록번호: {{ member.registration_number }} · {% endif %}
                     {{ member.group.name if member.group else '그룹 없음' }}
                     {% if member.registration_date %}
-                    · {{ member.registration_date.strftime('%Y년 %m월') }} 등록
+                    · {{ member.registration_date.strftime('%Y년 %m월 %d일') }} 등록
                     {% endif %}
                 </p>
                 <div class="detail-actions">
@@ -68,7 +69,7 @@
             <div class="info-grid">
                 <div class="info-item">
                     <div class="info-label">이름</div>
-                    <div class="info-value">{{ member.name }}</div>
+                    <div class="info-value">{{ member.display_name }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">전화번호</div>
@@ -96,7 +97,14 @@
                 </div>
                 <div class="info-item">
                     <div class="info-label">생년월일</div>
-                    <div class="info-value">{{ member.birth_date.strftime('%Y년 %m월 %d일') if member.birth_date else '-' }}</div>
+                    <div class="info-value">
+                        {% if member.birth_date %}
+                            {{ member.birth_date.strftime('%Y년 %m월 %d일') }}
+                            {% if member.age is not none %}
+                            <span style="color: var(--apple-blue); font-weight: 600;">({{ member.age }}세)</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">성별</div>
@@ -109,47 +117,100 @@
         <div class="form-section">
             <div class="form-section-title">
                 <i class="bi bi-building"></i>
-                교회 정보
+                교회 등록 정보
             </div>
             <div class="info-grid">
                 <div class="info-item">
-                    <div class="info-label">장년 성도 구분</div>
-                    <div class="info-value">{{ member.member_type or '-' }}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">교회학교 구분</div>
-                    <div class="info-value">{{ member.department or '-' }}</div>
+                    <div class="info-label">등록번호</div>
+                    <div class="info-value">{{ member.registration_number or '-' }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">등록일</div>
-                    <div class="info-value">{{ member.registration_date.strftime('%Y년 %m월 %d일') if member.registration_date else '-' }}</div>
+                    <div class="info-value">
+                        {% if member.registration_date %}
+                            {{ member.registration_date.strftime('%Y년 %m월 %d일') }}
+                            {% if member.is_newcomer %}
+                            <span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 4px;">새가족</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">직분</div>
+                    <div class="info-value">{{ member.member_type or '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">교회학교</div>
+                    <div class="info-value">{{ member.department or '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">신급</div>
+                    <div class="info-value">{{ member.faith_level or '-' }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">세례일</div>
                     <div class="info-value">{{ member.baptism_date.strftime('%Y년 %m월 %d일') if member.baptism_date else '-' }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">소속 그룹</div>
-                    <div class="info-value">{{ member.group.name if member.group else '-' }}</div>
+                    <div class="info-label">이전 교회</div>
+                    <div class="info-value">{{ member.previous_church or '-' }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">가족</div>
-                    <div class="info-value">
-                        {% if member.family %}
-                            {{ member.family.family_name }}
-                            {% if member.family_role %}({{ member.family_role }}){% endif %}
-                        {% else %}-{% endif %}
-                    </div>
+                    <div class="info-label">이전 교회 주소</div>
+                    <div class="info-value">{{ member.previous_church_address or '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">인도자</div>
+                    <div class="info-value">{{ member.referrer or '-' }}</div>
                 </div>
             </div>
-
-            {% if member.notes %}
-            <div style="margin-top: 20px; padding: 16px; background: #f9f9fb; border-radius: var(--apple-radius-sm);">
-                <div class="info-label" style="margin-bottom: 8px;">메모</div>
-                <p style="margin: 0; color: var(--apple-text); line-height: 1.6;">{{ member.notes }}</p>
-            </div>
-            {% endif %}
         </div>
+    </div>
+
+    <!-- 교회 조직 정보 -->
+    <div class="form-section" style="margin-top: 24px;">
+        <div class="form-section-title">
+            <i class="bi bi-diagram-3"></i>
+            교회 조직 정보
+        </div>
+        <div class="info-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="info-item">
+                <div class="info-label">교구</div>
+                <div class="info-value">{{ member.district or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">속회</div>
+                <div class="info-value">{{ member.cell_group or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">선교회</div>
+                <div class="info-value">{{ member.mission_group or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">바나바</div>
+                <div class="info-value">{{ member.barnabas or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">소속 그룹</div>
+                <div class="info-value">{{ member.group.name if member.group else '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">가족</div>
+                <div class="info-value">
+                    {% if member.family %}
+                        {{ member.family.family_name }}
+                        {% if member.family_role %}({{ member.family_role }}){% endif %}
+                    {% else %}-{% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if member.notes %}
+        <div style="margin-top: 20px; padding: 16px; background: #f9f9fb; border-radius: var(--apple-radius-sm);">
+            <div class="info-label" style="margin-bottom: 8px;">메모 (등록동기/기타사항)</div>
+            <p style="margin: 0; color: var(--apple-text); line-height: 1.6; white-space: pre-wrap;">{{ member.notes }}</p>
+        </div>
+        {% endif %}
     </div>
 
     <!-- 활동 기록 -->

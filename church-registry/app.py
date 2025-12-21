@@ -70,7 +70,22 @@ class Member(db.Model):
     # 교회 관련 정보
     baptism_date = db.Column(db.Date)  # 세례일
     registration_date = db.Column(db.Date)  # 등록일
+    registration_number = db.Column(db.String(20))  # 등록번호 (2025-43 형식)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'))  # 셀/구역/목장
+
+    # 이전 교회 정보
+    previous_church = db.Column(db.String(100))  # 이전 교회명
+    previous_church_address = db.Column(db.String(200))  # 이전 교회 주소
+
+    # 교회 조직 정보
+    district = db.Column(db.String(20))  # 교구 (1, 2, 3...)
+    cell_group = db.Column(db.String(50))  # 속회
+    mission_group = db.Column(db.String(50))  # 선교회 (14남선교회 등)
+    barnabas = db.Column(db.String(50))  # 바나바 (담당 장로/권사)
+    referrer = db.Column(db.String(50))  # 인도자/관계
+
+    # 신급 (학습, 세례, 유아세례, 입교)
+    faith_level = db.Column(db.String(20))
 
     # 가족 관계
     family_id = db.Column(db.Integer, db.ForeignKey('families.id'))
@@ -89,6 +104,36 @@ class Member(db.Model):
 
     created_at = db.Column(db.DateTime, default=db.func.now())
     updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+
+    @property
+    def age(self):
+        """나이 자동 계산 (만 나이)"""
+        if not self.birth_date:
+            return None
+        today = date.today()
+        age = today.year - self.birth_date.year
+        # 생일이 아직 안 지났으면 1살 빼기
+        if (today.month, today.day) < (self.birth_date.month, self.birth_date.day):
+            age -= 1
+        return age
+
+    @property
+    def is_newcomer(self):
+        """새가족 여부 (등록 후 2년 이내)"""
+        if not self.registration_date:
+            return False
+        two_years_ago = date.today() - timedelta(days=730)  # 약 2년
+        return self.registration_date > two_years_ago
+
+    @property
+    def display_name(self):
+        """표시용 이름 (이명섭 집사(새가족) 형식)"""
+        name = self.name
+        if self.member_type:
+            name = f"{self.name} {self.member_type}"
+        if self.is_newcomer:
+            name = f"{name}(새가족)"
+        return name
 
     def __repr__(self):
         return f'<Member {self.name}>'
@@ -214,7 +259,7 @@ def member_list():
 def member_new():
     """교인 등록"""
     if request.method == 'POST':
-        # 폼 데이터 수집
+        # 폼 데이터 수집 - 기본 정보
         name = request.form.get('name', '').strip()
         phone = request.form.get('phone', '').strip()
         email = request.form.get('email', '').strip()
@@ -226,6 +271,17 @@ def member_new():
         member_type = request.form.get('member_type', '')
         department = request.form.get('department', '')
         photo_url = request.form.get('photo_url', '')
+
+        # 새 필드들
+        registration_number = request.form.get('registration_number', '').strip()
+        previous_church = request.form.get('previous_church', '').strip()
+        previous_church_address = request.form.get('previous_church_address', '').strip()
+        district = request.form.get('district', '').strip()
+        cell_group = request.form.get('cell_group', '').strip()
+        mission_group = request.form.get('mission_group', '').strip()
+        barnabas = request.form.get('barnabas', '').strip()
+        referrer = request.form.get('referrer', '').strip()
+        faith_level = request.form.get('faith_level', '').strip()
 
         # 날짜 처리
         birth_date = None
@@ -257,18 +313,27 @@ def member_new():
             gender=gender,
             baptism_date=baptism_date,
             registration_date=registration_date,
+            registration_number=registration_number if registration_number else None,
             group_id=int(group_id) if group_id else None,
             status=status,
             notes=notes,
             member_type=member_type if member_type else None,
             department=department if department else None,
-            photo_url=photo_url if photo_url else None
+            photo_url=photo_url if photo_url else None,
+            previous_church=previous_church if previous_church else None,
+            previous_church_address=previous_church_address if previous_church_address else None,
+            district=district if district else None,
+            cell_group=cell_group if cell_group else None,
+            mission_group=mission_group if mission_group else None,
+            barnabas=barnabas if barnabas else None,
+            referrer=referrer if referrer else None,
+            faith_level=faith_level if faith_level else None
         )
 
         db.session.add(member)
         db.session.commit()
 
-        flash(f'{name} 교인이 등록되었습니다.', 'success')
+        flash(f'{member.display_name}이(가) 등록되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
     groups = Group.query.all()
@@ -288,7 +353,7 @@ def member_edit(member_id):
     member = Member.query.get_or_404(member_id)
 
     if request.method == 'POST':
-        # 폼 데이터 수집
+        # 폼 데이터 수집 - 기본 정보
         member.name = request.form.get('name', '').strip()
         member.phone = request.form.get('phone', '').strip()
         member.email = request.form.get('email', '').strip()
@@ -309,6 +374,34 @@ def member_edit(member_id):
         # 사진 URL
         photo_url = request.form.get('photo_url', '')
         member.photo_url = photo_url if photo_url else None
+
+        # 새 필드들
+        registration_number = request.form.get('registration_number', '').strip()
+        member.registration_number = registration_number if registration_number else None
+
+        previous_church = request.form.get('previous_church', '').strip()
+        member.previous_church = previous_church if previous_church else None
+
+        previous_church_address = request.form.get('previous_church_address', '').strip()
+        member.previous_church_address = previous_church_address if previous_church_address else None
+
+        district = request.form.get('district', '').strip()
+        member.district = district if district else None
+
+        cell_group = request.form.get('cell_group', '').strip()
+        member.cell_group = cell_group if cell_group else None
+
+        mission_group = request.form.get('mission_group', '').strip()
+        member.mission_group = mission_group if mission_group else None
+
+        barnabas = request.form.get('barnabas', '').strip()
+        member.barnabas = barnabas if barnabas else None
+
+        referrer = request.form.get('referrer', '').strip()
+        member.referrer = referrer if referrer else None
+
+        faith_level = request.form.get('faith_level', '').strip()
+        member.faith_level = faith_level if faith_level else None
 
         # 날짜 처리
         if request.form.get('birth_date'):
@@ -331,7 +424,7 @@ def member_edit(member_id):
 
         db.session.commit()
 
-        flash(f'{member.name} 교인 정보가 수정되었습니다.', 'success')
+        flash(f'{member.display_name} 정보가 수정되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
     groups = Group.query.all()
