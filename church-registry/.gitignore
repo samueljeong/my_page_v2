@@ -64,8 +64,8 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# pyenv (주석: .python-version은 Render 배포에 필요하므로 허용)
+# .python-version
 
 # celery beat schedule file
 celerybeat-schedule
