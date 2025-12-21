@@ -4,93 +4,346 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}교적 관리{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Pretendard 폰트 (애플 스타일) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+
+    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    <style>
+        :root {
+            --apple-bg: #f5f5f7;
+            --apple-card: rgba(255, 255, 255, 0.8);
+            --apple-text: #1d1d1f;
+            --apple-text-secondary: #86868b;
+            --apple-blue: #0071e3;
+            --apple-blue-hover: #0077ed;
+            --apple-border: rgba(0, 0, 0, 0.08);
+            --apple-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            --apple-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --apple-radius: 16px;
+            --apple-radius-sm: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--apple-bg);
+            color: var(--apple-text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 네비게이션 - 글래스모피즘 */
+        .apple-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid var(--apple-border);
+            height: 52px;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--apple-text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-brand:hover {
+            color: var(--apple-text);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+            list-style: none;
+        }
+
+        .nav-link {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--apple-text);
+            text-decoration: none;
+            border-radius: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--apple-text);
+        }
+
+        .nav-link.active {
+            background: var(--apple-blue);
+            color: white;
+        }
+
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        /* 메인 컨텐츠 */
+        main {
+            margin-top: 52px;
+            min-height: calc(100vh - 52px);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* 알럿 */
+        .apple-alert {
+            padding: 16px 20px;
+            border-radius: var(--apple-radius-sm);
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 0.3s ease;
+        }
+
+        .apple-alert.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .apple-alert.danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .apple-alert.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .alert-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+
+        .alert-close:hover {
+            opacity: 1;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 버튼 */
+        .apple-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 980px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .apple-btn-primary {
+            background: var(--apple-blue);
+            color: white;
+        }
+
+        .apple-btn-primary:hover {
+            background: var(--apple-blue-hover);
+            transform: scale(1.02);
+        }
+
+        .apple-btn-secondary {
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--apple-text);
+        }
+
+        .apple-btn-secondary:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        /* 카드 */
+        .apple-card {
+            background: var(--apple-card);
+            border-radius: var(--apple-radius);
+            box-shadow: var(--apple-shadow);
+            border: 1px solid var(--apple-border);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .apple-card:hover {
+            box-shadow: var(--apple-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        /* 인풋 */
+        .apple-input {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 16px;
+            font-family: inherit;
+            border: 1px solid var(--apple-border);
+            border-radius: var(--apple-radius-sm);
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .apple-input:focus {
+            outline: none;
+            border-color: var(--apple-blue);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+        }
+
+        .apple-input::placeholder {
+            color: var(--apple-text-secondary);
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 52px;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(20px);
+                flex-direction: column;
+                padding: 16px;
+                border-bottom: 1px solid var(--apple-border);
+            }
+
+            .nav-links.show {
+                display: flex;
+            }
+
+            .nav-toggle {
+                display: block;
+            }
+
+            .nav-link {
+                padding: 14px 20px;
+                border-radius: var(--apple-radius-sm);
+            }
+        }
+
+        /* 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-church"></i> 교적 관리
+    <nav class="apple-nav">
+        <div class="nav-container">
+            <a class="nav-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-chat-dots"></i>
+                AI 교적
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
+
+            <button class="nav-toggle" onclick="toggleNav()">
+                <i class="bi bi-list"></i>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('member_list') }}">
-                            <i class="bi bi-people"></i> 교인
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('group_list') }}">
-                            <i class="bi bi-diagram-3"></i> 그룹
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('attendance_list') }}">
-                            <i class="bi bi-calendar-check"></i> 출석
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('visit_list') }}">
-                            <i class="bi bi-house-heart"></i> 심방
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('offering_list') }}">
-                            <i class="bi bi-wallet2"></i> 헌금
-                        </a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                            <i class="bi bi-three-dots"></i> 더보기
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('newcomer_list') }}">
-                                <i class="bi bi-person-plus"></i> 새신자 관리
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('birthday_list') }}">
-                                <i class="bi bi-gift"></i> 생일자
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('export_members') }}">
-                                <i class="bi bi-download"></i> 엑셀 내보내기
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('import_members') }}">
-                                <i class="bi bi-upload"></i> 엑셀 가져오기
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
+
+            <ul class="nav-links" id="navLinks">
+                <li><a class="nav-link" href="{{ url_for('member_list') }}">교인</a></li>
+                <li><a class="nav-link" href="{{ url_for('group_list') }}">그룹</a></li>
+                <li><a class="nav-link" href="{{ url_for('attendance_list') }}">출석</a></li>
+                <li><a class="nav-link" href="{{ url_for('visit_list') }}">심방</a></li>
+                <li><a class="nav-link" href="{{ url_for('newcomer_list') }}">새신자</a></li>
+                <li><a class="nav-link" href="{{ url_for('birthday_list') }}">생일</a></li>
+            </ul>
         </div>
     </nav>
 
-    <main class="container my-4">
+    <main>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
+                <div class="container" style="padding-bottom: 0;">
+                    {% for category, message in messages %}
+                        <div class="apple-alert {{ category }}">
+                            <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                            {{ message }}
+                            <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
             {% endif %}
         {% endwith %}
 
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-light py-3 mt-5">
-        <div class="container text-center text-muted">
-            <small>&copy; 2024 교적 관리 시스템</small>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        function toggleNav() {
+            document.getElementById('navLinks').classList.toggle('show');
+        }
+    </script>
 </body>
 </html>
