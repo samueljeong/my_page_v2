@@ -113,6 +113,14 @@
             </div>
             <div class="info-grid">
                 <div class="info-item">
+                    <div class="info-label">장년 성도 구분</div>
+                    <div class="info-value">{{ member.member_type or '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">교회학교 구분</div>
+                    <div class="info-value">{{ member.department or '-' }}</div>
+                </div>
+                <div class="info-item">
                     <div class="info-label">등록일</div>
                     <div class="info-value">{{ member.registration_date.strftime('%Y년 %m월 %d일') if member.registration_date else '-' }}</div>
                 </div>

@@ -298,6 +298,34 @@
                     </select>
                 </div>
 
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="member_type" class="form-label">장년 성도 구분</label>
+                        <select class="form-select" id="member_type" name="member_type">
+                            <option value="">선택하세요</option>
+                            <option value="성도" {{ 'selected' if member and member.member_type == '성도' else '' }}>성도</option>
+                            <option value="집사" {{ 'selected' if member and member.member_type == '집사' else '' }}>집사</option>
+                            <option value="권사" {{ 'selected' if member and member.member_type == '권사' else '' }}>권사</option>
+                            <option value="장로" {{ 'selected' if member and member.member_type == '장로' else '' }}>장로</option>
+                            <option value="전도사" {{ 'selected' if member and member.member_type == '전도사' else '' }}>전도사</option>
+                            <option value="목사" {{ 'selected' if member and member.member_type == '목사' else '' }}>목사</option>
+                            <option value="명예집사" {{ 'selected' if member and member.member_type == '명예집사' else '' }}>명예집사</option>
+                            <option value="명예권사" {{ 'selected' if member and member.member_type == '명예권사' else '' }}>명예권사</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="department" class="form-label">교회학교 구분</label>
+                        <select class="form-select" id="department" name="department">
+                            <option value="">선택하세요 (장년은 선택 안함)</option>
+                            <option value="유아부" {{ 'selected' if member and member.department == '유아부' else '' }}>유아부</option>
+                            <option value="유치부" {{ 'selected' if member and member.department == '유치부' else '' }}>유치부</option>
+                            <option value="아동부" {{ 'selected' if member and member.department == '아동부' else '' }}>아동부</option>
+                            <option value="청소년부" {{ 'selected' if member and member.department == '청소년부' else '' }}>청소년부</option>
+                            <option value="청년부" {{ 'selected' if member and member.department == '청년부' else '' }}>청년부</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label for="status" class="form-label">상태</label>
                     <select class="form-select" id="status" name="status">

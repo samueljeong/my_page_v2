@@ -73,8 +73,16 @@
                     {% endif %}
                 </div>
                 <div class="member-info">
-                    <h3>{{ member.name }}</h3>
-                    <p>{{ member.group.name if member.group else '그룹 없음' }}</p>
+                    <h3>{{ member.name }}
+                        {% if member.member_type %}
+                        <span style="font-size: 12px; font-weight: 500; color: var(--apple-blue);">{{ member.member_type }}</span>
+                        {% endif %}
+                    </h3>
+                    <p>
+                        {% if member.department %}{{ member.department }}
+                        {% elif member.group %}{{ member.group.name }}
+                        {% else %}그룹 없음{% endif %}
+                    </p>
                 </div>
                 <span class="status-badge status-{{ member.status }}">
                     {% if member.status == 'active' %}활동
