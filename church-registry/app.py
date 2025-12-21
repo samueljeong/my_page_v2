@@ -6,6 +6,10 @@ import os
 import json
 import base64
 from datetime import datetime, date, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
@@ -15,6 +19,17 @@ import cloudinary
 import cloudinary.uploader
 
 load_dotenv()
+
+# 서울 시간대 (KST)
+SEOUL_TZ = ZoneInfo('Asia/Seoul')
+
+def get_seoul_now():
+    """서울 시간대 기준 현재 시각"""
+    return datetime.now(SEOUL_TZ)
+
+def get_seoul_today():
+    """서울 시간대 기준 오늘 날짜"""
+    return datetime.now(SEOUL_TZ).date()
 
 # OpenAI 클라이언트 (API 키가 있을 때만 초기화)
 openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -70,7 +85,22 @@ class Member(db.Model):
     # 교회 관련 정보
     baptism_date = db.Column(db.Date)  # 세례일
     registration_date = db.Column(db.Date)  # 등록일
+    registration_number = db.Column(db.String(20))  # 등록번호 (2025-43 형식)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'))  # 셀/구역/목장
+
+    # 이전 교회 정보
+    previous_church = db.Column(db.String(100))  # 이전 교회명
+    previous_church_address = db.Column(db.String(200))  # 이전 교회 주소
+
+    # 교회 조직 정보
+    district = db.Column(db.String(20))  # 교구 (1, 2, 3...)
+    cell_group = db.Column(db.String(50))  # 속회
+    mission_group = db.Column(db.String(50))  # 선교회 (14남선교회 등)
+    barnabas = db.Column(db.String(50))  # 바나바 (담당 장로/권사)
+    referrer = db.Column(db.String(50))  # 인도자/관계
+
+    # 신급 (학습, 세례, 유아세례, 입교)
+    faith_level = db.Column(db.String(20))
 
     # 가족 관계
     family_id = db.Column(db.Integer, db.ForeignKey('families.id'))
@@ -87,8 +117,38 @@ class Member(db.Model):
     # 사진
     photo_url = db.Column(db.String(500))  # 프로필 사진 URL
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
+    updated_at = db.Column(db.DateTime, default=get_seoul_now, onupdate=get_seoul_now)
+
+    @property
+    def age(self):
+        """나이 자동 계산 (만 나이)"""
+        if not self.birth_date:
+            return None
+        today = get_seoul_today()
+        age = today.year - self.birth_date.year
+        # 생일이 아직 안 지났으면 1살 빼기
+        if (today.month, today.day) < (self.birth_date.month, self.birth_date.day):
+            age -= 1
+        return age
+
+    @property
+    def is_newcomer(self):
+        """새가족 여부 (등록 후 2년 이내)"""
+        if not self.registration_date:
+            return False
+        two_years_ago = get_seoul_today() - timedelta(days=730)  # 약 2년
+        return self.registration_date > two_years_ago
+
+    @property
+    def display_name(self):
+        """표시용 이름 (이명섭 집사(새가족) 형식)"""
+        name = self.name
+        if self.member_type:
+            name = f"{self.name} {self.member_type}"
+        if self.is_newcomer:
+            name = f"{name}(새가족)"
+        return name
 
     def __repr__(self):
         return f'<Member {self.name}>'
@@ -102,7 +162,7 @@ class Family(db.Model):
     family_name = db.Column(db.String(100))  # 가족명 (예: 홍길동 가정)
     members = db.relationship('Member', backref='family', lazy=True)
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Group(db.Model):
@@ -116,7 +176,7 @@ class Group(db.Model):
 
     members = db.relationship('Member', backref='group', lazy=True)
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Attendance(db.Model):
@@ -131,7 +191,7 @@ class Attendance(db.Model):
 
     member = db.relationship('Member', backref='attendance_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Visit(db.Model):
@@ -147,7 +207,7 @@ class Visit(db.Model):
 
     member = db.relationship('Member', backref='visit_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Offering(db.Model):
@@ -163,7 +223,7 @@ class Offering(db.Model):
 
     member = db.relationship('Member', backref='offering_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 # =============================================================================
@@ -214,7 +274,7 @@ def member_list():
 def member_new():
     """교인 등록"""
     if request.method == 'POST':
-        # 폼 데이터 수집
+        # 폼 데이터 수집 - 기본 정보
         name = request.form.get('name', '').strip()
         phone = request.form.get('phone', '').strip()
         email = request.form.get('email', '').strip()
@@ -226,6 +286,17 @@ def member_new():
         member_type = request.form.get('member_type', '')
         department = request.form.get('department', '')
         photo_url = request.form.get('photo_url', '')
+
+        # 새 필드들
+        registration_number = request.form.get('registration_number', '').strip()
+        previous_church = request.form.get('previous_church', '').strip()
+        previous_church_address = request.form.get('previous_church_address', '').strip()
+        district = request.form.get('district', '').strip()
+        cell_group = request.form.get('cell_group', '').strip()
+        mission_group = request.form.get('mission_group', '').strip()
+        barnabas = request.form.get('barnabas', '').strip()
+        referrer = request.form.get('referrer', '').strip()
+        faith_level = request.form.get('faith_level', '').strip()
 
         # 날짜 처리
         birth_date = None
@@ -240,7 +311,7 @@ def member_new():
         if request.form.get('registration_date'):
             registration_date = datetime.strptime(request.form.get('registration_date'), '%Y-%m-%d').date()
         else:
-            registration_date = date.today()
+            registration_date = get_seoul_today()
 
         # 유효성 검사
         if not name:
@@ -257,18 +328,27 @@ def member_new():
             gender=gender,
             baptism_date=baptism_date,
             registration_date=registration_date,
+            registration_number=registration_number if registration_number else None,
             group_id=int(group_id) if group_id else None,
             status=status,
             notes=notes,
             member_type=member_type if member_type else None,
             department=department if department else None,
-            photo_url=photo_url if photo_url else None
+            photo_url=photo_url if photo_url else None,
+            previous_church=previous_church if previous_church else None,
+            previous_church_address=previous_church_address if previous_church_address else None,
+            district=district if district else None,
+            cell_group=cell_group if cell_group else None,
+            mission_group=mission_group if mission_group else None,
+            barnabas=barnabas if barnabas else None,
+            referrer=referrer if referrer else None,
+            faith_level=faith_level if faith_level else None
         )
 
         db.session.add(member)
         db.session.commit()
 
-        flash(f'{name} 교인이 등록되었습니다.', 'success')
+        flash(f'{member.display_name}이(가) 등록되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
     groups = Group.query.all()
@@ -288,7 +368,7 @@ def member_edit(member_id):
     member = Member.query.get_or_404(member_id)
 
     if request.method == 'POST':
-        # 폼 데이터 수집
+        # 폼 데이터 수집 - 기본 정보
         member.name = request.form.get('name', '').strip()
         member.phone = request.form.get('phone', '').strip()
         member.email = request.form.get('email', '').strip()
@@ -309,6 +389,34 @@ def member_edit(member_id):
         # 사진 URL
         photo_url = request.form.get('photo_url', '')
         member.photo_url = photo_url if photo_url else None
+
+        # 새 필드들
+        registration_number = request.form.get('registration_number', '').strip()
+        member.registration_number = registration_number if registration_number else None
+
+        previous_church = request.form.get('previous_church', '').strip()
+        member.previous_church = previous_church if previous_church else None
+
+        previous_church_address = request.form.get('previous_church_address', '').strip()
+        member.previous_church_address = previous_church_address if previous_church_address else None
+
+        district = request.form.get('district', '').strip()
+        member.district = district if district else None
+
+        cell_group = request.form.get('cell_group', '').strip()
+        member.cell_group = cell_group if cell_group else None
+
+        mission_group = request.form.get('mission_group', '').strip()
+        member.mission_group = mission_group if mission_group else None
+
+        barnabas = request.form.get('barnabas', '').strip()
+        member.barnabas = barnabas if barnabas else None
+
+        referrer = request.form.get('referrer', '').strip()
+        member.referrer = referrer if referrer else None
+
+        faith_level = request.form.get('faith_level', '').strip()
+        member.faith_level = faith_level if faith_level else None
 
         # 날짜 처리
         if request.form.get('birth_date'):
@@ -331,7 +439,7 @@ def member_edit(member_id):
 
         db.session.commit()
 
-        flash(f'{member.name} 교인 정보가 수정되었습니다.', 'success')
+        flash(f'{member.display_name} 정보가 수정되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
     groups = Group.query.all()
@@ -456,7 +564,7 @@ def attendance_list():
     if date_str:
         selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     else:
-        selected_date = date.today()
+        selected_date = get_seoul_today()
 
     # 예배 종류 필터
     service_type = request.args.get('service', '주일예배')
@@ -567,6 +675,27 @@ def visit_new():
     return render_template('visits/form.html', members=members, visit=None)
 
 
+@app.route('/visits/<int:visit_id>/edit', methods=['GET', 'POST'])
+def visit_edit(visit_id):
+    """심방 기록 수정"""
+    visit = Visit.query.get_or_404(visit_id)
+
+    if request.method == 'POST':
+        visit.member_id = int(request.form.get('member_id'))
+        visit.visit_date = datetime.strptime(request.form.get('visit_date'), '%Y-%m-%d').date()
+        visit.visitor_name = request.form.get('visitor_name', '').strip()
+        visit.purpose = request.form.get('purpose', '').strip()
+        visit.notes = request.form.get('notes', '').strip()
+
+        db.session.commit()
+
+        flash('심방 기록이 수정되었습니다.', 'success')
+        return redirect(url_for('visit_list'))
+
+    members = Member.query.order_by(Member.name).all()
+    return render_template('visits/form.html', members=members, visit=visit)
+
+
 @app.route('/visits/<int:visit_id>/delete', methods=['POST'])
 def visit_delete(visit_id):
     """심방 기록 삭제"""
@@ -665,7 +794,7 @@ def birthday_list():
     """이번 달 생일자 목록"""
     from sqlalchemy import extract
 
-    current_month = date.today().month
+    current_month = get_seoul_today().month
     birthdays = Member.query.filter(
         extract('month', Member.birth_date) == current_month,
         Member.status.in_(['active', 'newcomer'])
@@ -719,7 +848,7 @@ def export_members():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'교인목록_{date.today().strftime("%Y%m%d")}.xlsx'
+        download_name=f'교인목록_{get_seoul_today().strftime("%Y%m%d")}.xlsx'
     )
 
 
@@ -818,7 +947,7 @@ AI_TOOLS = [
         "type": "function",
         "function": {
             "name": "register_member",
-            "description": "새 교인을 등록합니다.",
+            "description": "새 교인을 등록하거나 기존 교인 정보를 업데이트합니다. 동명이인이 있으면 확인 후 처리합니다.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -829,7 +958,9 @@ AI_TOOLS = [
                     "birth_date": {"type": "string", "description": "생년월일 (YYYY-MM-DD)"},
                     "gender": {"type": "string", "enum": ["남", "여"], "description": "성별"},
                     "status": {"type": "string", "enum": ["active", "newcomer"], "description": "상태 (기본: active)"},
-                    "notes": {"type": "string", "description": "메모"}
+                    "notes": {"type": "string", "description": "메모"},
+                    "update_existing_id": {"type": "integer", "description": "기존 교인 ID - 동명이인 중 특정 교인 정보를 업데이트할 때 사용"},
+                    "force_new": {"type": "boolean", "description": "true이면 동명이인이 있어도 새 교인으로 등록 (이름에 번호 추가)"}
                 },
                 "required": ["name"]
             }
@@ -1006,11 +1137,93 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
         return json.dumps({"members": result, "count": len(result)}, ensure_ascii=False)
 
     elif function_name == "register_member":
-        # 중복 체크
-        existing = Member.query.filter_by(name=arguments["name"]).first()
-        if existing and arguments.get("phone") == existing.phone:
-            return json.dumps({"error": f"이미 '{arguments['name']}' 교인이 등록되어 있습니다. (ID: {existing.id})"}, ensure_ascii=False)
+        # 동명이인 체크
+        existing_members = Member.query.filter_by(name=arguments["name"]).all()
 
+        # force_new가 True이면 동명이인으로 새로 등록 (이름에 번호 추가)
+        if arguments.get("force_new") and existing_members:
+            # 동명이인 번호 계산 (홍길동, 홍길동(1), 홍길동(2) ...)
+            max_suffix = 0
+            base_name = arguments["name"]
+            for m in existing_members:
+                if m.name == base_name:
+                    max_suffix = max(max_suffix, 1)
+                elif m.name.startswith(base_name + "(") and m.name.endswith(")"):
+                    try:
+                        suffix = int(m.name[len(base_name)+1:-1])
+                        max_suffix = max(max_suffix, suffix + 1)
+                    except:
+                        pass
+            new_name = f"{base_name}({max_suffix})" if max_suffix > 0 else base_name
+            arguments["name"] = new_name
+            existing_members = []  # 새 이름으로 등록하므로 중복 없음
+
+        # update_existing_id가 있으면 기존 교인 정보 업데이트
+        if arguments.get("update_existing_id"):
+            member = Member.query.get(arguments["update_existing_id"])
+            if not member:
+                return json.dumps({"error": "해당 교인을 찾을 수 없습니다."}, ensure_ascii=False)
+
+            # 제공된 정보만 업데이트
+            if arguments.get("phone"):
+                member.phone = arguments["phone"]
+            if arguments.get("email"):
+                member.email = arguments["email"]
+            if arguments.get("address"):
+                member.address = arguments["address"]
+            if arguments.get("gender"):
+                member.gender = arguments["gender"]
+            if arguments.get("status"):
+                member.status = arguments["status"]
+            if arguments.get("notes"):
+                member.notes = arguments["notes"]
+            if arguments.get("birth_date"):
+                try:
+                    member.birth_date = datetime.strptime(arguments["birth_date"], "%Y-%m-%d").date()
+                except:
+                    pass
+
+            db.session.commit()
+            return json.dumps({
+                "success": True,
+                "action": "updated",
+                "message": f"'{member.display_name}' 교인 정보가 업데이트되었습니다.",
+                "member_id": member.id
+            }, ensure_ascii=False)
+
+        # 동명이인이 있는 경우 사용자에게 확인 요청
+        if existing_members:
+            existing_info = []
+            for m in existing_members:
+                info = {
+                    "id": m.id,
+                    "name": m.name,
+                    "display_name": m.display_name,
+                    "phone": m.phone or "연락처 없음",
+                    "birth_date": m.birth_date.strftime("%Y-%m-%d") if m.birth_date else "생년월일 없음",
+                    "status": m.status,
+                    "registration_date": m.registration_date.strftime("%Y-%m-%d") if m.registration_date else ""
+                }
+                existing_info.append(info)
+
+            return json.dumps({
+                "duplicate_found": True,
+                "message": f"'{arguments['name']}' 이름의 교인이 이미 {len(existing_members)}명 등록되어 있습니다.",
+                "existing_members": existing_info,
+                "suggestion": "기존 교인 정보를 업데이트하려면 update_existing_id에 해당 교인 ID를 지정하세요. 동명이인으로 새로 등록하려면 force_new=true를 사용하세요.",
+                "pending_data": {
+                    "name": arguments.get("name"),
+                    "phone": arguments.get("phone"),
+                    "email": arguments.get("email"),
+                    "address": arguments.get("address"),
+                    "birth_date": arguments.get("birth_date"),
+                    "gender": arguments.get("gender"),
+                    "status": arguments.get("status"),
+                    "notes": arguments.get("notes")
+                }
+            }, ensure_ascii=False)
+
+        # 새 교인 등록
         member = Member(
             name=arguments["name"],
             phone=arguments.get("phone"),
@@ -1019,7 +1232,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
             gender=arguments.get("gender"),
             status=arguments.get("status", "active"),
             notes=arguments.get("notes"),
-            registration_date=date.today()
+            registration_date=get_seoul_today()
         )
 
         if arguments.get("birth_date"):
@@ -1033,6 +1246,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
 
         return json.dumps({
             "success": True,
+            "action": "created",
             "message": f"'{member.name}' 교인이 등록되었습니다.",
             "member_id": member.id,
             "member": {
@@ -1107,7 +1321,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
     elif function_name == "get_newcomers":
         query = Member.query.filter_by(status="newcomer")
         if arguments.get("days"):
-            cutoff = date.today() - timedelta(days=arguments["days"])
+            cutoff = get_seoul_today() - timedelta(days=arguments["days"])
             query = query.filter(Member.registration_date >= cutoff)
 
         newcomers = query.order_by(Member.registration_date.desc()).all()
@@ -1127,7 +1341,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
 
     elif function_name == "get_birthdays":
         from sqlalchemy import extract
-        month = arguments.get("month", date.today().month)
+        month = arguments.get("month", get_seoul_today().month)
 
         birthdays = Member.query.filter(
             extract('month', Member.birth_date) == month,
@@ -1147,7 +1361,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
 
     elif function_name == "get_absent_members":
         weeks = arguments.get("weeks", 3)
-        cutoff = date.today() - timedelta(weeks=weeks)
+        cutoff = get_seoul_today() - timedelta(weeks=weeks)
 
         # 최근 출석 기록이 있는 교인 ID
         recent_attended = db.session.query(Attendance.member_id).filter(
@@ -1190,7 +1404,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
                 })
 
         # 2. 장기 결석자 (3주 이상)
-        cutoff = date.today() - timedelta(weeks=3)
+        cutoff = get_seoul_today() - timedelta(weeks=3)
         recent_attended = db.session.query(Attendance.member_id).filter(
             Attendance.date >= cutoff,
             Attendance.attended == True
@@ -1228,7 +1442,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
         if not member:
             return json.dumps({"error": "해당 교인을 찾을 수 없습니다."}, ensure_ascii=False)
 
-        visit_date = date.today()
+        visit_date = get_seoul_today()
         if arguments.get("visit_date"):
             try:
                 visit_date = datetime.strptime(arguments["visit_date"], "%Y-%m-%d").date()
@@ -1274,7 +1488,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
         elif stat_type == "attendance":
             # 최근 4주 출석 통계
             from sqlalchemy import func
-            four_weeks_ago = date.today() - timedelta(weeks=4)
+            four_weeks_ago = get_seoul_today() - timedelta(weeks=4)
 
             stats = db.session.query(
                 Attendance.date,
@@ -1379,6 +1593,19 @@ def process_ai_chat(user_message: str, image_data: str = None) -> str:
 - "지난 3주간 안 나온 분들" → get_absent_members 호출
 - "이번 달 생일자" → get_birthdays 호출
 - "전체 교인 수" → get_statistics 호출
+
+동명이인 처리:
+register_member 호출 시 동명이인이 있으면 duplicate_found: true 응답이 옵니다.
+이 경우 사용자에게 기존 교인 목록을 보여주고 다음을 물어보세요:
+1. 기존 교인 정보 업데이트: "홍길동 생년월일 추가해줘" → update_existing_id 사용
+2. 동명이인으로 새로 등록: "새 홍길동으로 등록해줘" → force_new=true 사용
+
+예시 응답:
+"'홍길동' 이름의 교인이 이미 등록되어 있습니다:
+1. 홍길동 집사 (010-1234-5678, 1985-03-15생)
+2. 홍길동 성도 (연락처 없음, 생년월일 없음)
+
+기존 교인 정보를 업데이트할까요, 아니면 동명이인으로 새로 등록할까요?"
 
 사진이 첨부되면:
 - 명함/등록카드 사진: 정보를 추출하여 등록 제안
@@ -1677,7 +1904,7 @@ def api_import_analyzed():
                 continue
 
             # 교인 생성
-            member = Member(name=name, phone=phone, registration_date=date.today())
+            member = Member(name=name, phone=phone, registration_date=get_seoul_today())
 
             # 나머지 필드 매핑
             for field in ['email', 'address', 'gender', 'notes']:

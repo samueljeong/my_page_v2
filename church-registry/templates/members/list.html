@@ -73,13 +73,11 @@
                     {% endif %}
                 </div>
                 <div class="member-info">
-                    <h3>{{ member.name }}
-                        {% if member.member_type %}
-                        <span style="font-size: 12px; font-weight: 500; color: var(--apple-blue);">{{ member.member_type }}</span>
-                        {% endif %}
-                    </h3>
+                    <h3>{{ member.display_name }}</h3>
                     <p>
+                        {% if member.registration_number %}{{ member.registration_number }} · {% endif %}
                         {% if member.department %}{{ member.department }}
+                        {% elif member.mission_group %}{{ member.mission_group }}
                         {% elif member.group %}{{ member.group.name }}
                         {% else %}그룹 없음{% endif %}
                     </p>
@@ -96,6 +94,9 @@
                 {% endif %}
                 {% if member.registration_date %}
                 <span><i class="bi bi-calendar"></i> {{ member.registration_date.strftime('%Y.%m.%d') }}</span>
+                {% endif %}
+                {% if member.age is not none %}
+                <span><i class="bi bi-person"></i> {{ member.age }}세</span>
                 {% endif %}
             </div>
         </a>
