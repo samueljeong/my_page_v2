@@ -478,6 +478,270 @@ def attendance_stats():
 
 
 # =============================================================================
+# 심방 기록 라우트
+# =============================================================================
+
+@app.route('/visits')
+def visit_list():
+    """심방 기록 목록"""
+    visits = Visit.query.order_by(Visit.visit_date.desc()).limit(50).all()
+    return render_template('visits/list.html', visits=visits)
+
+
+@app.route('/visits/new', methods=['GET', 'POST'])
+def visit_new():
+    """심방 기록 등록"""
+    if request.method == 'POST':
+        member_id = request.form.get('member_id')
+        visit_date = datetime.strptime(request.form.get('visit_date'), '%Y-%m-%d').date()
+        visitor_name = request.form.get('visitor_name', '').strip()
+        purpose = request.form.get('purpose', '').strip()
+        notes = request.form.get('notes', '').strip()
+
+        visit = Visit(
+            member_id=int(member_id),
+            visit_date=visit_date,
+            visitor_name=visitor_name,
+            purpose=purpose,
+            notes=notes
+        )
+
+        db.session.add(visit)
+        db.session.commit()
+
+        flash('심방 기록이 저장되었습니다.', 'success')
+        return redirect(url_for('visit_list'))
+
+    members = Member.query.order_by(Member.name).all()
+    return render_template('visits/form.html', members=members, visit=None)
+
+
+@app.route('/visits/<int:visit_id>/delete', methods=['POST'])
+def visit_delete(visit_id):
+    """심방 기록 삭제"""
+    visit = Visit.query.get_or_404(visit_id)
+    db.session.delete(visit)
+    db.session.commit()
+    flash('심방 기록이 삭제되었습니다.', 'success')
+    return redirect(url_for('visit_list'))
+
+
+# =============================================================================
+# 헌금 기록 라우트
+# =============================================================================
+
+@app.route('/offerings')
+def offering_list():
+    """헌금 기록 목록"""
+    # 날짜 필터
+    month = request.args.get('month')
+    if month:
+        year, m = map(int, month.split('-'))
+        start_date = date(year, m, 1)
+        if m == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, m + 1, 1)
+        offerings = Offering.query.filter(
+            Offering.date >= start_date,
+            Offering.date < end_date
+        ).order_by(Offering.date.desc()).all()
+    else:
+        offerings = Offering.query.order_by(Offering.date.desc()).limit(100).all()
+
+    # 월별 합계
+    from sqlalchemy import func
+    total = sum(o.amount for o in offerings)
+
+    return render_template('offerings/list.html', offerings=offerings, total=total, month=month)
+
+
+@app.route('/offerings/new', methods=['GET', 'POST'])
+def offering_new():
+    """헌금 기록 등록"""
+    if request.method == 'POST':
+        member_id = request.form.get('member_id')
+        offering_date = datetime.strptime(request.form.get('date'), '%Y-%m-%d').date()
+        amount = int(request.form.get('amount', 0))
+        offering_type = request.form.get('offering_type', '').strip()
+        notes = request.form.get('notes', '').strip()
+
+        offering = Offering(
+            member_id=int(member_id) if member_id else None,
+            date=offering_date,
+            amount=amount,
+            offering_type=offering_type,
+            notes=notes
+        )
+
+        db.session.add(offering)
+        db.session.commit()
+
+        flash('헌금 기록이 저장되었습니다.', 'success')
+        return redirect(url_for('offering_list'))
+
+    members = Member.query.order_by(Member.name).all()
+    return render_template('offerings/form.html', members=members, offering=None)
+
+
+@app.route('/offerings/<int:offering_id>/delete', methods=['POST'])
+def offering_delete(offering_id):
+    """헌금 기록 삭제"""
+    offering = Offering.query.get_or_404(offering_id)
+    db.session.delete(offering)
+    db.session.commit()
+    flash('헌금 기록이 삭제되었습니다.', 'success')
+    return redirect(url_for('offering_list'))
+
+
+# =============================================================================
+# 새신자 관리 라우트
+# =============================================================================
+
+@app.route('/newcomers')
+def newcomer_list():
+    """새신자 목록"""
+    newcomers = Member.query.filter_by(status='newcomer').order_by(Member.registration_date.desc()).all()
+    return render_template('newcomers/list.html', newcomers=newcomers)
+
+
+# =============================================================================
+# 생일/기념일 알림 라우트
+# =============================================================================
+
+@app.route('/birthdays')
+def birthday_list():
+    """이번 달 생일자 목록"""
+    from sqlalchemy import extract
+
+    current_month = date.today().month
+    birthdays = Member.query.filter(
+        extract('month', Member.birth_date) == current_month,
+        Member.status.in_(['active', 'newcomer'])
+    ).order_by(extract('day', Member.birth_date)).all()
+
+    return render_template('birthdays/list.html', birthdays=birthdays, month=current_month)
+
+
+# =============================================================================
+# 엑셀 내보내기/가져오기 라우트
+# =============================================================================
+
+@app.route('/export/members')
+def export_members():
+    """교인 목록 엑셀 내보내기"""
+    from openpyxl import Workbook
+    from io import BytesIO
+    from flask import send_file
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "교인 목록"
+
+    # 헤더
+    headers = ['이름', '전화번호', '이메일', '주소', '생년월일', '성별', '등록일', '세례일', '소속그룹', '상태', '메모']
+    ws.append(headers)
+
+    # 데이터
+    members = Member.query.order_by(Member.name).all()
+    for m in members:
+        ws.append([
+            m.name,
+            m.phone or '',
+            m.email or '',
+            m.address or '',
+            m.birth_date.strftime('%Y-%m-%d') if m.birth_date else '',
+            m.gender or '',
+            m.registration_date.strftime('%Y-%m-%d') if m.registration_date else '',
+            m.baptism_date.strftime('%Y-%m-%d') if m.baptism_date else '',
+            m.group.name if m.group else '',
+            m.status or '',
+            m.notes or ''
+        ])
+
+    # 파일로 저장
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'교인목록_{date.today().strftime("%Y%m%d")}.xlsx'
+    )
+
+
+@app.route('/import/members', methods=['GET', 'POST'])
+def import_members():
+    """교인 목록 엑셀 가져오기"""
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('파일을 선택해주세요.', 'danger')
+            return redirect(request.url)
+
+        file = request.files['file']
+        if file.filename == '':
+            flash('파일을 선택해주세요.', 'danger')
+            return redirect(request.url)
+
+        if file and file.filename.endswith('.xlsx'):
+            from openpyxl import load_workbook
+
+            wb = load_workbook(file)
+            ws = wb.active
+
+            count = 0
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[0]:  # 이름이 있는 경우만
+                    # 기존 교인 확인 (이름 + 전화번호로 중복 체크)
+                    existing = Member.query.filter_by(name=row[0], phone=row[1] if row[1] else None).first()
+                    if existing:
+                        continue
+
+                    member = Member(
+                        name=row[0],
+                        phone=row[1] if len(row) > 1 else None,
+                        email=row[2] if len(row) > 2 else None,
+                        address=row[3] if len(row) > 3 else None,
+                        gender=row[5] if len(row) > 5 else None,
+                        status=row[9] if len(row) > 9 and row[9] in ['active', 'inactive', 'newcomer'] else 'active',
+                        notes=row[10] if len(row) > 10 else None
+                    )
+
+                    # 날짜 파싱
+                    if len(row) > 4 and row[4]:
+                        try:
+                            if isinstance(row[4], str):
+                                member.birth_date = datetime.strptime(row[4], '%Y-%m-%d').date()
+                            else:
+                                member.birth_date = row[4]
+                        except:
+                            pass
+
+                    if len(row) > 6 and row[6]:
+                        try:
+                            if isinstance(row[6], str):
+                                member.registration_date = datetime.strptime(row[6], '%Y-%m-%d').date()
+                            else:
+                                member.registration_date = row[6]
+                        except:
+                            pass
+
+                    db.session.add(member)
+                    count += 1
+
+            db.session.commit()
+            flash(f'{count}명의 교인이 등록되었습니다.', 'success')
+            return redirect(url_for('member_list'))
+
+        flash('xlsx 파일만 업로드 가능합니다.', 'danger')
+        return redirect(request.url)
+
+    return render_template('import/members.html')
+
+
+# =============================================================================
 # 데이터베이스 초기화
 # =============================================================================
 
