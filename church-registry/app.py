@@ -6,6 +6,10 @@ import os
 import json
 import base64
 from datetime import datetime, date, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
@@ -15,6 +19,17 @@ import cloudinary
 import cloudinary.uploader
 
 load_dotenv()
+
+# 서울 시간대 (KST)
+SEOUL_TZ = ZoneInfo('Asia/Seoul')
+
+def get_seoul_now():
+    """서울 시간대 기준 현재 시각"""
+    return datetime.now(SEOUL_TZ)
+
+def get_seoul_today():
+    """서울 시간대 기준 오늘 날짜"""
+    return datetime.now(SEOUL_TZ).date()
 
 # OpenAI 클라이언트 (API 키가 있을 때만 초기화)
 openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -102,15 +117,15 @@ class Member(db.Model):
     # 사진
     photo_url = db.Column(db.String(500))  # 프로필 사진 URL
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
+    updated_at = db.Column(db.DateTime, default=get_seoul_now, onupdate=get_seoul_now)
 
     @property
     def age(self):
         """나이 자동 계산 (만 나이)"""
         if not self.birth_date:
             return None
-        today = date.today()
+        today = get_seoul_today()
         age = today.year - self.birth_date.year
         # 생일이 아직 안 지났으면 1살 빼기
         if (today.month, today.day) < (self.birth_date.month, self.birth_date.day):
@@ -122,7 +137,7 @@ class Member(db.Model):
         """새가족 여부 (등록 후 2년 이내)"""
         if not self.registration_date:
             return False
-        two_years_ago = date.today() - timedelta(days=730)  # 약 2년
+        two_years_ago = get_seoul_today() - timedelta(days=730)  # 약 2년
         return self.registration_date > two_years_ago
 
     @property
@@ -147,7 +162,7 @@ class Family(db.Model):
     family_name = db.Column(db.String(100))  # 가족명 (예: 홍길동 가정)
     members = db.relationship('Member', backref='family', lazy=True)
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Group(db.Model):
@@ -161,7 +176,7 @@ class Group(db.Model):
 
     members = db.relationship('Member', backref='group', lazy=True)
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Attendance(db.Model):
@@ -176,7 +191,7 @@ class Attendance(db.Model):
 
     member = db.relationship('Member', backref='attendance_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Visit(db.Model):
@@ -192,7 +207,7 @@ class Visit(db.Model):
 
     member = db.relationship('Member', backref='visit_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 class Offering(db.Model):
@@ -208,7 +223,7 @@ class Offering(db.Model):
 
     member = db.relationship('Member', backref='offering_records')
 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
 
 
 # =============================================================================
@@ -296,7 +311,7 @@ def member_new():
         if request.form.get('registration_date'):
             registration_date = datetime.strptime(request.form.get('registration_date'), '%Y-%m-%d').date()
         else:
-            registration_date = date.today()
+            registration_date = get_seoul_today()
 
         # 유효성 검사
         if not name:
@@ -549,7 +564,7 @@ def attendance_list():
     if date_str:
         selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     else:
-        selected_date = date.today()
+        selected_date = get_seoul_today()
 
     # 예배 종류 필터
     service_type = request.args.get('service', '주일예배')
@@ -660,6 +675,27 @@ def visit_new():
     return render_template('visits/form.html', members=members, visit=None)
 
 
+@app.route('/visits/<int:visit_id>/edit', methods=['GET', 'POST'])
+def visit_edit(visit_id):
+    """심방 기록 수정"""
+    visit = Visit.query.get_or_404(visit_id)
+
+    if request.method == 'POST':
+        visit.member_id = int(request.form.get('member_id'))
+        visit.visit_date = datetime.strptime(request.form.get('visit_date'), '%Y-%m-%d').date()
+        visit.visitor_name = request.form.get('visitor_name', '').strip()
+        visit.purpose = request.form.get('purpose', '').strip()
+        visit.notes = request.form.get('notes', '').strip()
+
+        db.session.commit()
+
+        flash('심방 기록이 수정되었습니다.', 'success')
+        return redirect(url_for('visit_list'))
+
+    members = Member.query.order_by(Member.name).all()
+    return render_template('visits/form.html', members=members, visit=visit)
+
+
 @app.route('/visits/<int:visit_id>/delete', methods=['POST'])
 def visit_delete(visit_id):
     """심방 기록 삭제"""
@@ -758,7 +794,7 @@ def birthday_list():
     """이번 달 생일자 목록"""
     from sqlalchemy import extract
 
-    current_month = date.today().month
+    current_month = get_seoul_today().month
     birthdays = Member.query.filter(
         extract('month', Member.birth_date) == current_month,
         Member.status.in_(['active', 'newcomer'])
@@ -812,7 +848,7 @@ def export_members():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'교인목록_{date.today().strftime("%Y%m%d")}.xlsx'
+        download_name=f'교인목록_{get_seoul_today().strftime("%Y%m%d")}.xlsx'
     )
 
 
@@ -1112,7 +1148,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
             gender=arguments.get("gender"),
             status=arguments.get("status", "active"),
             notes=arguments.get("notes"),
-            registration_date=date.today()
+            registration_date=get_seoul_today()
         )
 
         if arguments.get("birth_date"):
@@ -1200,7 +1236,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
     elif function_name == "get_newcomers":
         query = Member.query.filter_by(status="newcomer")
         if arguments.get("days"):
-            cutoff = date.today() - timedelta(days=arguments["days"])
+            cutoff = get_seoul_today() - timedelta(days=arguments["days"])
             query = query.filter(Member.registration_date >= cutoff)
 
         newcomers = query.order_by(Member.registration_date.desc()).all()
@@ -1220,7 +1256,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
 
     elif function_name == "get_birthdays":
         from sqlalchemy import extract
-        month = arguments.get("month", date.today().month)
+        month = arguments.get("month", get_seoul_today().month)
 
         birthdays = Member.query.filter(
             extract('month', Member.birth_date) == month,
@@ -1240,7 +1276,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
 
     elif function_name == "get_absent_members":
         weeks = arguments.get("weeks", 3)
-        cutoff = date.today() - timedelta(weeks=weeks)
+        cutoff = get_seoul_today() - timedelta(weeks=weeks)
 
         # 최근 출석 기록이 있는 교인 ID
         recent_attended = db.session.query(Attendance.member_id).filter(
@@ -1283,7 +1319,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
                 })
 
         # 2. 장기 결석자 (3주 이상)
-        cutoff = date.today() - timedelta(weeks=3)
+        cutoff = get_seoul_today() - timedelta(weeks=3)
         recent_attended = db.session.query(Attendance.member_id).filter(
             Attendance.date >= cutoff,
             Attendance.attended == True
@@ -1321,7 +1357,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
         if not member:
             return json.dumps({"error": "해당 교인을 찾을 수 없습니다."}, ensure_ascii=False)
 
-        visit_date = date.today()
+        visit_date = get_seoul_today()
         if arguments.get("visit_date"):
             try:
                 visit_date = datetime.strptime(arguments["visit_date"], "%Y-%m-%d").date()
@@ -1367,7 +1403,7 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
         elif stat_type == "attendance":
             # 최근 4주 출석 통계
             from sqlalchemy import func
-            four_weeks_ago = date.today() - timedelta(weeks=4)
+            four_weeks_ago = get_seoul_today() - timedelta(weeks=4)
 
             stats = db.session.query(
                 Attendance.date,
@@ -1770,7 +1806,7 @@ def api_import_analyzed():
                 continue
 
             # 교인 생성
-            member = Member(name=name, phone=phone, registration_date=date.today())
+            member = Member(name=name, phone=phone, registration_date=get_seoul_today())
 
             # 나머지 필드 매핑
             for field in ['email', 'address', 'gender', 'notes']:
