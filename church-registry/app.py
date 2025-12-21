@@ -11,12 +11,25 @@ from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from openai import OpenAI
 from werkzeug.utils import secure_filename
+import cloudinary
+import cloudinary.uploader
 
 load_dotenv()
 
 # OpenAI 클라이언트 (API 키가 있을 때만 초기화)
 openai_api_key = os.getenv('OPENAI_API_KEY')
 openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+
+# Cloudinary 설정 (환경변수가 있을 때만 초기화)
+cloudinary_configured = False
+if os.getenv('CLOUDINARY_CLOUD_NAME'):
+    cloudinary.config(
+        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.getenv('CLOUDINARY_API_KEY'),
+        api_secret=os.getenv('CLOUDINARY_API_SECRET'),
+        secure=True
+    )
+    cloudinary_configured = True
 
 # Flask 앱 초기화
 app = Flask(__name__)
@@ -1426,7 +1439,7 @@ def api_chat():
 
 @app.route('/api/upload-photo', methods=['POST'])
 def api_upload_photo():
-    """사진 업로드 API"""
+    """사진 업로드 API - Cloudinary 또는 로컬 저장소 사용"""
     if 'photo' not in request.files:
         return jsonify({"error": "파일이 없습니다."}), 400
 
@@ -1437,25 +1450,63 @@ def api_upload_photo():
         return jsonify({"error": "파일이 선택되지 않았습니다."}), 400
 
     if file:
-        # 파일명 생성
-        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
-        filename = f"member_{member_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{ext}"
-        filename = secure_filename(filename)
+        try:
+            # Cloudinary가 설정되어 있으면 클라우드에 업로드
+            if cloudinary_configured:
+                # 고유 public_id 생성
+                public_id = f"church-registry/member_{member_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+                # Cloudinary에 업로드
+                result = cloudinary.uploader.upload(
+                    file,
+                    public_id=public_id,
+                    folder="church-registry",
+                    transformation=[
+                        {"width": 400, "height": 400, "crop": "fill", "gravity": "face"}
+                    ]
+                )
 
-        # 교인 사진 URL 업데이트
-        if member_id:
-            member = Member.query.get(int(member_id))
-            if member:
-                member.photo_url = f"/static/uploads/{filename}"
-                db.session.commit()
+                photo_url = result['secure_url']
 
-        return jsonify({
-            "success": True,
-            "url": f"/static/uploads/{filename}"
-        })
+                # 교인 사진 URL 업데이트
+                if member_id:
+                    member = Member.query.get(int(member_id))
+                    if member:
+                        member.photo_url = photo_url
+                        db.session.commit()
+
+                return jsonify({
+                    "success": True,
+                    "url": photo_url,
+                    "storage": "cloudinary"
+                })
+
+            else:
+                # Cloudinary가 없으면 로컬에 저장 (개발용)
+                ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
+                filename = f"member_{member_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{ext}"
+                filename = secure_filename(filename)
+
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+
+                photo_url = f"/static/uploads/{filename}"
+
+                # 교인 사진 URL 업데이트
+                if member_id:
+                    member = Member.query.get(int(member_id))
+                    if member:
+                        member.photo_url = photo_url
+                        db.session.commit()
+
+                return jsonify({
+                    "success": True,
+                    "url": photo_url,
+                    "storage": "local"
+                })
+
+        except Exception as e:
+            return jsonify({"error": f"업로드 실패: {str(e)}"}), 500
 
     return jsonify({"error": "업로드 실패"}), 500
 
