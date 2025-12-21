@@ -3,59 +3,63 @@
 {% block title %}{{ '그룹 수정' if group else '새 그룹 등록' }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>
-        <i class="bi bi-diagram-3"></i>
-        {{ '그룹 수정' if group else '새 그룹 등록' }}
-    </h2>
-    <a href="{{ url_for('group_list') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> 목록으로
-    </a>
-</div>
-
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">그룹명 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name"
-                               value="{{ group.name if group else '' }}" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="group_type" class="form-label">그룹 유형</label>
-                        <select class="form-select" id="group_type" name="group_type">
-                            <option value="">선택</option>
-                            <option value="cell" {{ 'selected' if group and group.group_type == 'cell' else '' }}>셀</option>
-                            <option value="district" {{ 'selected' if group and group.group_type == 'district' else '' }}>구역</option>
-                            <option value="mokjang" {{ 'selected' if group and group.group_type == 'mokjang' else '' }}>목장</option>
-                            <option value="other" {{ 'selected' if group and group.group_type == 'other' else '' }}>기타</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="leader_id" class="form-label">리더</label>
-                        <select class="form-select" id="leader_id" name="leader_id">
-                            <option value="">선택</option>
-                            {% for member in members %}
-                            <option value="{{ member.id }}" {{ 'selected' if group and group.leader_id == member.id else '' }}>
-                                {{ member.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg"></i> {{ '수정' if group else '등록' }}
-                        </button>
-                        <a href="{{ url_for('group_list') }}" class="btn btn-outline-secondary">취소</a>
-                    </div>
-                </form>
-            </div>
+<div class="container">
+    <!-- 페이지 헤더 -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="bi bi-diagram-3{{ '-fill' if not group else '' }}"></i>
+                {{ '그룹 수정' if group else '새 그룹 등록' }}
+            </h1>
+            <p class="page-subtitle">{{ '그룹 정보를 수정합니다' if group else '새로운 그룹을 등록합니다' }}</p>
         </div>
+        <a href="{{ url_for('group_list') }}" class="btn-cancel">
+            <i class="bi bi-arrow-left"></i> 목록으로
+        </a>
+    </div>
+
+    <div class="form-section" style="max-width: 600px;">
+        <form method="POST">
+            <div class="form-group">
+                <label for="name" class="form-label">
+                    그룹명 <span class="required">*</span>
+                </label>
+                <input type="text" class="form-control" id="name" name="name"
+                       value="{{ group.name if group else '' }}"
+                       placeholder="그룹명을 입력하세요" required>
+            </div>
+
+            <div class="form-group">
+                <label for="group_type" class="form-label">그룹 유형</label>
+                <select class="form-select" id="group_type" name="group_type">
+                    <option value="">선택하세요</option>
+                    <option value="cell" {{ 'selected' if group and group.group_type == 'cell' else '' }}>셀</option>
+                    <option value="district" {{ 'selected' if group and group.group_type == 'district' else '' }}>구역</option>
+                    <option value="mokjang" {{ 'selected' if group and group.group_type == 'mokjang' else '' }}>목장</option>
+                    <option value="other" {{ 'selected' if group and group.group_type == 'other' else '' }}>기타</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="leader_id" class="form-label">리더</label>
+                <select class="form-select" id="leader_id" name="leader_id">
+                    <option value="">선택하세요</option>
+                    {% for member in members %}
+                    <option value="{{ member.id }}" {{ 'selected' if group and group.leader_id == member.id else '' }}>
+                        {{ member.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">
+                    <i class="bi bi-check-lg"></i>
+                    {{ '수정 완료' if group else '등록하기' }}
+                </button>
+                <a href="{{ url_for('group_list') }}" class="btn-cancel">취소</a>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

@@ -3,139 +3,119 @@
 {% block title %}교인 목록{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-people"></i> 교인 목록</h2>
-    <a href="{{ url_for('member_new') }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> 새 교인 등록
-    </a>
-</div>
+<div class="container">
+    <!-- 페이지 헤더 -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="bi bi-people-fill"></i>
+                교인 목록
+            </h1>
+            <p class="page-subtitle">총 {{ members|length }}명의 교인이 등록되어 있습니다</p>
+        </div>
+        <a href="{{ url_for('member_new') }}" class="btn-submit">
+            <i class="bi bi-plus-lg"></i> 새 교인 등록
+        </a>
+    </div>
 
-<!-- 검색 필터 -->
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="GET" class="row g-3">
-            <div class="col-md-4">
-                <input type="text" class="form-control" name="q"
-                       placeholder="이름 검색..." value="{{ query }}">
+    <!-- 검색 및 필터 -->
+    <div class="form-section" style="margin-bottom: 24px;">
+        <form method="GET" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+            <div class="search-bar" style="flex: 1; min-width: 200px; max-width: none;">
+                <i class="bi bi-search"></i>
+                <input type="text" name="q" placeholder="이름으로 검색..." value="{{ query }}">
             </div>
-            <div class="col-md-3">
-                <select class="form-select" name="group">
-                    <option value="">전체 그룹</option>
-                    {% for group in groups %}
-                    <option value="{{ group.id }}" {{ 'selected' if group_filter == group.id|string else '' }}>
-                        {{ group.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select class="form-select" name="status">
-                    <option value="">전체 상태</option>
-                    <option value="active" {{ 'selected' if status_filter == 'active' else '' }}>활동</option>
-                    <option value="inactive" {{ 'selected' if status_filter == 'inactive' else '' }}>비활동</option>
-                    <option value="newcomer" {{ 'selected' if status_filter == 'newcomer' else '' }}>새신자</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-primary w-100">
-                    <i class="bi bi-search"></i> 검색
-                </button>
-            </div>
+            <select class="form-select" name="group" style="width: auto; min-width: 150px;">
+                <option value="">전체 그룹</option>
+                {% for group in groups %}
+                <option value="{{ group.id }}" {{ 'selected' if group_filter == group.id|string else '' }}>
+                    {{ group.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select class="form-select" name="status" style="width: auto; min-width: 130px;">
+                <option value="">전체 상태</option>
+                <option value="active" {{ 'selected' if status_filter == 'active' else '' }}>활동</option>
+                <option value="inactive" {{ 'selected' if status_filter == 'inactive' else '' }}>비활동</option>
+                <option value="newcomer" {{ 'selected' if status_filter == 'newcomer' else '' }}>새신자</option>
+            </select>
+            <button type="submit" class="apple-btn apple-btn-primary">
+                <i class="bi bi-search"></i> 검색
+            </button>
+            {% if query or status_filter or group_filter %}
+            <a href="{{ url_for('member_list') }}" class="apple-btn apple-btn-secondary">
+                <i class="bi bi-x-lg"></i> 초기화
+            </a>
+            {% endif %}
         </form>
     </div>
-</div>
 
-<!-- 검색 결과 요약 -->
-{% if query or status_filter or group_filter %}
-<div class="alert alert-info d-flex justify-content-between align-items-center">
-    <span>
-        <i class="bi bi-info-circle"></i>
-        검색 결과: <strong>{{ members|length }}명</strong>
-        {% if query %}(이름: "{{ query }}"){% endif %}
-    </span>
-    <a href="{{ url_for('member_list') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-x"></i> 필터 초기화
-    </a>
-</div>
-{% endif %}
-
-<!-- 교인 목록 테이블 -->
-<div class="card">
-    <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>이름</th>
-                    <th>연락처</th>
-                    <th>그룹</th>
-                    <th>상태</th>
-                    <th>등록일</th>
-                    <th style="width: 120px">관리</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if members %}
-                    {% for member in members %}
-                    <tr>
-                        <td>
-                            <a href="{{ url_for('member_detail', member_id=member.id) }}" class="text-decoration-none fw-bold">
-                                {{ member.name }}
-                            </a>
-                        </td>
-                        <td>
-                            {% if member.phone %}
-                                <a href="tel:{{ member.phone }}" class="text-decoration-none">
-                                    {{ member.phone }}
-                                </a>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ member.group.name if member.group else '-' }}</td>
-                        <td>
-                            {% if member.status == 'active' %}
-                                <span class="badge bg-success">활동</span>
-                            {% elif member.status == 'inactive' %}
-                                <span class="badge bg-secondary">비활동</span>
-                            {% else %}
-                                <span class="badge bg-info">새신자</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ member.registration_date.strftime('%Y-%m-%d') if member.registration_date else '-' }}</td>
-                        <td>
-                            <a href="{{ url_for('member_detail', member_id=member.id) }}"
-                               class="btn btn-sm btn-outline-primary" title="상세보기">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            <a href="{{ url_for('member_edit', member_id=member.id) }}"
-                               class="btn btn-sm btn-outline-secondary" title="수정">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">
-                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                            {% if query or status_filter or group_filter %}
-                                검색 결과가 없습니다.
-                            {% else %}
-                                등록된 교인이 없습니다.
-                            {% endif %}
-                            <br>
-                            <a href="{{ url_for('member_new') }}" class="btn btn-primary mt-3">
-                                <i class="bi bi-plus-lg"></i> 첫 교인 등록하기
-                            </a>
-                        </td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
+    <!-- 검색 결과 알림 -->
+    {% if query or status_filter or group_filter %}
+    <div class="apple-alert success" style="background: #e3f2fd; color: #1565c0;">
+        <i class="bi bi-funnel"></i>
+        필터 적용 중: <strong>{{ members|length }}명</strong>
+        {% if query %}(검색어: "{{ query }}"){% endif %}
     </div>
+    {% endif %}
+
+    <!-- 교인 카드 그리드 -->
     {% if members %}
-    <div class="card-footer text-muted">
-        총 {{ members|length }}명
+    <div class="card-grid">
+        {% for member in members %}
+        <a href="{{ url_for('member_detail', member_id=member.id) }}" class="member-card">
+            <div class="member-card-header">
+                <div class="member-avatar">
+                    {% if member.photo_url %}
+                    <img src="{{ member.photo_url }}" alt="{{ member.name }}">
+                    {% else %}
+                    {{ member.name[0] }}
+                    {% endif %}
+                </div>
+                <div class="member-info">
+                    <h3>{{ member.name }}</h3>
+                    <p>{{ member.group.name if member.group else '그룹 없음' }}</p>
+                </div>
+                <span class="status-badge status-{{ member.status }}">
+                    {% if member.status == 'active' %}활동
+                    {% elif member.status == 'inactive' %}비활동
+                    {% else %}새신자{% endif %}
+                </span>
+            </div>
+            <div class="member-meta">
+                {% if member.phone %}
+                <span><i class="bi bi-telephone"></i> {{ member.phone }}</span>
+                {% endif %}
+                {% if member.registration_date %}
+                <span><i class="bi bi-calendar"></i> {{ member.registration_date.strftime('%Y.%m.%d') }}</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- 빈 상태 -->
+    <div class="form-section">
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
+            <h3>
+                {% if query or status_filter or group_filter %}
+                검색 결과가 없습니다
+                {% else %}
+                등록된 교인이 없습니다
+                {% endif %}
+            </h3>
+            <p>
+                {% if query or status_filter or group_filter %}
+                다른 검색어나 필터를 시도해보세요
+                {% else %}
+                첫 번째 교인을 등록해보세요
+                {% endif %}
+            </p>
+            <a href="{{ url_for('member_new') }}" class="btn-submit">
+                <i class="bi bi-plus-lg"></i> 새 교인 등록
+            </a>
+        </div>
     </div>
     {% endif %}
 </div>
