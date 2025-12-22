@@ -1111,6 +1111,24 @@ def build_step3_prompt_from_json(
     if style_id:
         draft += f"- 스타일ID: {style_id}\n"
     draft += f"- 성경구절: {reference}\n"
+
+    # 개역개정 성경 본문 추가 (오타 없는 원문)
+    if reference:
+        try:
+            from sermon_modules.bible import format_verses_for_prompt
+            bible_text = format_verses_for_prompt(reference)
+            if bible_text and "찾을 수 없습니다" not in bible_text:
+                draft += "\n" + "─" * 40 + "\n"
+                draft += "【 ★ 개역개정 성경 본문 (정확한 원문) ★ 】\n"
+                draft += "─" * 40 + "\n"
+                draft += bible_text + "\n"
+                draft += "─" * 40 + "\n"
+                draft += "※ 위 성경 본문을 그대로 인용하세요. 절대 수정/생략/요약하지 마세요.\n"
+                draft += "─" * 40 + "\n\n"
+        except Exception as e:
+            # 성경 모듈 로드 실패 시 무시 (기존 동작 유지)
+            pass
+
     if title:
         draft += f"- 제목: {title}\n"
     if service_type:

@@ -7,6 +7,7 @@ Flask Blueprint를 사용한 Sermon 앱 모듈화
 - utils.py: 유틸리티 함수들
 - auth.py: 인증, 크레딧 관리, 데코레이터
 - prompt.py: 프롬프트 빌더 함수들
+- bible.py: 개역개정 성경 본문 검색 (오타 없는 원문)
 - api_sermon.py: 설교 처리 API Blueprint (준비됨)
 - api_banner.py: 배너 API Blueprint (준비됨)
 - api_admin.py: 관리자 API Blueprint (준비됨)
@@ -94,6 +95,17 @@ from .context import (
     CONTROVERSIAL_KEYWORDS
 )
 
+from .bible import (
+    get_verses,
+    get_verses_from_reference,
+    format_verses,
+    format_verses_for_prompt,
+    parse_reference,
+    get_book_info,
+    search_verses,
+    BOOK_MAP
+)
+
 __version__ = '1.0.0'
 __all__ = [
     # db
@@ -117,4 +129,7 @@ __all__ = [
     # context
     'get_current_context', 'format_context_for_prompt', 'get_audience_types', 'AUDIENCE_INTERESTS',
     'init_context_service', 'validate_illustration', 'suggest_illustrations', 'CONTROVERSIAL_KEYWORDS',
+    # bible
+    'get_verses', 'get_verses_from_reference', 'format_verses', 'format_verses_for_prompt',
+    'parse_reference', 'get_book_info', 'search_verses', 'BOOK_MAP',
 ]
