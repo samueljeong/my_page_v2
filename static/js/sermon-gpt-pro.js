@@ -66,46 +66,68 @@ function assembleGptProDraft() {
 
   // 헤더
   draft += `====================================\n`;
-  draft += `📖 설교 초안 자료 (GPT-5.1 작성용)\n`;
+  draft += `설교 초안 자료 (GPT-5.1 작성용)\n`;
   draft += `====================================\n\n`;
 
   // 최우선 지침
   draft += `==================================================\n`;
-  draft += `【 ★★★ 최우선 지침 ★★★ 】\n`;
+  draft += `[최우선 지침]\n`;
   draft += `==================================================\n\n`;
 
+  // 존대어 사용 필수 (대상과 무관하게)
+  draft += `[필수] 어체: 존대어 (경어체)\n`;
+  draft += `   - 대상이 청소년/어린이여도 반드시 존대어로 작성하세요.\n`;
+  draft += `   - "~합니다", "~입니다", "~하십시오" 형태를 사용하세요.\n`;
+  draft += `   - 반말("~해", "~야") 사용 금지.\n\n`;
+
   if (duration) {
-    draft += `🚨 분량: ${duration}\n`;
-    draft += `   → 목표 글자 수: ${durationInfo.targetChars.toLocaleString()}자 (공백 포함)\n`;
-    draft += `   → 허용 범위: ${durationInfo.minChars.toLocaleString()}자 ~ ${durationInfo.maxChars.toLocaleString()}자\n`;
-    draft += `   → 기준: 분당 ${durationInfo.charsPerMin}자 (한국어 설교 평균 속도)\n`;
-    draft += `   → 이 글자 수를 반드시 지켜주세요. 짧으면 안 됩니다!\n`;
-    if (durationInfo.minutes <= 10) {
-      draft += `   → 짧은 설교이므로 핵심에 집중하되, 구조(서론/본론/결론)는 유지하세요.\n`;
+    draft += `[최우선 필수] 분량: ${duration} = ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `   최소 글자 수: ${durationInfo.minChars.toLocaleString()}자 (이 미만은 불합격)\n`;
+    draft += `   목표 글자 수: ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `   최대 글자 수: ${durationInfo.maxChars.toLocaleString()}자\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `   계산 기준: ${durationInfo.minutes}분 × ${durationInfo.charsPerMin}자/분 = ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `\n`;
+    draft += `   [분량 맞추기 전략]\n`;
+    if (durationInfo.minutes >= 25) {
+      draft += `   - 서론: 약 ${Math.round(durationInfo.targetChars * 0.15).toLocaleString()}자 (도입, 성경 배경)\n`;
+      draft += `   - 본론: 약 ${Math.round(durationInfo.targetChars * 0.65).toLocaleString()}자 (대지별 설명 + 예화 + 적용)\n`;
+      draft += `   - 결론: 약 ${Math.round(durationInfo.targetChars * 0.20).toLocaleString()}자 (요약 + 결단 촉구 + 기도)\n`;
+      draft += `   - 각 대지마다 예화 1개, 적용 1개를 반드시 포함하세요.\n`;
+    } else if (durationInfo.minutes >= 15) {
+      draft += `   - 서론: 약 ${Math.round(durationInfo.targetChars * 0.15).toLocaleString()}자\n`;
+      draft += `   - 본론: 약 ${Math.round(durationInfo.targetChars * 0.65).toLocaleString()}자 (대지별 충분한 설명)\n`;
+      draft += `   - 결론: 약 ${Math.round(durationInfo.targetChars * 0.20).toLocaleString()}자\n`;
+    } else {
+      draft += `   - 짧은 설교이므로 핵심에 집중하되, 구조(서론/본론/결론)는 유지하세요.\n`;
     }
     draft += `\n`;
+    draft += `   [경고] ${durationInfo.minChars.toLocaleString()}자 미만 작성 시 불합격 처리됩니다.\n`;
+    draft += `   반드시 ${durationInfo.targetChars.toLocaleString()}자 이상 작성하세요!\n\n`;
   }
 
   if (worshipType) {
-    draft += `🚨 예배/집회 유형: ${worshipType}\n`;
-    draft += `   → '${worshipType}'에 적합한 톤과 내용으로 작성하세요.\n\n`;
+    draft += `[필수] 예배/집회 유형: ${worshipType}\n`;
+    draft += `   - '${worshipType}'에 적합한 톤과 내용으로 작성하세요.\n\n`;
   }
 
   if (target) {
-    draft += `🚨 대상: ${target}\n\n`;
+    draft += `[필수] 대상: ${target}\n`;
+    draft += `   - 대상에 맞는 예시와 적용을 사용하되, 어체는 존대어를 유지하세요.\n\n`;
   }
 
   draft += `==================================================\n\n`;
 
   // 안내 문구
-  draft += `⚠️ 중요: 이 자료는 gpt-4o-mini가 만든 '초안'입니다.\n`;
+  draft += `[중요] 이 자료는 gpt-4o-mini가 만든 '초안'입니다.\n`;
   draft += `GPT-5.1은 이 자료를 참고하되, 처음부터 새로 작성해주세요.\n`;
   draft += `mini가 만든 문장을 그대로 복사하지 말고, 자연스러운 설교문으로 재작성하세요.\n\n`;
 
   draft += `==================================================\n\n`;
 
   // 기본 정보
-  draft += `📌 기본 정보\n`;
+  draft += `[기본 정보]\n`;
   draft += `- 카테고리: ${categoryLabel}\n`;
   if (styleName) draft += `- 스타일: ${styleName}\n`;
   draft += `- 성경구절: ${ref}\n`;
@@ -150,6 +172,44 @@ function assembleGptProDraft() {
             if (definition) draft += `     → 의미: ${definition.substring(0, 200)}${definition.length > 200 ? '...' : ''}\n`;
             draft += `\n`;
           });
+        }
+      }
+
+      // Step2 추가 정보: 예화 (illustrations)
+      if (stepType === 'step2') {
+        try {
+          const step2Data = JSON.parse(window.stepResults[step.id]);
+          const illustrations = step2Data.illustrations || step2Data.예화;
+          if (illustrations) {
+            draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            draft += `【 ★ 예화 (Step2 보강) 】\n`;
+            draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            if (Array.isArray(illustrations)) {
+              illustrations.forEach((illust, i) => {
+                if (typeof illust === 'object') {
+                  draft += `${i + 1}. ${illust.title || illust.제목 || ''}\n`;
+                  if (illust.content || illust.내용) {
+                    draft += `   ${illust.content || illust.내용}\n`;
+                  }
+                  if (illust.application || illust.적용) {
+                    draft += `   → 적용: ${illust.application || illust.적용}\n`;
+                  }
+                } else {
+                  draft += `${i + 1}. ${illust}\n`;
+                }
+                draft += `\n`;
+              });
+            } else if (typeof illustrations === 'object') {
+              Object.entries(illustrations).forEach(([key, value]) => {
+                draft += `▶ ${key}: ${value}\n`;
+              });
+              draft += `\n`;
+            } else {
+              draft += `${illustrations}\n\n`;
+            }
+          }
+        } catch (e) {
+          // JSON 파싱 실패 시 무시 (원본 텍스트에 예화가 포함되어 있을 수 있음)
         }
       }
 
@@ -212,20 +272,20 @@ function assembleGptProDraft() {
     const step3Guide = window.DEFAULT_GUIDES[styleName].step3;
 
     draft += `==================================================\n`;
-    draft += `【 ★★★ 스타일별 작성 가이드 (${styleName}) ★★★ 】\n`;
+    draft += `[스타일별 작성 가이드 (${styleName})]\n`;
     draft += `==================================================\n\n`;
 
     // 가독성/문단 스타일
     if (step3Guide.writing_style) {
       const ws = step3Guide.writing_style;
-      draft += `▶ ${ws.label || '문단/줄바꿈 스타일'}\n`;
+      draft += `> ${ws.label || '문단/줄바꿈 스타일'}\n`;
       if (ws.core_principle) draft += `   핵심: ${ws.core_principle}\n`;
       if (ws.must_do) {
-        draft += `   ✅ 해야 할 것:\n`;
+        draft += `   [해야 할 것]\n`;
         ws.must_do.forEach(item => draft += `      - ${item}\n`);
       }
       if (ws.must_not) {
-        draft += `   ❌ 하지 말 것:\n`;
+        draft += `   [하지 말 것]\n`;
         ws.must_not.forEach(item => draft += `      - ${item}\n`);
       }
       draft += `\n`;
@@ -234,14 +294,14 @@ function assembleGptProDraft() {
     // 성경구절 인용 방식
     if (step3Guide.scripture_citation) {
       const sc = step3Guide.scripture_citation;
-      draft += `▶ ${sc.label || '성경구절 인용 방식'}\n`;
+      draft += `> ${sc.label || '성경구절 인용 방식'}\n`;
       if (sc.core_principle) draft += `   핵심: ${sc.core_principle}\n`;
       if (sc.must_do) {
-        draft += `   ✅ 해야 할 것:\n`;
+        draft += `   [해야 할 것]\n`;
         sc.must_do.forEach(item => draft += `      - ${item}\n`);
       }
       if (sc.good_examples) {
-        draft += `   ✅ 올바른 예시:\n`;
+        draft += `   [올바른 예시]\n`;
         sc.good_examples.forEach(ex => draft += `      ${ex}\n`);
       }
       draft += `\n`;
@@ -252,30 +312,35 @@ function assembleGptProDraft() {
 
   // 최종 작성 지침
   draft += `==================================================\n`;
-  draft += `📝 최종 작성 지침:\n`;
+  draft += `[최종 작성 지침]\n`;
   draft += `==================================================\n`;
   draft += `위의 초안 자료를 참고하여, 완성도 높은 설교문을 처음부터 새로 작성해주세요.\n\n`;
 
-  draft += `✅ 필수 체크리스트:\n`;
-  draft += `  □ Step1의 '핵심_메시지'가 설교 전체에 일관되게 흐르는가?\n`;
-  draft += `  □ Step1의 '주요_절_해설'과 '핵심_단어_분석'을 활용했는가?\n`;
-  draft += `  □ Step2의 설교 구조(서론, 대지, 결론)를 따랐는가?\n`;
-  if (duration) draft += `  □ 분량이 ${duration} (${durationInfo.minChars.toLocaleString()}~${durationInfo.maxChars.toLocaleString()}자)에 맞는가?\n`;
-  if (target) draft += `  □ 대상(${target})에 맞는 어조와 예시를 사용했는가?\n`;
-  if (worshipType) draft += `  □ 예배 유형(${worshipType})에 맞는 톤인가?\n`;
-  draft += `  □ 성경 구절이 가독성 가이드에 맞게 줄바꿈 처리되었는가?\n`;
-  draft += `  □ 마크다운 없이 순수 텍스트로 작성했는가?\n`;
-  draft += `  □ 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n\n`;
+  draft += `[필수 체크리스트]\n`;
+  draft += `  - 존대어(경어체)로 작성했는가? (반말 금지)\n`;
+  draft += `  - Step1의 '핵심_메시지'가 설교 전체에 일관되게 흐르는가?\n`;
+  draft += `  - Step1의 '주요_절_해설'과 '핵심_단어_분석'을 활용했는가?\n`;
+  draft += `  - Step2의 설교 구조(서론, 대지, 결론)를 따랐는가?\n`;
+  if (duration) draft += `  - 분량이 ${duration} (${durationInfo.minChars.toLocaleString()}~${durationInfo.maxChars.toLocaleString()}자)에 맞는가?\n`;
+  if (target) draft += `  - 대상(${target})에 맞는 예시와 적용을 사용했는가?\n`;
+  if (worshipType) draft += `  - 예배 유형(${worshipType})에 맞는 톤인가?\n`;
+  draft += `  - 성경 구절이 가독성 가이드에 맞게 줄바꿈 처리되었는가?\n`;
+  draft += `  - 마크다운 없이 순수 텍스트로 작성했는가?\n`;
+  draft += `  - 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n\n`;
 
   if (duration) {
-    draft += `⚠️ 가장 중요: 반드시 ${durationInfo.targetChars.toLocaleString()}자 이상 작성하세요!\n`;
-    draft += `   (허용 범위: ${durationInfo.minChars.toLocaleString()}자 ~ ${durationInfo.maxChars.toLocaleString()}자)\n`;
+    draft += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `[최종 분량 확인]\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `${duration} 설교 = 최소 ${durationInfo.minChars.toLocaleString()}자 ~ 최대 ${durationInfo.maxChars.toLocaleString()}자\n`;
+    draft += `목표: ${durationInfo.targetChars.toLocaleString()}자\n\n`;
+    draft += `작성 완료 후 반드시 글자 수를 확인하세요.\n`;
+    draft += `${durationInfo.minChars.toLocaleString()}자 미만이면 다시 작성해야 합니다.\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   }
   if (worshipType) {
-    draft += `⚠️ 예배 유형 '${worshipType}'에 맞는 톤으로 작성하세요.\n`;
+    draft += `\n[예배 유형] '${worshipType}'에 맞는 톤으로 작성하세요.\n`;
   }
-
-  draft += `\n글자 수가 부족하면 안 됩니다. ${durationInfo.targetChars.toLocaleString()}자 목표로 충분히 상세하게 작성해주세요.\n`;
 
   return draft;
 }
