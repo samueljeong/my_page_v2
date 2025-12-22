@@ -81,15 +81,30 @@ function assembleGptProDraft() {
   draft += `   - 반말("~해", "~야") 사용 금지.\n\n`;
 
   if (duration) {
-    draft += `[필수] 분량: ${duration}\n`;
-    draft += `   - 목표 글자 수: ${durationInfo.targetChars.toLocaleString()}자 (공백 포함)\n`;
-    draft += `   - 허용 범위: ${durationInfo.minChars.toLocaleString()}자 ~ ${durationInfo.maxChars.toLocaleString()}자\n`;
-    draft += `   - 기준: 분당 ${durationInfo.charsPerMin}자 (한국어 설교 평균 속도)\n`;
-    draft += `   - 이 글자 수를 반드시 지켜주세요. 짧으면 안 됩니다!\n`;
-    if (durationInfo.minutes <= 10) {
+    draft += `[최우선 필수] 분량: ${duration} = ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `   최소 글자 수: ${durationInfo.minChars.toLocaleString()}자 (이 미만은 불합격)\n`;
+    draft += `   목표 글자 수: ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `   최대 글자 수: ${durationInfo.maxChars.toLocaleString()}자\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `   계산 기준: ${durationInfo.minutes}분 × ${durationInfo.charsPerMin}자/분 = ${durationInfo.targetChars.toLocaleString()}자\n`;
+    draft += `\n`;
+    draft += `   [분량 맞추기 전략]\n`;
+    if (durationInfo.minutes >= 25) {
+      draft += `   - 서론: 약 ${Math.round(durationInfo.targetChars * 0.15).toLocaleString()}자 (도입, 성경 배경)\n`;
+      draft += `   - 본론: 약 ${Math.round(durationInfo.targetChars * 0.65).toLocaleString()}자 (대지별 설명 + 예화 + 적용)\n`;
+      draft += `   - 결론: 약 ${Math.round(durationInfo.targetChars * 0.20).toLocaleString()}자 (요약 + 결단 촉구 + 기도)\n`;
+      draft += `   - 각 대지마다 예화 1개, 적용 1개를 반드시 포함하세요.\n`;
+    } else if (durationInfo.minutes >= 15) {
+      draft += `   - 서론: 약 ${Math.round(durationInfo.targetChars * 0.15).toLocaleString()}자\n`;
+      draft += `   - 본론: 약 ${Math.round(durationInfo.targetChars * 0.65).toLocaleString()}자 (대지별 충분한 설명)\n`;
+      draft += `   - 결론: 약 ${Math.round(durationInfo.targetChars * 0.20).toLocaleString()}자\n`;
+    } else {
       draft += `   - 짧은 설교이므로 핵심에 집중하되, 구조(서론/본론/결론)는 유지하세요.\n`;
     }
     draft += `\n`;
+    draft += `   [경고] ${durationInfo.minChars.toLocaleString()}자 미만 작성 시 불합격 처리됩니다.\n`;
+    draft += `   반드시 ${durationInfo.targetChars.toLocaleString()}자 이상 작성하세요!\n\n`;
   }
 
   if (worshipType) {
@@ -314,14 +329,18 @@ function assembleGptProDraft() {
   draft += `  - 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n\n`;
 
   if (duration) {
-    draft += `[중요] 반드시 ${durationInfo.targetChars.toLocaleString()}자 이상 작성하세요!\n`;
-    draft += `   (허용 범위: ${durationInfo.minChars.toLocaleString()}자 ~ ${durationInfo.maxChars.toLocaleString()}자)\n`;
+    draft += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `[최종 분량 확인]\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    draft += `${duration} 설교 = 최소 ${durationInfo.minChars.toLocaleString()}자 ~ 최대 ${durationInfo.maxChars.toLocaleString()}자\n`;
+    draft += `목표: ${durationInfo.targetChars.toLocaleString()}자\n\n`;
+    draft += `작성 완료 후 반드시 글자 수를 확인하세요.\n`;
+    draft += `${durationInfo.minChars.toLocaleString()}자 미만이면 다시 작성해야 합니다.\n`;
+    draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   }
   if (worshipType) {
-    draft += `[중요] 예배 유형 '${worshipType}'에 맞는 톤으로 작성하세요.\n`;
+    draft += `\n[예배 유형] '${worshipType}'에 맞는 톤으로 작성하세요.\n`;
   }
-
-  draft += `\n글자 수가 부족하면 안 됩니다. ${durationInfo.targetChars.toLocaleString()}자 목표로 충분히 상세하게 작성해주세요.\n`;
 
   return draft;
 }

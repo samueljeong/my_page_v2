@@ -1051,14 +1051,36 @@ def build_step3_prompt_from_json(
     draft += "=" * 50 + "\n\n"
 
     if duration:
-        draft += f"[필수] 분량: {duration}\n"
-        draft += f"   → 목표 글자 수: {duration_info['target_chars']:,}자 (공백 포함)\n"
-        draft += f"   → 허용 범위: {duration_info['min_chars']:,}자 ~ {duration_info['max_chars']:,}자\n"
-        draft += f"   → 기준: 분당 {duration_info['chars_per_min']}자 (한국어 설교 평균 속도)\n"
-        draft += f"   → 이 글자 수를 반드시 지켜주세요. 짧으면 안 됩니다!\n"
-        if duration_info['minutes'] <= 10:
-            draft += f"   → 짧은 설교이므로 핵심에 집중하되, 구조(서론/본론/결론)는 유지하세요.\n"
+        target_chars = duration_info['target_chars']
+        min_chars = duration_info['min_chars']
+        max_chars = duration_info['max_chars']
+        minutes = duration_info['minutes']
+        chars_per_min = duration_info['chars_per_min']
+
+        draft += f"[최우선 필수] 분량: {duration} = {target_chars:,}자\n"
+        draft += "━" * 48 + "\n"
+        draft += f"   최소 글자 수: {min_chars:,}자 (이 미만은 불합격)\n"
+        draft += f"   목표 글자 수: {target_chars:,}자\n"
+        draft += f"   최대 글자 수: {max_chars:,}자\n"
+        draft += "━" * 48 + "\n"
+        draft += f"   계산 기준: {minutes}분 × {chars_per_min}자/분 = {target_chars:,}자\n\n"
+
+        draft += "   [분량 맞추기 전략]\n"
+        if minutes >= 25:
+            draft += f"   - 서론: 약 {round(target_chars * 0.15):,}자 (도입, 성경 배경)\n"
+            draft += f"   - 본론: 약 {round(target_chars * 0.65):,}자 (대지별 설명 + 예화 + 적용)\n"
+            draft += f"   - 결론: 약 {round(target_chars * 0.20):,}자 (요약 + 결단 촉구 + 기도)\n"
+            draft += "   - 각 대지마다 예화 1개, 적용 1개를 반드시 포함하세요.\n"
+        elif minutes >= 15:
+            draft += f"   - 서론: 약 {round(target_chars * 0.15):,}자\n"
+            draft += f"   - 본론: 약 {round(target_chars * 0.65):,}자 (대지별 충분한 설명)\n"
+            draft += f"   - 결론: 약 {round(target_chars * 0.20):,}자\n"
+        else:
+            draft += "   - 짧은 설교이므로 핵심에 집중하되, 구조(서론/본론/결론)는 유지하세요.\n"
+
         draft += "\n"
+        draft += f"   [경고] {min_chars:,}자 미만 작성 시 불합격 처리됩니다.\n"
+        draft += f"   반드시 {target_chars:,}자 이상 작성하세요!\n\n"
 
     if service_type:
         draft += f"[필수] 예배/집회 유형: {service_type}\n"
@@ -1318,12 +1340,16 @@ def build_step3_prompt_from_json(
     draft += "  □ 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n\n"
 
     if duration:
-        draft += f"※ 가장 중요: 반드시 {duration_info['target_chars']:,}자 이상 작성하세요!\n"
-        draft += f"   (허용 범위: {duration_info['min_chars']:,}자 ~ {duration_info['max_chars']:,}자)\n"
+        draft += "\n" + "━" * 48 + "\n"
+        draft += "[최종 분량 확인]\n"
+        draft += "━" * 48 + "\n"
+        draft += f"{duration} 설교 = 최소 {duration_info['min_chars']:,}자 ~ 최대 {duration_info['max_chars']:,}자\n"
+        draft += f"목표: {duration_info['target_chars']:,}자\n\n"
+        draft += "작성 완료 후 반드시 글자 수를 확인하세요.\n"
+        draft += f"{duration_info['min_chars']:,}자 미만이면 다시 작성해야 합니다.\n"
+        draft += "━" * 48 + "\n"
     if service_type:
-        draft += f"※ 예배 유형 '{service_type}'에 맞는 톤으로 작성하세요.\n"
-
-    draft += f"\n글자 수가 부족하면 안 됩니다. {duration_info['target_chars']:,}자 목표로 충분히 상세하게 작성해주세요.\n"
+        draft += f"\n[예배 유형] '{service_type}'에 맞는 톤으로 작성하세요.\n"
 
     # 자기 점검 포맷
     draft += "\n" + "-" * 40 + "\n"
