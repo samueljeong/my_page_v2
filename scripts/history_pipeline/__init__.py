@@ -11,12 +11,12 @@
   - episode: 전체 에피소드 번호
   - era_episode: 시대 내 에피소드 번호
   - opus_prompt_pack: 실제 자료가 포함된 Opus 프롬프트
-  - status: PENDING/DONE
+  - status: 준비/완료
 
 사용법:
     from scripts.history_pipeline import run_history_pipeline
 
-    # 자동으로 PENDING 10개 유지
+    # 자동으로 '준비' 10개 유지
     result = run_history_pipeline(
         sheet_id="YOUR_SHEET_ID",
         service=sheets_service

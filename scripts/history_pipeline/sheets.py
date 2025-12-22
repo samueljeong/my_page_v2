@@ -448,8 +448,8 @@ def get_next_episode_info(service, spreadsheet_id: str) -> Dict[str, Any]:
             "total_episodes": 시대 총 에피소드 수,
             "topic": 주제 정보 딕셔너리,
             "is_new_era": 새 시대 시작 여부,
-            "need_more": 더 추가 필요한지 (PENDING < 10),
-            "pending_count": 현재 PENDING 개수,
+            "need_more": 더 추가 필요한지 ('준비' < 10),
+            "pending_count": 현재 '준비' 개수,
             "all_complete": 모든 에피소드 완료 여부,
         }
     """
@@ -497,14 +497,14 @@ def get_next_episode_info(service, spreadsheet_id: str) -> Dict[str, Any]:
 
 def count_pending_episodes(service, spreadsheet_id: str) -> int:
     """
-    PENDING 상태 에피소드 개수 반환
+    '준비' 상태 에피소드 개수 반환
 
     Args:
         service: Google Sheets API 서비스 객체
         spreadsheet_id: 스프레드시트 ID
 
     Returns:
-        PENDING 상태 에피소드 수
+        '준비' 상태 에피소드 수
     """
     progress = get_series_progress(service, spreadsheet_id)
     return progress["pending_count"]
@@ -516,7 +516,7 @@ def mark_episode_done(
     episode: int
 ) -> bool:
     """
-    특정 에피소드를 DONE으로 표시
+    특정 에피소드를 '완료'로 표시
 
     Args:
         service: Google Sheets API 서비스 객체

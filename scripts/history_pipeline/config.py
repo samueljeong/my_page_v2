@@ -990,12 +990,12 @@ SHEET_HEADERS = {
         "source_url",        # 출처 URL
         "opus_prompt_pack",  # ★ Opus에 붙여넣을 완제품
         "thumbnail_copy",    # 썸네일 문구 추천
-        "status",            # PENDING/DONE
+        "status",            # 준비/완료
         "created_at",        # 생성 시간 (ISO)
     ],
 }
 
-# PENDING 유지 개수 (항상 이 개수만큼 PENDING 상태 유지)
+# 준비 상태 유지 개수 (항상 이 개수만큼 '준비' 상태 유지)
 PENDING_TARGET_COUNT = 10
 
 

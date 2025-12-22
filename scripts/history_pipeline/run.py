@@ -7,7 +7,7 @@
 - HISTORY_OPUS_INPUT 단일 시트 사용
 
 워크플로우:
-1. 현재 PENDING 개수 확인
+1. 현재 '준비' 상태 개수 확인
 2. 10개 미만이면 다음 에피소드 추가
 3. 주제별 자료 수집 (한국민족문화대백과, e뮤지엄 등)
 4. 수집된 내용을 포함한 Opus 프롬프트 생성
@@ -18,7 +18,7 @@
 
 API:
     GET /api/history/run-pipeline
-    → 자동으로 PENDING 10개 유지
+    → 자동으로 '준비' 10개 유지
 """
 
 import os
@@ -53,12 +53,12 @@ def run_history_pipeline(
     """
     한국사 파이프라인 실행 (주제 기반, 자동 에피소드 보충)
 
-    PENDING 10개 미만이면 자동으로 다음 에피소드 추가
+    '준비' 10개 미만이면 자동으로 다음 에피소드 추가
 
     Args:
         sheet_id: Google Sheets ID
         service: Google Sheets API 서비스 객체
-        force: 강제 실행 (PENDING 10개여도 추가)
+        force: 강제 실행 ('준비' 10개여도 추가)
 
     Returns:
         실행 결과 딕셔너리
@@ -90,11 +90,11 @@ def run_history_pipeline(
         result["current_era"] = progress["current_era"]
         result["current_episode"] = progress["last_episode"]
 
-        print(f"[HISTORY] 현재 상태: PENDING {result['pending_before']}개, 에피소드 {result['current_episode']}/{progress['planned_total']}개")
+        print(f"[HISTORY] 현재 상태: 준비 {result['pending_before']}개, 에피소드 {result['current_episode']}/{progress['planned_total']}개")
 
-        # 2) PENDING 충분하면 종료 (force가 아닌 경우)
+        # 2) 준비 상태 충분하면 종료 (force가 아닌 경우)
         if not force and result["pending_before"] >= PENDING_TARGET_COUNT:
-            print(f"[HISTORY] PENDING {PENDING_TARGET_COUNT}개 이상, 추가 불필요")
+            print(f"[HISTORY] 준비 {PENDING_TARGET_COUNT}개 이상, 추가 불필요")
             result["success"] = True
             result["pending_after"] = result["pending_before"]
             return result
@@ -115,7 +115,7 @@ def run_history_pipeline(
                 break
 
             if not next_info["need_more"] and not force:
-                print(f"[HISTORY] PENDING 충분, 추가 종료")
+                print(f"[HISTORY] 준비 상태 충분, 추가 종료")
                 break
 
             era = next_info["era"]
@@ -200,7 +200,7 @@ def run_history_pipeline(
 
         print(f"[HISTORY] ========================================")
         print(f"[HISTORY] 완료: {episodes_added}개 에피소드 추가")
-        print(f"[HISTORY] PENDING: {result['pending_before']} → {result['pending_after']}")
+        print(f"[HISTORY] 준비: {result['pending_before']} → {result['pending_after']}")
         print(f"[HISTORY] ========================================")
 
     except Exception as e:

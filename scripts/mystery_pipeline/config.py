@@ -36,7 +36,7 @@ MYSTERY_SHEET_NAME = "MYSTERY_OPUS_INPUT"
 # 통합 시트 이름 (2024-12-20 신규)
 UNIFIED_MYSTERY_SHEET = "MYSTERY"
 
-# PENDING 유지 개수
+# 준비 상태 유지 개수
 PENDING_TARGET_COUNT = 5
 
 # 시트 헤더
@@ -50,7 +50,7 @@ MYSTERY_SHEET_HEADERS = [
     "summary",          # 사건 요약
     "full_content",     # 전체 내용 (Opus용)
     "opus_prompt",      # Opus 프롬프트
-    "status",           # PENDING/WRITING/DONE
+    "status",           # 준비/작성중/완료
     "created_at",       # 생성 시간
 ]
 
