@@ -54,6 +54,13 @@ from .renderer import (
     create_bible_background,
 )
 
+from .sheets import (
+    create_bible_sheet,
+    get_pending_episodes,
+    update_episode_status,
+    get_bible_sheet_header_map,
+)
+
 __all__ = [
     # TTS 설정
     "BIBLE_TTS_VOICE",
@@ -87,4 +94,17 @@ __all__ = [
     # 썸네일
     "generate_episode_thumbnail",
     "generate_all_thumbnails",
+
+    # 자막/렌더링
+    "generate_verse_srt",
+    "generate_ass_subtitle",
+    "render_episode_video",
+    "render_verse_frame",
+    "create_bible_background",
+
+    # Google Sheets
+    "create_bible_sheet",
+    "get_pending_episodes",
+    "update_episode_status",
+    "get_bible_sheet_header_map",
 ]

@@ -21708,6 +21708,65 @@ def api_create_unified_sheets():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route('/api/sheets/create-bible', methods=['GET', 'POST'])
+def api_create_bible_sheet():
+    """
+    성경통독 BIBLE 시트 생성 API
+
+    - 106개 에피소드 데이터 자동 등록
+    - 상태='대기'로 설정하면 파이프라인 트리거
+
+    파라미터:
+    - channel_id: YouTube 채널 ID (선택)
+    - force: "1"이면 기존 시트 삭제 후 재생성
+
+    예시:
+    - GET /api/sheets/create-bible
+    - GET /api/sheets/create-bible?channel_id=UCxxx
+    - GET /api/sheets/create-bible?force=1
+    """
+    print("[BIBLE-SHEETS] ===== create-bible 호출됨 =====")
+
+    try:
+        service = get_sheets_service_account()
+        if not service:
+            return jsonify({
+                "ok": False,
+                "error": "Google Sheets 서비스 계정이 설정되지 않았습니다"
+            }), 400
+
+        sheet_id = os.environ.get('AUTOMATION_SHEET_ID')
+        if not sheet_id:
+            return jsonify({
+                "ok": False,
+                "error": "AUTOMATION_SHEET_ID 환경변수가 필요합니다"
+            }), 400
+
+        # 파라미터 처리
+        channel_id = request.args.get('channel_id', '')
+        force_recreate = request.args.get('force', '0') == '1'
+
+        # bible_pipeline 모듈 import
+        from scripts.bible_pipeline.sheets import create_bible_sheet
+
+        result = create_bible_sheet(
+            service=service,
+            sheet_id=sheet_id,
+            channel_id=channel_id,
+            force_recreate=force_recreate
+        )
+
+        if result.get("ok"):
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # 기존 시트 → 새 시트 매핑
 MIGRATION_MAPPING = {
     "NEWS": {
