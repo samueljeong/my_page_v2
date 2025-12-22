@@ -1,20 +1,24 @@
 """
-해외 미스테리 자료 수집 모듈
+미스테리 자료 수집 모듈
 
-영어 위키백과에서 미스테리 사건 정보 수집
-- Wikipedia API 사용 (무료, 제한 없음)
-- 전체 본문 추출
-- 한국어 번역은 Opus가 담당
+- 해외 미스테리: 영어 위키백과 API
+- 한국 미스테리: 나무위키 (2025-12-22 추가)
 """
 
 import re
 import html
 import time
+import hashlib
 import requests
 from typing import Dict, Any, Optional, List
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
-from .config import FEATURED_MYSTERIES, MYSTERY_CATEGORIES
+from .config import (
+    FEATURED_MYSTERIES,
+    MYSTERY_CATEGORIES,
+    FEATURED_KR_MYSTERIES,
+    KR_MYSTERY_CATEGORIES,
+)
 
 
 # Wikipedia API 기본 설정
@@ -296,3 +300,211 @@ def list_available_mysteries(used_titles: List[str] = None) -> List[Dict[str, st
             })
 
     return available
+
+
+# ============================================================
+# 한국 미스테리 수집 (나무위키 기반)
+# ============================================================
+
+NAMU_USER_AGENT = "MysteryPipelineBot/1.0 (https://drama-s2ns.onrender.com) Python/3.9"
+
+
+def compute_kr_hash(title_ko: str) -> str:
+    """한국 미스테리 중복 방지용 해시 생성"""
+    s = title_ko.encode("utf-8")
+    return hashlib.sha256(s).hexdigest()[:16]
+
+
+def get_namu_url(namu_title: str) -> str:
+    """나무위키 URL 생성"""
+    encoded = quote(namu_title, safe="")
+    return f"https://namu.wiki/w/{encoded}"
+
+
+def get_namu_info(namu_title: str) -> Optional[Dict[str, Any]]:
+    """
+    나무위키 문서 존재 확인 (Opus가 직접 URL에서 읽음)
+
+    나무위키는 공식 API가 없으므로 URL만 생성하고
+    Opus가 직접 페이지를 읽도록 함
+
+    Args:
+        namu_title: 나무위키 문서 제목
+
+    Returns:
+        문서 기본 정보 딕셔너리 또는 None
+    """
+    try:
+        url = get_namu_url(namu_title)
+
+        # HEAD 요청으로 문서 존재 확인 (본문 다운로드 X)
+        headers = {
+            "User-Agent": NAMU_USER_AGENT,
+        }
+
+        response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+
+        if response.status_code == 200:
+            print(f"[KR_MYSTERY] 나무위키 문서 확인: {namu_title}")
+            return {
+                "title": namu_title,
+                "url": url,
+                "exists": True,
+            }
+        else:
+            print(f"[KR_MYSTERY] 나무위키 문서 없음: {namu_title} (HTTP {response.status_code})")
+            return None
+
+    except Exception as e:
+        print(f"[KR_MYSTERY] 나무위키 확인 오류 ({namu_title}): {e}")
+        # 오류 시에도 URL은 반환 (Opus가 직접 확인)
+        return {
+            "title": namu_title,
+            "url": get_namu_url(namu_title),
+            "exists": None,  # 확인 불가
+        }
+
+
+def collect_kr_mystery_article(
+    namu_title: str,
+    title_ko: str = None,
+    category: str = None,
+) -> Dict[str, Any]:
+    """
+    한국 미스테리 사건 기본 정보 수집 (Opus가 직접 URL에서 읽음)
+
+    Args:
+        namu_title: 나무위키 문서 제목
+        title_ko: 표시용 한국어 제목 (없으면 namu_title 사용)
+        category: 카테고리 키
+
+    Returns:
+        기본 정보 딕셔너리
+    """
+    result = {
+        "success": False,
+        "namu_title": namu_title,
+        "title_ko": title_ko or namu_title,
+        "category": category or "",
+        "url": get_namu_url(namu_title),
+        "hash": compute_kr_hash(title_ko or namu_title),
+        "error": None,
+    }
+
+    try:
+        # 나무위키 문서 존재 확인
+        namu_data = get_namu_info(namu_title)
+
+        if namu_data:
+            result["success"] = True
+            result["url"] = namu_data["url"]
+            print(f"[KR_MYSTERY] 기본 정보 수집 완료: {title_ko or namu_title}")
+            print(f"[KR_MYSTERY] → Opus가 직접 URL에서 전체 내용을 읽습니다")
+        else:
+            result["error"] = "나무위키에서 문서를 찾을 수 없습니다"
+            # URL은 그대로 유지 (Opus가 직접 확인할 수 있도록)
+
+    except Exception as e:
+        result["error"] = str(e)
+        print(f"[KR_MYSTERY] 정보 수집 오류 ({namu_title}): {e}")
+
+    return result
+
+
+def get_next_kr_mystery(
+    used_titles: List[str] = None,
+    category: str = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    다음 한국 미스테리 사건 가져오기 (사용하지 않은 것 중에서)
+
+    Args:
+        used_titles: 이미 사용한 title_ko 리스트
+        category: 특정 카테고리만 (없으면 전체)
+
+    Returns:
+        미스테리 정보 딕셔너리
+    """
+    used_titles = used_titles or []
+
+    for mystery in FEATURED_KR_MYSTERIES:
+        title_ko = mystery.get("title_ko", mystery.get("namu_title", ""))
+
+        # 이미 사용한 것은 스킵
+        if title_ko in used_titles:
+            continue
+
+        # namu_title로도 중복 체크
+        if mystery.get("namu_title") in used_titles:
+            continue
+
+        # 카테고리 필터
+        if category and mystery.get("category") != category:
+            continue
+
+        # 나무위키에서 정보 수집
+        collected = collect_kr_mystery_article(
+            namu_title=mystery.get("namu_title", title_ko),
+            title_ko=title_ko,
+            category=mystery.get("category"),
+        )
+
+        if collected["success"] or collected["url"]:
+            # 추가 정보 병합
+            collected["year"] = mystery.get("year", "")
+            collected["hook"] = mystery.get("hook", "")
+            collected["movie"] = mystery.get("movie", "")
+            collected["solved"] = mystery.get("solved", False)
+            return collected
+
+        # 실패해도 URL이 있으면 반환 (Opus가 직접 확인)
+        if collected.get("url"):
+            collected["year"] = mystery.get("year", "")
+            collected["hook"] = mystery.get("hook", "")
+            return collected
+
+        # 대기 후 다음으로
+        time.sleep(0.3)
+
+    print(f"[KR_MYSTERY] 사용 가능한 한국 미스테리가 없습니다")
+    return None
+
+
+def list_available_kr_mysteries(used_titles: List[str] = None) -> List[Dict[str, Any]]:
+    """
+    사용 가능한 한국 미스테리 목록 반환 (간략 정보만)
+
+    Args:
+        used_titles: 이미 사용한 title_ko 리스트
+
+    Returns:
+        사용 가능한 미스테리 목록
+    """
+    used_titles = used_titles or []
+    available = []
+
+    for mystery in FEATURED_KR_MYSTERIES:
+        title_ko = mystery.get("title_ko", mystery.get("namu_title", ""))
+        namu_title = mystery.get("namu_title", "")
+
+        # 중복 체크
+        if title_ko in used_titles or namu_title in used_titles:
+            continue
+
+        available.append({
+            "namu_title": namu_title,
+            "title_ko": title_ko,
+            "category": mystery.get("category", ""),
+            "year": mystery.get("year", ""),
+            "hook": mystery.get("hook", ""),
+            "movie": mystery.get("movie", ""),
+            "solved": mystery.get("solved", False),
+        })
+
+    return available
+
+
+def get_kr_category_name(category_key: str) -> str:
+    """카테고리 키를 한글 이름으로 변환"""
+    cat_info = KR_MYSTERY_CATEGORIES.get(category_key, {})
+    return cat_info.get("name", category_key)

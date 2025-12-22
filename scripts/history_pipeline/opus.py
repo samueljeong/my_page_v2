@@ -438,7 +438,7 @@ def generate_opus_input(
         "(레거시 - 자료 없음)",
         "(레거시 - 프롬프트 없음)",
         "",
-        "PENDING",
+        "준비",
         created_at,
     ]]
 
@@ -476,7 +476,7 @@ def generate_episode_opus_input(
         "(레거시 - 자료 없음)",
         "(레거시 - 프롬프트 없음)",
         "",
-        "PENDING",
+        "준비",
         created_at,
     ]]
 

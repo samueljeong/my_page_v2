@@ -23,7 +23,7 @@ NEWS_OPUS_FIELDS = [
     "brief",            # [5] brief
     "thumbnail_copy",   # [6] thumb
     "opus_prompt_pack", # [7] opus_prompt_pack
-    "상태",             # [8] "PENDING" → 상태 열에 저장
+    "상태",             # [8] "준비" → 상태 열에 저장
     "_skip_created",    # [9] created_at (스킵)
     "_skip_selected",   # [10] selected (스킵)
 ]
