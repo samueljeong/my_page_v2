@@ -11369,6 +11369,20 @@ def api_image_generate_assets_zip():
             text = re.sub(r'(\d+)\s*[xX×]\s*(\d+)', lambda m: num_to_sino(int(m.group(1))) + ' 곱하기 ' + num_to_sino(int(m.group(2))), text)
             text = re.sub(r'(\d+)\s*[/÷]\s*(\d+)', lambda m: num_to_sino(int(m.group(1))) + ' 나누기 ' + num_to_sino(int(m.group(2))), text)
 
+            # ★ 범위 표현 (물결표 ~) (2025-12-22 추가)
+            # 7~8 → "칠에서팔", 10~20% → "십에서이십퍼센트"
+            # 물결표를 "에서"로 변환하여 자연스러운 범위 읽기
+            def replace_range(match):
+                num1 = num_to_sino(int(match.group(1)))
+                num2 = num_to_sino(int(match.group(2)))
+                unit = match.group(3) if match.lastindex >= 3 and match.group(3) else ''
+                # % → 퍼센트
+                if unit == '%':
+                    unit = '퍼센트'
+                return f"{num1}에서{num2}{unit}"
+            # 숫자~숫자 + 선택적 단위 (%, 개, 명, 원 등)
+            text = re.sub(r'(\d+)~(\d+)(%|퍼센트|개|명|원|만원|억원|조원|kg|g|cm|m|km|일|시간|분|초)?', replace_range, text)
+
             return text
 
         def generate_tts_for_sentence(text, voice_name, language_code, api_key):
@@ -11382,9 +11396,12 @@ def api_image_generate_assets_zip():
             text = text.replace('\\N', ' ').replace('\\n', ' ')  # 이스케이프된 형태 먼저
             text = text.replace('\n', ' ')                        # 실제 줄바꿈 문자
             text = re.sub(r'[/\\][nN]', ' ', text)               # 슬래시 형태까지
-            # 1) 소수점을 "점"으로 변환 (1.5톤 → 1점5톤)
-            text = re.sub(r'(\d+)\.(\d+)', lambda m: m.group(0).replace('.', '점'), text)
-            # 2) 쉼표를 마침표로 대체 (TTS 휴지 강화)
+            # ★ 소수점 변환 제거 (2025-12-22)
+            # 기존: text = re.sub(r'(\d+)\.(\d+)', lambda m: m.group(0).replace('.', '점'), text)
+            # 문제: convert_numbers_to_korean()보다 먼저 실행되어 소수점 패턴 매칭 방해
+            # 예: "2.75%" → "2점75%" → sino_units에서 "75%"를 "칠십오퍼센트"로 변환 (잘못됨)
+            # 해결: convert_numbers_to_korean()에서 소수점을 올바르게 처리함
+            # 1) 쉼표를 마침표로 대체 (TTS 휴지 강화)
             # 쉼표 뒤에 충분한 휴지가 없어서 발음이 빠름 → 마침표로 대체하여 휴지 확보
             text = text.replace(',', '.')
             # 3) 연속 공백 정리
@@ -12842,14 +12859,14 @@ def _get_bgm_file(mood, bgm_dir=None):
     return selected
 
 
-def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
+def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.10):
     """비디오에 BGM 믹싱 (나레이션 유지, BGM은 작게)
 
     Args:
         video_path: 원본 비디오 경로
         bgm_path: BGM 오디오 경로
         output_path: 출력 비디오 경로
-        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.10 = 10%)
 
     Returns:
         성공 여부 (bool)
@@ -12903,7 +12920,7 @@ def _mix_bgm_with_video(video_path, bgm_path, output_path, bgm_volume=0.15):
         return False
 
 
-def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bgm_volume=0.15):
+def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bgm_volume=0.10):
     """비디오에 씬별 BGM 믹싱 (감정 흐름에 따라 BGM 전환)
 
     Args:
@@ -12911,7 +12928,7 @@ def _mix_scene_bgm_with_video(video_path, scenes, video_effects, output_path, bg
         scenes: 씬 목록 (duration 정보 포함)
         video_effects: video_effects 객체 (bgm_mood, scene_bgm_changes 포함)
         output_path: 출력 비디오 경로
-        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.15 = 15%)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.10 = 10%)
 
     Returns:
         성공 여부 (bool)
