@@ -98,36 +98,46 @@ def fetch_chapter(book_id: int, chapter: int, retries: int = 3) -> list[dict]:
     for attempt in range(retries):
         try:
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Referer': 'http://www.holybible.or.kr/',
             })
 
             with urllib.request.urlopen(req, timeout=30) as response:
                 # EUC-KR 인코딩
                 data = response.read().decode('euc-kr', errors='ignore')
 
-                # 구절 추출 (패턴: <font...>절번호</font> 구절내용)
-                # 실제 HTML 구조에 맞게 조정 필요
                 verses = []
 
-                # 패턴 1: <font color=...><b>절번호</b></font> 내용
-                pattern1 = r'<font[^>]*><b>(\d+)</b></font>\s*(.+?)(?=<font[^>]*><b>\d+</b></font>|</td>|$)'
-                matches = re.findall(pattern1, data, re.DOTALL)
+                # holybible.or.kr HTML 구조:
+                # <ol start=001 id="b_001">
+                # <li><font class=tk4l>구절내용</font>
+                # <li><font class=tk4l>구절내용</font>
+                # ...
 
-                if not matches:
-                    # 패턴 2: 다른 HTML 구조 시도
-                    pattern2 = r'>(\d+)</.*?>\s*([^<]+)'
-                    matches = re.findall(pattern2, data)
+                # 모든 <ol> 블록 찾기
+                ol_blocks = re.findall(r'<ol start=(\d+)[^>]*>(.*?)</td>', data, re.DOTALL)
 
-                for verse_num, text in matches:
-                    clean_text = re.sub(r'<[^>]+>', '', text).strip()
-                    clean_text = re.sub(r'\s+', ' ', clean_text)
-                    if clean_text:
-                        verses.append({
-                            "verse": int(verse_num),
-                            "text": clean_text
-                        })
+                for start_num, ol_content in ol_blocks:
+                    start_verse = int(start_num)
+
+                    # <li><font class=tk4l>...</font> 패턴으로 각 구절 추출
+                    li_matches = re.findall(r'<li><font class=tk4l>(.*?)</font>', ol_content, re.DOTALL)
+
+                    for i, verse_content in enumerate(li_matches):
+                        verse_num = start_verse + i
+
+                        # HTML 태그 제거 (사전 링크 등)
+                        clean_text = re.sub(r'<[^>]+>', '', verse_content)
+                        # 연속 공백 정리
+                        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
+                        if clean_text:
+                            verses.append({
+                                "verse": verse_num,
+                                "text": clean_text
+                            })
 
                 return sorted(verses, key=lambda x: x["verse"])
 
