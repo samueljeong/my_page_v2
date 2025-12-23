@@ -198,13 +198,13 @@ def create_gradient_background(
     return img
 
 
-def add_wave_pattern(
+def add_modern_effects(
     img: Image.Image,
     accent_color: str = "#5c6bc0",
-    opacity: float = 0.15
+    opacity: float = 0.2
 ) -> Image.Image:
     """
-    물결 패턴 추가 (우측 하단)
+    2025 모던 스타일 효과 추가 (글로우 + 보케 + 빛줄기)
 
     Args:
         img: 원본 이미지
@@ -212,33 +212,58 @@ def add_wave_pattern(
         opacity: 투명도 (0-1)
 
     Returns:
-        패턴이 추가된 이미지
+        효과가 추가된 이미지
     """
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
     r, g, b = hex_to_rgb(accent_color)
-    alpha = int(255 * opacity)
 
-    # 물결 패턴 (여러 겹의 곡선)
-    for wave_num in range(3):
-        points = []
-        amplitude = 50 + wave_num * 30
-        frequency = 0.005 - wave_num * 0.001
-        y_offset = height - 200 + wave_num * 80
+    # 1. 중앙 글로우 효과 (빛나는 중심)
+    center_x, center_y = width // 2, height // 2
+    for radius in range(300, 50, -30):
+        alpha = int(30 * (1 - radius / 300))
+        if alpha > 0:
+            draw.ellipse(
+                [center_x - radius, center_y - radius,
+                 center_x + radius, center_y + radius],
+                fill=(r, g, b, alpha)
+            )
 
-        for x in range(width):
-            y = y_offset + amplitude * math.sin(x * frequency + wave_num)
-            points.append((x, y))
+    # 2. 상단 빛줄기 효과
+    for i in range(5):
+        x_offset = width * (0.2 + i * 0.15)
+        ray_alpha = 15
+        points = [
+            (x_offset - 100, 0),
+            (x_offset + 100, 0),
+            (x_offset + 200, height // 2),
+            (x_offset - 200, height // 2),
+        ]
+        draw.polygon(points, fill=(255, 255, 255, ray_alpha))
 
-        # 하단까지 채우기
-        points.append((width, height))
-        points.append((0, height))
+    # 3. 보케 효과 (반투명 원)
+    import random
+    random.seed(42)  # 일관된 결과
+    for _ in range(8):
+        bx = random.randint(0, width)
+        by = random.randint(0, height)
+        br = random.randint(50, 150)
+        ba = random.randint(5, 20)
+        draw.ellipse([bx - br, by - br, bx + br, by + br], fill=(255, 255, 255, ba))
 
-        current_alpha = alpha - wave_num * 20
-        if current_alpha > 0:
-            draw.polygon(points, fill=(r, g, b, current_alpha))
+    # 4. 하단 비네팅 (어두운 가장자리)
+    for y in range(height - 200, height):
+        progress = (y - (height - 200)) / 200
+        alpha = int(100 * progress)
+        draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
+
+    # 상단 비네팅
+    for y in range(0, 100):
+        progress = 1 - (y / 100)
+        alpha = int(60 * progress)
+        draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
 
     # 원본 이미지와 합성
     img = img.convert('RGBA')
@@ -249,16 +274,16 @@ def create_bible_background(
     book_name: str,
     width: int = 1920,
     height: int = 1080,
-    add_pattern: bool = True
+    add_effects: bool = True
 ) -> Image.Image:
     """
-    성경 책에 맞는 배경 이미지 생성
+    성경 책에 맞는 배경 이미지 생성 (2025 모던 스타일)
 
     Args:
         book_name: 성경 책 이름 (예: 창세기)
         width: 이미지 너비
         height: 이미지 높이
-        add_pattern: 물결 패턴 추가 여부
+        add_effects: 모던 효과 추가 여부
 
     Returns:
         PIL Image 객체
@@ -274,9 +299,9 @@ def create_bible_background(
         direction="diagonal"
     )
 
-    # 물결 패턴 추가
-    if add_pattern:
-        img = add_wave_pattern(img, accent_color=colors["accent"])
+    # 모던 효과 추가 (글로우, 보케, 빛줄기)
+    if add_effects:
+        img = add_modern_effects(img, accent_color=colors["accent"])
 
     return img.convert('RGB')
 
@@ -535,7 +560,7 @@ def generate_ass_subtitle(
     verse_durations: List[float],
     output_path: str,
     font_name: str = "NanumSquareRound",
-    font_size: int = 48,
+    font_size: int = 72,
     primary_color: str = "&H00FFFFFF",  # 흰색
     outline_color: str = "&H00000000",  # 검정
     fade_duration_ms: int = 300
@@ -548,7 +573,7 @@ def generate_ass_subtitle(
         verse_durations: 각 절의 TTS 재생 시간 (초)
         output_path: ASS 파일 저장 경로
         font_name: 폰트 이름
-        font_size: 폰트 크기
+        font_size: 폰트 크기 (YouTube용 72px 권장)
         primary_color: 텍스트 색상 (ASS 형식)
         outline_color: 외곽선 색상
         fade_duration_ms: 페이드 효과 시간 (밀리초)
@@ -556,7 +581,9 @@ def generate_ass_subtitle(
     Returns:
         저장된 파일 경로
     """
-    # ASS 헤더
+    # ASS 헤더 - 2025 모던 스타일
+    # Reference: 상단 가운데, 골드색, 크게
+    # Verse: 중앙, 흰색, 매우 크게
     ass_header = f"""[Script Info]
 Title: Bible Reading Subtitles
 ScriptType: v4.00+
@@ -566,8 +593,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Reference,{font_name},{int(font_size * 0.8)},&H00FFD700,&H000000FF,{outline_color},&H80000000,1,0,0,0,100,100,0,0,1,2,2,8,50,50,80,1
-Style: Verse,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},&H80000000,0,0,0,0,100,100,0,0,1,3,3,5,50,50,100,1
+Style: Reference,{font_name},{int(font_size * 0.7)},&H0000D7FF,&H000000FF,&H00000000,&HCC000000,1,0,0,0,100,100,2,0,1,4,3,8,50,50,60,1
+Style: Verse,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},&HCC000000,1,0,0,0,100,100,1,0,1,5,4,5,100,100,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -595,12 +622,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: 0,{format_ass_time(start_time)},{format_ass_time(end_time)},Reference,,0,0,0,,{ref_text}"
         )
 
-        # 본문 텍스트 (하단): "(1) 태초에 하나님이..."
-        # 긴 텍스트는 줄바꿈 처리
+        # 본문 텍스트 (중앙): "(1) 태초에 하나님이..."
+        # 긴 텍스트는 줄바꿈 처리 (큰 폰트에 맞게 20자 기준)
         verse_text = subtitle['text']
-        if len(verse_text) > 35:
-            # 35자 이상이면 줄바꿈
-            lines = wrap_text(verse_text, max_chars_per_line=35)
+        if len(verse_text) > 20:
+            # 20자 이상이면 줄바꿈 (큰 폰트 기준)
+            lines = wrap_text(verse_text, max_chars_per_line=20)
             verse_text = "\\N".join(lines)  # ASS 줄바꿈
 
         verse_with_fade = f"{{\\fad({fade_duration_ms},{fade_duration_ms})}}{verse_text}"
