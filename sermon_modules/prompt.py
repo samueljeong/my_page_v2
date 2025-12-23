@@ -1141,161 +1141,206 @@ def build_step3_prompt_from_json(
 
     draft += "\n" + "=" * 50 + "\n\n"
 
-    # Step1 결과
+    # Step1 결과 (★ 토큰 절약을 위해 핵심 정보만 추출)
     if step1_result:
-        draft += "【 STEP 1 — 성경 연구 및 분석 】\n\n"
+        draft += "【 STEP 1 — 성경 연구 및 분석 (핵심 요약) 】\n\n"
         if isinstance(step1_result, dict):
-            # 주요 필드 추출
+            # 1. 핵심 메시지 (필수)
             if step1_result.get("core_message") or step1_result.get("핵심_메시지"):
                 msg = step1_result.get("core_message") or step1_result.get("핵심_메시지")
                 draft += f"▶ 핵심 메시지:\n{msg}\n\n"
 
+            # 2. passage_overview (있으면)
+            if step1_result.get("passage_overview"):
+                overview = step1_result["passage_overview"]
+                if isinstance(overview, dict):
+                    if overview.get("one_paragraph_summary"):
+                        draft += f"▶ 본문 요약:\n{overview['one_paragraph_summary']}\n\n"
+                    if overview.get("flow_tags"):
+                        tags = overview["flow_tags"]
+                        if isinstance(tags, list):
+                            draft += f"▶ 흐름 태그: {' → '.join(tags)}\n\n"
+
+            # 3. 주요 절 해설 (상위 3개만)
             if step1_result.get("key_verses") or step1_result.get("주요_절_해설"):
                 verses = step1_result.get("key_verses") or step1_result.get("주요_절_해설")
-                draft += f"▶ 주요 절 해설:\n{json_to_text(verses)}\n\n"
+                if isinstance(verses, list) and len(verses) > 3:
+                    verses = verses[:3]
+                draft += f"▶ 주요 절 해설 (상위 3개):\n{json_to_text(verses)}\n\n"
 
-            if step1_result.get("key_words") or step1_result.get("핵심_단어_분석"):
-                words = step1_result.get("key_words") or step1_result.get("핵심_단어_분석")
-                draft += f"▶ 핵심 단어 분석:\n{json_to_text(words)}\n\n"
+            # 4. 핵심 단어 분석 (상위 3개만)
+            if step1_result.get("key_words") or step1_result.get("핵심_단어_분석") or step1_result.get("key_terms"):
+                words = step1_result.get("key_words") or step1_result.get("핵심_단어_분석") or step1_result.get("key_terms")
+                if isinstance(words, list) and len(words) > 3:
+                    words = words[:3]
+                draft += f"▶ 핵심 단어 (상위 3개):\n{json_to_text(words)}\n\n"
 
+            # 5. 역사적 배경 (상위 2개만)
             if step1_result.get("historical_background") or step1_result.get("역사적_배경"):
                 bg = step1_result.get("historical_background") or step1_result.get("역사적_배경")
-                draft += f"▶ 역사적 배경:\n{bg}\n\n"
+                if isinstance(bg, list) and len(bg) > 2:
+                    bg = bg[:2]
+                draft += f"▶ 역사적 배경 (상위 2개):\n{json_to_text(bg)}\n\n"
 
-            if step1_result.get("theological_insights") or step1_result.get("신학적_통찰"):
-                insights = step1_result.get("theological_insights") or step1_result.get("신학적_통찰")
-                draft += f"▶ 신학적 통찰:\n{json_to_text(insights)}\n\n"
-
-            # anchors (ID 스키마)
+            # 6. anchors (★ 상위 5개만 - 토큰 절약 핵심)
             if step1_result.get("anchors"):
-                draft += f"▶ Anchors (핵심 근거):\n{json_to_text(step1_result['anchors'])}\n\n"
+                anchors = step1_result['anchors']
+                if isinstance(anchors, list) and len(anchors) > 5:
+                    anchors = anchors[:5]
+                    draft += f"▶ Anchors 핵심 근거 (상위 5개/{len(step1_result['anchors'])}개):\n"
+                else:
+                    draft += f"▶ Anchors 핵심 근거:\n"
+                draft += f"{json_to_text(anchors)}\n\n"
 
-            # guardrails
+            # 7. guardrails (★ 핵심만 추출 - does_not_claim 상위 3개)
             if step1_result.get("guardrails"):
-                draft += f"▶ Guardrails (주의사항):\n{json_to_text(step1_result['guardrails'])}\n\n"
+                guardrails = step1_result['guardrails']
+                if isinstance(guardrails, dict):
+                    draft += "▶ Guardrails (주의사항 핵심):\n"
+                    # clearly_affirms 상위 3개
+                    if guardrails.get("clearly_affirms"):
+                        affirms = guardrails["clearly_affirms"]
+                        if isinstance(affirms, list) and len(affirms) > 3:
+                            affirms = affirms[:3]
+                        draft += f"  [본문이 말하는 것] (상위 3개):\n{json_to_text(affirms)}\n"
+                    # does_not_claim 상위 3개
+                    if guardrails.get("does_not_claim"):
+                        claims = guardrails["does_not_claim"]
+                        if isinstance(claims, list) and len(claims) > 3:
+                            claims = claims[:3]
+                        draft += f"  [본문이 말하지 않는 것] (상위 3개):\n{json_to_text(claims)}\n"
+                    draft += "\n"
+                else:
+                    draft += f"▶ Guardrails:\n{json_to_text(guardrails)}\n\n"
 
-            # 나머지 필드
-            shown_keys = {'core_message', '핵심_메시지', 'key_verses', '주요_절_해설',
-                         'key_words', '핵심_단어_분석', 'historical_background', '역사적_배경',
-                         'theological_insights', '신학적_통찰', 'anchors', 'guardrails'}
-            other_fields = {k: v for k, v in step1_result.items() if k not in shown_keys and v}
-            if other_fields:
-                draft += f"▶ 기타 분석:\n{json_to_text(other_fields)}\n\n"
+            # 8. step2_transfer (있으면 - 핵심 후보)
+            if step1_result.get("step2_transfer"):
+                transfer = step1_result["step2_transfer"]
+                if isinstance(transfer, dict):
+                    if transfer.get("big_idea_candidates"):
+                        draft += f"▶ Big Idea 후보:\n"
+                        for idea in transfer["big_idea_candidates"][:2]:
+                            draft += f"  - {idea}\n"
+                        draft += "\n"
+
         else:
-            draft += f"{step1_result}\n\n"
+            # 문자열인 경우 길이 제한
+            if len(str(step1_result)) > 2000:
+                draft += f"{str(step1_result)[:2000]}... (이하 생략)\n\n"
+            else:
+                draft += f"{step1_result}\n\n"
 
-        # Strong's 원어 분석
+        # Strong's 원어 분석 (★ 상위 3개만 - 토큰 절약)
         if step1_extra_info and step1_extra_info.get('strongs_analysis'):
             strongs = step1_extra_info['strongs_analysis']
             key_words = strongs.get('key_words', [])
             if key_words:
                 draft += "-" * 40 + "\n"
-                draft += "【 ★ Strong's 원어 분석 】\n"
+                draft += "【 ★ Strong's 원어 분석 (상위 3개) 】\n"
                 draft += "-" * 40 + "\n\n"
-                if strongs.get('text'):
-                    draft += f"영문 (KJV): {strongs['text']}\n\n"
                 draft += "▶ 핵심 원어 단어:\n"
-                for i, word in enumerate(key_words[:7], 1):
+                for i, word in enumerate(key_words[:3], 1):  # ★ 7개 → 3개
                     lemma = word.get('lemma', '')
                     translit = word.get('translit', '')
                     strongs_num = word.get('strongs', '')
                     definition = word.get('definition', '')
                     draft += f"  {i}. {lemma} ({translit}, {strongs_num})\n"
-                    if word.get('english'):
-                        draft += f"     → 영어: {word['english']}\n"
                     if definition:
-                        draft += f"     → 의미: {definition[:200]}{'...' if len(definition) > 200 else ''}\n"
+                        draft += f"     → 의미: {definition[:100]}{'...' if len(definition) > 100 else ''}\n"  # 200자 → 100자
                     draft += "\n"
 
         draft += "=" * 50 + "\n\n"
 
-    # Step2 결과
+    # Step2 결과 (★ 토큰 절약을 위해 핵심 구조만 추출)
     if step2_result:
-        draft += "【 STEP 2 — 설교 구조 및 개요 】\n\n"
+        draft += "【 STEP 2 — 설교 구조 및 개요 (핵심 요약) 】\n\n"
         if isinstance(step2_result, dict):
-            # 서론
+            # 1. 서론 (요약)
             if step2_result.get("introduction") or step2_result.get("서론"):
                 intro = step2_result.get("introduction") or step2_result.get("서론")
-                draft += f"▶ 서론:\n{json_to_text(intro)}\n\n"
+                if isinstance(intro, dict):
+                    # 핵심 필드만 추출
+                    intro_summary = {}
+                    for key in ['hook', 'bridge', 'thesis', '도입', '연결', '주제문']:
+                        if intro.get(key):
+                            intro_summary[key] = intro[key]
+                    if intro_summary:
+                        draft += f"▶ 서론:\n{json_to_text(intro_summary)}\n\n"
+                    else:
+                        draft += f"▶ 서론:\n{json_to_text(intro)}\n\n"
+                else:
+                    draft += f"▶ 서론:\n{json_to_text(intro)}\n\n"
 
-            # 본론/대지
+            # 2. 본론/대지 (상위 3개 대지만)
             if step2_result.get("main_points") or step2_result.get("본론") or step2_result.get("대지"):
                 points = step2_result.get("main_points") or step2_result.get("본론") or step2_result.get("대지")
-                draft += f"▶ 본론 (대지):\n{json_to_text(points)}\n\n"
+                if isinstance(points, list) and len(points) > 3:
+                    points = points[:3]
+                    draft += f"▶ 본론 (대지) - 상위 3개:\n{json_to_text(points)}\n\n"
+                else:
+                    draft += f"▶ 본론 (대지):\n{json_to_text(points)}\n\n"
 
-            # 소대지 (subpoints) - 별도 필드로 있는 경우
-            if step2_result.get("subpoints") or step2_result.get("소대지"):
-                subpoints = step2_result.get("subpoints") or step2_result.get("소대지")
-                draft += f"▶ 소대지:\n{json_to_text(subpoints)}\n\n"
-
-            # sections (ID 스키마)
+            # 3. sections (ID 스키마) - 상위 3개만
             if step2_result.get("sections"):
-                draft += f"▶ 설교 구조:\n{json_to_text(step2_result['sections'])}\n\n"
+                sections = step2_result['sections']
+                if isinstance(sections, list) and len(sections) > 3:
+                    sections = sections[:3]
+                    draft += f"▶ 설교 구조 (상위 3개):\n{json_to_text(sections)}\n\n"
+                else:
+                    draft += f"▶ 설교 구조:\n{json_to_text(sections)}\n\n"
 
-            # 결론
+            # 4. 결론 (요약)
             if step2_result.get("conclusion") or step2_result.get("결론"):
                 conclusion = step2_result.get("conclusion") or step2_result.get("결론")
                 draft += f"▶ 결론:\n{json_to_text(conclusion)}\n\n"
 
-            # 적용
-            if step2_result.get("application") or step2_result.get("적용"):
-                app = step2_result.get("application") or step2_result.get("적용")
-                draft += f"▶ 적용:\n{json_to_text(app)}\n\n"
-
-            # 예화
+            # 5. 예화 (상위 2개만)
             if step2_result.get("illustrations") or step2_result.get("예화"):
                 illust = step2_result.get("illustrations") or step2_result.get("예화")
-                draft += f"▶ 예화:\n{json_to_text(illust)}\n\n"
+                if isinstance(illust, list) and len(illust) > 2:
+                    illust = illust[:2]
+                    draft += f"▶ 예화 (상위 2개):\n{json_to_text(illust)}\n\n"
+                else:
+                    draft += f"▶ 예화:\n{json_to_text(illust)}\n\n"
 
-            # writing_spec
-            if step2_result.get("writing_spec"):
-                draft += f"▶ 작성 규격:\n{json_to_text(step2_result['writing_spec'])}\n\n"
         else:
-            draft += f"{step2_result}\n\n"
+            # 문자열인 경우 길이 제한
+            if len(str(step2_result)) > 2000:
+                draft += f"{str(step2_result)[:2000]}... (이하 생략)\n\n"
+            else:
+                draft += f"{step2_result}\n\n"
 
-        # 시대 컨텍스트
+        # 시대 컨텍스트 (★ 토큰 절약: 카테고리당 1개, 관심사 3개)
         if step2_extra_info and step2_extra_info.get('context_data'):
             context = step2_extra_info['context_data']
             draft += "-" * 40 + "\n"
-            draft += "【 ★ 현재 시대 컨텍스트 】\n"
+            draft += "【 ★ 현재 시대 컨텍스트 (요약) 】\n"
             draft += "-" * 40 + "\n\n"
             draft += f"청중 유형: {context.get('audience', '전체')}\n\n"
 
-            # 주요 뉴스
+            # 주요 뉴스 (★ 카테고리당 1개만)
             news = context.get('news', {})
             if news:
                 cat_names = {'economy': '경제', 'politics': '정치', 'society': '사회', 'world': '국제', 'culture': '문화'}
-                draft += "▶ 주요 시사 이슈 (서론/예화에 활용):\n"
+                draft += "▶ 주요 시사 이슈 (카테고리당 1개):\n"
+                news_count = 0
                 for cat, items in news.items():
-                    if items:
-                        draft += f"  [{cat_names.get(cat, cat)}]\n"
-                        for item in items[:2]:
-                            title_text = item.get('title', '')
-                            if len(title_text) > 50:
-                                title_text = title_text[:50] + '...'
-                            draft += f"  - {title_text}\n"
+                    if items and news_count < 3:  # 최대 3개 카테고리만
+                        item = items[0]  # ★ 첫 번째만
+                        title_text = item.get('title', '')
+                        if len(title_text) > 40:
+                            title_text = title_text[:40] + '...'
+                        draft += f"  - [{cat_names.get(cat, cat)}] {title_text}\n"
+                        news_count += 1
                 draft += "\n"
 
-            # 사회 지표
-            indicators = context.get('indicators', {})
-            if indicators:
-                draft += "▶ 관련 사회 지표:\n"
-                for cat, data in indicators.items():
-                    if isinstance(data, dict):
-                        for key, value in data.items():
-                            if key != 'updated':
-                                draft += f"  - {key}: {value}\n"
-                draft += "\n"
-
-            # 청중 관심사
+            # 청중 관심사 (★ 상위 3개만)
             concerns = context.get('concerns', [])
             if concerns:
-                draft += "▶ 청중의 주요 관심사/고민:\n"
-                for concern in concerns:
+                draft += "▶ 청중 관심사 (상위 3개):\n"
+                for concern in concerns[:3]:  # ★ 3개만
                     draft += f"  - {concern}\n"
                 draft += "\n"
-
-            draft += "※ 위 시대 컨텍스트를 도입부/예화/적용에 활용하세요.\n\n"
 
         draft += "=" * 50 + "\n\n"
 
