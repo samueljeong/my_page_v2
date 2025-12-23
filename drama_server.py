@@ -3981,6 +3981,7 @@ def generate_gemini_tts(text, voice_name="Kore", model="gemini-2.5-flash-preview
     """
     import wave
     import io
+    import time
 
     # 영문 인명 괄호 제거 (자막에는 남고, TTS에서는 읽지 않음)
     text = preprocess_tts_text(text)
