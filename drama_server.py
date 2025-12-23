@@ -4373,6 +4373,183 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
         return {"ok": False, "error": str(e)}
 
 
+def generate_bible_tts_with_durations(verse_texts, voice_name="ko-KR-Chirp3-HD-Charon"):
+    """
+    BIBLE용 TTS 생성 - 절별 정확한 duration 반환
+
+    기존 방식: 전체 텍스트 TTS → 글자수 비율로 duration 추정 (부정확)
+    새 방식: 청크별 TTS → ffprobe로 실제 duration 측정 → 청크 내 분배 (정확)
+
+    Args:
+        verse_texts: 각 절의 TTS 텍스트 리스트 ["태초에...", "땅이 혼돈하고...", ...]
+        voice_name: Chirp 3 HD 음성 이름
+
+    Returns:
+        {
+            "ok": True,
+            "audio_data": bytes,
+            "total_duration": float,
+            "verse_durations": [float, ...]  # 각 절의 정확한 duration
+        }
+    """
+    import tempfile
+    import subprocess
+    import io
+
+    try:
+        from google.cloud import texttospeech
+        from google.oauth2 import service_account
+        import json
+
+        print(f"[BIBLE-TTS] 시작 - {len(verse_texts)}개 절, 음성: {voice_name}", flush=True)
+
+        # 서비스 계정 인증
+        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        if not service_account_json:
+            return {"ok": False, "error": "GOOGLE_SERVICE_ACCOUNT_JSON 환경변수가 없습니다"}
+
+        service_account_info = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="ko-KR",
+            name=voice_name,
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        )
+
+        # ========== 1. 절을 청크로 그룹핑 (5000바이트 ≈ 1400자 제한) ==========
+        MAX_CHARS = 1200  # 안전 마진
+        chunks = []  # [(start_verse_idx, end_verse_idx, combined_text), ...]
+        current_chunk_start = 0
+        current_chunk_text = ""
+
+        for i, verse_text in enumerate(verse_texts):
+            # 영문 인명 괄호 제거 (TTS에서는 읽지 않음)
+            clean_text = preprocess_tts_text(verse_text)
+
+            if len(current_chunk_text) + len(clean_text) + 1 > MAX_CHARS:
+                # 현재 청크 저장
+                if current_chunk_text:
+                    chunks.append((current_chunk_start, i - 1, current_chunk_text.strip()))
+                # 새 청크 시작
+                current_chunk_start = i
+                current_chunk_text = clean_text + " "
+            else:
+                current_chunk_text += clean_text + " "
+
+        # 마지막 청크 저장
+        if current_chunk_text:
+            chunks.append((current_chunk_start, len(verse_texts) - 1, current_chunk_text.strip()))
+
+        print(f"[BIBLE-TTS] {len(chunks)}개 청크로 분할", flush=True)
+
+        # ========== 2. 청크별 TTS + duration 측정 ==========
+        chunk_audios = []  # [(audio_bytes, duration, start_idx, end_idx), ...]
+
+        def get_audio_duration(audio_bytes):
+            """ffprobe로 오디오 duration 측정"""
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                    tmp.write(audio_bytes)
+                    tmp_path = tmp.name
+
+                cmd = [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    tmp_path
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                os.unlink(tmp_path)
+
+                if result.returncode == 0 and result.stdout.strip():
+                    return float(result.stdout.strip())
+            except Exception as e:
+                print(f"[BIBLE-TTS] ffprobe 오류: {e}")
+
+            # 폴백: MP3 128kbps 기준 추정
+            return len(audio_bytes) / 16000
+
+        for idx, (start_idx, end_idx, chunk_text) in enumerate(chunks):
+            print(f"[BIBLE-TTS] 청크 {idx+1}/{len(chunks)} 처리 중... ({len(chunk_text)}자)", flush=True)
+
+            input_text = texttospeech.SynthesisInput(text=chunk_text)
+            response = client.synthesize_speech(
+                input=input_text,
+                voice=voice,
+                audio_config=audio_config,
+            )
+
+            audio_bytes = response.audio_content
+            duration = get_audio_duration(audio_bytes)
+
+            chunk_audios.append((audio_bytes, duration, start_idx, end_idx))
+
+            print(f"[BIBLE-TTS] 청크 {idx+1}: {duration:.2f}초 (절 {start_idx+1}~{end_idx+1})", flush=True)
+
+            # API 레이트 리밋 방지
+            if idx < len(chunks) - 1:
+                import time
+                time.sleep(0.2)
+
+        # ========== 3. 절별 duration 계산 (청크 내 비율 분배) ==========
+        verse_durations = [0.0] * len(verse_texts)
+
+        for audio_bytes, chunk_duration, start_idx, end_idx in chunk_audios:
+            # 해당 청크에 포함된 절들
+            chunk_verses = verse_texts[start_idx:end_idx + 1]
+            total_chars = sum(len(v) for v in chunk_verses)
+
+            if total_chars > 0:
+                for i, verse_text in enumerate(chunk_verses):
+                    verse_idx = start_idx + i
+                    ratio = len(verse_text) / total_chars
+                    verse_durations[verse_idx] = chunk_duration * ratio
+            else:
+                # 균등 분배 (예외 처리)
+                count = end_idx - start_idx + 1
+                for i in range(count):
+                    verse_durations[start_idx + i] = chunk_duration / count
+
+        # ========== 4. 오디오 합치기 ==========
+        try:
+            from pydub import AudioSegment
+
+            combined = AudioSegment.empty()
+            for audio_bytes, _, _, _ in chunk_audios:
+                segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
+                combined += segment
+
+            output_buffer = io.BytesIO()
+            combined.export(output_buffer, format="mp3")
+            final_audio = output_buffer.getvalue()
+        except ImportError:
+            # pydub 없으면 단순 연결
+            final_audio = b''.join(audio_bytes for audio_bytes, _, _, _ in chunk_audios)
+
+        total_duration = sum(verse_durations)
+        print(f"[BIBLE-TTS] 완료 - 총 {total_duration:.1f}초, {len(verse_durations)}개 절", flush=True)
+
+        return {
+            "ok": True,
+            "audio_data": final_audio,
+            "total_duration": total_duration,
+            "verse_durations": verse_durations
+        }
+
+    except Exception as e:
+        print(f"[BIBLE-TTS] 오류: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
 def parse_gemini_voice(voice_name):
     """
     Gemini 음성 설정 파싱
@@ -22016,62 +22193,69 @@ def run_bible_episode_pipeline(
         temp_dir = os.path.join(tempfile.gettempdir(), f"bible_day_{day_number}")
         os.makedirs(temp_dir, exist_ok=True)
 
-        # ========== 1. TTS 생성 ==========
+        # ========== 1. TTS 생성 (청크별 실제 duration 측정) ==========
         print(f"[BIBLE] 1. TTS 생성 시작...")
 
-        # 전체 텍스트 생성 (절 번호 제외, 마침표 포함)
+        # 절별 TTS 텍스트 추출 (절 번호 제외, 마침표 포함)
         tts_texts = []
-        verse_durations = []
-
         for chapter in episode.chapters:
             for verse in chapter.verses:
                 tts_texts.append(verse.tts_text)  # 마침표 자동 추가됨
 
-        full_text = " ".join(tts_texts)
-        print(f"[BIBLE] TTS 텍스트: {len(full_text)}자")
+        print(f"[BIBLE] TTS 텍스트: {len(tts_texts)}개 절")
 
         # TTS 음성 처리
         audio_path = os.path.join(temp_dir, f"day_{day_number:03d}.mp3")
 
         if voice.startswith("chirp3:"):
-            # Google Cloud Chirp 3 HD TTS 사용
+            # ★ 새로운 방식: 청크별 TTS + ffprobe로 실제 duration 측정
             chirp3_config = parse_chirp3_voice(voice)
-            tts_result = generate_chirp3_tts(full_text, voice_name=chirp3_config["voice"])
-        elif voice.startswith("gemini:"):
-            # Gemini TTS (pro 또는 flash)
-            parts = voice.split(":")
-            if len(parts) == 3 and parts[1] == "pro":
-                voice_name = parts[2]
-                model = "gemini-2.5-pro-preview-tts"
+            tts_result = generate_bible_tts_with_durations(
+                verse_texts=tts_texts,
+                voice_name=chirp3_config["voice"]
+            )
+            if tts_result.get("ok"):
+                verse_durations = tts_result.get("verse_durations", [])
+                audio_duration = tts_result.get("total_duration", 0)
             else:
-                voice_name = parts[1] if len(parts) > 1 else "Charon"
-                model = "gemini-2.5-flash-preview-tts"
-            tts_result = generate_gemini_tts(full_text, voice_name=voice_name, model=model)
+                error_msg = f"TTS 생성 실패: {tts_result.get('error')}"
+                update_episode_status(service, sheet_id, row_idx, "실패", error_message=error_msg)
+                return {"ok": False, "error": error_msg}
         else:
-            # Google Cloud TTS
-            from scripts.tts.google_tts import generate_google_tts
-            tts_result = generate_google_tts(full_text, voice)
+            # 기존 방식 폴백 (Gemini TTS, Google Cloud TTS)
+            full_text = " ".join(tts_texts)
+            if voice.startswith("gemini:"):
+                parts = voice.split(":")
+                if len(parts) == 3 and parts[1] == "pro":
+                    voice_name = parts[2]
+                    model = "gemini-2.5-pro-preview-tts"
+                else:
+                    voice_name = parts[1] if len(parts) > 1 else "Charon"
+                    model = "gemini-2.5-flash-preview-tts"
+                tts_result = generate_gemini_tts(full_text, voice_name=voice_name, model=model)
+            else:
+                from scripts.tts.google_tts import generate_google_tts
+                tts_result = generate_google_tts(full_text, voice)
 
-        if not tts_result.get("ok"):
-            error_msg = f"TTS 생성 실패: {tts_result.get('error')}"
-            update_episode_status(service, sheet_id, row_idx, "실패", error_message=error_msg)
-            return {"ok": False, "error": error_msg}
+            if not tts_result.get("ok"):
+                error_msg = f"TTS 생성 실패: {tts_result.get('error')}"
+                update_episode_status(service, sheet_id, row_idx, "실패", error_message=error_msg)
+                return {"ok": False, "error": error_msg}
+
+            # 폴백: 글자수 비율로 duration 추정
+            audio_duration = tts_result.get("duration", len(full_text) / 15.0)
+            total_chars = sum(len(t) for t in tts_texts)
+            verse_durations = []
+            for text in tts_texts:
+                ratio = len(text) / total_chars if total_chars > 0 else 1.0 / len(tts_texts)
+                verse_durations.append(audio_duration * ratio)
 
         # 오디오 저장
         audio_data = tts_result.get("audio_data")
         with open(audio_path, "wb") as f:
             f.write(audio_data)
 
-        # 전체 오디오 길이
-        audio_duration = tts_result.get("duration", len(full_text) / 15.0)  # 대략 15자/초
-
-        # 절별 duration 계산 (텍스트 길이 비례)
-        total_chars = sum(len(t) for t in tts_texts)
-        for text in tts_texts:
-            ratio = len(text) / total_chars if total_chars > 0 else 1.0 / len(tts_texts)
-            verse_durations.append(audio_duration * ratio)
-
-        print(f"[BIBLE] TTS 완료: {audio_duration:.1f}초")
+        print(f"[BIBLE] TTS 완료: {audio_duration:.1f}초, {len(verse_durations)}개 절 duration 계산됨")
 
         # ========== 2. 배경 이미지 ==========
         print(f"[BIBLE] 2. 배경 이미지 확인...")
