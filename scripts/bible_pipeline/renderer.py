@@ -779,57 +779,98 @@ def render_episode_video(
         subtitle_type=subtitle_ext
     )
 
-    print(f"[RENDER] FFmpeg 실행 시작: Day {episode.day_number}", flush=True)
+    # 타임아웃 계산: 영상 길이의 2배 + 5분 (최소 15분, 최대 60분)
+    # Render 1vCPU에서 실시간의 약 1.5-2배 소요
+    timeout_seconds = min(max(int(total_duration * 2 + 300), 900), 3600)
+    print(f"[RENDER] FFmpeg 실행 시작: Day {episode.day_number} (타임아웃: {timeout_seconds//60}분)", flush=True)
     print(f"[RENDER] 명령어: {' '.join(cmd[:10])}...", flush=True)
 
     try:
-        # subprocess.Popen으로 실시간 진행 상황 출력
+        import select
+        import threading
+
+        # FFmpeg에 -progress pipe:1 추가하여 진행 정보를 stdout으로 출력
+        cmd_with_progress = cmd[:-1] + ['-progress', 'pipe:1', cmd[-1]]
+
         process = subprocess.Popen(
-            cmd,
+            cmd_with_progress,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
+            text=True
         )
 
+        start_time = time.time()
         last_progress_time = time.time()
-        stderr_output = []
+        stderr_lines = []
         current_time_sec = 0
 
-        # FFmpeg stderr에서 진행 상황 파싱
+        def read_stderr():
+            """stderr를 백그라운드에서 읽어 저장"""
+            for line in process.stderr:
+                stderr_lines.append(line)
+
+        # stderr를 별도 스레드에서 읽기 (블로킹 방지)
+        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        stderr_thread.start()
+
+        # stdout에서 진행 정보 읽기 (FFmpeg -progress 출력)
         while True:
-            line = process.stderr.readline()
-            if not line and process.poll() is not None:
+            # 타임아웃 체크
+            if time.time() - start_time > timeout_seconds:
+                process.kill()
+                return {"ok": False, "error": f"FFmpeg 타임아웃 ({timeout_seconds//60}분 초과)"}
+
+            # 프로세스 종료 체크
+            if process.poll() is not None:
                 break
 
-            if line:
-                stderr_output.append(line)
+            try:
+                line = process.stdout.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
 
-                # time=00:00:04.00 형식에서 진행 시간 추출
-                time_match = re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', line)
-                if time_match:
-                    hours = int(time_match.group(1))
-                    minutes = int(time_match.group(2))
-                    seconds = float(time_match.group(3))
-                    current_time_sec = hours * 3600 + minutes * 60 + seconds
+                # out_time_ms=12345678 형식에서 시간 추출
+                if line.startswith('out_time_ms='):
+                    try:
+                        ms = int(line.split('=')[1].strip())
+                        current_time_sec = ms / 1000000.0
+                    except:
+                        pass
 
-                    # 10초마다 진행 상황 출력
-                    if time.time() - last_progress_time >= 10:
-                        progress_pct = (current_time_sec / total_duration * 100) if total_duration > 0 else 0
-                        print(f"[RENDER] FFmpeg 진행: {current_time_sec:.0f}초/{total_duration:.0f}초 ({progress_pct:.1f}%)", flush=True)
-                        last_progress_time = time.time()
+                # out_time=00:01:23.456789 형식
+                elif line.startswith('out_time='):
+                    time_str = line.split('=')[1].strip()
+                    time_match = re.match(r'(\d+):(\d+):(\d+\.?\d*)', time_str)
+                    if time_match:
+                        hours = int(time_match.group(1))
+                        minutes = int(time_match.group(2))
+                        seconds = float(time_match.group(3))
+                        current_time_sec = hours * 3600 + minutes * 60 + seconds
+
+                # 30초마다 진행 상황 출력
+                if time.time() - last_progress_time >= 30:
+                    progress_pct = (current_time_sec / total_duration * 100) if total_duration > 0 else 0
+                    elapsed = time.time() - start_time
+                    print(f"[RENDER] FFmpeg 진행: {current_time_sec:.0f}초/{total_duration:.0f}초 ({progress_pct:.1f}%) - 경과: {elapsed/60:.1f}분", flush=True)
+                    last_progress_time = time.time()
+
+            except Exception as e:
+                time.sleep(0.1)
 
         # 프로세스 완료 대기
-        process.wait(timeout=600)
+        process.wait(timeout=60)
+        stderr_thread.join(timeout=5)
 
         if process.returncode != 0:
-            error_text = ''.join(stderr_output[-20:])  # 마지막 20줄
+            error_text = ''.join(stderr_lines[-30:]) if stderr_lines else "No stderr"
             return {
                 "ok": False,
                 "error": f"FFmpeg 오류 (code {process.returncode}): {error_text[:500]}"
             }
 
-        print(f"[RENDER] FFmpeg 완료! 총 {current_time_sec:.0f}초 렌더링됨", flush=True)
+        elapsed = time.time() - start_time
+        print(f"[RENDER] FFmpeg 완료! 총 {current_time_sec:.0f}초 렌더링됨 (소요: {elapsed/60:.1f}분)", flush=True)
         print(f"[RENDER] 영상 생성 완료: {video_path}", flush=True)
 
         return {
@@ -841,7 +882,7 @@ def render_episode_video(
 
     except subprocess.TimeoutExpired:
         process.kill()
-        return {"ok": False, "error": "FFmpeg 타임아웃 (10분 초과)"}
+        return {"ok": False, "error": f"FFmpeg 타임아웃 ({timeout_seconds//60}분 초과)"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
