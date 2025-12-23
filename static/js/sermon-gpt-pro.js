@@ -140,126 +140,146 @@ function assembleGptProDraft() {
 
   draft += `\n==================================================\n\n`;
 
-  // Step 결과들 + 추가 정보 (Strong's 원어 분석, 시대 컨텍스트)
+  // Step 결과들 + 추가 정보 (★ 토큰 절약을 위해 핵심 정보만 추출)
   const steps = getCurrentSteps();
   let stepNum = 1;
   steps.forEach(step => {
     if (window.stepResults[step.id]) {
       const stepType = step.stepType || 'step1';
-      const label = stepType === 'step1' ? 'STEP 1' : 'STEP 2';
+      const label = stepType === 'step1' ? 'STEP 1 (핵심 요약)' : 'STEP 2 (핵심 요약)';
       draft += `【 ${stepNum}. ${label} — ${step.name} 】\n\n`;
-      draft += window.stepResults[step.id] + '\n\n';
 
-      // Step1 추가 정보: Strong's 원어 분석
+      // ★ Step 결과를 요약하여 포함
+      let stepResult = window.stepResults[step.id];
+      try {
+        const parsed = JSON.parse(stepResult);
+        if (stepType === 'step1') {
+          // Step1 핵심 요약
+          let summary = '';
+          if (parsed.core_message || parsed.핵심_메시지) {
+            summary += `▶ 핵심 메시지:\n${parsed.core_message || parsed.핵심_메시지}\n\n`;
+          }
+          if (parsed.passage_overview?.one_paragraph_summary) {
+            summary += `▶ 본문 요약:\n${parsed.passage_overview.one_paragraph_summary}\n\n`;
+          }
+          // anchors 상위 5개만
+          if (parsed.anchors && Array.isArray(parsed.anchors)) {
+            const anchors = parsed.anchors.slice(0, 5);
+            summary += `▶ Anchors 핵심 근거 (상위 ${anchors.length}개):\n`;
+            anchors.forEach((a, i) => {
+              summary += `  ${i+1}. [${a.anchor_id || a.id || ''}] ${a.range || ''}: ${a.anchor_phrase || a.phrase || ''}\n`;
+            });
+            summary += '\n';
+          }
+          // guardrails 핵심만
+          if (parsed.guardrails?.does_not_claim) {
+            const claims = parsed.guardrails.does_not_claim.slice(0, 3);
+            summary += `▶ 본문이 말하지 않는 것 (상위 3개):\n`;
+            claims.forEach((c, i) => {
+              const claimText = typeof c === 'object' ? (c.claim || c.text || JSON.stringify(c)) : c;
+              summary += `  ${i+1}. ${claimText}\n`;
+            });
+            summary += '\n';
+          }
+          draft += summary || stepResult;
+        } else if (stepType === 'step2') {
+          // Step2 핵심 요약
+          let summary = '';
+          if (parsed.introduction || parsed.서론) {
+            const intro = parsed.introduction || parsed.서론;
+            summary += `▶ 서론:\n${typeof intro === 'object' ? JSON.stringify(intro).substring(0, 300) : intro}\n\n`;
+          }
+          // 본론 상위 3개
+          const points = parsed.main_points || parsed.본론 || parsed.대지 || parsed.sections;
+          if (points && Array.isArray(points)) {
+            const limitedPoints = points.slice(0, 3);
+            summary += `▶ 본론 (대지) - 상위 ${limitedPoints.length}개:\n`;
+            limitedPoints.forEach((p, i) => {
+              const title = p.title || p.제목 || p.point || p.theme || '';
+              summary += `  ${i+1}. ${title}\n`;
+            });
+            summary += '\n';
+          }
+          if (parsed.conclusion || parsed.결론) {
+            const conclusion = parsed.conclusion || parsed.결론;
+            summary += `▶ 결론:\n${typeof conclusion === 'object' ? JSON.stringify(conclusion).substring(0, 200) : conclusion}\n\n`;
+          }
+          // 예화 상위 2개
+          const illustrations = parsed.illustrations || parsed.예화;
+          if (illustrations && Array.isArray(illustrations)) {
+            summary += `▶ 예화 (상위 2개):\n`;
+            illustrations.slice(0, 2).forEach((illust, i) => {
+              const title = typeof illust === 'object' ? (illust.title || illust.제목 || '') : illust;
+              summary += `  ${i+1}. ${title}\n`;
+            });
+            summary += '\n';
+          }
+          draft += summary || stepResult;
+        } else {
+          draft += stepResult + '\n\n';
+        }
+      } catch (e) {
+        // JSON 파싱 실패 시 원본 텍스트 (길이 제한)
+        if (stepResult.length > 2000) {
+          draft += stepResult.substring(0, 2000) + '... (이하 생략)\n\n';
+        } else {
+          draft += stepResult + '\n\n';
+        }
+      }
+
+      // Step1 추가 정보: Strong's 원어 분석 (★ 상위 3개만)
       const extraInfo = window.stepExtraInfo?.[step.id];
       if (stepType === 'step1' && extraInfo?.strongs_analysis) {
         const strongs = extraInfo.strongs_analysis;
         if (strongs.key_words && strongs.key_words.length > 0) {
           draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-          draft += `【 ★ Strong's 원어 분석 (Step1 보강) 】\n`;
+          draft += `【 ★ Strong's 원어 분석 (상위 3개) 】\n`;
           draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-          if (strongs.text) {
-            draft += `영문 (KJV): ${strongs.text}\n\n`;
-          }
           draft += `▶ 핵심 원어 단어:\n`;
-          strongs.key_words.forEach((word, i) => {
+          strongs.key_words.slice(0, 3).forEach((word, i) => {  // ★ 상위 3개만
             const lemma = word.lemma || '';
             const translit = word.translit || '';
             const strongsNum = word.strongs || '';
             const definition = word.definition || '';
             draft += `  ${i + 1}. ${lemma} (${translit}, ${strongsNum})\n`;
-            if (word.english) draft += `     → 영어: ${word.english}\n`;
-            if (definition) draft += `     → 의미: ${definition.substring(0, 200)}${definition.length > 200 ? '...' : ''}\n`;
+            if (definition) draft += `     → 의미: ${definition.substring(0, 100)}${definition.length > 100 ? '...' : ''}\n`;  // ★ 100자 제한
             draft += `\n`;
           });
         }
       }
 
-      // Step2 추가 정보: 예화 (illustrations)
-      if (stepType === 'step2') {
-        try {
-          const step2Data = JSON.parse(window.stepResults[step.id]);
-          const illustrations = step2Data.illustrations || step2Data.예화;
-          if (illustrations) {
-            draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-            draft += `【 ★ 예화 (Step2 보강) 】\n`;
-            draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-            if (Array.isArray(illustrations)) {
-              illustrations.forEach((illust, i) => {
-                if (typeof illust === 'object') {
-                  draft += `${i + 1}. ${illust.title || illust.제목 || ''}\n`;
-                  if (illust.content || illust.내용) {
-                    draft += `   ${illust.content || illust.내용}\n`;
-                  }
-                  if (illust.application || illust.적용) {
-                    draft += `   → 적용: ${illust.application || illust.적용}\n`;
-                  }
-                } else {
-                  draft += `${i + 1}. ${illust}\n`;
-                }
-                draft += `\n`;
-              });
-            } else if (typeof illustrations === 'object') {
-              Object.entries(illustrations).forEach(([key, value]) => {
-                draft += `▶ ${key}: ${value}\n`;
-              });
-              draft += `\n`;
-            } else {
-              draft += `${illustrations}\n\n`;
-            }
-          }
-        } catch (e) {
-          // JSON 파싱 실패 시 무시 (원본 텍스트에 예화가 포함되어 있을 수 있음)
-        }
-      }
-
-      // Step2 추가 정보: 시대 컨텍스트
+      // Step2 추가 정보: 시대 컨텍스트 (★ 카테고리당 1개, 관심사 3개)
       if (stepType === 'step2' && extraInfo?.context_data) {
         const context = extraInfo.context_data;
         draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        draft += `【 ★ 현재 시대 컨텍스트 (Step2 보강) 】\n`;
+        draft += `【 ★ 현재 시대 컨텍스트 (요약) 】\n`;
         draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         draft += `청중 유형: ${context.audience || '전체'}\n\n`;
 
-        // 주요 뉴스 이슈
+        // 주요 뉴스 이슈 (★ 카테고리당 1개만, 최대 3개)
         if (context.news && Object.keys(context.news).length > 0) {
-          draft += `▶ 주요 시사 이슈 (서론/예화에 활용)\n`;
+          draft += `▶ 주요 시사 이슈 (카테고리당 1개):\n`;
           const catNames = { economy: '경제', politics: '정치', society: '사회', world: '국제', culture: '문화' };
+          let newsCount = 0;
           Object.entries(context.news).forEach(([cat, items]) => {
-            if (items && items.length > 0) {
-              draft += `  [${catNames[cat] || cat}]\n`;
-              items.slice(0, 2).forEach(item => {
-                const newsTitle = item.title?.length > 50 ? item.title.substring(0, 50) + '...' : item.title;
-                draft += `  • ${newsTitle}\n`;
-              });
+            if (items && items.length > 0 && newsCount < 3) {
+              const item = items[0];  // ★ 첫 번째만
+              const newsTitle = item.title?.length > 40 ? item.title.substring(0, 40) + '...' : item.title;
+              draft += `  - [${catNames[cat] || cat}] ${newsTitle}\n`;
+              newsCount++;
             }
           });
           draft += `\n`;
         }
 
-        // 사회 지표
-        if (context.indicators && Object.keys(context.indicators).length > 0) {
-          draft += `▶ 관련 사회 지표\n`;
-          Object.entries(context.indicators).forEach(([cat, data]) => {
-            if (typeof data === 'object') {
-              Object.entries(data).forEach(([key, value]) => {
-                if (key !== 'updated') draft += `  • ${key}: ${value}\n`;
-              });
-            }
-          });
-          draft += `\n`;
-        }
-
-        // 청중 관심사
+        // 청중 관심사 (★ 상위 3개만)
         if (context.concerns && context.concerns.length > 0) {
-          draft += `▶ 청중의 주요 관심사/고민\n`;
-          context.concerns.forEach(concern => {
+          draft += `▶ 청중 관심사 (상위 3개):\n`;
+          context.concerns.slice(0, 3).forEach(concern => {
             draft += `  • ${concern}\n`;
           });
           draft += `\n`;
         }
-
-        draft += `※ 위 시대 컨텍스트를 도입부/예화/적용에 활용하세요.\n\n`;
       }
 
       draft += `==================================================\n\n`;

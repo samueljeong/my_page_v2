@@ -5,6 +5,43 @@
 
 ---
 
+## 2025-12-23 세션
+
+### Step3/Step4 프롬프트 토큰 최적화
+
+**문제**: Step1/Step2가 추출하는 데이터가 너무 많아서 Step4에서 GPT 토큰 제한에 걸림
+
+**원인**:
+- Step1: anchors 10개+, historical_background 3개+, guardrails 15개+, key_terms 6개 등 전체 포함
+- Step2: sections, illustrations, context_data 전체 포함
+- Strong's 원어 분석: 7개 포함
+- 시대 컨텍스트: 뉴스 카테고리당 2개, 관심사 전체 포함
+
+**수정 (토큰 절약)**:
+
+| 항목 | 변경 전 | 변경 후 |
+|------|---------|---------|
+| anchors | 전체 (10개+) | 상위 5개 |
+| historical_background | 전체 (3개+) | 상위 2개 |
+| key_terms/key_words | 전체 (6개) | 상위 3개 |
+| guardrails.clearly_affirms | 전체 (5개+) | 상위 3개 |
+| guardrails.does_not_claim | 전체 (5개+) | 상위 3개 |
+| Strong's 원어 분석 | 7개 | 3개 |
+| Strong's definition 길이 | 200자 | 100자 |
+| 본론/대지 (sections) | 전체 | 상위 3개 |
+| 예화 (illustrations) | 전체 | 상위 2개 |
+| 시대 컨텍스트 뉴스 | 카테고리당 2개 | 카테고리당 1개, 최대 3개 |
+| 청중 관심사 | 전체 | 상위 3개 |
+| 문자열 결과 길이 제한 | 없음 | 2000자 |
+
+**수정 파일**:
+- `sermon_modules/prompt.py`: `build_step3_prompt_from_json()` 함수
+- `static/js/sermon-gpt-pro.js`: `assembleGptProDraft()` 함수
+
+**예상 효과**: 프롬프트 토큰 약 40~50% 감소
+
+---
+
 ## 2025-12-22 세션
 
 ### 1. Step3/Step4 프롬프트 통일 (`a276c14`)
