@@ -385,6 +385,10 @@ def process_step():
         master_guide = data.get("masterGuide", "")
         previous_results = data.get("previousResults", {})
 
+        # ★ 스타일 ID 및 주제설교 주제 (2025-12-23)
+        style_id = data.get("styleId", "")
+        topical_theme = data.get("topicalTheme", "")
+
         # 프론트엔드에서 전달받은 모델 사용 (없으면 기본값)
         model_name = data.get("model")
         if not model_name:
@@ -396,7 +400,7 @@ def process_step():
         # temperature 설정 (gpt-4o-mini만 사용)
         use_temperature = (model_name == "gpt-4o-mini")
 
-        print(f"[PROCESS] {category} - {step_name} (Step: {step_type}, 모델: {model_name})")
+        print(f"[PROCESS] {category} - {step_name} (Step: {step_type}, 모델: {model_name}, 스타일: {style_id or 'default'})")
 
         # JSON 지침 여부 확인
         is_json = is_json_guide(guide)
@@ -442,6 +446,16 @@ def process_step():
 
         if text:
             user_content += f"[성경 본문]\n{text}\n\n"
+
+        # ★ 주제설교인 경우 주제 정보 추가 (2025-12-23)
+        if topical_theme:
+            user_content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            user_content += "【 ★★★ 주제설교 주제 ★★★ 】\n"
+            user_content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            user_content += f"이 설교는 '{topical_theme}' 주제를 다루는 주제설교입니다.\n"
+            user_content += "성경 본문을 이 주제와 연결하여 분석하세요.\n"
+            user_content += "본문이 이 주제에 대해 말하는 바를 중심으로 연구하세요.\n\n"
+            print(f"[PROCESS] 주제설교 주제 추가: {topical_theme}")
 
         # Step1인 경우: 원어 분석 및 주석 데이터 자동 추가
         if step_type == "step1" and reference:
