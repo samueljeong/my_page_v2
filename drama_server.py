@@ -4176,6 +4176,8 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
     """
     Google Cloud TTS Chirp 3 HD를 사용하여 음성 생성
 
+    긴 텍스트는 자동으로 청크로 분할하여 처리 (5,000바이트 제한)
+
     Args:
         text: 변환할 텍스트
         voice_name: 전체 음성 이름 (예: ko-KR-Chirp3-HD-Charon)
@@ -4191,6 +4193,7 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
         from google.cloud import texttospeech
         from google.oauth2 import service_account
         import json
+        import re
 
         print(f"[CHIRP3-TTS] 시작 - 음성: {voice_name}, 텍스트: {len(text)}자", flush=True)
 
@@ -4213,8 +4216,6 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
 
         client = texttospeech.TextToSpeechClient(credentials=credentials)
 
-        input_text = texttospeech.SynthesisInput(text=text)
-
         voice = texttospeech.VoiceSelectionParams(
             language_code=language_code,
             name=voice_name,
@@ -4224,18 +4225,102 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
             audio_encoding=texttospeech.AudioEncoding.MP3
         )
 
-        response = client.synthesize_speech(
-            input=input_text,
-            voice=voice,
-            audio_config=audio_config,
-        )
+        # 청크 분할 (한글 3바이트 기준, 5000바이트 제한 → 약 1,500자)
+        MAX_CHARS = 1400  # 안전 마진 포함
 
-        print(f"[CHIRP3-TTS] 성공 - {len(response.audio_content)} bytes", flush=True)
+        def split_text_into_chunks(text, max_chars=MAX_CHARS):
+            """문장 단위로 텍스트를 청크로 분할"""
+            # 문장 끝 패턴: ., !, ?, 。 뒤에 공백이나 문장 끝
+            sentences = re.split(r'(?<=[.!?。])\s+', text)
 
-        return {
-            "ok": True,
-            "audio_data": response.audio_content
-        }
+            chunks = []
+            current_chunk = ""
+
+            for sentence in sentences:
+                # 문장 자체가 너무 길면 강제 분할
+                if len(sentence) > max_chars:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                        current_chunk = ""
+                    # 긴 문장을 max_chars 단위로 분할
+                    for i in range(0, len(sentence), max_chars):
+                        chunks.append(sentence[i:i+max_chars])
+                elif len(current_chunk) + len(sentence) + 1 <= max_chars:
+                    current_chunk += " " + sentence if current_chunk else sentence
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    current_chunk = sentence
+
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+
+            return chunks
+
+        # 짧은 텍스트는 바로 처리
+        if len(text.encode('utf-8')) <= 4500:
+            input_text = texttospeech.SynthesisInput(text=text)
+            response = client.synthesize_speech(
+                input=input_text,
+                voice=voice,
+                audio_config=audio_config,
+            )
+            print(f"[CHIRP3-TTS] 성공 - {len(response.audio_content)} bytes", flush=True)
+            return {
+                "ok": True,
+                "audio_data": response.audio_content
+            }
+
+        # 긴 텍스트는 청크로 분할
+        chunks = split_text_into_chunks(text)
+        print(f"[CHIRP3-TTS] 긴 텍스트 - {len(chunks)}개 청크로 분할", flush=True)
+
+        all_audio = []
+        for i, chunk in enumerate(chunks):
+            print(f"[CHIRP3-TTS] 청크 {i+1}/{len(chunks)} 처리 중... ({len(chunk)}자)", flush=True)
+
+            input_text = texttospeech.SynthesisInput(text=chunk)
+            response = client.synthesize_speech(
+                input=input_text,
+                voice=voice,
+                audio_config=audio_config,
+            )
+            all_audio.append(response.audio_content)
+
+            # API 레이트 리밋 방지
+            if i < len(chunks) - 1:
+                import time
+                time.sleep(0.2)
+
+        # MP3 오디오 연결 (pydub 사용)
+        try:
+            from pydub import AudioSegment
+            import io
+
+            combined = AudioSegment.empty()
+            for audio_data in all_audio:
+                segment = AudioSegment.from_mp3(io.BytesIO(audio_data))
+                combined += segment
+
+            # MP3로 내보내기
+            output_buffer = io.BytesIO()
+            combined.export(output_buffer, format="mp3")
+            final_audio = output_buffer.getvalue()
+
+            print(f"[CHIRP3-TTS] 성공 - {len(chunks)}개 청크 연결, {len(final_audio)} bytes", flush=True)
+
+            return {
+                "ok": True,
+                "audio_data": final_audio
+            }
+        except ImportError:
+            # pydub 없으면 단순 연결 (MP3는 단순 연결해도 재생 가능)
+            print("[CHIRP3-TTS] pydub 없음 - 단순 연결", flush=True)
+            final_audio = b''.join(all_audio)
+            return {
+                "ok": True,
+                "audio_data": final_audio
+            }
 
     except Exception as e:
         print(f"[CHIRP3-TTS] 오류: {e}", flush=True)
