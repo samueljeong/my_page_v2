@@ -22143,12 +22143,34 @@ def run_bible_episode_pipeline(
         # ========== 5. YouTube 업로드 ==========
         print(f"[BIBLE] 5. YouTube 업로드...")
 
-        # YouTube 설명 생성
-        description = f"""100일 성경통독 Day {day_number}
+        # SEO 최적화된 YouTube 설명 생성
+        testament = "구약" if episode.book in ["창세기", "출애굽기", "레위기", "민수기", "신명기", "여호수아", "사사기", "룻기", "사무엘상", "사무엘하", "열왕기상", "열왕기하", "역대상", "역대하", "에스라", "느헤미야", "에스더", "욥기", "시편", "잠언", "전도서", "아가", "이사야", "예레미야", "예레미야애가", "에스겔", "다니엘", "호세아", "요엘", "아모스", "오바댜", "요나", "미가", "나훔", "하박국", "스바냐", "학개", "스가랴", "말라기"] else "신약"
+        total_verses = sum(len(ch.verses) for ch in episode.chapters)
+        estimated_minutes = int(total_verses * 5 / 60) + 1  # 약 5초/절 기준
 
-📖 {episode.range_text}
+        description = f"""📖 100일 성경통독 Day {day_number} | {episode.range_text}
 
-#성경통독 #100일성경 #개역개정 #성경말씀 #{episode.book}
+🙏 100일 만에 성경 전체를 통독하는 프로젝트입니다.
+매일 약 20분씩, 차분한 목소리로 성경 말씀을 들으며 하루를 시작하세요.
+
+📌 오늘의 말씀
+• 범위: {episode.range_text}
+• 분류: {testament}성경
+• 총 {total_verses}절 (약 {estimated_minutes}분)
+
+⏰ 추천 청취 시간
+• 아침 기도 시간
+• 출퇴근 시간
+• 취침 전 묵상
+
+💝 이 영상이 도움이 되셨다면 '좋아요'와 '구독'을 부탁드립니다!
+🔔 알림 설정을 해두시면 매일 새로운 말씀을 받아보실 수 있습니다.
+
+📚 100일 성경통독 전체 목록은 재생목록에서 확인하세요!
+
+#100일성경통독 #성경통독 #개역개정 #{episode.book} #{testament}성경
+#성경말씀 #성경낭독 #기독교 #크리스천 #말씀묵상 #QT #묵상
+#Bible #BibleReading #Christian #Scripture #DailyBible
 """
 
         # 내부 API 호출로 YouTube 업로드
