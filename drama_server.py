@@ -22021,7 +22021,7 @@ def run_bible_episode_pipeline(
         return {"ok": False, "error": error_msg}
 
 
-@app.route('/api/bible/check-and-process', methods=['POST'])
+@app.route('/api/bible/check-and-process', methods=['GET', 'POST'])
 def api_bible_check_and_process():
     """
     성경통독 파이프라인 - BIBLE 시트에서 대기 상태인 에피소드 처리
