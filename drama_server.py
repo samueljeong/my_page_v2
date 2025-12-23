@@ -3981,6 +3981,7 @@ def generate_gemini_tts(text, voice_name="Kore", model="gemini-2.5-flash-preview
     """
     import wave
     import io
+    import time
 
     # 영문 인명 괄호 제거 (자막에는 남고, TTS에서는 읽지 않음)
     text = preprocess_tts_text(text)
@@ -21893,9 +21894,9 @@ def run_bible_episode_pipeline(
         audio_path = os.path.join(temp_dir, f"day_{day_number:03d}.mp3")
 
         if voice.startswith("chirp3:"):
-            # Gemini TTS 사용
-            voice_name = voice.replace("chirp3:", "")
-            tts_result = generate_gemini_tts(full_text, voice_name=voice_name)
+            # Google Cloud Chirp 3 HD TTS 사용
+            chirp3_config = parse_chirp3_voice(voice)
+            tts_result = generate_chirp3_tts(full_text, voice_name=chirp3_config["voice"])
         elif voice.startswith("gemini:"):
             # Gemini TTS (pro 또는 flash)
             parts = voice.split(":")
