@@ -560,7 +560,7 @@ def generate_ass_subtitle(
     verse_durations: List[float],
     output_path: str,
     font_name: str = "NanumSquareRound",
-    font_size: int = 72,
+    font_size: int = 96,
     primary_color: str = "&H00FFFFFF",  # 흰색
     outline_color: str = "&H00000000",  # 검정
     fade_duration_ms: int = 300
@@ -593,8 +593,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Reference,{font_name},{int(font_size * 0.7)},&H0000D7FF,&H000000FF,&H00000000,&HCC000000,1,0,0,0,100,100,2,0,1,4,3,8,50,50,60,1
-Style: Verse,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},&HCC000000,1,0,0,0,100,100,1,0,1,5,4,5,100,100,80,1
+Style: Reference,{font_name},{int(font_size * 0.75)},&H0000D7FF,&H000000FF,&H00000000,&HCC000000,1,0,0,0,100,100,2,0,1,4,3,8,50,50,120,1
+Style: Verse,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},&HCC000000,1,0,0,0,100,140,1,0,1,5,4,5,100,100,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -614,8 +614,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         start_time = current_time
         end_time = current_time + duration
 
-        # 참조 텍스트 (상단): "창세기 1장 1절"
-        reference = f"{subtitle['book']} {subtitle['chapter']}장 {subtitle['verse']}절"
+        # 참조 텍스트 (상단): "창세기 1장" (절 번호 제외)
+        reference = f"{subtitle['book']} {subtitle['chapter']}장"
         # 페이드 효과: {\\fad(시작,끝)}
         ref_text = f"{{\\fad({fade_duration_ms},{fade_duration_ms})}}{reference}"
         events.append(
