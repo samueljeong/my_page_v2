@@ -52,10 +52,13 @@ from .news_collector import (
 )
 
 from .script_generator import (
+    DEFAULT_MODEL,
+    GPT51_COSTS,
     generate_shorts_script,
     generate_complete_shorts_package,
     enhance_image_prompts,
     format_script_for_sheet,
+    extract_gpt51_response,
 )
 
 from .run import (
@@ -103,10 +106,13 @@ __all__ = [
     'generate_hook_text',
 
     # Script Generator
+    'DEFAULT_MODEL',
+    'GPT51_COSTS',
     'generate_shorts_script',
     'generate_complete_shorts_package',
     'enhance_image_prompts',
     'format_script_for_sheet',
+    'extract_gpt51_response',
 
     # Main
     'run_news_collection',

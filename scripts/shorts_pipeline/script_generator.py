@@ -1,7 +1,7 @@
 """
 쇼츠 파이프라인 - 대본 및 이미지 프롬프트 생성
 
-GPT-4o를 사용하여:
+GPT-5.1 Responses API를 사용하여:
 1. 60초 쇼츠 대본 생성 (9개 씬)
 2. 씬별 이미지 프롬프트 생성 (실루엣 포함)
 """
@@ -23,12 +23,46 @@ from .config import (
 )
 
 
+# 기본 모델
+DEFAULT_MODEL = "gpt-5.1"
+
+# GPT-5.1 비용 (USD per 1K tokens)
+GPT51_COSTS = {
+    "input": 0.01,   # $0.01 per 1K input tokens
+    "output": 0.03,  # $0.03 per 1K output tokens
+}
+
+
 def get_openai_client() -> OpenAI:
     """OpenAI 클라이언트 반환"""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
     return OpenAI(api_key=api_key)
+
+
+def extract_gpt51_response(response) -> str:
+    """
+    GPT-5.1 Responses API 응답에서 텍스트 추출
+
+    Args:
+        response: client.responses.create() 응답 객체
+
+    Returns:
+        추출된 텍스트
+    """
+    # 방법 1: output_text 직접 접근
+    if getattr(response, "output_text", None):
+        return response.output_text.strip()
+
+    # 방법 2: output 배열에서 추출
+    text_chunks = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            if getattr(content, "type", "") == "text":
+                text_chunks.append(getattr(content, "text", ""))
+
+    return "\n".join(text_chunks).strip()
 
 
 SCRIPT_GENERATION_PROMPT = """
@@ -103,10 +137,10 @@ def generate_shorts_script(
     news_summary: str,
     hook_text: str,
     silhouette_desc: str,
-    model: str = "gpt-4o"
+    model: str = None
 ) -> Dict[str, Any]:
     """
-    GPT를 사용하여 쇼츠 대본 생성
+    GPT-5.1 Responses API를 사용하여 쇼츠 대본 생성
 
     Args:
         celebrity: 연예인 이름
@@ -115,7 +149,7 @@ def generate_shorts_script(
         news_summary: 뉴스 요약
         hook_text: 훅 문장
         silhouette_desc: 실루엣 특징 설명
-        model: 사용할 GPT 모델
+        model: 사용할 GPT 모델 (기본: gpt-5.1)
 
     Returns:
         {
@@ -128,10 +162,13 @@ def generate_shorts_script(
             "cost": 0.03
         }
     """
+    if model is None:
+        model = DEFAULT_MODEL
+
     try:
         client = get_openai_client()
 
-        prompt = SCRIPT_GENERATION_PROMPT.format(
+        user_prompt = SCRIPT_GENERATION_PROMPT.format(
             celebrity=celebrity,
             issue_type=issue_type,
             news_title=news_title,
@@ -140,20 +177,42 @@ def generate_shorts_script(
             silhouette_desc=silhouette_desc,
         )
 
-        print(f"[SHORTS] 대본 생성 중: {celebrity} - {issue_type}")
+        system_prompt = "당신은 연예 뉴스 쇼츠 전문 작가입니다. 반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요."
 
-        response = client.chat.completions.create(
+        print(f"[SHORTS] GPT-5.1 대본 생성 중: {celebrity} - {issue_type}")
+
+        # GPT-5.1 Responses API 호출
+        response = client.responses.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "당신은 연예 뉴스 쇼츠 전문 작가입니다. JSON 형식으로만 응답하세요."},
-                {"role": "user", "content": prompt}
+            input=[
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt}]
+                }
             ],
-            temperature=0.7,
-            max_tokens=2000,
-            response_format={"type": "json_object"}
+            temperature=0.7
         )
 
-        result_text = response.choices[0].message.content
+        # 응답 추출
+        result_text = extract_gpt51_response(response)
+
+        if not result_text:
+            raise ValueError("GPT-5.1에서 빈 응답을 받았습니다")
+
+        # JSON 파싱 (```json ... ``` 형식 처리)
+        if result_text.startswith("```"):
+            # 코드 블록 제거
+            lines = result_text.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].strip() == "```":
+                lines = lines[:-1]
+            result_text = "\n".join(lines)
+
         result = json.loads(result_text)
 
         # 전체 대본 조합
@@ -161,12 +220,19 @@ def generate_shorts_script(
             scene["narration"] for scene in result.get("scenes", [])
         ])
 
-        # 비용 계산 (대략적)
-        input_tokens = response.usage.prompt_tokens
-        output_tokens = response.usage.completion_tokens
-        cost = (input_tokens * 0.005 + output_tokens * 0.015) / 1000
+        # 비용 계산 (GPT-5.1 기준)
+        # usage 정보가 있으면 사용, 없으면 추정
+        if hasattr(response, 'usage') and response.usage:
+            input_tokens = getattr(response.usage, 'input_tokens', 0) or getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'output_tokens', 0) or getattr(response.usage, 'completion_tokens', 0)
+        else:
+            # 대략적 추정 (한글 기준)
+            input_tokens = len(system_prompt + user_prompt) // 2
+            output_tokens = len(result_text) // 2
 
-        print(f"[SHORTS] 대본 생성 완료: {len(full_script)}자, ${cost:.4f}")
+        cost = (input_tokens * GPT51_COSTS["input"] + output_tokens * GPT51_COSTS["output"]) / 1000
+
+        print(f"[SHORTS] GPT-5.1 대본 생성 완료: {len(full_script)}자, ${cost:.4f}")
 
         return {
             "ok": True,
@@ -176,10 +242,12 @@ def generate_shorts_script(
             "total_chars": len(full_script),
             "hashtags": result.get("hashtags", []),
             "cost": round(cost, 4),
+            "model": model,
         }
 
     except json.JSONDecodeError as e:
         print(f"[SHORTS] JSON 파싱 실패: {e}")
+        print(f"[SHORTS] 원본 응답: {result_text[:500] if 'result_text' in dir() else 'N/A'}")
         return {"ok": False, "error": f"JSON 파싱 실패: {e}"}
     except Exception as e:
         print(f"[SHORTS] 대본 생성 실패: {e}")
@@ -256,7 +324,7 @@ IMPORTANT ADDITIONS:
 
 def generate_complete_shorts_package(
     news_data: Dict[str, Any],
-    model: str = "gpt-4o"
+    model: str = None
 ) -> Dict[str, Any]:
     """
     쇼츠 전체 패키지 생성 (대본 + 이미지 프롬프트)
