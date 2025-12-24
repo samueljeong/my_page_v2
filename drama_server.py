@@ -21111,7 +21111,17 @@ def api_sheets_check_and_process():
                     pending_tasks.append((sort_key, sheet_name, i, row, channel_id, col_map))
 
         # ========== 4. 예약시간 기준 정렬 ==========
-        pending_tasks.sort(key=lambda x: x[0])
+        print(f"[SHEETS] 대기 작업 {len(pending_tasks)}개 발견, 정렬 중...")
+        for idx, task in enumerate(pending_tasks[:5]):  # 처음 5개만 로그
+            sk, sn, rn, rd, ci, cm = task
+            print(f"[SHEETS]   - 태스크 {idx}: 시트={sn}, 행={rn}, sort_key={sk}")
+        try:
+            pending_tasks.sort(key=lambda x: x[0])
+        except Exception as sort_err:
+            print(f"[SHEETS] 정렬 오류: {sort_err}")
+            # 정렬 실패 시 첫 번째 것만 처리
+            if pending_tasks:
+                pending_tasks = [pending_tasks[0]]
 
         if not pending_tasks:
             # ========== 대기 작업 없음 ==========
@@ -21190,9 +21200,16 @@ def api_sheets_check_and_process():
                 from scripts.shorts_pipeline.sheets import update_status as shorts_update_status
 
                 # row_data를 딕셔너리로 변환
+                print(f"[SHORTS] col_map 타입: {type(col_map)}, 키 개수: {len(col_map)}")
+                print(f"[SHORTS] row_data 타입: {type(row_data)}, 길이: {len(row_data) if hasattr(row_data, '__len__') else 'N/A'}")
+
                 shorts_row_data = {}
                 for header, col_idx in col_map.items():
-                    shorts_row_data[header] = row_data[col_idx] if col_idx < len(row_data) else ""
+                    print(f"[SHORTS] header={header}, col_idx={col_idx} (type: {type(col_idx)})")
+                    if isinstance(col_idx, int) and col_idx < len(row_data):
+                        shorts_row_data[header] = row_data[col_idx]
+                    else:
+                        shorts_row_data[header] = ""
                 shorts_row_data["row_number"] = row_num
 
                 person = shorts_row_data.get("person", shorts_row_data.get("celebrity", ""))
