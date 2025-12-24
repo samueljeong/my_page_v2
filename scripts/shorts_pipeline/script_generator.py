@@ -66,8 +66,8 @@ def extract_gpt51_response(response) -> str:
 
 
 SCRIPT_GENERATION_PROMPT = """
-당신은 연예 뉴스 쇼츠 전문 작가입니다.
-아래 뉴스 정보를 60초 YouTube Shorts 대본으로 변환하세요.
+당신은 조회수 1000만을 만드는 연예 뉴스 쇼츠 전문 작가입니다.
+아래 뉴스 정보를 40-60초 YouTube Shorts 대본으로 변환하세요.
 
 ## 뉴스 정보
 - 연예인: {celebrity}
@@ -79,52 +79,79 @@ SCRIPT_GENERATION_PROMPT = """
 ## 실루엣 특징 (이미지용)
 {silhouette_desc}
 
-## 대본 규칙
-1. 총 450자 내외 (한국어 TTS 60초 기준)
-2. 9개 씬으로 구성
-3. 첫 문장(씬1)은 충격적인 훅으로 시작 - 시청자가 스크롤을 멈추게
-4. 마지막 씬(씬9)은 "구독과 좋아요 부탁드립니다" CTA로 마무리
-5. 사실 기반으로 작성, 추측이나 비방 금지
-6. 짧고 임팩트 있는 문장 사용
-7. 각 씬은 약 50자 내외
+## ⚠️ 가장 중요: 첫 3초 훅
 
-## 씬 구성 가이드
-- 씬1 (0-5초): 훅 - 충격적인 첫 문장
-- 씬2 (5-12초): 상황 설명 - 무슨 일이 있었는지
-- 씬3 (12-20초): 핵심 내용 - 폭로/사건의 핵심
-- 씬4 (20-27초): 반응 - 본인/소속사 반응
-- 씬5 (27-35초): 여론 - 네티즌/팬 반응
-- 씬6 (35-42초): 영향 - 방송/활동 영향
-- 씬7 (42-50초): 전문가/업계 반응
-- 씬8 (50-55초): 결론 - 현재 상황 정리
-- 씬9 (55-60초): CTA - 구독 유도
+첫 3초가 전부입니다. 시청자가 스크롤을 멈추고 "뭐지?" 하고 보게 만들어야 합니다.
+
+### 훅 작성 공식
+1. **궁금증 유발**: "이게 사실이라면..." / "아무도 몰랐던..."
+2. **충격 예고**: "결국 이렇게 됐습니다" / "모두가 충격받았습니다"
+3. **감정 자극**: "팬들이 울었습니다" / "업계가 발칵 뒤집혔습니다"
+4. **숫자 활용**: "24시간 만에..." / "10년 만에 처음..."
+5. **대비 활용**: "웃으며 말했지만..." / "모두가 축하했는데..."
+
+### 훅 금지 표현
+- "안녕하세요", "오늘은", "여러분" (지루함)
+- 질문으로 시작 (약함)
+- 설명으로 시작 (이탈)
+
+## 🔄 무한루프 구조 (핵심!)
+
+마지막 씬이 첫 씬과 자연스럽게 연결되어야 합니다.
+시청자가 "어? 영상이 끝났나?" 하고 헷갈리게 만들어 한 번 더 보게 만드세요.
+
+### 무한루프 예시
+- 첫 씬: "박나래, 결국 이렇게 됐습니다"
+- 마지막 씬: "그리고 이 사건은... (잠시 멈춤) 이렇게 됐습니다" → 자연스럽게 첫 씬으로
+
+### 무한루프 기법
+1. 마지막에 결론을 완전히 말하지 않음
+2. 마지막 분위기가 첫 씬과 비슷하게
+3. "그래서 결국..." 으로 끝내고 첫 훅과 연결
+4. CTA(구독 유도) 절대 넣지 않음 - 루프 깨짐
+
+## 대본 규칙
+1. 총 350-400자 (40-60초 TTS 기준)
+2. 8개 씬으로 구성 (마지막은 루프 연결)
+3. 모든 문장은 짧고 강렬하게 (한 문장 15자 이내 권장)
+4. 사실 기반, 추측/비방 금지
+5. 매 씬마다 새로운 정보 → 이탈 방지
+
+## 씬 구성 가이드 (40-60초)
+- 씬1 (0-3초): ⚡ 킬러 훅 - 스크롤 멈추게
+- 씬2 (3-10초): 상황 설명 - 무슨 일?
+- 씬3 (10-18초): 핵심 폭로 - 가장 충격적인 내용
+- 씬4 (18-26초): 반응 - 본인/소속사
+- 씬5 (26-34초): 여론 - 네티즌 반응
+- 씬6 (34-42초): 파장 - 어떤 영향?
+- 씬7 (42-50초): 반전/추가 정보 - 새로운 사실
+- 씬8 (50-55초): 🔄 루프 연결 - 첫 씬과 자연스럽게 연결
 
 ## 이미지 프롬프트 규칙
 - 영어로 작성
 - 9:16 세로 비율 (YouTube Shorts)
 - 연예인 얼굴 사용 금지 - 실루엣만 사용
-- 씬1에는 연예인 실루엣 포함
-- 나머지 씬은 분위기 배경 위주
+- 씬1, 씬8: 연예인 실루엣 포함 (루프 연결용)
+- 나머지: 분위기 배경
 - 텍스트 오버레이 공간 확보
 
-## 출력 형식 (JSON만 반환, 다른 텍스트 없이)
+## 출력 형식 (JSON만 반환)
 {{
-    "title": "쇼츠 제목 (30자 이내, 이모지 1-2개 포함)",
+    "title": "쇼츠 제목 (30자 이내, 이모지 1-2개, 궁금증 유발)",
+    "hook_strength": "훅의 강도 1-10점 자체 평가",
+    "loop_connection": "첫 씬과 마지막 씬이 어떻게 연결되는지 설명",
     "scenes": [
         {{
             "scene_number": 1,
-            "duration": "0-5초",
-            "narration": "훅 문장 (약 50자)",
-            "image_prompt": "영어 이미지 프롬프트",
-            "text_overlay": "화면에 표시할 핵심 텍스트 (10자 이내)"
+            "duration": "0-3초",
+            "narration": "킬러 훅 문장",
+            "image_prompt": "영어 이미지 프롬프트 (실루엣 포함)",
+            "text_overlay": "화면 핵심 텍스트 (5자 이내)"
         }},
-        {{
-            "scene_number": 2,
-            ...
-        }},
-        ...총 9개 씬
+        ...총 8개 씬 (마지막은 루프 연결)
     ],
-    "total_chars": 450,
+    "total_chars": 380,
+    "estimated_seconds": 50,
     "hashtags": ["#연예", "#이슈", "#쇼츠", "..."]
 }}
 """
@@ -262,7 +289,8 @@ def enhance_image_prompts(
     """
     씬별 이미지 프롬프트 강화
 
-    - 씬1: 연예인 실루엣 포함
+    - 씬1 (훅): 연예인 실루엣 포함
+    - 씬8 (루프 연결): 연예인 실루엣 포함 (첫 씬과 비슷하게)
     - 나머지: 분위기 배경
 
     Args:
@@ -274,10 +302,12 @@ def enhance_image_prompts(
         강화된 씬 목록
     """
     enhanced_scenes = []
+    total_scenes = len(scenes)
 
     for scene in scenes:
         scene_num = scene.get("scene_number", 1)
         original_prompt = scene.get("image_prompt", "")
+        is_last_scene = (scene_num == total_scenes) or (scene_num == 8)
 
         # 9:16 비율 강제
         aspect_instruction = (
@@ -287,30 +317,48 @@ def enhance_image_prompts(
         )
 
         if scene_num == 1:
-            # 첫 씬: 실루엣 포함
+            # 첫 씬 (훅): 실루엣 포함 + 강렬한 분위기
             enhanced_prompt = f"""
 {aspect_instruction}
 
 {original_prompt}
 
-IMPORTANT ADDITIONS:
+IMPORTANT - HOOK SCENE:
 - Include a black silhouette of {silhouette_desc}
 - Dramatic spotlight from above casting long shadow
 - NO facial features visible - only dark shadow outline
-- Korean entertainment news style
+- URGENT, BREAKING NEWS atmosphere
+- Red/orange dramatic lighting
 - Large empty space at top and bottom for Korean text overlay
-- 4K quality, cinematic lighting
+- 4K quality, cinematic lighting, high contrast
 """
-        else:
-            # 나머지: 배경 위주
+        elif is_last_scene:
+            # 마지막 씬 (루프 연결): 첫 씬과 비슷한 분위기 + 실루엣
             enhanced_prompt = f"""
 {aspect_instruction}
 
 {original_prompt}
 
-IMPORTANT ADDITIONS:
+IMPORTANT - LOOP CONNECTION SCENE (similar to first scene):
+- Include a black silhouette of {silhouette_desc}
+- Similar composition to the opening scene for seamless loop
+- Dramatic spotlight from above
+- NO facial features visible - only dark shadow outline
+- Slightly different angle but same mood as scene 1
+- Large empty space for Korean text overlay
+- 4K quality, cinematic lighting
+"""
+        else:
+            # 중간 씬: 배경 위주
+            enhanced_prompt = f"""
+{aspect_instruction}
+
+{original_prompt}
+
+IMPORTANT - BACKGROUND SCENE:
 - NO people or human figures in this scene
 - Focus on atmospheric background and mood
+- Dynamic, engaging visuals to prevent viewer drop-off
 - Large empty space for Korean text overlay
 - 4K quality, cinematic composition
 - Korean news broadcast style

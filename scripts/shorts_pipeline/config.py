@@ -54,17 +54,25 @@ VIDEO_WIDTH = 720
 VIDEO_HEIGHT = 1280
 VIDEO_SIZE = f"{VIDEO_WIDTH}x{VIDEO_HEIGHT}"
 
-# 영상 길이
+# 영상 길이 (40-60초 권장)
+MIN_DURATION_SECONDS = 40
 MAX_DURATION_SECONDS = 60
+TARGET_DURATION_SECONDS = 50  # 최적 길이
 
 # 씬 설정
-DEFAULT_SCENE_COUNT = 9
-SCENE_DURATION_SECONDS = 60 / DEFAULT_SCENE_COUNT  # 약 6.7초
+DEFAULT_SCENE_COUNT = 8  # 마지막 씬은 무한루프 연결용
+SCENE_DURATION_SECONDS = TARGET_DURATION_SECONDS / DEFAULT_SCENE_COUNT  # 약 6.25초
 
 # TTS 설정
-# 한국어 기준: 약 7.5자/초 → 60초 = 450자
-TARGET_SCRIPT_LENGTH = 450
+# 한국어 기준: 약 7.5자/초 → 50초 = 375자
+TARGET_SCRIPT_LENGTH = 380
+MIN_SCRIPT_LENGTH = 300  # 40초
+MAX_SCRIPT_LENGTH = 450  # 60초
 CHARS_PER_SECOND = 7.5
+
+# 훅 설정 (첫 3초)
+HOOK_DURATION_SECONDS = 3
+HOOK_MAX_CHARS = 25  # 첫 3초에 25자 이내
 
 
 # ============================================================
@@ -140,16 +148,56 @@ CELEBRITY_SILHOUETTES = {
 # ============================================================
 
 SCRIPT_STRUCTURE = """
-[씬 1] 0-5초 - 훅 (충격적인 첫 문장)
-[씬 2] 5-12초 - 상황 설명
-[씬 3] 12-20초 - 핵심 폭로/사건
-[씬 4] 20-27초 - 반응/반격
-[씬 5] 27-35초 - 여론/댓글 반응
-[씬 6] 35-42초 - 영향/파장
-[씬 7] 42-50초 - 업계/주변 반응
-[씬 8] 50-55초 - 결론/전망
-[씬 9] 55-60초 - CTA (구독 유도)
+[씬 1] 0-3초 - ⚡ 킬러 훅 (스크롤 멈추게)
+[씬 2] 3-10초 - 상황 설명 (무슨 일?)
+[씬 3] 10-18초 - 핵심 폭로 (가장 충격적인 내용)
+[씬 4] 18-26초 - 반응 (본인/소속사)
+[씬 5] 26-34초 - 여론 (네티즌 반응)
+[씬 6] 34-42초 - 파장 (어떤 영향?)
+[씬 7] 42-50초 - 반전/추가 정보 (새로운 사실)
+[씬 8] 50-55초 - 🔄 루프 연결 (첫 씬과 자연스럽게 연결)
+
+※ 무한루프: 마지막 씬이 첫 씬과 연결되어 시청자가 다시 보게 만듦
+※ CTA 금지: 구독 유도하면 루프 끊김
 """
+
+# 킬러 훅 템플릿 (첫 3초)
+HOOK_TEMPLATES = {
+    "논란": [
+        "{celebrity}, 결국 이렇게 됐습니다",
+        "{celebrity}의 충격적인 진실",
+        "아무도 몰랐던 {celebrity}의 실체",
+        "{celebrity}, 24시간 만에 모든 게 바뀌었습니다",
+    ],
+    "열애": [
+        "{celebrity}의 비밀 연인이 공개됐습니다",
+        "{celebrity}, 10년 만에 처음입니다",
+        "팬들이 울었습니다. {celebrity}가...",
+    ],
+    "컴백": [
+        "{celebrity}가 돌아옵니다. 이번엔 다릅니다",
+        "업계가 발칵 뒤집혔습니다",
+        "{celebrity}의 역대급 컴백",
+    ],
+    "사건": [
+        "{celebrity}에게 무슨 일이 생겼습니다",
+        "모두가 충격받았습니다",
+        "{celebrity}, 긴급 상황입니다",
+    ],
+    "근황": [
+        "{celebrity}, 요즘 이렇게 지냅니다",
+        "오랜만에 나타난 {celebrity}",
+        "{celebrity}의 놀라운 변화",
+    ],
+}
+
+# 무한루프 연결 문구 (마지막 씬)
+LOOP_ENDINGS = [
+    "그리고 결국... 이렇게 됐습니다",
+    "그래서 지금... 상황은 이렇습니다",
+    "그리고 이 사건은...",
+    "결국 {celebrity}는...",
+]
 
 
 # ============================================================
