@@ -11047,6 +11047,7 @@ def api_image_analyze_script():
             'history': {
                 'name': 'Historical Concept Art',
                 'style_prompt': '''Historical concept art style, [SCENE DESCRIPTION],
+ALL CHARACTERS MUST WEAR PERIOD-ACCURATE HISTORICAL CLOTHING (traditional hanbok, ancient armor, royal robes, peasant clothing matching the era),
 sepia and earth tone color palette, aged parchment texture border, vintage canvas feel,
 digital painting with visible brush strokes,
 dramatic lighting, misty atmospheric perspective,
@@ -11054,8 +11055,8 @@ clearly artistic interpretation NOT photograph,
 BOTTOM RIGHT CORNER: cute Korean scholar mascot (round face with round glasses, black topknot hairstyle, beige hanbok with olive vest, holding scroll, warm earth tones, thick outlines, 10-15% of frame),
 NO text, NO watermark, NO labels,
 16:9 cinematic composition''',
-                'forbidden': 'NO photorealistic, NO anime style, NO modern elements',
-                'required': 'Sepia tones, aged texture, historical atmosphere, mascot character'
+                'forbidden': 'NO photorealistic, NO anime style, NO modern clothing, NO modern elements, NO suits, NO t-shirts, NO jeans',
+                'required': 'Sepia tones, aged texture, historical atmosphere, mascot character, PERIOD-ACCURATE COSTUMES for all characters'
             },
             'news': {
                 'name': 'Modern News Infographic',
