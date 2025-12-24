@@ -27,7 +27,7 @@ async function assembleGptProDraft() {
   const today = new Date().toLocaleDateString('ko-KR');
 
   // ★ 분량→글자 수 변환 (API 호출 - step3_prompt_builder.py 단일 소스)
-  let durationInfo = { minutes: 20, minChars: 16200, maxChars: 19800, targetChars: 18000, charsPerMin: 900 };
+  let durationInfo = null;
   try {
     const durationResponse = await fetch(`/api/sermon/duration-info/${encodeURIComponent(duration)}`);
     if (durationResponse.ok) {
@@ -64,7 +64,7 @@ async function assembleGptProDraft() {
   draft += `   - "~합니다", "~입니다", "~하십시오" 형태를 사용하세요.\n`;
   draft += `   - 반말("~해", "~야") 사용 금지.\n\n`;
 
-  if (duration) {
+  if (duration && durationInfo) {
     draft += `[최우선 필수] 분량: ${duration} = ${durationInfo.targetChars.toLocaleString()}자\n`;
     draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     draft += `   최소 글자 수: ${durationInfo.minChars.toLocaleString()}자 (이 미만은 불합격)\n`;
@@ -341,14 +341,14 @@ async function assembleGptProDraft() {
   draft += `  - Step1의 '핵심_메시지'가 설교 전체에 일관되게 흐르는가?\n`;
   draft += `  - Step1의 '주요_절_해설'과 '핵심_단어_분석'을 활용했는가?\n`;
   draft += `  - Step2의 설교 구조(서론, 대지, 결론)를 따랐는가?\n`;
-  if (duration) draft += `  - 분량이 ${duration} (${durationInfo.minChars.toLocaleString()}~${durationInfo.maxChars.toLocaleString()}자)에 맞는가?\n`;
+  if (duration && durationInfo) draft += `  - 분량이 ${duration} (${durationInfo.minChars.toLocaleString()}~${durationInfo.maxChars.toLocaleString()}자)에 맞는가?\n`;
   if (target) draft += `  - 대상(${target})에 맞는 예시와 적용을 사용했는가?\n`;
   if (worshipType) draft += `  - 예배 유형(${worshipType})에 맞는 톤인가?\n`;
   draft += `  - 성경 구절이 가독성 가이드에 맞게 줄바꿈 처리되었는가?\n`;
   draft += `  - 마크다운 없이 순수 텍스트로 작성했는가?\n`;
   draft += `  - 복음과 소망, 하나님의 은혜가 분명하게 드러나는가?\n\n`;
 
-  if (duration) {
+  if (duration && durationInfo) {
     draft += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     draft += `[최종 분량 확인]\n`;
     draft += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
