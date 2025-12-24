@@ -18688,10 +18688,16 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
 def get_all_sheet_names(service, sheet_id):
     """
     Google Sheets 파일의 모든 시트(탭) 이름 가져오기
-    _설정, _템플릿 등 언더스코어로 시작하는 시트는 제외
+    제외 대상:
+    - _설정, _템플릿 등 언더스코어로 시작하는 시트
+    - SHORTS (별도 파이프라인 사용)
+    - BIBLE (별도 파이프라인 사용)
 
     반환: ['채널A', '채널B', ...] 또는 None (실패 시)
     """
+    # 메인 파이프라인에서 제외할 시트 목록
+    EXCLUDED_SHEETS = {'SHORTS', 'BIBLE'}
+
     try:
         spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         sheets = spreadsheet.get('sheets', [])
@@ -18700,7 +18706,8 @@ def get_all_sheet_names(service, sheet_id):
         for sheet in sheets:
             name = sheet.get('properties', {}).get('title', '')
             # 언더스코어로 시작하는 시트는 설정/템플릿용으로 제외
-            if name and not name.startswith('_'):
+            # SHORTS, BIBLE은 별도 파이프라인 사용
+            if name and not name.startswith('_') and name not in EXCLUDED_SHEETS:
                 sheet_names.append(name)
 
         print(f"[SHEETS] 발견된 채널 시트: {sheet_names}")
