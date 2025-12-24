@@ -239,7 +239,7 @@ def collect_entertainment_news(
                 "news_summary": "...",
                 "silhouette_desc": "...",
                 "hook_text": "...",
-                "상태": "",  # 빈 값 → 사용자가 "대기"로 변경 시 처리됨
+                "상태": "대기",  # 자동 처리 대상
             },
             ...
         ]
@@ -305,7 +305,7 @@ def collect_entertainment_news(
                     "news_summary": news_summary,
                     "silhouette_desc": silhouette_desc,
                     "hook_text": hook_text,
-                    "상태": "",  # 빈 값 → 사용자가 "대기"로 변경 시 처리됨
+                    "상태": "대기",  # 자동 처리 대상
                 })
 
                 if len(all_items) >= total_limit:
@@ -373,7 +373,7 @@ def search_celebrity_news(
             "news_summary": news_summary,
             "silhouette_desc": silhouette_desc,
             "hook_text": hook_text,
-            "상태": "",  # 빈 값 → 사용자가 "대기"로 변경 시 처리됨
+            "상태": "대기",  # 자동 처리 대상
         })
 
     print(f"[SHORTS] '{person}' 관련 {len(results)}개 뉴스 수집 완료")
