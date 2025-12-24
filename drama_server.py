@@ -43,12 +43,17 @@ from image import generate_image as image_generate, generate_image_base64, gener
 # TTS 청킹 모듈 (문장별 TTS 개선)
 from tts.tts_chunking import split_korean_sentences as tts_split_sentences
 
+# Sermon API Blueprint
+from sermon_modules.api_sermon import api_sermon_bp
+
 app = Flask(__name__)
 
 # Assistant Blueprint 등록
 app.register_blueprint(assistant_bp)
 # TubeLens Blueprint 등록
 app.register_blueprint(tubelens_bp)
+# Sermon API Blueprint 등록
+app.register_blueprint(api_sermon_bp)
 
 # ===== 전역 에러 핸들러 (항상 JSON 반환) =====
 @app.errorhandler(500)
