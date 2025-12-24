@@ -15,8 +15,9 @@ SHEET_NAME = "SHORTS"
 # 수집 영역 헤더
 COLLECT_HEADERS = [
     "run_id",           # 수집 날짜 (YYYY-MM-DD)
-    "celebrity",        # 연예인명
-    "issue_type",       # 논란/열애/컴백/사건/근황
+    "category",         # 연예인/운동선수/국뽕
+    "person",           # 인물명 (연예인/운동선수 등)
+    "issue_type",       # 논란/열애/컴백/사건/근황/성과/자랑
     "news_title",       # 뉴스 제목
     "news_url",         # 뉴스 URL
     "news_summary",     # 뉴스 요약 (3줄)
@@ -76,16 +77,44 @@ HOOK_MAX_CHARS = 25  # 첫 3초에 25자 이내
 
 
 # ============================================================
-# 이슈 타입
+# 카테고리 및 이슈 타입
 # ============================================================
 
-ISSUE_TYPES = [
-    "논란",     # 갑질, 학폭, 사생활 등
-    "열애",     # 열애설, 결혼, 이혼
-    "컴백",     # 컴백, 신곡, 앨범
-    "사건",     # 사고, 소송, 구속
-    "근황",     # 근황, 활동, 복귀
+# 콘텐츠 카테고리
+CONTENT_CATEGORIES = [
+    "연예인",   # 연예인/아이돌/배우
+    "운동선수", # 스포츠 선수
+    "국뽕",     # 국가 자랑거리/한류/K-문화
 ]
+
+# 이슈 타입 (카테고리별)
+ISSUE_TYPES = {
+    "연예인": [
+        "논란",     # 갑질, 학폭, 사생활 등
+        "열애",     # 열애설, 결혼, 이혼
+        "컴백",     # 컴백, 신곡, 앨범
+        "사건",     # 사고, 소송, 구속
+        "근황",     # 근황, 활동, 복귀
+    ],
+    "운동선수": [
+        "성과",     # 우승, 기록, 메달
+        "부상",     # 부상, 복귀
+        "이적",     # 이적, 계약
+        "논란",     # 도핑, 승부조작 등
+        "근황",     # 근황, 활동
+    ],
+    "국뽕": [
+        "자랑",     # 세계 1등, 최초, 최고
+        "성과",     # 수상, 인정
+        "반응",     # 외국인 반응, 해외 반응
+        "문화",     # K-문화, 한류
+    ],
+}
+
+# 모든 이슈 타입 (flat list for backward compatibility)
+ALL_ISSUE_TYPES = list(set(
+    issue for types in ISSUE_TYPES.values() for issue in types
+))
 
 
 # ============================================================
@@ -125,10 +154,10 @@ Korean news broadcast style
 
 
 # ============================================================
-# 연예인 실루엣 라이브러리
+# 실루엣 라이브러리 (카테고리별)
 # ============================================================
 
-# 유명 연예인 실루엣 특징
+# 연예인 실루엣 특징
 CELEBRITY_SILHOUETTES = {
     "박나래": "female comedian with short wavy hair holding a microphone in energetic pose",
     "유재석": "tall slim male figure with signature hand gesture, wearing suit",
@@ -140,6 +169,43 @@ CELEBRITY_SILHOUETTES = {
     # 기본값
     "default_male": "male figure in casual standing pose",
     "default_female": "female figure in casual standing pose",
+}
+
+# 운동선수 실루엣 특징
+ATHLETE_SILHOUETTES = {
+    # 축구
+    "손흥민": "athletic male soccer player in running pose with ball, spiky hair",
+    "이강인": "young male soccer player in dribbling pose, short hair",
+    "황희찬": "muscular male soccer player in celebration pose with arms raised",
+    "김민재": "tall athletic male defender in standing pose",
+    # 야구
+    "류현진": "stocky male baseball pitcher in throwing motion",
+    "오타니 쇼헤이": "tall male baseball player in batting stance",
+    "이정후": "male baseball player in batting pose, helmet",
+    # 배구
+    "김연경": "tall athletic female volleyball player in spiking pose",
+    # 피겨
+    "김연아": "elegant female figure skater in graceful pose",
+    # 골프
+    "고진영": "female golfer in swing pose with club",
+    "박인비": "female golfer in putting stance",
+    # 기본값
+    "default_athlete": "athletic figure in sports pose",
+}
+
+# 국뽕용 실루엣 (상징적 이미지)
+KOREA_PRIDE_SILHOUETTES = {
+    "default": "Korean traditional elements, Taegeuk pattern, modern Korea skyline silhouette",
+    "technology": "futuristic Korean tech cityscape, semiconductor chip shapes",
+    "culture": "traditional Korean hanbok silhouette mixed with modern K-pop stage",
+    "sports": "Korean athlete with gold medal, national flag waving",
+    "food": "Korean cuisine elements, bibimbap bowl, kimchi jar silhouettes",
+}
+
+# 통합 실루엣 라이브러리
+ALL_SILHOUETTES = {
+    **CELEBRITY_SILHOUETTES,
+    **ATHLETE_SILHOUETTES,
 }
 
 
@@ -161,33 +227,69 @@ SCRIPT_STRUCTURE = """
 ※ CTA 금지: 구독 유도하면 루프 끊김
 """
 
-# 킬러 훅 템플릿 (첫 3초)
+# 킬러 훅 템플릿 (첫 3초) - {person}은 인물명으로 대체됨
 HOOK_TEMPLATES = {
+    # 연예인용
     "논란": [
-        "{celebrity}, 결국 이렇게 됐습니다",
-        "{celebrity}의 충격적인 진실",
-        "아무도 몰랐던 {celebrity}의 실체",
-        "{celebrity}, 24시간 만에 모든 게 바뀌었습니다",
+        "{person}, 결국 이렇게 됐습니다",
+        "{person}의 충격적인 진실",
+        "아무도 몰랐던 {person}의 실체",
+        "{person}, 24시간 만에 모든 게 바뀌었습니다",
     ],
     "열애": [
-        "{celebrity}의 비밀 연인이 공개됐습니다",
-        "{celebrity}, 10년 만에 처음입니다",
-        "팬들이 울었습니다. {celebrity}가...",
+        "{person}의 비밀 연인이 공개됐습니다",
+        "{person}, 10년 만에 처음입니다",
+        "팬들이 울었습니다. {person}가...",
     ],
     "컴백": [
-        "{celebrity}가 돌아옵니다. 이번엔 다릅니다",
+        "{person}가 돌아옵니다. 이번엔 다릅니다",
         "업계가 발칵 뒤집혔습니다",
-        "{celebrity}의 역대급 컴백",
+        "{person}의 역대급 컴백",
     ],
     "사건": [
-        "{celebrity}에게 무슨 일이 생겼습니다",
+        "{person}에게 무슨 일이 생겼습니다",
         "모두가 충격받았습니다",
-        "{celebrity}, 긴급 상황입니다",
+        "{person}, 긴급 상황입니다",
     ],
     "근황": [
-        "{celebrity}, 요즘 이렇게 지냅니다",
-        "오랜만에 나타난 {celebrity}",
-        "{celebrity}의 놀라운 변화",
+        "{person}, 요즘 이렇게 지냅니다",
+        "오랜만에 나타난 {person}",
+        "{person}의 놀라운 변화",
+    ],
+    # 운동선수용
+    "성과": [
+        "{person}, 역대급 기록 세웠습니다",
+        "{person}이 해냈습니다",
+        "전세계가 주목합니다. {person}의 위업",
+        "{person}, 대한민국 최초입니다",
+    ],
+    "부상": [
+        "{person}에게 안타까운 소식입니다",
+        "{person}, 시즌 아웃 위기입니다",
+        "충격... {person}이 쓰러졌습니다",
+    ],
+    "이적": [
+        "{person}, 깜짝 이적 발표",
+        "{person}의 새 팀이 공개됐습니다",
+        "역대급 계약... {person}의 몸값",
+    ],
+    # 국뽕용
+    "자랑": [
+        "한국이 또 해냈습니다",
+        "세계가 놀란 한국의 저력",
+        "대한민국, 세계 1위 등극",
+        "역시 한국... 전세계 1등",
+    ],
+    "반응": [
+        "외국인들이 충격받았습니다",
+        "한국에 온 외국인들... 이게 뭐죠?",
+        "전세계가 주목하는 한국",
+        "해외에서 난리 난 한국 소식",
+    ],
+    "문화": [
+        "K-문화, 전세계를 접수했습니다",
+        "한류, 이제 세계 표준입니다",
+        "전세계가 따라하는 한국 트렌드",
     ],
 }
 
@@ -246,20 +348,65 @@ SCRIPT_GENERATION_PROMPT = """
 # RSS 피드 설정
 # ============================================================
 
-ENTERTAINMENT_RSS_FEEDS = [
-    {
-        "name": "naver_entertain",
-        "url": "https://news.google.com/rss/search?q=연예+뉴스&hl=ko&gl=KR&ceid=KR:ko",
-    },
-    {
-        "name": "celebrity_issue",
-        "url": "https://news.google.com/rss/search?q=연예인+논란&hl=ko&gl=KR&ceid=KR:ko",
-    },
-    {
-        "name": "kpop_news",
-        "url": "https://news.google.com/rss/search?q=아이돌+뉴스&hl=ko&gl=KR&ceid=KR:ko",
-    },
-]
+# 매일 수집할 뉴스 개수
+DAILY_NEWS_LIMIT = 5
+
+# 카테고리별 RSS 피드
+RSS_FEEDS = {
+    "연예인": [
+        {
+            "name": "celebrity_issue",
+            "url": "https://news.google.com/rss/search?q=연예인+논란&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "celebrity_news",
+            "url": "https://news.google.com/rss/search?q=연예인+뉴스&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "kpop_idol",
+            "url": "https://news.google.com/rss/search?q=아이돌+이슈&hl=ko&gl=KR&ceid=KR:ko",
+        },
+    ],
+    "운동선수": [
+        {
+            "name": "sports_star",
+            "url": "https://news.google.com/rss/search?q=운동선수+이슈&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "kbl_kbo",
+            "url": "https://news.google.com/rss/search?q=프로야구+프로농구+선수&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "soccer_player",
+            "url": "https://news.google.com/rss/search?q=축구+선수+이적+활약&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "athlete_news",
+            "url": "https://news.google.com/rss/search?q=손흥민+김연경+류현진&hl=ko&gl=KR&ceid=KR:ko",
+        },
+    ],
+    "국뽕": [
+        {
+            "name": "korea_pride",
+            "url": "https://news.google.com/rss/search?q=한국+세계+1위+최초&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "hallyu_kculture",
+            "url": "https://news.google.com/rss/search?q=한류+K문화+해외반응&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "foreigner_reaction",
+            "url": "https://news.google.com/rss/search?q=외국인+한국+반응&hl=ko&gl=KR&ceid=KR:ko",
+        },
+        {
+            "name": "korea_recognition",
+            "url": "https://news.google.com/rss/search?q=한국+해외+인정+수상&hl=ko&gl=KR&ceid=KR:ko",
+        },
+    ],
+}
+
+# 레거시 호환용 (이전 코드와의 호환성 유지)
+ENTERTAINMENT_RSS_FEEDS = RSS_FEEDS["연예인"]
 
 
 # ============================================================
