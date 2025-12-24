@@ -4004,20 +4004,17 @@ def preprocess_tts_extended(text: str) -> str:
     text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', text)
 
     # ===== 3. 이모지 제거 =====
-    # 유니코드 이모지 범위 제거
+    # 유니코드 이모지 범위 제거 (한글 범위 AC00-D7AF 제외!)
     emoji_pattern = re.compile(
         "["
-        "\U0001F600-\U0001F64F"  # 표정
+        "\U0001F600-\U0001F64F"  # 표정 이모지
         "\U0001F300-\U0001F5FF"  # 기호 & 픽토그램
         "\U0001F680-\U0001F6FF"  # 교통 & 지도
         "\U0001F1E0-\U0001F1FF"  # 국기
-        "\U00002702-\U000027B0"  # 딩뱃
-        "\U000024C2-\U0001F251"  # 기타
         "\U0001F900-\U0001F9FF"  # 보조 기호
         "\U0001FA00-\U0001FA6F"  # 체스 기호
         "\U0001FA70-\U0001FAFF"  # 기호 확장
-        "\U00002600-\U000026FF"  # 기호
-        "\U00002700-\U000027BF"  # 딩뱃
+        "\U0001F200-\U0001F251"  # 괄호 문자 (한글 범위 피함)
         "]+",
         flags=re.UNICODE
     )
@@ -12280,15 +12277,22 @@ def api_image_generate_assets_zip():
             text = text.replace('\\N', ' ').replace('\\n', ' ')  # 이스케이프된 형태 먼저
             text = text.replace('\n', ' ')                        # 실제 줄바꿈 문자
             text = re.sub(r'[/\\][nN]', ' ', text)               # 슬래시 형태까지
-            # ★ 소수점 변환 제거 (2025-12-22)
-            # 기존: text = re.sub(r'(\d+)\.(\d+)', lambda m: m.group(0).replace('.', '점'), text)
-            # 문제: convert_numbers_to_korean()보다 먼저 실행되어 소수점 패턴 매칭 방해
-            # 예: "2.75%" → "2점75%" → sino_units에서 "75%"를 "칠십오퍼센트"로 변환 (잘못됨)
-            # 해결: convert_numbers_to_korean()에서 소수점을 올바르게 처리함
-            # 1) 쉼표를 마침표로 대체 (TTS 휴지 강화)
-            # 쉼표 뒤에 충분한 휴지가 없어서 발음이 빠름 → 마침표로 대체하여 휴지 확보
-            text = text.replace(',', '.')
-            # 3) 연속 공백 정리
+
+            # 0-3) 문장부호 정리 (TTS가 "점", "물음표"로 읽는 것 방지)
+            # 연속된 마침표/물음표/느낌표 → 단일 공백 (휴지 효과)
+            text = re.sub(r'[.]{2,}', ' ', text)   # ... → 공백
+            text = re.sub(r'[?]{2,}', ' ', text)   # ??? → 공백
+            text = re.sub(r'[!]{2,}', ' ', text)   # !!! → 공백
+            # 문장 끝 마침표/물음표/느낌표 → 공백으로 대체 (TTS는 문장 끝에서 자연스럽게 휴지)
+            text = re.sub(r'[.?!]+\s*$', '', text)  # 문장 끝 부호 제거
+            text = re.sub(r'[.?!]+\s+', ' ', text)  # 문장 중간 부호 → 공백
+            # 단독 부호 제거
+            text = re.sub(r'\s+[.?!]+\s+', ' ', text)
+
+            # 0-4) 쉼표 → 공백 (휴지 효과, "쉼표"로 읽는 것 방지)
+            text = text.replace(',', ' ')
+
+            # 연속 공백 정리
             text = re.sub(r'\s+', ' ', text).strip()
 
             # ===== Chirp 3 HD 처리 (최고 품질 + 빠른 속도) =====
