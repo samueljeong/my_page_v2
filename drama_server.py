@@ -21111,7 +21111,17 @@ def api_sheets_check_and_process():
                     pending_tasks.append((sort_key, sheet_name, i, row, channel_id, col_map))
 
         # ========== 4. 예약시간 기준 정렬 ==========
-        pending_tasks.sort(key=lambda x: x[0])
+        print(f"[SHEETS] 대기 작업 {len(pending_tasks)}개 발견, 정렬 중...")
+        for idx, task in enumerate(pending_tasks[:5]):  # 처음 5개만 로그
+            sk, sn, rn, rd, ci, cm = task
+            print(f"[SHEETS]   - 태스크 {idx}: 시트={sn}, 행={rn}, sort_key={sk}")
+        try:
+            pending_tasks.sort(key=lambda x: x[0])
+        except Exception as sort_err:
+            print(f"[SHEETS] 정렬 오류: {sort_err}")
+            # 정렬 실패 시 첫 번째 것만 처리
+            if pending_tasks:
+                pending_tasks = [pending_tasks[0]]
 
         if not pending_tasks:
             # ========== 대기 작업 없음 ==========
@@ -21190,9 +21200,15 @@ def api_sheets_check_and_process():
                 from scripts.shorts_pipeline.sheets import update_status as shorts_update_status
 
                 # row_data를 딕셔너리로 변환
+                # col_map은 {'헤더': {'index': N, 'letter': 'X'}} 형식
                 shorts_row_data = {}
-                for header, col_idx in col_map.items():
-                    shorts_row_data[header] = row_data[col_idx] if col_idx < len(row_data) else ""
+                for header, col_info in col_map.items():
+                    # col_info가 dict면 index 추출, int면 그대로 사용
+                    idx = col_info['index'] if isinstance(col_info, dict) else col_info
+                    if idx < len(row_data):
+                        shorts_row_data[header] = row_data[idx]
+                    else:
+                        shorts_row_data[header] = ""
                 shorts_row_data["row_number"] = row_num
 
                 person = shorts_row_data.get("person", shorts_row_data.get("celebrity", ""))
@@ -21234,9 +21250,14 @@ def api_sheets_check_and_process():
                 print(f"[BIBLE] 성경통독 파이프라인 시작: 행 {row_num}")
 
                 # row_data를 딕셔너리로 변환 (BIBLE 형식)
+                # col_map은 {'헤더': {'index': N, 'letter': 'X'}} 형식
                 bible_row_data = {}
-                for header, col_idx in col_map.items():
-                    bible_row_data[header] = row_data[col_idx] if col_idx < len(row_data) else ""
+                for header, col_info in col_map.items():
+                    idx = col_info['index'] if isinstance(col_info, dict) else col_info
+                    if idx < len(row_data):
+                        bible_row_data[header] = row_data[idx]
+                    else:
+                        bible_row_data[header] = ""
                 bible_row_data["row_idx"] = row_num
 
                 bible_result = run_bible_episode_pipeline(
