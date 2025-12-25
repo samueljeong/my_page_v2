@@ -21295,11 +21295,13 @@ def api_sheets_check_and_process():
                     playlist_id = get_row_value(row_data, col_map, '플레이리스트ID', '')
                     scheduled_time = get_row_value(row_data, col_map, '예약시간', '')
 
-                    # YouTube 설명 생성 (쇼츠용)
-                    shorts_description = script_result.get("description", "")
+                    # YouTube 설명 생성 (쇼츠용) - youtube_seo 사용
+                    youtube_seo = script_result.get("youtube_seo", {})
+                    shorts_description = youtube_seo.get("description", "")
                     if not shorts_description:
-                        shorts_description = f"#{person} #{issue_type}\n\n"
-                        shorts_description += script_result.get("hook", "")
+                        # fallback: 기본 설명 생성
+                        shorts_description = f"{script_result.get('title', person)}\n\n"
+                        shorts_description += f"#{person} #{issue_type} #Shorts #연예뉴스"
 
                     # 업로드 페이로드 구성
                     shorts_upload_payload = {
@@ -21310,9 +21312,7 @@ def api_sheets_check_and_process():
                         "channelId": channel_id,
                     }
 
-                    # 썸네일 추가
-                    if video_result.get("thumbnail_path"):
-                        shorts_upload_payload["thumbnailPath"] = video_result.get("thumbnail_path")
+                    # 썸네일은 쇼츠에서 자동 생성되므로 별도 업로드 안함
 
                     # 플레이리스트 추가
                     if playlist_id:

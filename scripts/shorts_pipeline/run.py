@@ -957,37 +957,19 @@ def run_video_generation(
         audio_path = tts_result["audio_path"]
 
         # ============================================================
-        # 2단계: 이미지 + 썸네일 병렬 생성
+        # 2단계: 이미지 생성 (썸네일은 YouTube 자동 생성 사용)
         # ============================================================
-        print("\n[SHORTS] === 2단계: 이미지 + 썸네일 병렬 생성 ===")
+        print("\n[SHORTS] === 2단계: 이미지 생성 ===")
 
         scenes = script_result.get("scenes", [])
-        thumbnail_config = script_result.get("thumbnail", {})
         image_dir = os.path.join(work_dir, "images")
-        thumbnail_path = os.path.join(work_dir, "thumbnail.png")
 
-        # 병렬 실행 (2 워커: 이미지 생성 + 썸네일 생성)
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            # 이미지 생성 작업 (내부에서 4 워커 사용)
-            image_future = executor.submit(
-                generate_images_parallel,
-                scenes=scenes,
-                output_dir=image_dir,
-                max_workers=4
-            )
-
-            # 썸네일 생성 작업
-            thumbnail_future = executor.submit(
-                generate_thumbnail,
-                thumbnail_config=thumbnail_config,
-                person=person,
-                issue_type=issue_type,
-                output_path=thumbnail_path
-            )
-
-            # 결과 수집
-            image_result = image_future.result()
-            thumbnail_result = thumbnail_future.result()
+        # 이미지 생성 (4 워커 병렬)
+        image_result = generate_images_parallel(
+            scenes=scenes,
+            output_dir=image_dir,
+            max_workers=4
+        )
 
         # 이미지 생성 결과 확인
         if not image_result.get("ok") and len(image_result.get("images", [])) == 0:
@@ -998,7 +980,6 @@ def run_video_generation(
             }
 
         total_cost += image_result.get("cost", 0)
-        total_cost += thumbnail_result.get("cost", 0) if thumbnail_result.get("ok") else 0
 
         # ============================================================
         # 3단계: FFmpeg 영상 렌더링
@@ -1036,7 +1017,7 @@ def run_video_generation(
         result = {
             "ok": True,
             "video_path": render_result["path"],
-            "thumbnail_path": thumbnail_path if thumbnail_result.get("ok") else None,
+            "thumbnail_path": None,  # YouTube 자동 썸네일 사용
             "duration": render_result["duration"],
             "cost": round(total_cost, 3),
             "work_dir": work_dir,
