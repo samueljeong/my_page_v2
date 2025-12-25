@@ -52,6 +52,13 @@ def _get_aspect_instruction(size: str) -> Tuple[str, int, int]:
             "This is MANDATORY for YouTube Shorts format. DO NOT generate square or landscape images."
         )
         return instruction, 720, 1280
+    elif size == "1024x1024" or "1:1" in size or size == "720x720":
+        # 1:1 정사각형 - 크롭 없음
+        instruction = (
+            "Generate a 1:1 SQUARE image. The width and height must be equal. "
+            "Target dimensions: 1024x1024 pixels. DO NOT generate rectangular images."
+        )
+        return instruction, 1024, 1024
     else:
         instruction = (
             "CRITICAL: You MUST generate the image in EXACT 16:9 WIDESCREEN LANDSCAPE aspect ratio. "

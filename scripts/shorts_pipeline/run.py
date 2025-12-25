@@ -254,7 +254,7 @@ def generate_single_image(
             result = main_generate_image(
                 prompt=prompt,
                 size="1024x1024",  # 1:1 정사각형
-                model=GEMINI_FLASH,  # 씬 이미지는 Flash 모델
+                model=GEMINI_PRO,  # 고품질 PRO 모델
                 add_aspect_instruction=False,  # 비율 지시문 생략 (1:1 유지)
             )
 
@@ -419,7 +419,7 @@ NO text on image
         result = main_generate_image(
             prompt=prompt,
             size="1024x1024",  # 1:1 정사각형
-            model=GEMINI_PRO,  # 썸네일은 Pro 모델 (고품질)
+            model=GEMINI_PRO,  # 고품질 PRO 모델
             add_aspect_instruction=False,  # 비율 지시문 생략
         )
 
