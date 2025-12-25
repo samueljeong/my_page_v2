@@ -7,10 +7,66 @@ GPT-5.1 Responses API를 사용하여:
 """
 
 import os
+import re
 import json
 from typing import Dict, Any, List, Optional
 
 from openai import OpenAI
+
+
+def repair_json(text: str) -> str:
+    """
+    불완전한 JSON 수정 시도
+    - 마크다운 코드 블록 제거
+    - 후행 콤마 제거
+    - 누락된 콤마 추가
+    """
+    # 1) 마크다운 코드 블록 제거
+    if "```" in text:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+        if match:
+            text = match.group(1)
+        else:
+            # 시작만 있고 끝이 없는 경우
+            text = re.sub(r'^```(?:json)?\s*', '', text)
+            text = re.sub(r'\s*```$', '', text)
+
+    # 2) 후행 콤마 제거 (배열/객체 끝의 콤마)
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # 3) 줄바꿈 후 따옴표가 오는데 콤마가 없는 경우 수정
+    # "value"\n"key" → "value",\n"key"
+    text = re.sub(r'"\s*\n\s*"(?=[a-zA-Z_가-힣])', '",\n"', text)
+
+    # 4) 객체/배열 끝 후 콤마 없이 다음 요소가 오는 경우
+    # }\n{ → },\n{
+    text = re.sub(r'}\s*\n\s*{', '},\n{', text)
+    # ]\n[ → ],\n[
+    text = re.sub(r']\s*\n\s*\[', '],\n[', text)
+
+    return text.strip()
+
+
+def safe_json_parse(text: str) -> Dict[str, Any]:
+    """
+    안전한 JSON 파싱 (수정 시도 포함)
+    """
+    # 1차 시도: 직접 파싱
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 2차 시도: 수정 후 파싱
+    repaired = repair_json(text)
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError as e:
+        # 최종 실패 시 상세 에러 출력
+        print(f"[SHORTS] JSON 수정 후에도 파싱 실패")
+        print(f"[SHORTS] 에러 위치: line {e.lineno}, col {e.colno}")
+        print(f"[SHORTS] 수정된 JSON 앞 500자:\n{repaired[:500]}")
+        raise
 
 from .config import (
     DEFAULT_SCENE_COUNT,
@@ -284,17 +340,8 @@ def generate_shorts_script(
         if not result_text:
             raise ValueError("GPT-5.1에서 빈 응답을 받았습니다")
 
-        # JSON 파싱 (```json ... ``` 형식 처리)
-        if result_text.startswith("```"):
-            # 코드 블록 제거
-            lines = result_text.split("\n")
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines[-1].strip() == "```":
-                lines = lines[:-1]
-            result_text = "\n".join(lines)
-
-        result = json.loads(result_text)
+        # 안전한 JSON 파싱 (마크다운 제거 + 수정 시도)
+        result = safe_json_parse(result_text)
 
         # 전체 대본 조합
         full_script = "\n".join([
