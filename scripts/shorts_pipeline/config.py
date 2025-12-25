@@ -132,10 +132,13 @@ BACKGROUND_STYLES = {
     "cta": "Subscribe button style, glowing red accent, clean dark background",
 }
 
-# 실루엣 프롬프트 템플릿
+# 실루엣 프롬프트 템플릿 (9:16 세로 크롭 대비)
 SILHOUETTE_TEMPLATE = """
+IMPORTANT: Compose for 9:16 VERTICAL crop - keep main subject CENTERED in the middle 50% of frame width.
 {background_style},
 black silhouette of {silhouette_desc},
+silhouette MUST be positioned in the exact CENTER of the frame,
+keep arms and body within the central narrow vertical strip,
 dramatic spotlight from above casting long shadow,
 Korean entertainment news style,
 NO facial features visible - only dark shadow outline,
@@ -145,8 +148,10 @@ large empty space at top and bottom for Korean text overlay,
 
 # 배경 전용 프롬프트 (실루엣 없는 씬용)
 BACKGROUND_ONLY_TEMPLATE = """
+IMPORTANT: Compose for 9:16 VERTICAL crop - keep main elements CENTERED in the middle 50% of frame width.
 {background_style},
 NO people or human figures,
+main visual elements centered for vertical cropping,
 large empty space for Korean text overlay,
 4K quality, cinematic composition,
 Korean news broadcast style

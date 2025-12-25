@@ -395,8 +395,11 @@ def generate_thumbnail(
         )
 
         prompt = thumbnail_config.get("image_prompt", f"""
-YouTube Shorts thumbnail, 9:16 vertical,
+CRITICAL: Compose for 9:16 VERTICAL crop - keep silhouette CENTERED in the middle 50% of frame width.
+YouTube Shorts thumbnail,
 dramatic black silhouette of {person},
+silhouette MUST be positioned in the exact CENTER of the frame,
+keep arms and body within the central narrow vertical strip,
 spotlight from above, {style_config['accent_color']} accent lighting,
 {style_config['background_color']} background,
 empty space in center for Korean text overlay,
