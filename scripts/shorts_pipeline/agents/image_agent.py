@@ -10,10 +10,78 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+try:
+    from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+except ImportError:
+    from base import BaseAgent, AgentResult, AgentStatus, TaskContext
 
-# 기존 run.py의 이미지 생성 함수 사용
-from ..run import generate_images_parallel, generate_single_image
+
+def generate_images_parallel(scenes, output_dir, max_workers=4):
+    """
+    씬 이미지 병렬 생성 (동적 임포트)
+    """
+    try:
+        # 런타임에 임포트 시도
+        import sys
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+
+        from image import generate_image as main_generate_image
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        os.makedirs(output_dir, exist_ok=True)
+        images = []
+        failed = []
+
+        print(f"[ImageAgent] 이미지 생성 시작: {len(scenes)}개 씬")
+
+        def generate_single(scene):
+            scene_num = scene.get("scene_number", 1)
+            prompt = scene.get("image_prompt_enhanced", scene.get("image_prompt", ""))
+
+            try:
+                result = main_generate_image(
+                    prompt=prompt,
+                    aspect_ratio="1:1",
+                    model="gemini-2.0-flash-exp"
+                )
+
+                if result.get("ok") and result.get("local_path"):
+                    return {"ok": True, "scene": scene_num, "path": result["local_path"]}
+                else:
+                    return {"ok": False, "scene": scene_num, "error": result.get("error", "Unknown")}
+            except Exception as e:
+                return {"ok": False, "scene": scene_num, "error": str(e)}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(generate_single, scene): scene for scene in scenes}
+
+            for future in as_completed(futures):
+                result = future.result()
+                if result.get("ok"):
+                    images.append(result)
+                else:
+                    failed.append(result)
+
+        cost = len(images) * 0.05
+        print(f"[ImageAgent] 이미지 생성 완료: {len(images)}개 성공, {len(failed)}개 실패")
+
+        return {
+            "ok": len(failed) == 0,
+            "images": sorted(images, key=lambda x: x["scene"]),
+            "failed": failed,
+            "cost": round(cost, 3),
+        }
+
+    except ImportError as e:
+        print(f"[ImageAgent] 이미지 모듈 임포트 실패: {e}")
+        return {
+            "ok": False,
+            "images": [],
+            "failed": [{"scene": i+1, "error": str(e)} for i in range(len(scenes))],
+            "cost": 0,
+        }
 
 
 class ImageAgent(BaseAgent):

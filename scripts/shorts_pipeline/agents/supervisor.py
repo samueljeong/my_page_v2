@@ -12,10 +12,16 @@ import asyncio
 import time
 from typing import Any, Dict, Optional
 
-from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
-from .script_agent import ScriptAgent
-from .image_agent import ImageAgent
-from .review_agent import ReviewAgent
+try:
+    from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+    from .script_agent import ScriptAgent
+    from .image_agent import ImageAgent
+    from .review_agent import ReviewAgent
+except ImportError:
+    from base import BaseAgent, AgentResult, AgentStatus, TaskContext
+    from script_agent import ScriptAgent
+    from image_agent import ImageAgent
+    from review_agent import ReviewAgent
 
 
 class SupervisorAgent(BaseAgent):

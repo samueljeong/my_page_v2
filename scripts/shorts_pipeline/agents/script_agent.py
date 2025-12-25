@@ -6,19 +6,76 @@ ScriptAgent - 기획/대본 생성 에이전트
 - 검수 피드백 반영하여 개선
 """
 
+import os
+import sys
 import time
+import json
+import re
 from typing import Any, Dict, Optional
 
-from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+try:
+    from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+except ImportError:
+    from base import BaseAgent, AgentResult, AgentStatus, TaskContext
 
-# 기존 script_generator 모듈 사용
-from ..script_generator import (
-    generate_complete_shorts_package,
-    get_openai_client,
-    extract_gpt51_response,
-    safe_json_parse,
-    GPT51_COSTS,
-)
+
+# GPT-5.1 비용 (USD per 1K tokens)
+GPT51_COSTS = {
+    "input": 0.01,
+    "output": 0.03,
+}
+
+
+def get_openai_client():
+    """OpenAI 클라이언트 반환"""
+    from openai import OpenAI
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
+    return OpenAI(api_key=api_key)
+
+
+def extract_gpt51_response(response) -> str:
+    """GPT-5.1 Responses API 응답에서 텍스트 추출"""
+    if getattr(response, "output_text", None):
+        return response.output_text.strip()
+
+    text_chunks = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            if getattr(content, "type", "") == "text":
+                text_chunks.append(getattr(content, "text", ""))
+
+    return "\n".join(text_chunks).strip()
+
+
+def repair_json(text: str) -> str:
+    """불완전한 JSON 수정 시도"""
+    if "```" in text:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+        if match:
+            text = match.group(1)
+        else:
+            text = re.sub(r'^```(?:json)?\s*', '', text)
+            text = re.sub(r'\s*```$', '', text)
+
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    text = re.sub(r'"\s*\n\s*"(?=[a-zA-Z_가-힣])', '",\n"', text)
+    text = re.sub(r'}\s*\n\s*{', '},\n{', text)
+    text = re.sub(r']\s*\n\s*\[', '],\n[', text)
+
+    return text.strip()
+
+
+def safe_json_parse(text: str) -> Dict[str, Any]:
+    """안전한 JSON 파싱"""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    repaired = repair_json(text)
+    return json.loads(repaired)
 
 
 class ScriptAgent(BaseAgent):
@@ -97,18 +154,82 @@ class ScriptAgent(BaseAgent):
         """새로운 대본 생성"""
         self.log(f"대본 생성 시작: {context.person} - {context.issue_type}")
 
-        news_data = {
-            "person": context.person,
-            "celebrity": context.person,  # 호환성
-            "issue_type": context.issue_type,
-            "news_title": context.topic,
-            "news_summary": context.topic,  # 간단 모드
-            "hook_text": "",
-            "silhouette_desc": self._get_silhouette_desc(context.person),
-        }
+        try:
+            client = get_openai_client()
 
-        result = generate_complete_shorts_package(news_data, model=self.model)
-        return result
+            prompt = f"""
+당신은 YouTube Shorts 대본 전문 작가입니다.
+아래 정보를 바탕으로 30-40초 쇼츠 대본을 작성하세요.
+
+## 정보
+- 인물: {context.person}
+- 주제: {context.topic}
+- 이슈 타입: {context.issue_type}
+- 카테고리: {context.category}
+
+## 대본 규칙
+1. 총 200-260자 (30-40초 TTS 기준)
+2. 5개 씬으로 구성
+3. 씬1: 킬러 훅 (스크롤 멈추게)
+4. 씬2-4: 핵심 내용
+5. 씬5: 결론 (훅 반복 금지)
+
+## 출력 형식 (JSON만 반환)
+{{
+    "title": "쇼츠 제목 (30자 이내)",
+    "scenes": [
+        {{"scene_number": 1, "narration": "킬러 훅 문장", "image_prompt": "영어 이미지 프롬프트"}},
+        {{"scene_number": 2, "narration": "...", "image_prompt": "..."}},
+        {{"scene_number": 3, "narration": "...", "image_prompt": "..."}},
+        {{"scene_number": 4, "narration": "...", "image_prompt": "..."}},
+        {{"scene_number": 5, "narration": "결론", "image_prompt": "..."}}
+    ],
+    "hashtags": ["#태그1", "#태그2"]
+}}
+"""
+
+            response = client.responses.create(
+                model=self.model,
+                input=[
+                    {"role": "system", "content": [{"type": "input_text", "text": "쇼츠 대본 작가. JSON으로만 응답."}]},
+                    {"role": "user", "content": [{"type": "input_text", "text": prompt}]}
+                ],
+                temperature=0.7
+            )
+
+            result_text = extract_gpt51_response(response)
+            result = safe_json_parse(result_text)
+
+            # 전체 대본 조합
+            full_script = "\n".join([
+                scene["narration"] for scene in result.get("scenes", [])
+            ])
+
+            # 비용 계산
+            if hasattr(response, 'usage') and response.usage:
+                input_tokens = getattr(response.usage, 'input_tokens', 0)
+                output_tokens = getattr(response.usage, 'output_tokens', 0)
+            else:
+                input_tokens = len(prompt) // 2
+                output_tokens = len(result_text) // 2
+
+            cost = (input_tokens * GPT51_COSTS["input"] + output_tokens * GPT51_COSTS["output"]) / 1000
+
+            self.log(f"대본 생성 완료: {len(full_script)}자, ${cost:.4f}")
+
+            return {
+                "ok": True,
+                "title": result.get("title", f"{context.person} 이슈"),
+                "scenes": result.get("scenes", []),
+                "full_script": full_script,
+                "total_chars": len(full_script),
+                "hashtags": result.get("hashtags", []),
+                "cost": round(cost, 4),
+            }
+
+        except Exception as e:
+            self.log(f"대본 생성 실패: {e}", "error")
+            return {"ok": False, "error": str(e)}
 
     async def _improve_script(self, context: TaskContext, feedback: str) -> Dict[str, Any]:
         """피드백 반영하여 대본 개선"""
