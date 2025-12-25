@@ -38,6 +38,7 @@ from .config import (
     estimate_cost,
     VIDEO_WIDTH,
     VIDEO_HEIGHT,
+    FRAME_LAYOUT,
     TTS_CONFIG,
     TTS_VOICE_BY_ISSUE,
     IMAGE_MODEL,
@@ -48,6 +49,7 @@ from .config import (
     FFMPEG_TRANSITIONS,
     SHORTS_BGM_MOODS,
     SHORTS_SUBTITLE_STYLE,
+    SHORTS_TITLE_STYLE,
 )
 from .sheets import (
     get_sheets_service,
@@ -242,15 +244,18 @@ def generate_single_image(
     from PIL import Image as PILImage
     from io import BytesIO
 
+    # 프로젝트 루트 경로 (image 모듈이 저장하는 위치)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     for attempt in range(max_retries):
         try:
             # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
-            # 9:16 세로 비율 (쇼츠용)
+            # 1:1 비율로 생성 → 프레임 중앙에 배치 (크롭 없음)
             result = main_generate_image(
                 prompt=prompt,
-                size="720x1280",  # 쇼츠용 세로 비율
-                output_dir=output_dir,
+                size="1024x1024",  # 1:1 정사각형
                 model=GEMINI_FLASH,  # 씬 이미지는 Flash 모델
+                add_aspect_instruction=False,  # 비율 지시문 생략 (1:1 유지)
             )
 
             if not result.get("ok"):
@@ -259,6 +264,7 @@ def generate_single_image(
             image_url = result.get("image_url", "")
 
             # 결과 이미지 경로 처리
+            os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, f"scene_{scene_number:03d}.jpg")
 
             if image_url.startswith("data:"):
@@ -268,8 +274,8 @@ def generate_single_image(
                 with open(output_path, "wb") as f:
                     f.write(image_bytes)
             elif image_url.startswith("/static/"):
-                # 로컬 파일 경로인 경우
-                src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), image_url.lstrip("/"))
+                # 로컬 파일 경로인 경우 - 프로젝트 루트 기준
+                src_path = os.path.join(project_root, image_url.lstrip("/"))
                 if os.path.exists(src_path):
                     shutil.copy(src_path, output_path)
                 else:
@@ -392,26 +398,29 @@ def generate_thumbnail(
         )
 
         prompt = thumbnail_config.get("image_prompt", f"""
-YouTube Shorts thumbnail, 9:16 vertical,
+1:1 square image composition,
 dramatic black silhouette of {person},
+silhouette centered in frame filling 80% of the space,
 spotlight from above, {style_config['accent_color']} accent lighting,
 {style_config['background_color']} background,
-empty space in center for Korean text overlay,
+Korean entertainment news style,
+NO facial features visible - only dark shadow outline,
 4K quality, dramatic composition,
 NO text on image
 """)
 
         print(f"[SHORTS] 썸네일 생성 중: {person}")
 
-        # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
-        output_dir = os.path.dirname(output_path)
-        os.makedirs(output_dir, exist_ok=True)
+        # 프로젝트 루트 경로
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+        # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
+        # 1:1 비율로 생성 후 9:16 프레임 합성
         result = main_generate_image(
             prompt=prompt,
-            size="720x1280",  # 쇼츠용 세로 비율
-            output_dir=output_dir,
+            size="1024x1024",  # 1:1 정사각형
             model=GEMINI_PRO,  # 썸네일은 Pro 모델 (고품질)
+            add_aspect_instruction=False,  # 비율 지시문 생략
         )
 
         if not result.get("ok"):
@@ -419,22 +428,37 @@ NO text on image
 
         image_url = result.get("image_url", "")
 
-        # 결과 이미지를 output_path로 복사
+        # 결과 이미지를 임시 파일로 저장 (1:1)
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        temp_1x1_path = output_path.replace(".jpg", "_1x1.jpg").replace(".png", "_1x1.jpg")
+
         if image_url.startswith("data:"):
             base64_data = image_url.split(",", 1)[1] if "," in image_url else image_url
             image_bytes = base64.b64decode(base64_data)
-            with open(output_path, "wb") as f:
+            with open(temp_1x1_path, "wb") as f:
                 f.write(image_bytes)
         elif image_url.startswith("/static/"):
-            src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), image_url.lstrip("/"))
+            src_path = os.path.join(project_root, image_url.lstrip("/"))
             if os.path.exists(src_path):
-                shutil.copy(src_path, output_path)
+                shutil.copy(src_path, temp_1x1_path)
             else:
                 raise ValueError(f"썸네일 파일 없음: {src_path}")
         else:
             raise ValueError(f"알 수 없는 이미지 URL 형식: {image_url[:100]}")
 
-        print(f"[SHORTS] 썸네일 생성 완료")
+        # 1:1 이미지를 9:16 프레임으로 합성 (타이틀 포함)
+        hook_text = thumbnail_config.get("hook_text", person)
+        if len(hook_text) > 20:
+            hook_text = hook_text[:20] + "..."
+        compose_frame(temp_1x1_path, output_path, title_text=hook_text)
+
+        # 임시 파일 삭제
+        if os.path.exists(temp_1x1_path):
+            os.remove(temp_1x1_path)
+
+        print(f"[SHORTS] 썸네일 생성 완료 (9:16 프레임 합성)")
 
         return {
             "ok": True,
@@ -448,6 +472,95 @@ NO text on image
 
 
 # ============================================================
+# 프레임 합성 (1:1 이미지 → 9:16 프레임)
+# ============================================================
+
+def compose_frame(
+    image_path: str,
+    output_path: str,
+    title_text: str = None
+) -> str:
+    """
+    1:1 이미지를 9:16 프레임 중앙에 배치
+
+    레이아웃:
+    ┌─────────────────┐
+    │   타이틀 영역    │  180px (상단)
+    ├─────────────────┤
+    │                 │
+    │   1:1 이미지     │  720px (중앙)
+    │                 │
+    ├─────────────────┤
+    │   자막 영역      │  380px (하단)
+    └─────────────────┘
+
+    Args:
+        image_path: 1:1 이미지 경로
+        output_path: 출력 경로
+        title_text: 상단 타이틀 (선택)
+
+    Returns:
+        출력 파일 경로
+    """
+    from PIL import Image as PILImage, ImageDraw, ImageFont
+
+    try:
+        # 배경 생성 (720x1280, 거의 검정)
+        bg_color = FRAME_LAYOUT["background_color"]
+        # hex to RGB
+        bg_rgb = tuple(int(bg_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        background = PILImage.new('RGB', (VIDEO_WIDTH, VIDEO_HEIGHT), bg_rgb)
+
+        # 1:1 이미지 로드 및 리사이즈
+        img = PILImage.open(image_path)
+        img_size = FRAME_LAYOUT["image_size"]  # 720
+        img = img.resize((img_size, img_size), PILImage.Resampling.LANCZOS)
+
+        # 이미지를 중앙에 배치 (y = title_height)
+        title_height = FRAME_LAYOUT["title_height"]  # 180
+        x = (VIDEO_WIDTH - img_size) // 2  # 0 (720-720)/2
+        y = title_height
+
+        background.paste(img, (x, y))
+
+        # 타이틀 추가 (선택)
+        if title_text:
+            draw = ImageDraw.Draw(background)
+            try:
+                font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+                    SHORTS_TITLE_STYLE["font_size"]
+                )
+            except:
+                font = ImageFont.load_default()
+
+            # 텍스트 중앙 정렬
+            bbox = draw.textbbox((0, 0), title_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_x = (VIDEO_WIDTH - text_width) // 2
+            text_y = FRAME_LAYOUT["title_y"]
+
+            # 외곽선 효과
+            outline_color = SHORTS_TITLE_STYLE["outline_color"]
+            for dx, dy in [(-2,-2), (-2,2), (2,-2), (2,2), (-2,0), (2,0), (0,-2), (0,2)]:
+                draw.text((text_x+dx, text_y+dy), title_text, font=font, fill=outline_color)
+
+            # 메인 텍스트
+            draw.text((text_x, text_y), title_text, font=font, fill=SHORTS_TITLE_STYLE["font_color"])
+
+        # 저장
+        background.save(output_path, 'JPEG', quality=90)
+        return output_path
+
+    except Exception as e:
+        print(f"[SHORTS] 프레임 합성 실패: {e}")
+        # 실패 시 원본 이미지 복사
+        import shutil
+        shutil.copy(image_path, output_path)
+        return output_path
+
+
+# ============================================================
 # 영상 렌더링 (FFmpeg - Ken Burns + 전환 효과)
 # ============================================================
 
@@ -456,17 +569,28 @@ def render_video(
     audio_path: str,
     scenes: List[Dict[str, Any]],
     issue_type: str,
-    output_path: str
+    output_path: str,
+    title_text: str = None
 ) -> Dict[str, Any]:
     """
-    FFmpeg로 영상 렌더링 (Ken Burns + 전환 효과)
+    FFmpeg로 영상 렌더링 (1:1 이미지 → 9:16 프레임 합성 + Ken Burns)
+
+    레이아웃:
+    ┌─────────────────┐
+    │   타이틀 영역    │  180px
+    ├─────────────────┤
+    │   1:1 이미지     │  720px
+    ├─────────────────┤
+    │   자막 영역      │  380px
+    └─────────────────┘
 
     Args:
-        images: 이미지 경로 목록
+        images: 이미지 경로 목록 (1:1 이미지)
         audio_path: TTS 오디오 경로
         scenes: 씬 정보 (자막용)
         issue_type: 이슈 타입 (효과 설정)
         output_path: 출력 영상 경로
+        title_text: 상단 타이틀 (선택)
 
     Returns:
         {"ok": True, "path": "...", "duration": 50.5}
@@ -479,13 +603,20 @@ def render_video(
 
         print(f"[SHORTS] 영상 렌더링: {scene_count}개 씬, 총 {audio_duration:.1f}초")
 
-        # 1) 씬별 클립 생성 (Ken Burns 효과)
+        # 1) 씬별 클립 생성 (프레임 합성 + Ken Burns 효과)
         clips = []
+        composed_frames = []
+
         for img_info in images:
             scene_num = img_info["scene"]
             img_path = img_info["path"]
 
-            # Ken Burns 효과 패턴
+            # 1-1) 1:1 이미지를 9:16 프레임으로 합성
+            composed_path = img_path.replace(".jpg", "_composed.jpg").replace(".png", "_composed.jpg")
+            compose_frame(img_path, composed_path, title_text)
+            composed_frames.append(composed_path)
+
+            # 1-2) Ken Burns 효과 패턴
             pattern = SHORTS_KEN_BURNS["scene_patterns"].get(scene_num, "zoom_in")
             zoompan = FFMPEG_ZOOMPAN_PRESETS.get(pattern, FFMPEG_ZOOMPAN_PRESETS["zoom_in"])
 
@@ -494,17 +625,20 @@ def render_video(
                 issue_type, SHORTS_KEN_BURNS["intensity_by_issue"]["default"]
             )
 
-            clip_path = img_path.replace(".png", "_clip.mp4")
+            clip_path = img_path.replace(".jpg", "_clip.mp4").replace(".png", "_clip.mp4")
 
-            # FFmpeg 명령어 (zoompan 필터)
+            # FFmpeg 명령어 (이미 9:16 크기이므로 scale 불필요)
             fps = 30
             total_frames = int(scene_duration * fps)
 
+            # Ken Burns는 이미지 영역(중앙)에만 적용하도록 조정
+            # 전체 프레임에 적용하면 타이틀/자막 영역도 움직임
+            # 간단하게 전체 적용 (미세한 움직임)
             cmd = [
                 "ffmpeg", "-y",
                 "-loop", "1",
-                "-i", img_path,
-                "-vf", f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},zoompan=z={zoompan['z']}:x={zoompan['x']}:y={zoompan['y']}:d={total_frames}:s={VIDEO_WIDTH}x{VIDEO_HEIGHT}:fps={fps}",
+                "-i", composed_path,
+                "-vf", f"zoompan=z={zoompan['z']}:x={zoompan['x']}:y={zoompan['y']}:d={total_frames}:s={VIDEO_WIDTH}x{VIDEO_HEIGHT}:fps={fps}",
                 "-t", str(scene_duration),
                 "-c:v", "libx264",
                 "-preset", "fast",
@@ -548,6 +682,9 @@ def render_video(
         for clip in clips:
             if os.path.exists(clip):
                 os.remove(clip)
+        for composed in composed_frames:
+            if os.path.exists(composed):
+                os.remove(composed)
         if os.path.exists(concat_list_path):
             os.remove(concat_list_path)
         if os.path.exists(concat_path):
@@ -692,12 +829,18 @@ def run_video_generation(
 
         video_path = os.path.join(work_dir, "output.mp4")
 
+        # 타이틀 추출 (훅 또는 인물명)
+        title_text = script_result.get("hook", person)
+        if len(title_text) > 20:
+            title_text = title_text[:20] + "..."
+
         render_result = render_video(
             images=image_result["images"],
             audio_path=audio_path,
             scenes=scenes,
             issue_type=issue_type,
-            output_path=video_path
+            output_path=video_path,
+            title_text=title_text
         )
 
         if not render_result.get("ok"):

@@ -55,6 +55,36 @@ VIDEO_WIDTH = 720
 VIDEO_HEIGHT = 1280
 VIDEO_SIZE = f"{VIDEO_WIDTH}x{VIDEO_HEIGHT}"
 
+# 프레임 레이아웃 (1:1 이미지 + 타이틀 + 자막)
+FRAME_LAYOUT = {
+    "title_height": 180,      # 상단 타이틀 영역
+    "image_size": 720,        # 중앙 1:1 이미지 (720x720)
+    "subtitle_height": 380,   # 하단 자막 영역
+    "background_color": "#0a0a0a",  # 거의 검정 배경
+    "title_y": 90,            # 타이틀 Y 위치 (중앙)
+    "subtitle_y": 1080,       # 자막 Y 시작 위치 (720 + 180 + 여백)
+}
+
+# 자막 스타일
+SHORTS_SUBTITLE_STYLE = {
+    "font_size": 42,          # 큰 폰트 (가독성)
+    "font_color": "#FFFFFF",
+    "outline_color": "#000000",
+    "outline_width": 3,
+    "font_name": "NanumGothicBold",
+    "line_spacing": 1.3,
+    "max_chars_per_line": 18,  # 한 줄 최대 글자
+}
+
+# 타이틀 스타일
+SHORTS_TITLE_STYLE = {
+    "font_size": 48,
+    "font_color": "#FFFF00",  # 노란색 강조
+    "outline_color": "#000000",
+    "outline_width": 4,
+    "font_name": "NanumGothicExtraBold",
+}
+
 # 영상 길이 (40-60초 권장)
 MIN_DURATION_SECONDS = 40
 MAX_DURATION_SECONDS = 60
@@ -132,24 +162,28 @@ BACKGROUND_STYLES = {
     "cta": "Subscribe button style, glowing red accent, clean dark background",
 }
 
-# 실루엣 프롬프트 템플릿
+# 실루엣 프롬프트 템플릿 (1:1 정사각형 - 프레임 중앙 배치용)
 SILHOUETTE_TEMPLATE = """
+1:1 square image composition,
 {background_style},
 black silhouette of {silhouette_desc},
+silhouette centered in frame filling 80% of the space,
 dramatic spotlight from above casting long shadow,
 Korean entertainment news style,
 NO facial features visible - only dark shadow outline,
-large empty space at top and bottom for Korean text overlay,
-4K quality, cinematic lighting
+4K quality, cinematic lighting,
+NO text on image
 """
 
 # 배경 전용 프롬프트 (실루엣 없는 씬용)
 BACKGROUND_ONLY_TEMPLATE = """
+1:1 square image composition,
 {background_style},
 NO people or human figures,
-large empty space for Korean text overlay,
+main visual elements centered and filling the frame,
 4K quality, cinematic composition,
-Korean news broadcast style
+Korean news broadcast style,
+NO text on image
 """
 
 
