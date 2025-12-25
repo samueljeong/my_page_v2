@@ -51,6 +51,8 @@ from .config import (
     SHORTS_BGM_CONFIG,
     SHORTS_SUBTITLE_STYLE,
     SHORTS_TITLE_STYLE,
+    TITLE_MAX_LENGTH,
+    TITLE_KEYWORDS,
 )
 from .sheets import (
     get_sheets_service,
@@ -636,9 +638,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     # 1) 상단 타이틀 - 전체 영상 동안 고정 표시
     if title_text:
-        # 타이틀이 너무 길면 자르기
-        if len(title_text) > 20:
-            title_text = title_text[:20] + "..."
+        # 타이틀이 너무 길면 자르기 (이미 run_video_generation에서 처리됨)
+        if len(title_text) > TITLE_MAX_LENGTH:
+            title_text = title_text[:TITLE_MAX_LENGTH]
         ass_content += f"Dialogue: 1,{format_time(0)},{format_time(total_duration)},Title,,0,0,0,,{{\\fad(300,300)}}{title_text}\n"
 
     # 2) 전체 나레이션을 문장 단위로 분리
@@ -1087,10 +1089,22 @@ def run_video_generation(
 
         video_path = os.path.join(work_dir, "output.mp4")
 
-        # 타이틀 추출 (훅 또는 인물명)
-        title_text = script_result.get("hook", person)
-        if len(title_text) > 20:
-            title_text = title_text[:20] + "..."
+        # 상단 타이틀 생성 (10~15자 임팩트 키워드)
+        # 형식: "인물명 키워드!" (예: "박나래 현재 상황!", "주사이모 검찰조사!")
+        keyword = TITLE_KEYWORDS.get(issue_type, TITLE_KEYWORDS.get("default", "속보!"))
+
+        # 인물명이 너무 길면 자르기 (타이틀 전체 15자 이내)
+        max_person_len = TITLE_MAX_LENGTH - len(keyword) - 1  # 공백 포함
+        if len(person) > max_person_len:
+            person_short = person[:max_person_len]
+        else:
+            person_short = person
+
+        title_text = f"{person_short} {keyword}"
+
+        # 최종 길이 체크
+        if len(title_text) > TITLE_MAX_LENGTH:
+            title_text = title_text[:TITLE_MAX_LENGTH]
 
         render_result = render_video(
             images=image_result["images"],
