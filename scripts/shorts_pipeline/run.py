@@ -419,7 +419,7 @@ NO text on image
         result = main_generate_image(
             prompt=prompt,
             size="1024x1024",  # 1:1 정사각형
-            model=GEMINI_PRO,  # 썸네일은 Pro 모델 (고품질)
+            model=GEMINI_FLASH,  # 비용 절감 (Flash 모델)
             add_aspect_instruction=False,  # 비율 지시문 생략
         )
 
