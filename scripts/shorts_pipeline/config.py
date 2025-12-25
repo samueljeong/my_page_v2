@@ -85,20 +85,20 @@ SHORTS_TITLE_STYLE = {
     "font_name": "NanumGothicExtraBold",
 }
 
-# 영상 길이 (40-60초 권장)
-MIN_DURATION_SECONDS = 40
-MAX_DURATION_SECONDS = 60
-TARGET_DURATION_SECONDS = 50  # 최적 길이
+# 영상 길이 (30-40초 권장)
+MIN_DURATION_SECONDS = 25
+MAX_DURATION_SECONDS = 40
+TARGET_DURATION_SECONDS = 35  # 최적 길이
 
 # 씬 설정
-DEFAULT_SCENE_COUNT = 8  # 마지막 씬은 무한루프 연결용
-SCENE_DURATION_SECONDS = TARGET_DURATION_SECONDS / DEFAULT_SCENE_COUNT  # 약 6.25초
+DEFAULT_SCENE_COUNT = 5  # 짧은 영상에 맞게 5개 씬
+SCENE_DURATION_SECONDS = TARGET_DURATION_SECONDS / DEFAULT_SCENE_COUNT  # 약 7초
 
 # TTS 설정
-# 한국어 기준: 약 7.5자/초 → 50초 = 375자
-TARGET_SCRIPT_LENGTH = 380
-MIN_SCRIPT_LENGTH = 300  # 40초
-MAX_SCRIPT_LENGTH = 450  # 60초
+# 한국어 기준: 약 7.5자/초 → 35초 = 약 260자
+TARGET_SCRIPT_LENGTH = 260
+MIN_SCRIPT_LENGTH = 200  # 25초
+MAX_SCRIPT_LENGTH = 300  # 40초
 CHARS_PER_SECOND = 7.5
 
 # 훅 설정 (첫 3초)
@@ -428,11 +428,25 @@ SHORTS_BGM_MOODS = {
 
 # BGM 볼륨 설정
 SHORTS_BGM_CONFIG = {
-    "volume": 0.15,        # 배경음악 볼륨 (TTS 대비)
+    "volume": 0.10,        # 배경음악 볼륨 10% (TTS 우선)
     "fade_in": 1.0,        # 시작 페이드인 (초)
     "fade_out": 2.0,       # 끝 페이드아웃 (초)
     "ducking": True,       # TTS 구간에서 볼륨 낮추기
     "ducking_ratio": 0.5,  # 덕킹 시 볼륨 비율
+}
+
+# 상단 타이틀 설정 (10~15자 임팩트 키워드)
+TITLE_MAX_LENGTH = 15
+TITLE_KEYWORDS = {
+    "논란": "논란 터졌다!",
+    "열애": "열애설!",
+    "컴백": "컴백!",
+    "사건": "충격!",
+    "성과": "대박!",
+    "자랑": "세계 1위!",
+    "근황": "현재 상황!",
+    "반응": "반응 폭발!",
+    "default": "속보!",
 }
 
 # 사용 가능한 BGM 분위기 목록
