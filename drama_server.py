@@ -21286,6 +21286,117 @@ def api_sheets_check_and_process():
                 sheets_update_cell_by_header(service, sheet_id, sheet_name, row_num, col_map, '대본', script_text)
                 sheets_update_cell_by_header(service, sheet_id, sheet_name, row_num, col_map, '제목(GPT생성)', script_result.get("title", ""))
 
+                # ========== YouTube 업로드 (SHORTS) ==========
+                if video_result.get("ok") and video_result.get("video_path"):
+                    print(f"[SHORTS] YouTube 업로드 시작...")
+
+                    # 시트에서 추가 정보 가져오기
+                    privacy_status = get_row_value(row_data, col_map, '공개설정', 'public')
+                    playlist_id = get_row_value(row_data, col_map, '플레이리스트ID', '')
+                    scheduled_time = get_row_value(row_data, col_map, '예약시간', '')
+
+                    # YouTube 설명 생성 (쇼츠용)
+                    shorts_description = script_result.get("description", "")
+                    if not shorts_description:
+                        shorts_description = f"#{person} #{issue_type}\n\n"
+                        shorts_description += script_result.get("hook", "")
+
+                    # 업로드 페이로드 구성
+                    shorts_upload_payload = {
+                        "videoPath": video_result.get("video_path"),
+                        "title": script_result.get("title", f"{person} - {issue_type}"),
+                        "description": shorts_description,
+                        "privacyStatus": privacy_status.lower() if privacy_status else "public",
+                        "channelId": channel_id,
+                    }
+
+                    # 썸네일 추가
+                    if video_result.get("thumbnail_path"):
+                        shorts_upload_payload["thumbnailPath"] = video_result.get("thumbnail_path")
+
+                    # 플레이리스트 추가
+                    if playlist_id:
+                        shorts_upload_payload["playlistId"] = playlist_id
+                        print(f"[SHORTS] 플레이리스트 추가: {playlist_id}")
+
+                    # 예약 업로드 처리
+                    if scheduled_time:
+                        try:
+                            from datetime import datetime, timedelta
+
+                            publish_time_str = str(scheduled_time).strip()
+
+                            # ISO 8601 형식이면 그대로 사용
+                            if 'T' in publish_time_str and publish_time_str.endswith('Z'):
+                                shorts_upload_payload["publish_at"] = publish_time_str
+                            else:
+                                # 일반 형식 파싱
+                                formats_to_try = [
+                                    "%Y-%m-%d %H:%M:%S",
+                                    "%Y-%m-%d %H:%M",
+                                    "%Y/%m/%d %H:%M",
+                                    "%m/%d %H:%M",
+                                ]
+                                parsed_dt = None
+                                for fmt in formats_to_try:
+                                    try:
+                                        parsed_dt = datetime.strptime(publish_time_str, fmt)
+                                        if parsed_dt.year == 1900:
+                                            parsed_dt = parsed_dt.replace(year=datetime.now().year)
+                                        break
+                                    except ValueError:
+                                        continue
+
+                                if parsed_dt:
+                                    # UTC로 변환 (한국 시간은 UTC+9)
+                                    utc_dt = parsed_dt - timedelta(hours=9)
+                                    shorts_upload_payload["publish_at"] = utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                                    print(f"[SHORTS] 예약 업로드 설정: {publish_time_str}")
+                        except Exception as sched_err:
+                            print(f"[SHORTS] 예약시간 처리 오류 (무시): {sched_err}")
+
+                    # YouTube 업로드 API 호출
+                    try:
+                        import requests as req
+                        base_url = os.environ.get("BASE_URL", "http://localhost:5050")
+
+                        upload_resp = req.post(
+                            f"{base_url}/api/youtube/upload",
+                            json=shorts_upload_payload,
+                            timeout=600
+                        )
+
+                        upload_data = upload_resp.json()
+                        print(f"[SHORTS] YouTube 업로드 응답: ok={upload_data.get('ok')}, videoUrl={upload_data.get('videoUrl', 'N/A')[:50] if upload_data.get('videoUrl') else 'N/A'}")
+
+                        if upload_data.get('ok'):
+                            youtube_url = upload_data.get('videoUrl', '')
+                            result["video_url"] = youtube_url
+                            result["ok"] = True
+                            print(f"[SHORTS] ✅ YouTube 업로드 성공: {youtube_url}")
+                        elif upload_data.get('mode') == 'test':
+                            result["error"] = "YouTube 토큰 없음 (테스트 모드)"
+                            result["ok"] = False
+                            print(f"[SHORTS] ⚠️ 테스트 모드 (토큰 필요)")
+                        elif upload_data.get('needsAuth'):
+                            result["error"] = upload_data.get('error', 'OAuth 인증 필요')
+                            result["ok"] = False
+                            print(f"[SHORTS] ⚠️ OAuth 인증 필요")
+                        else:
+                            result["error"] = upload_data.get('error', '업로드 실패')
+                            result["ok"] = False
+                            print(f"[SHORTS] ❌ 업로드 실패: {result['error']}")
+
+                    except Exception as upload_err:
+                        print(f"[SHORTS] YouTube 업로드 오류: {upload_err}")
+                        result["error"] = f"업로드 오류: {str(upload_err)}"
+                        result["ok"] = False
+                else:
+                    print(f"[SHORTS] 비디오 생성 실패 - 업로드 스킵")
+                    result["ok"] = False
+                    if not result.get("error"):
+                        result["error"] = video_result.get("error", "비디오 생성 실패")
+
             elif sheet_name == "BIBLE":
                 # ★ BIBLE 파이프라인
                 print(f"[BIBLE] 성경통독 파이프라인 시작: 행 {row_num}")
