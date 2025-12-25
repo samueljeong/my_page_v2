@@ -6,76 +6,25 @@ ScriptAgent - 기획/대본 생성 에이전트
 - 검수 피드백 반영하여 개선
 """
 
-import os
-import sys
 import time
-import json
-import re
 from typing import Any, Dict, Optional
 
 try:
     from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+    from .utils import (
+        GPT51_COSTS,
+        get_openai_client,
+        extract_gpt51_response,
+        safe_json_parse,
+    )
 except ImportError:
     from base import BaseAgent, AgentResult, AgentStatus, TaskContext
-
-
-# GPT-5.1 비용 (USD per 1K tokens)
-GPT51_COSTS = {
-    "input": 0.01,
-    "output": 0.03,
-}
-
-
-def get_openai_client():
-    """OpenAI 클라이언트 반환"""
-    from openai import OpenAI
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
-    return OpenAI(api_key=api_key)
-
-
-def extract_gpt51_response(response) -> str:
-    """GPT-5.1 Responses API 응답에서 텍스트 추출"""
-    if getattr(response, "output_text", None):
-        return response.output_text.strip()
-
-    text_chunks = []
-    for item in getattr(response, "output", []) or []:
-        for content in getattr(item, "content", []) or []:
-            if getattr(content, "type", "") == "text":
-                text_chunks.append(getattr(content, "text", ""))
-
-    return "\n".join(text_chunks).strip()
-
-
-def repair_json(text: str) -> str:
-    """불완전한 JSON 수정 시도"""
-    if "```" in text:
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
-        if match:
-            text = match.group(1)
-        else:
-            text = re.sub(r'^```(?:json)?\s*', '', text)
-            text = re.sub(r'\s*```$', '', text)
-
-    text = re.sub(r',\s*([}\]])', r'\1', text)
-    text = re.sub(r'"\s*\n\s*"(?=[a-zA-Z_가-힣])', '",\n"', text)
-    text = re.sub(r'}\s*\n\s*{', '},\n{', text)
-    text = re.sub(r']\s*\n\s*\[', '],\n[', text)
-
-    return text.strip()
-
-
-def safe_json_parse(text: str) -> Dict[str, Any]:
-    """안전한 JSON 파싱"""
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    repaired = repair_json(text)
-    return json.loads(repaired)
+    from utils import (
+        GPT51_COSTS,
+        get_openai_client,
+        extract_gpt51_response,
+        safe_json_parse,
+    )
 
 
 class ScriptAgent(BaseAgent):

@@ -4,69 +4,12 @@
 GPT-5.1 Responses API를 사용하여:
 1. 60초 쇼츠 대본 생성 (9개 씬)
 2. 씬별 이미지 프롬프트 생성 (실루엣 포함)
+
+Note: 이 파일은 레거시 코드입니다.
+      새 구현은 agents/script_agent.py를 사용하세요.
 """
 
-import os
-import re
-import json
 from typing import Dict, Any, List, Optional
-
-from openai import OpenAI
-
-
-def repair_json(text: str) -> str:
-    """
-    불완전한 JSON 수정 시도
-    - 마크다운 코드 블록 제거
-    - 후행 콤마 제거
-    - 누락된 콤마 추가
-    """
-    # 1) 마크다운 코드 블록 제거
-    if "```" in text:
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
-        if match:
-            text = match.group(1)
-        else:
-            # 시작만 있고 끝이 없는 경우
-            text = re.sub(r'^```(?:json)?\s*', '', text)
-            text = re.sub(r'\s*```$', '', text)
-
-    # 2) 후행 콤마 제거 (배열/객체 끝의 콤마)
-    text = re.sub(r',\s*([}\]])', r'\1', text)
-
-    # 3) 줄바꿈 후 따옴표가 오는데 콤마가 없는 경우 수정
-    # "value"\n"key" → "value",\n"key"
-    text = re.sub(r'"\s*\n\s*"(?=[a-zA-Z_가-힣])', '",\n"', text)
-
-    # 4) 객체/배열 끝 후 콤마 없이 다음 요소가 오는 경우
-    # }\n{ → },\n{
-    text = re.sub(r'}\s*\n\s*{', '},\n{', text)
-    # ]\n[ → ],\n[
-    text = re.sub(r']\s*\n\s*\[', '],\n[', text)
-
-    return text.strip()
-
-
-def safe_json_parse(text: str) -> Dict[str, Any]:
-    """
-    안전한 JSON 파싱 (수정 시도 포함)
-    """
-    # 1차 시도: 직접 파싱
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # 2차 시도: 수정 후 파싱
-    repaired = repair_json(text)
-    try:
-        return json.loads(repaired)
-    except json.JSONDecodeError as e:
-        # 최종 실패 시 상세 에러 출력
-        print(f"[SHORTS] JSON 수정 후에도 파싱 실패")
-        print(f"[SHORTS] 에러 위치: line {e.lineno}, col {e.colno}")
-        print(f"[SHORTS] 수정된 JSON 앞 500자:\n{repaired[:500]}")
-        raise
 
 from .config import (
     DEFAULT_SCENE_COUNT,
@@ -78,47 +21,18 @@ from .config import (
     VIDEO_HEIGHT,
 )
 
+# 공통 유틸리티 임포트
+from .agents.utils import (
+    GPT51_COSTS,
+    get_openai_client,
+    extract_gpt51_response,
+    safe_json_parse,
+    repair_json,
+)
+
 
 # 기본 모델
 DEFAULT_MODEL = "gpt-5.1"
-
-# GPT-5.1 비용 (USD per 1K tokens)
-GPT51_COSTS = {
-    "input": 0.01,   # $0.01 per 1K input tokens
-    "output": 0.03,  # $0.03 per 1K output tokens
-}
-
-
-def get_openai_client() -> OpenAI:
-    """OpenAI 클라이언트 반환"""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
-    return OpenAI(api_key=api_key)
-
-
-def extract_gpt51_response(response) -> str:
-    """
-    GPT-5.1 Responses API 응답에서 텍스트 추출
-
-    Args:
-        response: client.responses.create() 응답 객체
-
-    Returns:
-        추출된 텍스트
-    """
-    # 방법 1: output_text 직접 접근
-    if getattr(response, "output_text", None):
-        return response.output_text.strip()
-
-    # 방법 2: output 배열에서 추출
-    text_chunks = []
-    for item in getattr(response, "output", []) or []:
-        for content in getattr(item, "content", []) or []:
-            if getattr(content, "type", "") == "text":
-                text_chunks.append(getattr(content, "text", ""))
-
-    return "\n".join(text_chunks).strip()
 
 
 SCRIPT_GENERATION_PROMPT = """

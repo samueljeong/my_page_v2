@@ -8,70 +8,25 @@ ReviewAgent - 검수 에이전트
 """
 
 import os
-import json
-import re
 import time
 from typing import Any, Dict, List, Optional
 
 try:
     from .base import BaseAgent, AgentResult, AgentStatus, TaskContext
+    from .utils import (
+        GPT51_COSTS,
+        get_openai_client,
+        extract_gpt51_response,
+        safe_json_parse,
+    )
 except ImportError:
     from base import BaseAgent, AgentResult, AgentStatus, TaskContext
-
-
-# GPT-5.1 비용 (USD per 1K tokens)
-GPT51_COSTS = {
-    "input": 0.01,
-    "output": 0.03,
-}
-
-
-def get_openai_client():
-    """OpenAI 클라이언트 반환"""
-    from openai import OpenAI
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
-    return OpenAI(api_key=api_key)
-
-
-def extract_gpt51_response(response) -> str:
-    """GPT-5.1 Responses API 응답에서 텍스트 추출"""
-    if getattr(response, "output_text", None):
-        return response.output_text.strip()
-
-    text_chunks = []
-    for item in getattr(response, "output", []) or []:
-        for content in getattr(item, "content", []) or []:
-            if getattr(content, "type", "") == "text":
-                text_chunks.append(getattr(content, "text", ""))
-
-    return "\n".join(text_chunks).strip()
-
-
-def repair_json(text: str) -> str:
-    """불완전한 JSON 수정 시도"""
-    if "```" in text:
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
-        if match:
-            text = match.group(1)
-        else:
-            text = re.sub(r'^```(?:json)?\s*', '', text)
-            text = re.sub(r'\s*```$', '', text)
-
-    text = re.sub(r',\s*([}\]])', r'\1', text)
-    return text.strip()
-
-
-def safe_json_parse(text: str) -> Dict[str, Any]:
-    """안전한 JSON 파싱"""
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    repaired = repair_json(text)
-    return json.loads(repaired)
+    from utils import (
+        GPT51_COSTS,
+        get_openai_client,
+        extract_gpt51_response,
+        safe_json_parse,
+    )
 
 
 class ReviewAgent(BaseAgent):
@@ -94,6 +49,23 @@ class ReviewAgent(BaseAgent):
             "min_success_rate": 0.8,  # 80% 이상 성공 필요
         }
 
+        self.subtitle_criteria = {
+            "min_duration": 25,  # 최소 25초
+            "max_duration": 45,  # 최대 45초
+            "min_subtitles": 3,  # 최소 자막 개수
+            "max_chars_per_line": 18,  # 자막 한 줄 최대 글자 수 (빠른 가독성)
+            "max_line_duration": 2.5,  # 한 줄 자막 최대 노출 시간 (초)
+            "min_line_duration": 0.8,  # 한 줄 자막 최소 노출 시간 (초)
+        }
+
+        # 상단 타이틀 스타일 기준
+        self.title_criteria = {
+            "required": True,  # 상단 타이틀 필수
+            "max_chars": 25,  # 타이틀 최대 글자 수
+            "position": "top",  # 상단 위치
+            "style_required": ["bold", "shadow"],  # 필수 스타일
+        }
+
     async def execute(self, context: TaskContext, **kwargs) -> AgentResult:
         """
         검수 실행
@@ -101,7 +73,7 @@ class ReviewAgent(BaseAgent):
         Args:
             context: 작업 컨텍스트
             **kwargs:
-                review_type: "script" | "image" | "all"
+                review_type: "script" | "subtitle" | "image" | "all"
 
         Returns:
             AgentResult with review feedback
@@ -114,6 +86,7 @@ class ReviewAgent(BaseAgent):
         try:
             results = {
                 "script_review": None,
+                "subtitle_review": None,
                 "image_review": None,
                 "passed": True,
                 "needs_improvement": False,
@@ -134,6 +107,18 @@ class ReviewAgent(BaseAgent):
                     results["improvement_targets"].append("script")
                     results["feedback"] += f"\n[대본 피드백]\n{script_result.get('feedback', '')}"
 
+            # 자막 검수
+            if review_type in ["subtitle", "all"] and context.subtitle_data:
+                subtitle_result = await self._review_subtitle(context)
+                results["subtitle_review"] = subtitle_result
+                total_cost += subtitle_result.get("cost", 0)
+
+                if not subtitle_result.get("passed", False):
+                    results["passed"] = False
+                    results["needs_improvement"] = True
+                    results["improvement_targets"].append("subtitle")
+                    results["feedback"] += f"\n[자막 피드백]\n{subtitle_result.get('feedback', '')}"
+
             # 이미지 검수
             if review_type in ["image", "all"] and context.images:
                 image_result = await self._review_images(context)
@@ -151,6 +136,8 @@ class ReviewAgent(BaseAgent):
             # 컨텍스트에 피드백 저장
             if "script" in results["improvement_targets"]:
                 context.script_feedback = results["script_review"].get("feedback", "")
+            if "subtitle" in results["improvement_targets"]:
+                context.subtitle_feedback = results["subtitle_review"].get("feedback", "")
             if "image" in results["improvement_targets"]:
                 context.image_feedback = results["image_review"].get("feedback", "")
 
@@ -353,6 +340,221 @@ class ReviewAgent(BaseAgent):
             "feedback": "\n".join(issues) if issues else "이미지 검수 통과",
             "cost": 0,  # 규칙 기반이므로 비용 없음
         }
+
+    async def _review_subtitle(self, context: TaskContext) -> Dict[str, Any]:
+        """자막/TTS 검수 (규칙 기반 + 라인 분할 검사)"""
+        self.log("자막 검수 시작")
+
+        subtitle_data = context.subtitle_data or {}
+        timeline = subtitle_data.get("timeline", [])
+        duration_sec = subtitle_data.get("duration_sec", 0)
+        audio_file = subtitle_data.get("audio_file", "")
+        srt_file = subtitle_data.get("srt_file", "")
+        title_data = subtitle_data.get("title", {})  # 상단 타이틀 정보
+
+        issues = []
+        warnings = []  # 경고 (통과는 가능하지만 개선 권장)
+
+        # ===== 1. 기본 파일 존재 확인 =====
+        if not audio_file:
+            issues.append("오디오 파일이 생성되지 않았습니다")
+        elif not os.path.exists(audio_file):
+            issues.append(f"오디오 파일을 찾을 수 없습니다: {audio_file}")
+
+        if not srt_file:
+            issues.append("자막 파일이 생성되지 않았습니다")
+        elif not os.path.exists(srt_file):
+            issues.append(f"자막 파일을 찾을 수 없습니다: {srt_file}")
+
+        # ===== 2. 재생 시간 체크 =====
+        if duration_sec < self.subtitle_criteria["min_duration"]:
+            issues.append(f"영상이 너무 짧습니다 ({duration_sec:.1f}초 < {self.subtitle_criteria['min_duration']}초)")
+        elif duration_sec > self.subtitle_criteria["max_duration"]:
+            issues.append(f"영상이 너무 깁니다 ({duration_sec:.1f}초 > {self.subtitle_criteria['max_duration']}초)")
+
+        # ===== 3. 자막 개수 체크 =====
+        subtitle_count = len(timeline)
+        if subtitle_count < self.subtitle_criteria["min_subtitles"]:
+            issues.append(f"자막이 부족합니다 ({subtitle_count}개 < {self.subtitle_criteria['min_subtitles']}개)")
+
+        # ===== 4. 상단 타이틀 검수 =====
+        title_issues = self._check_title_style(title_data, context)
+        if title_issues:
+            warnings.extend(title_issues)  # 타이틀은 경고로 처리
+
+        # ===== 5. 자막 라인 분할 검수 (핵심!) =====
+        line_issues = self._check_line_splitting(timeline)
+        if line_issues["critical"]:
+            issues.extend(line_issues["critical"])
+        if line_issues["warnings"]:
+            warnings.extend(line_issues["warnings"])
+
+        # ===== 6. 자막 타이밍 검수 =====
+        timing_issues = self._check_subtitle_timing(timeline)
+        if timing_issues:
+            warnings.extend(timing_issues)
+
+        passed = len(issues) == 0
+
+        self.log(f"자막 검수 완료: {duration_sec:.1f}초, 자막 {subtitle_count}개, 통과: {passed}")
+        if warnings:
+            self.log(f"경고 {len(warnings)}개: {warnings[:3]}...")
+
+        # 피드백 생성
+        feedback_parts = []
+        if issues:
+            feedback_parts.append("[필수 수정]\n" + "\n".join(f"- {i}" for i in issues))
+        if warnings:
+            feedback_parts.append("[개선 권장]\n" + "\n".join(f"- {w}" for w in warnings))
+
+        return {
+            "passed": passed,
+            "duration_sec": duration_sec,
+            "subtitle_count": subtitle_count,
+            "issues": issues,
+            "warnings": warnings,
+            "line_check": line_issues.get("stats", {}),
+            "feedback": "\n\n".join(feedback_parts) if feedback_parts else "자막 검수 통과",
+            "cost": 0,  # 규칙 기반이므로 비용 없음
+        }
+
+    def _check_title_style(self, title_data: Dict, context: TaskContext) -> List[str]:
+        """상단 타이틀 스타일 검수"""
+        issues = []
+
+        if not self.title_criteria["required"]:
+            return issues
+
+        # 타이틀이 없는 경우
+        if not title_data:
+            # 토픽에서 타이틀 추출 시도
+            topic = context.topic or ""
+            if len(topic) > self.title_criteria["max_chars"]:
+                issues.append(f"상단 타이틀이 너무 깁니다 ({len(topic)}자 > {self.title_criteria['max_chars']}자)")
+            return issues
+
+        # 타이틀 텍스트 길이 검사
+        title_text = title_data.get("text", "")
+        if len(title_text) > self.title_criteria["max_chars"]:
+            issues.append(f"상단 타이틀이 너무 깁니다 ({len(title_text)}자 > {self.title_criteria['max_chars']}자)")
+
+        # 스타일 검사
+        style = title_data.get("style", {})
+        for required_style in self.title_criteria["style_required"]:
+            if not style.get(required_style):
+                issues.append(f"상단 타이틀에 '{required_style}' 스타일이 필요합니다")
+
+        # 위치 검사
+        position = title_data.get("position", "top")
+        if position != self.title_criteria["position"]:
+            issues.append(f"상단 타이틀 위치가 잘못되었습니다 ({position} → {self.title_criteria['position']})")
+
+        return issues
+
+    def _check_line_splitting(self, timeline: List[Dict]) -> Dict[str, Any]:
+        """
+        자막 라인 분할 검수
+
+        TTS는 문장 단위이지만, 자막은 짧은 라인으로 분할되어야 함
+        - 한 줄 최대 18자 (빠른 가독성)
+        - 긴 문장은 여러 자막으로 분할
+        """
+        critical = []
+        warnings = []
+        stats = {
+            "total_lines": len(timeline),
+            "long_lines": 0,
+            "avg_chars": 0,
+            "max_chars": 0,
+        }
+
+        if not timeline:
+            return {"critical": critical, "warnings": warnings, "stats": stats}
+
+        max_chars = self.subtitle_criteria["max_chars_per_line"]
+        total_chars = 0
+        long_lines = []
+
+        for i, item in enumerate(timeline):
+            text = item.get("text", "")
+            char_count = len(text)
+            total_chars += char_count
+
+            if char_count > stats["max_chars"]:
+                stats["max_chars"] = char_count
+
+            # 한 줄이 너무 긴 경우
+            if char_count > max_chars:
+                stats["long_lines"] += 1
+                long_lines.append({
+                    "index": i + 1,
+                    "chars": char_count,
+                    "text": text[:30] + "..." if len(text) > 30 else text
+                })
+
+        stats["avg_chars"] = total_chars / len(timeline) if timeline else 0
+
+        # 결과 분석
+        long_ratio = stats["long_lines"] / len(timeline) if timeline else 0
+
+        if long_ratio > 0.5:
+            # 50% 이상이 긴 라인이면 필수 수정
+            critical.append(
+                f"자막 {stats['long_lines']}/{len(timeline)}개가 너무 깁니다 "
+                f"(최대 {max_chars}자 권장). 문장을 짧게 분할하세요."
+            )
+        elif long_ratio > 0.2:
+            # 20% 이상이면 경고
+            warnings.append(
+                f"자막 {stats['long_lines']}개가 길어서 가독성이 떨어질 수 있습니다 "
+                f"(평균 {stats['avg_chars']:.1f}자, 최대 {stats['max_chars']}자)"
+            )
+
+        # 가장 긴 라인 3개 샘플
+        if long_lines:
+            sample = long_lines[:3]
+            sample_text = ", ".join(f"#{s['index']}({s['chars']}자)" for s in sample)
+            warnings.append(f"긴 자막 샘플: {sample_text}")
+
+        return {
+            "critical": critical,
+            "warnings": warnings,
+            "stats": stats,
+        }
+
+    def _check_subtitle_timing(self, timeline: List[Dict]) -> List[str]:
+        """자막 타이밍 검수 (노출 시간)"""
+        warnings = []
+
+        min_duration = self.subtitle_criteria["min_line_duration"]
+        max_duration = self.subtitle_criteria["max_line_duration"]
+
+        too_short = 0
+        too_long = 0
+
+        for item in timeline:
+            start = item.get("start_sec", 0)
+            end = item.get("end_sec", 0)
+            duration = end - start
+
+            if duration < min_duration:
+                too_short += 1
+            elif duration > max_duration:
+                too_long += 1
+
+        if too_short > 0:
+            warnings.append(
+                f"자막 {too_short}개가 너무 짧게 표시됩니다 "
+                f"(최소 {min_duration}초 권장)"
+            )
+
+        if too_long > 0:
+            warnings.append(
+                f"자막 {too_long}개가 너무 오래 표시됩니다 "
+                f"(최대 {max_duration}초 권장, 분할 필요)"
+            )
+
+        return warnings
 
     def _format_scenes(self, scenes: List[Dict[str, Any]]) -> str:
         """씬 목록을 포맷팅"""
