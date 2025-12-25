@@ -242,14 +242,16 @@ def generate_single_image(
     from PIL import Image as PILImage
     from io import BytesIO
 
+    # 프로젝트 루트 경로 (image 모듈이 저장하는 위치)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     for attempt in range(max_retries):
         try:
             # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
-            # 9:16 세로 비율 (쇼츠용)
+            # output_dir 생략 → 기본 static/images에 저장
             result = main_generate_image(
                 prompt=prompt,
                 size="720x1280",  # 쇼츠용 세로 비율
-                output_dir=output_dir,
                 model=GEMINI_FLASH,  # 씬 이미지는 Flash 모델
             )
 
@@ -259,6 +261,7 @@ def generate_single_image(
             image_url = result.get("image_url", "")
 
             # 결과 이미지 경로 처리
+            os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, f"scene_{scene_number:03d}.jpg")
 
             if image_url.startswith("data:"):
@@ -268,8 +271,8 @@ def generate_single_image(
                 with open(output_path, "wb") as f:
                     f.write(image_bytes)
             elif image_url.startswith("/static/"):
-                # 로컬 파일 경로인 경우
-                src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), image_url.lstrip("/"))
+                # 로컬 파일 경로인 경우 - 프로젝트 루트 기준
+                src_path = os.path.join(project_root, image_url.lstrip("/"))
                 if os.path.exists(src_path):
                     shutil.copy(src_path, output_path)
                 else:
@@ -403,14 +406,14 @@ NO text on image
 
         print(f"[SHORTS] 썸네일 생성 중: {person}")
 
-        # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
-        output_dir = os.path.dirname(output_path)
-        os.makedirs(output_dir, exist_ok=True)
+        # 프로젝트 루트 경로
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+        # 메인 파이프라인의 image 모듈 사용 (OpenRouter API)
+        # output_dir 생략 → 기본 static/images에 저장
         result = main_generate_image(
             prompt=prompt,
             size="720x1280",  # 쇼츠용 세로 비율
-            output_dir=output_dir,
             model=GEMINI_PRO,  # 썸네일은 Pro 모델 (고품질)
         )
 
@@ -420,13 +423,16 @@ NO text on image
         image_url = result.get("image_url", "")
 
         # 결과 이미지를 output_path로 복사
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+
         if image_url.startswith("data:"):
             base64_data = image_url.split(",", 1)[1] if "," in image_url else image_url
             image_bytes = base64.b64decode(base64_data)
             with open(output_path, "wb") as f:
                 f.write(image_bytes)
         elif image_url.startswith("/static/"):
-            src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), image_url.lstrip("/"))
+            src_path = os.path.join(project_root, image_url.lstrip("/"))
             if os.path.exists(src_path):
                 shutil.copy(src_path, output_path)
             else:
