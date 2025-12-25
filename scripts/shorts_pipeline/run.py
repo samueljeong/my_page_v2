@@ -48,6 +48,7 @@ from .config import (
     SCENE_TRANSITIONS,
     FFMPEG_TRANSITIONS,
     SHORTS_BGM_MOODS,
+    SHORTS_BGM_CONFIG,
     SHORTS_SUBTITLE_STYLE,
     SHORTS_TITLE_STYLE,
 )
@@ -885,6 +886,104 @@ def render_video(
 
 
 # ============================================================
+# BGM 믹싱
+# ============================================================
+
+def mix_bgm_with_video(
+    video_path: str,
+    issue_type: str,
+    output_path: str = None
+) -> Dict[str, Any]:
+    """
+    비디오에 BGM 믹싱
+
+    Args:
+        video_path: 원본 비디오 경로
+        issue_type: 이슈 타입 (BGM 분위기 결정)
+        output_path: 출력 경로 (없으면 원본 대체)
+
+    Returns:
+        {"ok": True, "path": "..."}
+    """
+    import glob
+    import random
+
+    try:
+        # 1) 이슈 타입에 맞는 BGM 분위기 선택
+        bgm_mood = SHORTS_BGM_MOODS.get(issue_type, SHORTS_BGM_MOODS.get("default", "dramatic"))
+        print(f"[BGM] 분위기 선택: {issue_type} → {bgm_mood}")
+
+        # 2) BGM 파일 찾기
+        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        bgm_dir = os.path.join(script_dir, "static", "audio", "bgm")
+
+        # 해당 분위기의 BGM 파일 목록
+        bgm_files = glob.glob(os.path.join(bgm_dir, f"{bgm_mood}_*.mp3"))
+
+        if not bgm_files:
+            # fallback: dramatic
+            bgm_files = glob.glob(os.path.join(bgm_dir, "dramatic_*.mp3"))
+
+        if not bgm_files:
+            print(f"[BGM] BGM 파일 없음: {bgm_mood}")
+            return {"ok": False, "error": "BGM 파일 없음"}
+
+        # 랜덤 선택
+        bgm_path = random.choice(bgm_files)
+        print(f"[BGM] 선택된 파일: {os.path.basename(bgm_path)}")
+
+        # 3) 비디오 길이 확인
+        probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                     "-of", "default=noprint_wrappers=1:nokey=1", video_path]
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        video_duration = float(result.stdout.strip())
+
+        # 4) BGM 볼륨 설정
+        bgm_volume = SHORTS_BGM_CONFIG.get("volume", 0.15)
+        fade_in = SHORTS_BGM_CONFIG.get("fade_in", 1.0)
+        fade_out = SHORTS_BGM_CONFIG.get("fade_out", 2.0)
+
+        fade_out_start = max(0, video_duration - fade_out)
+
+        # 5) 출력 경로 설정
+        if output_path is None:
+            output_path = video_path.replace(".mp4", "_bgm.mp4")
+
+        # 6) FFmpeg 믹싱
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-stream_loop", "-1", "-i", bgm_path,
+            "-filter_complex",
+            f"[1:a]volume={bgm_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_out_start}:d={fade_out}[bgm];"
+            f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]",
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest",
+            "-movflags", "+faststart",
+            output_path
+        ]
+
+        print(f"[BGM] 믹싱 시작...")
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=300)
+
+        if result.returncode == 0:
+            print(f"[BGM] 믹싱 완료")
+            return {"ok": True, "path": output_path}
+        else:
+            stderr = result.stderr.decode('utf-8', errors='ignore')[:200]
+            print(f"[BGM] 믹싱 실패: {stderr}")
+            return {"ok": False, "error": stderr}
+
+    except Exception as e:
+        print(f"[BGM] 믹싱 오류: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+# ============================================================
 # 병렬 비디오 생성 파이프라인
 # ============================================================
 
@@ -1010,13 +1109,36 @@ def run_video_generation(
             }
 
         # ============================================================
+        # 4단계: BGM 믹싱
+        # ============================================================
+        print("\n[SHORTS] === 4단계: BGM 믹싱 ===")
+
+        final_video_path = os.path.join(work_dir, "final.mp4")
+        bgm_result = mix_bgm_with_video(
+            video_path=render_result["path"],
+            issue_type=issue_type,
+            output_path=final_video_path
+        )
+
+        if bgm_result.get("ok"):
+            # BGM 믹싱 성공 → 최종 파일 사용
+            video_output_path = bgm_result["path"]
+            # 원본 삭제
+            if os.path.exists(render_result["path"]):
+                os.remove(render_result["path"])
+        else:
+            # BGM 믹싱 실패 → 원본 사용 (BGM 없이)
+            print(f"[SHORTS] BGM 믹싱 실패, 원본 사용: {bgm_result.get('error')}")
+            video_output_path = render_result["path"]
+
+        # ============================================================
         # 완료
         # ============================================================
         gc.collect()
 
         result = {
             "ok": True,
-            "video_path": render_result["path"],
+            "video_path": video_output_path,
             "thumbnail_path": None,  # YouTube 자동 썸네일 사용
             "duration": render_result["duration"],
             "cost": round(total_cost, 3),
