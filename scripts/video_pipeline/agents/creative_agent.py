@@ -124,7 +124,10 @@ class CreativeAgent(BaseAgent):
         image_style: str
     ) -> Tuple[List[Optional[str]], float]:
         """
-        이미지 병렬 생성
+        이미지 배치 병렬 생성 (한 번에 2개씩)
+
+        Gemini API는 순차 처리하므로 모든 요청을 동시에 보내면 타임아웃 발생.
+        2개씩 배치로 처리하여 안정성 확보.
 
         Args:
             context: 작업 컨텍스트
@@ -134,42 +137,50 @@ class CreativeAgent(BaseAgent):
         Returns:
             (이미지 경로 목록, 총 비용)
         """
-        scenes_to_generate = failed_scenes if failed_scenes else range(len(context.scenes))
+        scenes_to_generate = list(failed_scenes if failed_scenes else range(len(context.scenes)))
 
-        self.log(f"이미지 병렬 생성: {len(list(scenes_to_generate))}개 씬")
+        self.log(f"이미지 배치 생성: {len(scenes_to_generate)}개 씬 (2개씩 병렬)")
 
         # 기존 이미지 복사 (재생성 대상이 아닌 것)
         images = context.images[:] if context.images else [None] * len(context.scenes)
-
-        # 병렬 태스크 생성
-        tasks = []
-        for i in scenes_to_generate:
-            if i < len(context.scenes):
-                scene = context.scenes[i]
-                tasks.append(self._generate_single_image(scene, i, image_style))
-
-        # 병렬 실행
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
         total_cost = 0.0
-        for idx, result in zip(scenes_to_generate, results):
-            if isinstance(result, Exception):
-                # 예외 타입과 메시지를 모두 로깅
-                error_type = type(result).__name__
-                error_msg = str(result) or "(빈 메시지)"
-                self.log(f"이미지 {idx} 생성 실패: [{error_type}] {error_msg}", "warning")
-                images[idx] = None
-            elif result:
-                image_path = result.get("image_path")
-                if image_path:
-                    images[idx] = image_path
-                    total_cost += result.get("cost", 0.02)
-                else:
-                    self.log(f"이미지 {idx} 결과에 image_path 없음: {result}", "warning")
+
+        # 2개씩 배치 처리 (Gemini 순차 처리 대응)
+        batch_size = 2
+        for batch_start in range(0, len(scenes_to_generate), batch_size):
+            batch_indices = scenes_to_generate[batch_start:batch_start + batch_size]
+            batch_num = batch_start // batch_size + 1
+            total_batches = (len(scenes_to_generate) + batch_size - 1) // batch_size
+
+            self.log(f"배치 {batch_num}/{total_batches}: 씬 {batch_indices}")
+
+            # 배치 태스크 생성
+            tasks = []
+            for i in batch_indices:
+                if i < len(context.scenes):
+                    scene = context.scenes[i]
+                    tasks.append(self._generate_single_image(scene, i, image_style))
+
+            # 배치 실행
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for idx, result in zip(batch_indices, results):
+                if isinstance(result, Exception):
+                    error_type = type(result).__name__
+                    error_msg = str(result) or "(빈 메시지)"
+                    self.log(f"이미지 {idx} 생성 실패: [{error_type}] {error_msg}", "warning")
                     images[idx] = None
-            else:
-                self.log(f"이미지 {idx} 결과가 None 또는 빈 값", "warning")
-                images[idx] = None
+                elif result:
+                    image_path = result.get("image_path")
+                    if image_path:
+                        images[idx] = image_path
+                        total_cost += result.get("cost", 0.02)
+                    else:
+                        self.log(f"이미지 {idx} 결과에 image_path 없음: {result}", "warning")
+                        images[idx] = None
+                else:
+                    self.log(f"이미지 {idx} 결과가 None 또는 빈 값", "warning")
+                    images[idx] = None
 
         return images, total_cost
 
@@ -225,7 +236,8 @@ class CreativeAgent(BaseAgent):
 
         payload = {
             "prompt": prompt,
-            "style": style,
+            "size": "1280x720",  # 기존 파이프라인과 동일 (16:9)
+            "imageProvider": "gemini",
             "scene_index": index,
         }
 
