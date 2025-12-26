@@ -15533,6 +15533,13 @@ def _create_scene_clip_worker(task):
             else:
                 print(f"[VIDEO-WORKER-PARALLEL] 씬 {idx+1} 로컬 이미지 없음: {local_path}")
                 return idx, None, duration
+        else:
+            # 로컬 경로 (/ 없이 시작하는 경우, 예: uploads/xxx/image.png)
+            if os.path.exists(image_url):
+                shutil.copy(image_url, img_path)
+            else:
+                print(f"[VIDEO-WORKER-PARALLEL] 씬 {idx+1} 로컬 이미지 없음: {image_url}")
+                return idx, None, duration
     except Exception as e:
         print(f"[VIDEO-WORKER-PARALLEL] 씬 {idx+1} 이미지 다운로드 실패: {e}")
         return idx, None, duration
@@ -15554,6 +15561,10 @@ def _create_scene_clip_worker(task):
                 local_path = audio_url.lstrip('/')
                 if os.path.exists(local_path):
                     shutil.copy(local_path, audio_path)
+            else:
+                # 로컬 경로 (/ 없이 시작하는 경우)
+                if os.path.exists(audio_url):
+                    shutil.copy(audio_url, audio_path)
         except Exception as e:
             print(f"[VIDEO-WORKER-PARALLEL] 씬 {idx+1} 오디오 다운로드 실패: {e}")
             audio_path = None
@@ -15802,6 +15813,14 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                                 print(f"[VIDEO-WORKER-SEQUENTIAL] Local image not found: {local_path}")
                                 current_time += duration
                                 continue
+                        else:
+                            # 로컬 경로 (/ 없이 시작하는 경우)
+                            if os.path.exists(image_url):
+                                shutil.copy(image_url, img_path)
+                            else:
+                                print(f"[VIDEO-WORKER-SEQUENTIAL] Local image not found: {image_url}")
+                                current_time += duration
+                                continue
                     except Exception as e:
                         print(f"[VIDEO-WORKER-SEQUENTIAL] Image download failed: {e}")
                         current_time += duration
@@ -15829,6 +15848,10 @@ def _generate_video_worker(job_id, session_id, scenes, detected_lang, video_effe
                                 local_path = audio_url.lstrip('/')
                                 if os.path.exists(local_path):
                                     shutil.copy(local_path, audio_path)
+                            else:
+                                # 로컬 경로 (/ 없이 시작하는 경우)
+                                if os.path.exists(audio_url):
+                                    shutil.copy(audio_url, audio_path)
                         except Exception as e:
                             print(f"[VIDEO-WORKER-SEQUENTIAL] Audio download failed: {e}")
                             audio_path = None
