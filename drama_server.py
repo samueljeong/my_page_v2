@@ -19731,6 +19731,51 @@ def run_automation_pipeline(row_data, row_index, selected_project=''):
     import time as time_module
 
     try:
+        # ========== 에이전트 파이프라인 분기 (환경변수: USE_AGENT_PIPELINE=1) ==========
+        if os.environ.get("USE_AGENT_PIPELINE", "0") == "1":
+            try:
+                import asyncio
+                from scripts.video_pipeline import run_agent_pipeline
+
+                # row_data를 딕셔너리로 변환
+                row_dict = {
+                    "상태": row_data[0] if len(row_data) > 0 else '',
+                    "작업시간": row_data[1] if len(row_data) > 1 else '',
+                    "채널ID": (row_data[2] if len(row_data) > 2 else '').strip(),
+                    "채널명": row_data[3] if len(row_data) > 3 else '',
+                    "예약시간": row_data[4] if len(row_data) > 4 else '',
+                    "대본": row_data[5] if len(row_data) > 5 else '',
+                    "제목": row_data[6] if len(row_data) > 6 else '',
+                    "공개설정": (row_data[10] if len(row_data) > 10 else '').strip() or 'private',
+                    "음성": (row_data[13] if len(row_data) > 13 else '').strip() or 'ko-KR-Neural2-C',
+                    "타겟": (row_data[14] if len(row_data) > 14 else '').strip() or 'senior',
+                    "카테고리": (row_data[15] if len(row_data) > 15 else '').strip(),
+                    "플레이리스트ID": (row_data[17] if len(row_data) > 17 else '').strip(),
+                    "제목(입력)": (row_data[18] if len(row_data) > 18 else '').strip(),
+                    "썸네일문구(입력)": (row_data[19] if len(row_data) > 19 else '').strip(),
+                }
+
+                print(f"[AGENT] ========== 에이전트 파이프라인 시작 ==========", flush=True)
+                print(f"[AGENT] 행 {row_index}, 대본 {len(row_dict['대본'])}자", flush=True)
+
+                # 비동기 실행
+                video_url, error, cost = asyncio.run(
+                    run_agent_pipeline(row_dict, row_index, sheet_name="")
+                )
+
+                if video_url:
+                    print(f"[AGENT] ✅ 완료: {video_url}, 비용=${cost:.4f}", flush=True)
+                    return {"ok": True, "video_url": video_url, "cost": cost}
+                else:
+                    print(f"[AGENT] ❌ 실패: {error}", flush=True)
+                    return {"ok": False, "error": error, "video_url": None, "cost": cost}
+
+            except Exception as agent_err:
+                print(f"[AGENT] ⚠️ 에이전트 파이프라인 오류, 기존 방식으로 폴백: {agent_err}", flush=True)
+                import traceback
+                traceback.print_exc()
+                # 기존 로직으로 계속 진행
+
         # 시트 컬럼 구조:
         # ===== Google Sheets 컬럼 구조 (CLAUDE.md 기준) =====
         # A(0): 상태, B(1): 작업시간, C(2): 채널ID, D(3): 채널명(참고용)
