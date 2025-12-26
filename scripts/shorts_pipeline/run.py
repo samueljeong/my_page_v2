@@ -113,16 +113,18 @@ def generate_tts(
         if not api_key:
             raise ValueError("GOOGLE_API_KEY 환경변수가 설정되지 않았습니다")
 
-        # 이슈 타입별 음성 설정
+        # 이슈 타입별 음성 설정 (음성 + 속도)
         voice_config = TTS_VOICE_BY_ISSUE.get(issue_type, TTS_VOICE_BY_ISSUE["default"])
         voice_name = voice_config.get("voice", TTS_CONFIG["voice"])
+        speaking_rate = voice_config.get("rate", TTS_CONFIG.get("speaking_rate", 1.2))
 
-        print(f"[SHORTS] TTS 생성 중: {len(text)}자, 음성={voice_name}")
+        print(f"[SHORTS] TTS 생성 중: {len(text)}자, 음성={voice_name}, 속도={speaking_rate}x")
 
         # Gemini TTS REST API 호출
         model = "gemini-2.5-flash-preview-tts"  # TTS 전용 모델
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
+        # ★ speakingRate 포함 (쇼츠용 120% 속도)
         payload = {
             "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
@@ -132,7 +134,8 @@ def generate_tts(
                         "prebuiltVoiceConfig": {
                             "voiceName": voice_name
                         }
-                    }
+                    },
+                    "speakingRate": speaking_rate
                 }
             }
         }
@@ -262,9 +265,10 @@ def generate_tts_with_timing(
         if not api_key:
             raise ValueError("GOOGLE_API_KEY 환경변수가 설정되지 않았습니다")
 
-        # 음성 설정
+        # 음성 설정 (이슈 타입별 음성 + 속도)
         voice_config = TTS_VOICE_BY_ISSUE.get(issue_type, TTS_VOICE_BY_ISSUE["default"])
         voice_name = voice_config.get("voice", TTS_CONFIG["voice"])
+        speaking_rate = voice_config.get("rate", TTS_CONFIG.get("speaking_rate", 1.2))
 
         # 1) 전체 텍스트에서 문장 추출
         all_sentences = []
@@ -282,7 +286,7 @@ def generate_tts_with_timing(
         if not all_sentences:
             raise ValueError("TTS 생성할 문장이 없습니다")
 
-        print(f"[SHORTS] TTS 생성 중: {len(all_sentences)}개 문장, 음성={voice_name}")
+        print(f"[SHORTS] TTS 생성 중: {len(all_sentences)}개 문장, 음성={voice_name}, 속도={speaking_rate}x")
 
         # 2) 문장별 TTS 생성
         sentence_audios = []
@@ -294,6 +298,7 @@ def generate_tts_with_timing(
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
         for idx, sentence in enumerate(all_sentences):
+            # Gemini TTS API 페이로드 (speakingRate 포함)
             payload = {
                 "contents": [{"parts": [{"text": sentence}]}],
                 "generationConfig": {
@@ -303,7 +308,9 @@ def generate_tts_with_timing(
                             "prebuiltVoiceConfig": {
                                 "voiceName": voice_name
                             }
-                        }
+                        },
+                        # ★ 쇼츠용 120% 속도 (이슈 타입별 다름)
+                        "speakingRate": speaking_rate
                     }
                 }
             }
