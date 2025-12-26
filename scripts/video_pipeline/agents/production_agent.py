@@ -112,9 +112,16 @@ class ProductionAgent(BaseAgent):
             # 결과 저장
             context.video_path = video_result.get("video_path")
 
+            # video_path가 없으면 실패 처리
+            if not context.video_path:
+                return AgentResult(
+                    success=False,
+                    error="영상 생성 완료했으나 video_path 없음"
+                )
+
             duration = time.time() - start_time
 
-            self.log(f"영상 생성 완료: {duration:.1f}초")
+            self.log(f"영상 생성 완료: {context.video_path}, {duration:.1f}초")
             context.add_log(
                 self.name, "render", "success",
                 f"path={context.video_path}, duration={duration:.1f}s"
@@ -175,9 +182,11 @@ class ProductionAgent(BaseAgent):
                 state = status.get("status", "unknown")
 
                 if state == "completed":
+                    # API는 video_url 반환 (파일 경로)
+                    video_path = status.get("video_url") or status.get("video_path")
                     return {
                         "ok": True,
-                        "video_path": status.get("video_path"),
+                        "video_path": video_path,
                         "duration": status.get("duration"),
                     }
                 elif state == "failed":
