@@ -171,18 +171,23 @@ def detect_issue_type(text: str) -> str:
     return "근황"  # 기본값
 
 
-def get_silhouette_description(person: str, category: str = "연예인") -> str:
+def get_silhouette_description(
+    person: str,
+    category: str = "연예인",
+    use_dynamic: bool = True
+) -> str:
     """
     인물에 맞는 실루엣 설명 반환
 
     Args:
         person: 인물 이름
         category: 카테고리 (연예인/운동선수/국뽕)
+        use_dynamic: 동적 생성 사용 여부 (Google 검색 + LLM)
 
     Returns:
         실루엣 프롬프트 설명 (영어)
     """
-    # 1) 카테고리별 라이브러리 확인
+    # 1) 카테고리별 라이브러리 확인 (정적 라이브러리 우선)
     if category == "운동선수" and person in ATHLETE_SILHOUETTES:
         return ATHLETE_SILHOUETTES[person]
     elif category == "국뽕":
@@ -192,10 +197,24 @@ def get_silhouette_description(person: str, category: str = "연예인") -> str:
     elif person in ATHLETE_SILHOUETTES:
         return ATHLETE_SILHOUETTES[person]
 
-    # 2) 성별 추정 (간단한 휴리스틱)
+    # 2) ★ 동적 실루엣 생성 (Google 검색 + LLM)
+    if use_dynamic and person:
+        try:
+            from .silhouette_generator import generate_silhouette_dynamic
+
+            print(f"[NewsCollector] 동적 실루엣 생성 시도: {person}")
+            result = generate_silhouette_dynamic(person, category)
+            if result:
+                return result
+        except ImportError as e:
+            print(f"[NewsCollector] 동적 생성 모듈 로드 실패: {e}")
+        except Exception as e:
+            print(f"[NewsCollector] 동적 생성 실패 (fallback 사용): {e}")
+
+    # 3) Fallback: 성별 추정 (간단한 휴리스틱)
     if person:
         # 여성에 많은 끝글자
-        female_endings = ["희", "영", "경", "숙", "정", "연", "아", "이", "나", "라"]
+        female_endings = ["희", "영", "경", "숙", "정", "연", "아", "이", "나", "라", "지", "은", "현"]
         if person[-1] in female_endings:
             return CELEBRITY_SILHOUETTES.get("default_female", "female figure in casual standing pose")
 

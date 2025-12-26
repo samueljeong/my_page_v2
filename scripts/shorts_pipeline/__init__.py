@@ -94,6 +94,13 @@ from .news_collector import (
     generate_hook_text,
 )
 
+from .silhouette_generator import (
+    generate_silhouette_dynamic,
+    get_cached_silhouette,
+    clear_cache as clear_silhouette_cache,
+    get_cache_stats as get_silhouette_cache_stats,
+)
+
 from .script_generator import (
     DEFAULT_MODEL,
     GPT51_COSTS,
@@ -190,6 +197,12 @@ __all__ = [
     'detect_issue_type',
     'get_silhouette_description',
     'generate_hook_text',
+
+    # Silhouette Generator (동적 실루엣 생성)
+    'generate_silhouette_dynamic',
+    'get_cached_silhouette',
+    'clear_silhouette_cache',
+    'get_silhouette_cache_stats',
 
     # Script Generator
     'DEFAULT_MODEL',
