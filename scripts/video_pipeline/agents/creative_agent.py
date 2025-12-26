@@ -24,8 +24,8 @@ class CreativeAgent(BaseAgent):
     def __init__(self, server_url: str = "http://localhost:5059"):
         super().__init__("CreativeAgent", max_retries=2)
         self.server_url = server_url
-        self.image_timeout = 60  # 이미지당 60초
-        self.thumbnail_timeout = 180  # 썸네일 180초
+        self.image_timeout = 300  # 이미지당 5분 (Gemini는 2-3분 소요)
+        self.thumbnail_timeout = 300  # 썸네일 5분
 
     async def execute(self, context: VideoTaskContext, **kwargs) -> AgentResult:
         """
