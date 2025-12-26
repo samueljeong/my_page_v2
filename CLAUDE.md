@@ -43,6 +43,7 @@ Google Sheets 기반 YouTube 영상 자동 생성 시스템
 | 날짜 | 문제 | 원인 | 교훈 |
 |------|------|------|------|
 | 2025-12-26 | 시작 버튼 미작동 | `selectRecommendation()`에서 `window.currentStyleId` 미설정 | `startAutoAnalysis()`의 전제조건을 확인했어야 함 |
+| 2025-12-26 | 시작 버튼 안보임 | `startAutoAnalysis()`에서 버튼 숨김 후 복구 안함 | UI 숨김 코드가 있으면 복구 코드도 확인 |
 
 ### 검증 방법
 
