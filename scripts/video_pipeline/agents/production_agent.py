@@ -182,8 +182,15 @@ class ProductionAgent(BaseAgent):
                 state = status.get("status", "unknown")
 
                 if state == "completed":
-                    # API는 video_url 반환 (파일 경로)
-                    video_path = status.get("video_url") or status.get("video_path")
+                    # API는 video_url 반환 (URL 경로: /uploads/xxx.mp4)
+                    video_url = status.get("video_url") or status.get("video_path")
+
+                    # URL 경로를 파일 경로로 변환 (/uploads/xxx.mp4 → uploads/xxx.mp4)
+                    if video_url and video_url.startswith("/"):
+                        video_path = video_url.lstrip("/")
+                    else:
+                        video_path = video_url
+
                     return {
                         "ok": True,
                         "video_path": video_path,
