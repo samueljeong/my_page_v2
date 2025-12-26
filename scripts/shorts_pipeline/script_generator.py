@@ -56,6 +56,9 @@ SCRIPT_GENERATION_PROMPT = """
 - 훅 참고: {hook_text}
 - 실루엣: {silhouette_desc}
 
+## 💬 실제 댓글 분석 (대본에 반영!)
+{comment_section}
+
 ## 🔒 리텐션 높이는 구조 (필수!)
 
 ### 씬별 이탈 방지 전략
@@ -227,6 +230,62 @@ SCRIPT_GENERATION_PROMPT = """
 """
 
 
+def _build_comment_section(script_hints: Optional[Dict[str, Any]]) -> str:
+    """
+    script_hints를 프롬프트용 댓글 섹션으로 변환
+
+    Args:
+        script_hints: generate_script_hints() 결과물
+            {
+                "debate_topic": "갑질이다 vs 예민하다",
+                "pro_arguments": ["선 넘었다", ...],
+                "con_arguments": ["예민하다", ...],
+                "hot_phrases": ["선 넘었다", ...],
+                "suggested_scene4": "댓글 보니까...",
+            }
+
+    Returns:
+        프롬프트에 삽입할 텍스트
+    """
+    if not script_hints or not any([
+        script_hints.get("debate_topic"),
+        script_hints.get("hot_phrases"),
+        script_hints.get("pro_arguments"),
+    ]):
+        return """(댓글 데이터 없음 - 일반적인 댓글 유도 문구 사용)"""
+
+    lines = []
+
+    # 논쟁 주제
+    if script_hints.get("debate_topic"):
+        lines.append(f"🔥 **실제 논쟁 주제**: {script_hints['debate_topic']}")
+
+    # 핫한 문구
+    if script_hints.get("hot_phrases"):
+        phrases = ", ".join([f'"{p}"' for p in script_hints["hot_phrases"][:5]])
+        lines.append(f"💬 **인기 댓글 표현**: {phrases}")
+        lines.append("   → 이 표현들을 대본에 자연스럽게 녹여주세요!")
+
+    # 찬성 의견
+    if script_hints.get("pro_arguments"):
+        args = " / ".join(script_hints["pro_arguments"][:3])
+        lines.append(f"👎 **비판 의견**: {args}")
+
+    # 반대 의견
+    if script_hints.get("con_arguments"):
+        args = " / ".join(script_hints["con_arguments"][:3])
+        lines.append(f"👍 **옹호 의견**: {args}")
+
+    # 씬4 제안
+    if script_hints.get("suggested_scene4"):
+        lines.append(f"✨ **씬4 추천 멘트**: \"{script_hints['suggested_scene4']}\"")
+
+    lines.append("")
+    lines.append("⚡ **중요**: 위 실제 댓글 표현을 활용해서 시청자가 '나도 한마디!'하고 싶게 만드세요!")
+
+    return "\n".join(lines)
+
+
 def generate_shorts_script(
     celebrity: str,
     issue_type: str,
@@ -234,7 +293,8 @@ def generate_shorts_script(
     news_summary: str,
     hook_text: str,
     silhouette_desc: str,
-    model: str = None
+    model: str = None,
+    script_hints: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     GPT-5.1 Responses API를 사용하여 쇼츠 대본 생성
@@ -247,6 +307,7 @@ def generate_shorts_script(
         hook_text: 훅 문장
         silhouette_desc: 실루엣 특징 설명
         model: 사용할 GPT 모델 (기본: gpt-5.1)
+        script_hints: 실제 댓글 기반 힌트 (news_scorer에서 생성)
 
     Returns:
         {
@@ -265,6 +326,9 @@ def generate_shorts_script(
     try:
         client = get_openai_client()
 
+        # 댓글 섹션 생성
+        comment_section = _build_comment_section(script_hints)
+
         user_prompt = SCRIPT_GENERATION_PROMPT.format(
             celebrity=celebrity,
             issue_type=issue_type,
@@ -272,6 +336,7 @@ def generate_shorts_script(
             news_summary=news_summary,
             hook_text=hook_text,
             silhouette_desc=silhouette_desc,
+            comment_section=comment_section,
         )
 
         system_prompt = "당신은 연예 뉴스 쇼츠 전문 작가입니다. 반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요."
@@ -476,7 +541,8 @@ def generate_complete_shorts_package(
             "news_title": "...",
             "news_summary": "...",
             "hook_text": "...",
-            "silhouette_desc": "..."
+            "silhouette_desc": "...",
+            "script_hints": {...}  # 옵션: 실제 댓글 기반 힌트
         }
 
     Returns:
@@ -501,6 +567,9 @@ def generate_complete_shorts_package(
     # person 필드 우선, 없으면 celebrity 호환
     person = news_data.get("person", news_data.get("celebrity", ""))
 
+    # 실제 댓글 기반 힌트 (news_scorer에서 생성)
+    script_hints = news_data.get("script_hints")
+
     script_result = generate_shorts_script(
         celebrity=person,  # 함수 파라미터는 celebrity로 유지 (내부 사용)
         issue_type=news_data.get("issue_type", ""),
@@ -509,6 +578,7 @@ def generate_complete_shorts_package(
         hook_text=news_data.get("hook_text", ""),
         silhouette_desc=news_data.get("silhouette_desc", ""),
         model=model,
+        script_hints=script_hints,
     )
 
     if not script_result.get("ok"):

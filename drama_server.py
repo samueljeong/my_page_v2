@@ -24262,6 +24262,112 @@ def api_shorts_status():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ===== Shorts Viral Pipeline API =====
+
+@app.route('/api/shorts/viral-pipeline', methods=['POST'])
+def api_shorts_viral_pipeline():
+    """
+    바이럴 점수 기반 자동 쇼츠 파이프라인
+
+    자동으로 최적의 뉴스를 선정하고 댓글 기반 대본을 생성합니다.
+
+    흐름:
+    1. RSS에서 뉴스 수집
+    2. 네이버/다음 댓글 크롤링 → 바이럴 점수 계산
+    3. 가장 점수 높은 뉴스 선정
+    4. 실제 댓글을 반영한 대본 생성
+    5. (옵션) 비디오 생성
+
+    Request JSON:
+        {
+            "min_score": 40,           # 최소 바이럴 점수 (기본 40)
+            "categories": ["연예인"],  # 수집할 카테고리 (선택)
+            "generate_video": true,    # 비디오 생성 여부 (기본 true)
+            "upload_youtube": false,   # YouTube 업로드 여부 (기본 false)
+            "privacy_status": "private", # YouTube 공개 설정
+            "channel_id": null,        # YouTube 채널 ID (선택)
+            "save_to_sheet": true      # 시트 저장 여부 (기본 true)
+        }
+
+    Returns:
+        {
+            "ok": true,
+            "person": "아이유",
+            "issue_type": "열애",
+            "viral_score": {
+                "total_score": 75,
+                "grade": "S",
+                "components": {...}
+            },
+            "script_hints": {
+                "debate_topic": "...",
+                "hot_phrases": [...],
+                ...
+            },
+            "script": {
+                "title": "...",
+                "total_chars": 350,
+                "scenes": 5
+            },
+            "video": {
+                "path": "/tmp/shorts_xxx/final.mp4",
+                "duration": 45.5
+            },
+            "youtube": {
+                "video_id": "...",
+                "video_url": "https://www.youtube.com/watch?v=..."
+            },
+            "cost": 0.84
+        }
+
+    cURL 예시:
+        # 비디오 생성만
+        curl -X POST https://drama-s2ns.onrender.com/api/shorts/viral-pipeline \\
+          -H "Content-Type: application/json" \\
+          -d '{"min_score": 40, "generate_video": true}'
+
+        # 비디오 생성 + YouTube 업로드
+        curl -X POST https://drama-s2ns.onrender.com/api/shorts/viral-pipeline \\
+          -H "Content-Type: application/json" \\
+          -d '{"min_score": 40, "generate_video": true, "upload_youtube": true}'
+    """
+    try:
+        from scripts.shorts_pipeline.run import run_viral_pipeline
+
+        data = request.get_json() or {}
+
+        min_score = data.get("min_score", 40)
+        categories = data.get("categories")
+        generate_video = data.get("generate_video", True)
+        upload_youtube = data.get("upload_youtube", False)
+        privacy_status = data.get("privacy_status", "private")
+        channel_id = data.get("channel_id")
+        save_to_sheet = data.get("save_to_sheet", True)
+
+        print(f"[API] /api/shorts/viral-pipeline 호출")
+        print(f"[API] 파라미터: min_score={min_score}, generate_video={generate_video}, upload_youtube={upload_youtube}")
+
+        result = run_viral_pipeline(
+            min_score=min_score,
+            categories=categories,
+            generate_video=generate_video,
+            upload_youtube=upload_youtube,
+            privacy_status=privacy_status,
+            channel_id=channel_id,
+            save_to_sheet=save_to_sheet
+        )
+
+        if result.get("ok"):
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ===== Shorts Agent API =====
 
 @app.route('/api/shorts/agent-run', methods=['POST'])
