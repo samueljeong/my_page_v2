@@ -12,6 +12,13 @@ from typing import Any, Dict, Optional, Tuple
 
 from .agents import VideoSupervisorAgent, VideoTaskContext, AgentResult
 
+# ★ 기본 음성 설정 (원본 파이프라인과 동일)
+try:
+    from lang import ko as lang_ko
+    DEFAULT_VOICE = lang_ko.TTS.get('default_voice', 'ko-KR-Neural2-C')
+except ImportError:
+    DEFAULT_VOICE = 'ko-KR-Neural2-C'
+
 logger = logging.getLogger(__name__)
 
 
@@ -104,7 +111,7 @@ class AgentPipelineRunner:
         privacy = row_data.get("공개설정", "private") or "private"
         publish_at = row_data.get("예약시간", "") or None
         playlist_id = row_data.get("플레이리스트ID", "") or None
-        voice = row_data.get("음성", "ko-KR-Neural2-C") or "ko-KR-Neural2-C"
+        voice = row_data.get("음성", "") or DEFAULT_VOICE  # ★ 원본 파이프라인과 동일한 기본 음성
         # ★ 카테고리 (news/story 등) - 원본 파이프라인과 동일
         input_category = row_data.get("카테고리", "") or ""
 
