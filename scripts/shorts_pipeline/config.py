@@ -194,13 +194,37 @@ NO text on image
 
 # 연예인 실루엣 특징
 CELEBRITY_SILHOUETTES = {
+    # ★ 여성 연예인
+    "이시영": "athletic female figure with strong posture, confident mother stance, short hair, action hero pose",
     "박나래": "female comedian with short wavy hair holding a microphone in energetic pose",
+    "아이유": "petite female figure with long wavy hair, elegant standing pose",
+    "이영지": "young female figure with long straight hair, hip-hop style pose",
+    "한소희": "slim female figure with long black hair, elegant model pose",
+    "김태희": "graceful female figure with long flowing hair, gentle smile pose",
+    "전지현": "tall elegant female figure in powerful stance, long hair flowing",
+    "송혜교": "beautiful female figure with soft features, elegant sitting pose",
+    "수지": "youthful female figure with innocent look, natural standing pose",
+    "제니": "fashionable female figure with charismatic pose, trendy style",
+    "지수": "elegant female figure with long straight hair, graceful pose",
+    "카리나": "futuristic female figure with sharp features, dynamic pose",
+    "장원영": "tall slim female figure with long limbs, model pose",
+    # ★ 남성 연예인
     "유재석": "tall slim male figure with signature hand gesture, wearing suit",
     "조세호": "slim male figure with glasses, formal attire, standing pose",
-    "이영지": "young female figure with long straight hair, hip-hop style pose",
-    "아이유": "petite female figure with long wavy hair, elegant standing pose",
+    "이광수": "very tall slim male figure in playful running pose",
+    "유병재": "male figure with messy hair, casual comedian pose",
+    "정해인": "handsome male figure with soft features, gentle standing pose",
+    "박서준": "muscular male figure in confident stance, stylish pose",
+    "현빈": "tall handsome male figure in elegant suit, charismatic pose",
+    "공유": "mature male figure with warm smile, sophisticated stance",
+    "뷔": "artistic male figure with unique pose, fashionable style",
+    "지드래곤": "iconic male figure with avant-garde fashion, artistic pose",
+    # ★ 그룹
     "뉴진스": "group of five young female figures in dynamic dance pose",
     "BTS": "group of male figures in synchronized dance formation",
+    "블랙핑크": "group of four female figures in powerful dance formation",
+    "에스파": "group of four female figures in futuristic concept pose",
+    "아이브": "group of six female figures in elegant synchronized pose",
     # 기본값
     "default_male": "male figure in casual standing pose",
     "default_female": "female figure in casual standing pose",
@@ -475,39 +499,49 @@ BGM_MOOD_OPTIONS = [
 SHORTS_SUBTITLE_STYLE = {
     # 기본 폰트 설정
     "font_name": "NanumSquareRoundEB",  # 나눔스퀘어라운드 ExtraBold
-    "font_size": 48,                     # 큰 글씨 (모바일 가독성)
+    "font_size": 58,                     # ★ 크게 (모바일 가독성 - 48→58)
     "font_color": "#FFFFFF",             # 흰색
+    "bold": True,                        # ★ 굵게
 
     # 테두리/외곽선 (가독성 향상)
     "outline_color": "#000000",          # 검정 테두리
-    "outline_width": 3,                  # 두꺼운 테두리
+    "outline_width": 4,                  # ★ 더 두껍게 (3→4)
 
     # 그림자 효과
     "shadow_enabled": True,
     "shadow_color": "#000000",
-    "shadow_offset": 2,
+    "shadow_offset": 3,                  # ★ 그림자 강화 (2→3)
 
-    # 위치 (9:16 세로 화면 기준)
-    "position": "bottom",                # 하단 배치
-    "margin_bottom": 150,                # 바텀 여백 (네비게이션 바 피하기)
+    # ★ 위치 (화면 중앙 배치 - 쇼츠 트렌드)
+    "position": "center",                # ★ 중앙 배치 (bottom→center)
+    "alignment": 5,                      # ★ ASS: 5=중앙, 2=하단, 8=상단
+    "margin_v": 0,                       # ★ 중앙이므로 여백 0
     "margin_horizontal": 40,             # 좌우 여백
 
+    # ★ 배경 박스 (가독성 대폭 향상)
+    "background_enabled": True,          # ★ 반투명 배경 박스
+    "background_color": "#000000",       # 검정 배경
+    "background_opacity": 0.6,           # 60% 투명도
+    "border_style": 4,                   # ASS: 4=배경박스+테두리
+
     # 애니메이션
-    "fade_in": 0.1,                      # 페이드인 (초)
-    "fade_out": 0.1,                     # 페이드아웃 (초)
+    "fade_in": 0.05,                     # 빠른 페이드인 (0.1→0.05)
+    "fade_out": 0.05,                    # 빠른 페이드아웃
 
     # 한 줄 최대 글자 수 (자동 줄바꿈)
-    "max_chars_per_line": 12,            # 세로 화면이라 짧게
+    "max_chars_per_line": 14,            # ★ 약간 늘림 (12→14)
 }
 
 # 강조 자막 스타일 (훅, 핵심 문장용)
 SHORTS_EMPHASIS_STYLE = {
-    "font_size": 56,                     # 더 큰 글씨
+    "font_size": 68,                     # ★ 더 크게 (56→68)
     "font_color": "#FFFF00",             # 노란색
     "outline_color": "#FF0000",          # 빨간 테두리
-    "outline_width": 4,
+    "outline_width": 5,                  # ★ 더 두껍게 (4→5)
     "position": "center",                # 중앙 배치
+    "alignment": 5,                      # ASS 중앙
     "scale_effect": True,                # 확대 효과
+    "background_enabled": True,          # 배경 박스
 }
 
 # 이슈 타입별 자막 강조 색상

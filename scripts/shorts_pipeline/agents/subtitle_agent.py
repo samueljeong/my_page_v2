@@ -82,6 +82,21 @@ class SubtitleAgent(BaseAgent):
         "속보": "#FF0000",
     }
 
+    # ★ 자막 스타일 설정 (중앙 배치, 배경 박스)
+    # 참고: https://www.opus.pro/blog/youtube-shorts-caption-subtitle-best-practices
+    SUBTITLE_STYLE = {
+        "position": "center",           # 화면 중앙 (쇼츠 트렌드)
+        "alignment": 5,                 # ASS: 5=중앙, 2=하단, 8=상단
+        "font_size": 58,                # 모바일 가독성 (48-60px 권장)
+        "font_name": "NanumSquareRoundEB",
+        "bold": True,
+        "outline_width": 4,             # 두꺼운 테두리
+        "shadow_offset": 3,
+        "background_enabled": True,     # 반투명 배경 박스
+        "background_opacity": 0.6,      # 60% 투명도
+        "max_chars_per_line": 14,       # 한 줄 최대 글자
+    }
+
     def __init__(self):
         super().__init__("SubtitleAgent")
         self.output_base_dir = "/tmp/shorts_agents"
@@ -290,6 +305,77 @@ class SubtitleAgent(BaseAgent):
         self.log(f"하이라이트 적용: {list(highlights.keys())}")
 
         return highlights
+
+    def _wrap_text(self, text: str, max_chars: int = None) -> str:
+        """
+        긴 텍스트를 여러 줄로 자동 줄바꿈 (ASS \\N 사용)
+
+        Args:
+            text: 원본 텍스트
+            max_chars: 한 줄 최대 글자 수
+
+        Returns:
+            줄바꿈이 적용된 텍스트
+        """
+        max_chars = max_chars or self.SUBTITLE_STYLE.get("max_chars_per_line", 14)
+
+        if len(text) <= max_chars:
+            return text
+
+        # 자연스러운 분할점 찾기 (띄어쓰기, 쉼표 등)
+        words = text.split()
+        lines = []
+        current_line = ""
+
+        for word in words:
+            if len(current_line) + len(word) + 1 <= max_chars:
+                current_line += (" " if current_line else "") + word
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+
+        if current_line:
+            lines.append(current_line)
+
+        # ASS 줄바꿈 적용 (\\N)
+        return "\\N".join(lines)
+
+    def _format_ass_highlight(self, text: str, keywords: List[str]) -> str:
+        """
+        ASS 형식으로 키워드 하이라이트 적용
+
+        Args:
+            text: 원본 텍스트
+            keywords: 강조할 키워드 목록
+
+        Returns:
+            ASS 태그가 적용된 텍스트
+        """
+        result = text
+
+        for keyword in keywords:
+            if keyword in result:
+                color = self.HIGHLIGHT_COLORS.get(keyword, "#FFFF00")
+                # HEX를 ASS BGR 형식으로 변환
+                hex_color = color.lstrip("#")
+                r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+                ass_color = f"&H00{b}{g}{r}&"
+
+                # 키워드에 색상 + 굵게 적용
+                highlight_tag = f"{{\\c{ass_color}\\b1}}{keyword}{{\\r}}"
+                result = result.replace(keyword, highlight_tag)
+
+        return result
+
+    def get_subtitle_style(self) -> Dict[str, Any]:
+        """
+        현재 자막 스타일 설정 반환
+
+        Returns:
+            자막 스타일 딕셔너리
+        """
+        return self.SUBTITLE_STYLE.copy()
 
     def _estimate_cost(self, scenes: List[Dict], voice: Dict = None) -> float:
         """TTS 비용 추정 (프로바이더별 가격)"""

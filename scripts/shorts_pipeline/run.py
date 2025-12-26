@@ -769,30 +769,44 @@ def generate_ass_subtitles(
     sub_style = SHORTS_SUBTITLE_STYLE
     title_style = SHORTS_TITLE_STYLE
     font_name = sub_style.get("font_name", "NanumGothicBold")
-    font_size = sub_style.get("font_size", 42)
-    outline_width = sub_style.get("outline_width", 3)
-    margin_bottom = sub_style.get("margin_bottom", 180)
+    font_size = sub_style.get("font_size", 58)
+    outline_width = sub_style.get("outline_width", 4)
+    shadow_offset = sub_style.get("shadow_offset", 3)
 
-    # 타이틀 설정 (더 크고 아래로)
+    # ★ 새로운 스타일 설정 (중앙 배치, 배경 박스)
+    alignment = sub_style.get("alignment", 5)  # 5=중앙, 2=하단, 8=상단
+    margin_v = sub_style.get("margin_v", 0)    # 중앙이면 0
+    margin_h = sub_style.get("margin_horizontal", 40)
+    border_style = sub_style.get("border_style", 4)  # 4=배경박스+테두리, 1=테두리만
+    is_bold = -1 if sub_style.get("bold", True) else 0
+
+    # 타이틀 설정 (상단 고정)
     title_font_size = title_style.get("font_size", 64)
-    title_margin_top = FRAME_LAYOUT.get("title_y", 160)  # 상단에서 160px 아래
+    title_margin_top = FRAME_LAYOUT.get("title_y", 160)
 
-    # BGR 형식으로 변환 (ASS 형식)
-    def hex_to_ass_color(hex_color):
+    # BGR 형식으로 변환 (ASS 형식: &HAABBGGRR)
+    def hex_to_ass_color(hex_color, alpha=0):
         hex_color = hex_color.lstrip("#")
         r = hex_color[0:2]
         g = hex_color[2:4]
         b = hex_color[4:6]
-        return f"&H00{b}{g}{r}"
+        return f"&H{alpha:02X}{b}{g}{r}"
 
     primary_color = hex_to_ass_color(sub_style.get("font_color", "#FFFFFF"))
     outline_color = hex_to_ass_color(sub_style.get("outline_color", "#000000"))
     title_color = hex_to_ass_color(title_style.get("font_color", "#FFFF00"))
     title_outline = hex_to_ass_color(title_style.get("outline_color", "#000000"))
 
+    # ★ 배경 박스 색상 (반투명)
+    bg_opacity = sub_style.get("background_opacity", 0.6)
+    bg_alpha = int((1 - bg_opacity) * 255)  # ASS는 투명도가 반대
+    back_color = hex_to_ass_color(sub_style.get("background_color", "#000000"), bg_alpha)
+
     # ASS 헤더 - 두 가지 스타일 정의
-    # 1. Title: 상단 고정 (Alignment=8: 상단 중앙), MarginV = 상단에서 거리
-    # 2. Subtitle: 하단 자막 (Alignment=2: 하단 중앙), MarginV = 하단에서 거리
+    # ★ 1. Title: 상단 고정 (Alignment=8: 상단 중앙)
+    # ★ 2. Subtitle: 중앙 배치 (Alignment=5: 화면 정중앙)
+    #    - BorderStyle=4: 배경 박스 + 테두리 (가독성 최고)
+    #    - Bold=-1: 굵은 글씨
     ass_content = f"""[Script Info]
 Title: Shorts Subtitles
 ScriptType: v4.00+
@@ -803,7 +817,7 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Title,{font_name},{title_font_size},{title_color},&H000000FF,{title_outline},&H80000000,1,0,0,0,100,100,0,0,1,5,2,8,40,40,{title_margin_top},1
-Style: Subtitle,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},&H80000000,1,0,0,0,100,100,0,0,1,{outline_width},2,2,40,40,{margin_bottom},1
+Style: Subtitle,{font_name},{font_size},{primary_color},&H000000FF,{outline_color},{back_color},{is_bold},0,0,0,100,100,0,0,{border_style},{outline_width},{shadow_offset},{alignment},{margin_h},{margin_h},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

@@ -372,6 +372,8 @@ IMPORTANT - HOOK SCENE (ONLY silhouette in this video):
 - Red/orange dramatic lighting
 - Large empty space at top and bottom for Korean text overlay
 - 4K quality, cinematic lighting, high contrast
+
+⚠️ CRITICAL: ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGOS on the image!
 """
         elif is_last_scene:
             # 마지막 씬: 결론 분위기 (실루엣 없음!)
@@ -387,6 +389,8 @@ IMPORTANT - CONCLUSION SCENE:
 - Professional, polished look
 - Large empty space for Korean text overlay
 - 4K quality, cinematic composition
+
+⚠️ CRITICAL: ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGOS on the image!
 """
         else:
             # 중간 씬: 대본 내용에 맞는 배경 (실루엣 없음!)
@@ -403,6 +407,8 @@ IMPORTANT - CONTENT SCENE:
 - Large empty space for Korean text overlay
 - 4K quality, cinematic composition
 - Korean news broadcast style atmosphere
+
+⚠️ CRITICAL: ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGOS on the image!
 """
 
         scene["image_prompt_enhanced"] = enhanced_prompt.strip()
