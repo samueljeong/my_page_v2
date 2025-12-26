@@ -7,21 +7,71 @@
 3. 찬/반 의견 분류
 4. 대본에 반영할 핵심 표현 추출
 5. Google News 리다이렉트 URL 해결
+6. API 캐싱 및 속도 제한 (차단 방지)
 """
 
 import re
+import time
 import requests
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs, unquote
 import json
 import base64
+import hashlib
+from functools import lru_cache
 
 # User-Agent 설정 (차단 방지)
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
 }
+
+# API 속도 제한 설정
+RATE_LIMIT_DELAY = 0.5  # 요청 간 최소 대기 시간 (초)
+_last_request_time = 0.0
+
+# 간단한 메모리 캐시 (URL → 댓글 데이터)
+_comment_cache: Dict[str, Tuple[float, Dict]] = {}
+CACHE_TTL = 3600  # 캐시 유효 시간 (1시간)
+
+
+def _rate_limit():
+    """API 호출 간 속도 제한"""
+    global _last_request_time
+    elapsed = time.time() - _last_request_time
+    if elapsed < RATE_LIMIT_DELAY:
+        time.sleep(RATE_LIMIT_DELAY - elapsed)
+    _last_request_time = time.time()
+
+
+def _get_cache_key(url: str) -> str:
+    """URL을 캐시 키로 변환"""
+    return hashlib.md5(url.encode()).hexdigest()
+
+
+def _get_cached(url: str) -> Optional[Dict]:
+    """캐시에서 댓글 데이터 조회"""
+    key = _get_cache_key(url)
+    if key in _comment_cache:
+        cached_time, data = _comment_cache[key]
+        if time.time() - cached_time < CACHE_TTL:
+            print(f"[NewsScorer] 캐시 히트: {url[:40]}...")
+            return data
+        else:
+            del _comment_cache[key]  # 만료된 캐시 삭제
+    return None
+
+
+def _set_cache(url: str, data: Dict):
+    """댓글 데이터를 캐시에 저장"""
+    key = _get_cache_key(url)
+    _comment_cache[key] = (time.time(), data)
+
+    # 캐시 크기 제한 (최대 100개)
+    if len(_comment_cache) > 100:
+        oldest_key = min(_comment_cache.keys(), key=lambda k: _comment_cache[k][0])
+        del _comment_cache[oldest_key]
 
 
 # ============================================================
@@ -270,15 +320,17 @@ def extract_naver_article_id(url: str) -> Optional[Tuple[str, str]]:
 def fetch_naver_comments(
     url: str,
     max_comments: int = 20,
-    sort: str = "RECOMMEND"  # RECOMMEND (공감순) or NEW (최신순)
+    sort: str = "RECOMMEND",  # RECOMMEND (공감순) or NEW (최신순)
+    use_cache: bool = True
 ) -> Dict[str, Any]:
     """
-    네이버 뉴스 댓글 가져오기
+    네이버 뉴스 댓글 가져오기 (캐싱 + 속도 제한)
 
     Args:
         url: 네이버 뉴스 URL
         max_comments: 최대 댓글 수
         sort: 정렬 방식 (RECOMMEND=공감순, NEW=최신순)
+        use_cache: 캐시 사용 여부
 
     Returns:
         {
@@ -297,9 +349,18 @@ def fetch_naver_comments(
             "top_keywords": ["갑질", "선넘었다", "실망"],
         }
     """
+    # 캐시 확인
+    if use_cache:
+        cached = _get_cached(url)
+        if cached:
+            return cached
+
     article_ids = extract_naver_article_id(url)
     if not article_ids:
         return {"success": False, "error": "네이버 뉴스 URL이 아닙니다"}
+
+    # 속도 제한 적용
+    _rate_limit()
 
     oid, aid = article_ids
 
@@ -374,7 +435,7 @@ def fetch_naver_comments(
         # 주요 키워드 추출
         top_keywords = extract_top_keywords(" ".join(all_text))
 
-        return {
+        result = {
             "success": True,
             "comment_count": total_count,
             "fetched_count": len(comments),
@@ -382,6 +443,12 @@ def fetch_naver_comments(
             "pro_ratio": round(pro_ratio, 2),
             "top_keywords": top_keywords,
         }
+
+        # 캐시에 저장
+        if use_cache:
+            _set_cache(url, result)
+
+        return result
 
     except Exception as e:
         print(f"[NewsScorer] 네이버 댓글 가져오기 실패: {e}")
@@ -394,17 +461,27 @@ def fetch_naver_comments(
 
 def fetch_daum_comments(
     url: str,
-    max_comments: int = 20
+    max_comments: int = 20,
+    use_cache: bool = True
 ) -> Dict[str, Any]:
     """
-    다음 뉴스 댓글 가져오기
+    다음 뉴스 댓글 가져오기 (캐싱 + 속도 제한)
 
     다음 뉴스 댓글 API 활용
     """
+    # 캐시 확인
+    if use_cache:
+        cached = _get_cached(url)
+        if cached:
+            return cached
+
     # 다음 뉴스 기사 ID 추출
     match = re.search(r'/v/(\w+)', url)
     if not match:
         return {"success": False, "error": "다음 뉴스 URL이 아닙니다"}
+
+    # 속도 제한 적용
+    _rate_limit()
 
     article_id = match.group(1)
 
@@ -450,7 +527,7 @@ def fetch_daum_comments(
         pro_ratio = positive_count / total_sentiment if total_sentiment > 0 else 0.5
         top_keywords = extract_top_keywords(" ".join(all_text))
 
-        return {
+        result = {
             "success": True,
             "comment_count": total_count,
             "fetched_count": len(comments),
@@ -458,6 +535,12 @@ def fetch_daum_comments(
             "pro_ratio": round(pro_ratio, 2),
             "top_keywords": top_keywords,
         }
+
+        # 캐시에 저장
+        if use_cache:
+            _set_cache(url, result)
+
+        return result
 
     except Exception as e:
         print(f"[NewsScorer] 다음 댓글 가져오기 실패: {e}")
