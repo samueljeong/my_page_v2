@@ -178,6 +178,9 @@ class CreativeAgent(BaseAgent):
                 elif result:
                     image_path = result.get("image_path")
                     if image_path:
+                        # URL 경로를 파일 경로로 변환 (/uploads/xxx → uploads/xxx)
+                        if image_path.startswith("/"):
+                            image_path = image_path.lstrip("/")
                         images[idx] = image_path
                         total_cost += result.get("cost", 0.02)
                     else:
@@ -345,6 +348,9 @@ class CreativeAgent(BaseAgent):
 
             if result.get("ok"):
                 thumbnail_path = result.get("thumbnail_path") or result.get("image_url")
+                # URL 경로를 파일 경로로 변환 (/uploads/xxx → uploads/xxx)
+                if thumbnail_path and thumbnail_path.startswith("/"):
+                    thumbnail_path = thumbnail_path.lstrip("/")
                 return thumbnail_path, result.get("cost", 0.03)
             else:
                 self.log(f"썸네일 생성 실패: {result.get('error')}", "warning")
