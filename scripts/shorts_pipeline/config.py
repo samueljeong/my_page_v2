@@ -194,13 +194,37 @@ NO text on image
 
 # 연예인 실루엣 특징
 CELEBRITY_SILHOUETTES = {
+    # ★ 여성 연예인
+    "이시영": "athletic female figure with strong posture, confident mother stance, short hair, action hero pose",
     "박나래": "female comedian with short wavy hair holding a microphone in energetic pose",
+    "아이유": "petite female figure with long wavy hair, elegant standing pose",
+    "이영지": "young female figure with long straight hair, hip-hop style pose",
+    "한소희": "slim female figure with long black hair, elegant model pose",
+    "김태희": "graceful female figure with long flowing hair, gentle smile pose",
+    "전지현": "tall elegant female figure in powerful stance, long hair flowing",
+    "송혜교": "beautiful female figure with soft features, elegant sitting pose",
+    "수지": "youthful female figure with innocent look, natural standing pose",
+    "제니": "fashionable female figure with charismatic pose, trendy style",
+    "지수": "elegant female figure with long straight hair, graceful pose",
+    "카리나": "futuristic female figure with sharp features, dynamic pose",
+    "장원영": "tall slim female figure with long limbs, model pose",
+    # ★ 남성 연예인
     "유재석": "tall slim male figure with signature hand gesture, wearing suit",
     "조세호": "slim male figure with glasses, formal attire, standing pose",
-    "이영지": "young female figure with long straight hair, hip-hop style pose",
-    "아이유": "petite female figure with long wavy hair, elegant standing pose",
+    "이광수": "very tall slim male figure in playful running pose",
+    "유병재": "male figure with messy hair, casual comedian pose",
+    "정해인": "handsome male figure with soft features, gentle standing pose",
+    "박서준": "muscular male figure in confident stance, stylish pose",
+    "현빈": "tall handsome male figure in elegant suit, charismatic pose",
+    "공유": "mature male figure with warm smile, sophisticated stance",
+    "뷔": "artistic male figure with unique pose, fashionable style",
+    "지드래곤": "iconic male figure with avant-garde fashion, artistic pose",
+    # ★ 그룹
     "뉴진스": "group of five young female figures in dynamic dance pose",
     "BTS": "group of male figures in synchronized dance formation",
+    "블랙핑크": "group of four female figures in powerful dance formation",
+    "에스파": "group of four female figures in futuristic concept pose",
+    "아이브": "group of six female figures in elegant synchronized pose",
     # 기본값
     "default_male": "male figure in casual standing pose",
     "default_female": "female figure in casual standing pose",

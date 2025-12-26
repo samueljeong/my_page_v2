@@ -32,6 +32,21 @@ except ImportError:
 class ReviewAgent(BaseAgent):
     """검수 에이전트"""
 
+    # ★ person 검증용 제외 목록 (일반 명사, 호칭 등)
+    INVALID_PERSON_NAMES = {
+        # 가족/관계 호칭
+        "엄마", "아빠", "아버지", "어머니", "아들", "딸", "남편", "아내",
+        "언니", "오빠", "누나", "형", "동생", "할머니", "할아버지",
+        "외계인", "슈퍼맘", "워킹맘", "육아",
+        # 직함/역할
+        "대통령", "네티즌", "시청자", "팬들", "관계자", "매니저", "기자",
+        # 일반 명사
+        "연예인", "아이돌", "배우", "가수", "코미디언", "개그맨",
+        "선수", "감독", "코치", "심판",
+        # 추상 명사
+        "논란", "사건", "이슈", "문제", "상황", "결과", "영향",
+    }
+
     def __init__(self):
         super().__init__("ReviewAgent")
         self.model = "gpt-5.1"
@@ -85,6 +100,7 @@ class ReviewAgent(BaseAgent):
 
         try:
             results = {
+                "person_review": None,  # ★ person 검증 추가
                 "script_review": None,
                 "subtitle_review": None,
                 "image_review": None,
@@ -94,6 +110,26 @@ class ReviewAgent(BaseAgent):
                 "feedback": "",
             }
             total_cost = 0
+
+            # ★ person 검증 (가장 먼저 수행 - 기본 품질 보장)
+            person_result = self._validate_person(context)
+            results["person_review"] = person_result
+            if not person_result.get("valid", False):
+                results["passed"] = False
+                results["needs_improvement"] = True
+                results["improvement_targets"].append("person")
+                results["feedback"] += f"\n[인물명 오류]\n{person_result.get('feedback', '')}"
+                # person이 잘못되면 나머지 검수 의미 없음 - 바로 반환
+                self.set_status(AgentStatus.SUCCESS)
+                return AgentResult(
+                    success=True,
+                    data=results,
+                    feedback=results["feedback"].strip(),
+                    needs_improvement=True,
+                    improvement_targets=["person"],
+                    cost=0,
+                    duration=time.time() - start_time,
+                )
 
             # 대본 검수
             if review_type in ["script", "all"] and context.script:
@@ -565,3 +601,62 @@ class ReviewAgent(BaseAgent):
             duration = scene.get("duration", "")
             lines.append(f"씬{scene_num} ({duration}): {narration}")
         return "\n".join(lines)
+
+    def _validate_person(self, context: TaskContext) -> Dict[str, Any]:
+        """
+        ★ person(인물명) 유효성 검증
+
+        잘못된 인물명 패턴:
+        1. INVALID_PERSON_NAMES에 포함된 일반 명사/호칭
+        2. 너무 짧거나 긴 이름 (1글자 또는 10글자 초과)
+        3. 빈 문자열
+
+        Returns:
+            {
+                "valid": True/False,
+                "person": "이시영",
+                "issues": ["문제점..."],
+                "feedback": "구체적 피드백"
+            }
+        """
+        person = context.person or ""
+        issues = []
+
+        self.log(f"person 검증: '{person}'")
+
+        # 1. 빈 문자열 체크
+        if not person or not person.strip():
+            issues.append("인물명이 비어있습니다")
+
+        # 2. 길이 체크
+        elif len(person) < 2:
+            issues.append(f"인물명이 너무 짧습니다: '{person}' (최소 2글자)")
+        elif len(person) > 10:
+            issues.append(f"인물명이 너무 깁니다: '{person}' (최대 10글자)")
+
+        # 3. 무효한 이름 체크 (일반 명사/호칭)
+        elif person in self.INVALID_PERSON_NAMES:
+            issues.append(
+                f"'{person}'은(는) 실제 인물명이 아닙니다. "
+                f"뉴스 제목에서 실제 연예인/인물 이름을 추출해야 합니다. "
+                f"예: '엄마' → '이시영', '선수' → '손흥민'"
+            )
+
+        # 4. 숫자로만 구성된 경우
+        elif person.isdigit():
+            issues.append(f"'{person}'은(는) 유효한 인물명이 아닙니다 (숫자만)")
+
+        # 검증 결과
+        valid = len(issues) == 0
+
+        if valid:
+            self.log(f"person 검증 통과: '{person}'")
+        else:
+            self.log(f"person 검증 실패: {issues}", "warning")
+
+        return {
+            "valid": valid,
+            "person": person,
+            "issues": issues,
+            "feedback": "\n".join(issues) if issues else "인물명 검증 통과",
+        }
