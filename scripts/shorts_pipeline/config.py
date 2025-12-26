@@ -499,39 +499,49 @@ BGM_MOOD_OPTIONS = [
 SHORTS_SUBTITLE_STYLE = {
     # 기본 폰트 설정
     "font_name": "NanumSquareRoundEB",  # 나눔스퀘어라운드 ExtraBold
-    "font_size": 48,                     # 큰 글씨 (모바일 가독성)
+    "font_size": 58,                     # ★ 크게 (모바일 가독성 - 48→58)
     "font_color": "#FFFFFF",             # 흰색
+    "bold": True,                        # ★ 굵게
 
     # 테두리/외곽선 (가독성 향상)
     "outline_color": "#000000",          # 검정 테두리
-    "outline_width": 3,                  # 두꺼운 테두리
+    "outline_width": 4,                  # ★ 더 두껍게 (3→4)
 
     # 그림자 효과
     "shadow_enabled": True,
     "shadow_color": "#000000",
-    "shadow_offset": 2,
+    "shadow_offset": 3,                  # ★ 그림자 강화 (2→3)
 
-    # 위치 (9:16 세로 화면 기준)
-    "position": "bottom",                # 하단 배치
-    "margin_bottom": 150,                # 바텀 여백 (네비게이션 바 피하기)
+    # ★ 위치 (화면 중앙 배치 - 쇼츠 트렌드)
+    "position": "center",                # ★ 중앙 배치 (bottom→center)
+    "alignment": 5,                      # ★ ASS: 5=중앙, 2=하단, 8=상단
+    "margin_v": 0,                       # ★ 중앙이므로 여백 0
     "margin_horizontal": 40,             # 좌우 여백
 
+    # ★ 배경 박스 (가독성 대폭 향상)
+    "background_enabled": True,          # ★ 반투명 배경 박스
+    "background_color": "#000000",       # 검정 배경
+    "background_opacity": 0.6,           # 60% 투명도
+    "border_style": 4,                   # ASS: 4=배경박스+테두리
+
     # 애니메이션
-    "fade_in": 0.1,                      # 페이드인 (초)
-    "fade_out": 0.1,                     # 페이드아웃 (초)
+    "fade_in": 0.05,                     # 빠른 페이드인 (0.1→0.05)
+    "fade_out": 0.05,                    # 빠른 페이드아웃
 
     # 한 줄 최대 글자 수 (자동 줄바꿈)
-    "max_chars_per_line": 12,            # 세로 화면이라 짧게
+    "max_chars_per_line": 14,            # ★ 약간 늘림 (12→14)
 }
 
 # 강조 자막 스타일 (훅, 핵심 문장용)
 SHORTS_EMPHASIS_STYLE = {
-    "font_size": 56,                     # 더 큰 글씨
+    "font_size": 68,                     # ★ 더 크게 (56→68)
     "font_color": "#FFFF00",             # 노란색
     "outline_color": "#FF0000",          # 빨간 테두리
-    "outline_width": 4,
+    "outline_width": 5,                  # ★ 더 두껍게 (4→5)
     "position": "center",                # 중앙 배치
+    "alignment": 5,                      # ASS 중앙
     "scale_effect": True,                # 확대 효과
+    "background_enabled": True,          # 배경 박스
 }
 
 # 이슈 타입별 자막 강조 색상
