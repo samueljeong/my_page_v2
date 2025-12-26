@@ -92,6 +92,15 @@ class AudioAgent(BaseAgent):
             context.tts_result = result
             context.subtitles = result.get("subtitles", [])
 
+            # ★ scenes에 audio_url, duration, subtitles 반영 (영상 생성에 필요)
+            scene_metadata = result.get("scene_metadata", [])
+            for sm in scene_metadata:
+                idx = sm.get("scene_idx", -1)
+                if 0 <= idx < len(context.scenes):
+                    context.scenes[idx]["audio_url"] = sm.get("audio_url")
+                    context.scenes[idx]["duration"] = sm.get("duration", 5)
+                    context.scenes[idx]["subtitles"] = sm.get("subtitles", [])
+
             duration = time.time() - start_time
             cost = result.get("cost", 0.0)
             context.add_cost("audio", cost)
