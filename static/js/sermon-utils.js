@@ -105,24 +105,49 @@ function showStep3Overlay() {
   // 기존 오버레이 제거
   hideStep3Overlay();
 
-  const dualRow = document.querySelector('.dual-row');
-  if (!dualRow) return;
+  // Step3 버튼 비활성화 (중복 클릭 방지)
+  const btnGptPro = document.getElementById('btn-gpt-pro');
+  if (btnGptPro) {
+    btnGptPro.disabled = true;
+    btnGptPro.style.opacity = '0.6';
+    btnGptPro.style.cursor = 'not-allowed';
+    btnGptPro.textContent = '생성 중...';
+  }
 
+  // 전체 화면 오버레이 (body에 추가)
   const overlay = document.createElement('div');
   overlay.className = 'step3-loading-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  `;
   overlay.innerHTML = `
-    <div class="step3-loading-content">
-      <div class="step3-loading-title">설교문 생성 중</div>
-      <div class="step3-loading-subtitle">AI가 정성껏 설교문을 작성하고 있습니다</div>
-      <div class="step3-loading-dots">
-        <span></span>
-        <span></span>
-        <span></span>
+    <div class="step3-loading-content" style="text-align: center; color: white;">
+      <div class="step3-loading-title" style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;">설교문 생성 중</div>
+      <div class="step3-loading-subtitle" style="font-size: 1rem; margin-bottom: 1.5rem;">AI가 정성껏 설교문을 작성하고 있습니다</div>
+      <div class="step3-loading-dots" style="display: flex; justify-content: center; gap: 0.5rem;">
+        <span style="width: 12px; height: 12px; background: white; border-radius: 50%; animation: pulse 1.4s infinite ease-in-out both; animation-delay: 0s;"></span>
+        <span style="width: 12px; height: 12px; background: white; border-radius: 50%; animation: pulse 1.4s infinite ease-in-out both; animation-delay: 0.2s;"></span>
+        <span style="width: 12px; height: 12px; background: white; border-radius: 50%; animation: pulse 1.4s infinite ease-in-out both; animation-delay: 0.4s;"></span>
       </div>
+      <style>
+        @keyframes pulse {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+      </style>
     </div>
   `;
 
-  dualRow.appendChild(overlay);
+  document.body.appendChild(overlay);
 }
 
 // Step3 오버레이 제거
@@ -130,6 +155,15 @@ function hideStep3Overlay() {
   const overlay = document.querySelector('.step3-loading-overlay');
   if (overlay) {
     overlay.remove();
+  }
+
+  // Step3 버튼 상태 복구
+  const btnGptPro = document.getElementById('btn-gpt-pro');
+  if (btnGptPro) {
+    btnGptPro.disabled = false;
+    btnGptPro.style.opacity = '1';
+    btnGptPro.style.cursor = 'pointer';
+    btnGptPro.textContent = '설교문 작성';
   }
 }
 
