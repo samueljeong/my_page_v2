@@ -120,6 +120,8 @@ class AgentPipelineRunner:
         voice = row_data.get("음성", "") or DEFAULT_VOICE  # ★ 원본 파이프라인과 동일한 기본 음성
         # ★ 카테고리 (news/story 등) - 원본 파이프라인과 동일
         input_category = row_data.get("카테고리", "") or ""
+        # ★ 인용링크 (유튜브 설명에 포함)
+        citation_links = row_data.get("인용링크", "") or ""
 
         return VideoTaskContext(
             row_number=row_number,
@@ -134,6 +136,7 @@ class AgentPipelineRunner:
             voice=voice,
             project_suffix=selected_project,  # YouTube 프로젝트
             input_category=input_category,  # ★ 카테고리 추가
+            citation_links=citation_links,  # ★ 인용링크 추가
         )
 
     def run_sync(

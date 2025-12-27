@@ -111,6 +111,11 @@ class PublishAgent(BaseAgent):
                 description = description + hashtags_text
                 self.log(f"해시태그 {len(hashtags)}개 추가")
 
+            # ★ 인용링크 추가 (원본 파이프라인과 동일 - 시트에서 가져온 출처 링크)
+            if context.citation_links:
+                description = description + "\n\n📚 출처\n" + context.citation_links
+                self.log(f"인용링크 추가 ({len(context.citation_links)}자)")
+
             # ★ CTA 추가 (구독/좋아요 유도)
             description = self._add_cta(description, title)
 
