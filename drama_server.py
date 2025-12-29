@@ -22328,9 +22328,25 @@ def api_news_run_pipeline():
             llm_min_score=llm_min_score
         )
 
+        # ===== 히스토리 파이프라인도 함께 실행 (매일 1회) =====
+        history_result = None
+        try:
+            from scripts.history_pipeline import run_history_pipeline
+            print("[NEWS] ===== 히스토리 파이프라인 시작 =====")
+            history_result = run_history_pipeline(
+                sheet_id=sheet_id,
+                service=service,
+                force=False  # 준비 10개 미만일 때만 추가
+            )
+            print(f"[NEWS] 히스토리 파이프라인 완료: {history_result.get('episodes_added', 0)}개 에피소드 추가")
+        except Exception as hist_err:
+            print(f"[NEWS] 히스토리 파이프라인 오류 (무시): {hist_err}")
+            history_result = {"error": str(hist_err)}
+
         return jsonify({
             "ok": result["success"],
             "result": result,
+            "history": history_result,
             "sheets_setup": sheets_result
         })
 
