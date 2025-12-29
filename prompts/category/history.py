@@ -54,34 +54,41 @@ HISTORY_RULES = """
 
 ⚠️ CRITICAL: Extract {keyword} from the ACTUAL SCRIPT CONTENT!
 
-### Thumbnail Style: HISTORICAL CONCEPT ART + MASCOT (SAME STYLE AS SCENES!)
-⚠️ CRITICAL: Thumbnail MUST use the EXACT SAME style as scene images!
-⚠️ Historical setting and costume matching the era
-⚠️ SAME MASCOT CHARACTER as scenes (larger size for thumbnail visibility)
+### Thumbnail Style: HISTORICAL WEBTOON STYLE (과장된 역사 인물!)
+⚠️ CRITICAL: 역사 인물이 과장된 웹툰 표정으로 등장!
+⚠️ 마스코트 대신 시대에 맞는 역사적 인물 사용!
+⚠️ 웹툰 스타일의 극단적 감정 표현 필수!
 
-**Thumbnail Prompt Template (MUST MATCH SCENE STYLE!):**
+**Thumbnail Prompt Template (HISTORICAL WEBTOON!):**
 ```
-Historical concept art thumbnail, [MAIN SCENE DESCRIPTION],
-sepia and earth tone color palette, aged parchment texture border, vintage canvas feel,
-digital painting with visible brush strokes, dramatic cinematic lighting,
-LEFT SIDE (30% of frame): EXACT MASCOT - cute Korean scholar character with round face, circular wire-frame glasses, black traditional topknot (sangtu) hairstyle, wearing cream/beige hanbok with olive-green patterned vest, holding bamboo scroll, warm earth tone colors only, thick clean outlines, friendly expression, expressive pose pointing at or reacting to scene,
-historical scene on right side with period-accurate costumes,
-aged vintage feel, eye-catching YouTube thumbnail composition,
-NO text, NO watermark, NO labels, 16:9 aspect ratio
+Korean webtoon style illustration, [ERA] [HISTORICAL ROLE] with EXTREMELY EXAGGERATED [EMOTION] EXPRESSION,
+[SPECIFIC EXPRESSION DETAILS: wide eyes 2x larger, pupils dilated, mouth wide open/gritted teeth, eyebrows raised/furrowed],
+wearing period-accurate [ERA] costume ([COSTUME DETAILS]),
+[HISTORICAL BACKGROUND: fortress/palace/battlefield with smoke/fire/dramatic sky],
+bold black outlines, vibrant colors with sepia/earth undertones,
+dramatic [CAMERA ANGLE] shot, manga-style impact lines and emotion effects,
+sweat drops, action lines emphasizing intensity,
+eye-catching YouTube thumbnail composition,
+NO text, NO watermark, 16:9 aspect ratio
 ```
 
-**ai_prompts A/B/C templates (ALL use EXACT SAME MASCOT!):**
-- A: Wide historical scene + mascot on LEFT (30%) pointing at key element with curious expression
-- B: Battle/court scene + mascot on LEFT (30%) reacting with surprised/concerned expression
-- C: Dramatic moment + mascot on LEFT (30%) with thoughtful/contemplative expression
+**ai_prompts A/B/C templates (역사 인물 + 과장된 표정!):**
+- A: 충격/놀람 - [ERA] figure with SHOCKED expression (wide eyes, dropped jaw, sweat drops, hands on face)
+- B: 분노/결의 - [ERA] figure with INTENSE ANGRY expression (fierce eyes with fire, gritted teeth, clenched fist, veins)
+- C: 슬픔/비장 - [ERA] figure with SORROWFUL expression (tearful eyes, trembling lips, dramatic pose)
 
-⚠️ MASCOT MUST BE IDENTICAL IN ALL IMAGES:
-- Round face, circular wire-frame glasses
-- Black topknot (sangtu) on top of head
-- Cream/beige hanbok with olive-green patterned vest
-- Holding bamboo scroll or book
-- Warm earth tones ONLY (beige, cream, olive, muted gold)
-- Thick clean outlines, NOT anime style
+⚠️ 시대별 인물/의상 가이드:
+- 고조선: Bronze age warrior, fur cape, bronze helmet/sword
+- 삼국시대: Goguryeo/Baekje/Silla general, iron armor, decorative helmet
+- 고려: Goryeo official/warrior, ornate armor or court robes, gat hat
+- 조선: Joseon scholar/general, hanbok with armor or dopo robe, traditional hairstyle
+- 근대: Korean independence fighter, western-influenced clothing, determined expression
+
+⚠️ 표정 필수 요소 (클릭 유도!):
+- 눈: 평소의 2배 크기, 흰자위 보이게
+- 입: 크게 벌리거나 이 악물기
+- 눈썹: 극단적으로 올리거나 찌푸리기
+- 효과: 땀방울, 눈물, 충격선, 불꽃 반사 등
 
 ---
 
