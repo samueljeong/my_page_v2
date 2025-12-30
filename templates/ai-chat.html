@@ -511,6 +511,29 @@
       </div>
 
       <div class="setting-group">
+        <h3>🎚️ 모델 티어 설정</h3>
+        <div class="debate-settings">
+          <label>
+            <input type="checkbox" id="auto-tier" checked style="width:auto;margin-right:8px;">
+            자동 티어 (질문 복잡도에 따라 모델 자동 선택)
+          </label>
+
+          <label>수동 티어 선택</label>
+          <select id="force-tier">
+            <option value="">자동</option>
+            <option value="1">Tier 1 - 간단 (gpt-4o-mini, gemini-flash)</option>
+            <option value="2">Tier 2 - 중간 (gpt-4o, gemini-flash)</option>
+            <option value="3">Tier 3 - 복잡 (gpt-4o, gemini-pro)</option>
+          </select>
+
+          <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;font-size:0.75rem;color:var(--text-muted);">
+            💡 자동 티어: 질문이 복잡하면 자동으로 상위 모델 사용<br>
+            💡 응답 불충분 시 상위 티어로 자동 재시도
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
         <h3>🔄 토론 설정</h3>
         <div class="debate-settings">
           <label>토론 라운드 수</label>
@@ -665,12 +688,27 @@
         debateRounds: parseInt(document.getElementById('debate-rounds').value),
         debateStyle: document.getElementById('debate-style').value,
         summarizer: document.getElementById('debate-summarizer').value,
-        includeContext: document.getElementById('includeContext').checked
+        includeContext: document.getElementById('includeContext').checked,
+        autoTier: document.getElementById('auto-tier').checked,
+        forceTier: document.getElementById('force-tier').value || null
       };
     }
 
+    // Tier badge colors
+    const tierColors = {
+      1: '#22c55e',  // green - 간단
+      2: '#f59e0b',  // amber - 중간
+      3: '#ef4444'   // red - 복잡
+    };
+
+    const tierLabels = {
+      1: 'T1 간단',
+      2: 'T2 중간',
+      3: 'T3 복잡'
+    };
+
     // Add message to UI
-    function addMessage(sender, content, modelId = null) {
+    function addMessage(sender, content, modelId = null, tier = null, escalated = false, modelUsed = null) {
       const msgDiv = document.createElement('div');
       msgDiv.className = `message ${sender === 'user' ? 'user' : 'ai'} ${modelId || ''}`;
 
@@ -680,11 +718,34 @@
         llama: '#7c3aed'
       };
 
+      // 티어 뱃지 HTML
+      let tierBadge = '';
+      if (tier && sender !== 'user') {
+        const badgeColor = tierColors[tier] || '#64748b';
+        tierBadge = `<span style="
+          display:inline-block;
+          padding:2px 6px;
+          background:${badgeColor};
+          color:white;
+          border-radius:4px;
+          font-size:0.65rem;
+          margin-left:6px;
+        ">${tierLabels[tier] || 'T' + tier}${escalated ? ' ⬆️' : ''}</span>`;
+      }
+
+      // 실제 사용된 모델 표시
+      let modelInfo = '';
+      if (modelUsed && sender !== 'user') {
+        modelInfo = `<span style="font-size:0.65rem;color:var(--text-muted);margin-left:6px;">(${modelUsed})</span>`;
+      }
+
       msgDiv.innerHTML = `
         ${sender !== 'user' ? `
           <div class="message-header">
             ${modelId ? `<div class="model-icon ${modelId}" style="width:20px;height:20px;font-size:0.6rem;">${modelId[0].toUpperCase()}</div>` : ''}
             <span class="message-sender">${sender}</span>
+            ${tierBadge}
+            ${modelInfo}
           </div>
         ` : ''}
         <div class="message-content">${formatMessage(content)}</div>
@@ -693,7 +754,7 @@
       chatMessages.appendChild(msgDiv);
       chatMessages.scrollTop = chatMessages.scrollHeight;
 
-      messages.push({ sender, content, modelId, timestamp: new Date().toISOString() });
+      messages.push({ sender, content, modelId, tier, timestamp: new Date().toISOString() });
     }
 
     // Format message (basic markdown)
@@ -763,7 +824,9 @@
                 message: content,
                 model: model.id,
                 role: model.role,
-                context: settings.includeContext ? messages.slice(-10) : []
+                context: settings.includeContext ? messages.slice(-10) : [],
+                autoTier: settings.autoTier,
+                forceTier: settings.forceTier
               })
             });
 
@@ -771,7 +834,11 @@
             hideTyping();
 
             if (data.ok) {
-              addMessage(model.name, data.response, model.id);
+              // 에스컬레이션 알림
+              if (data.escalated) {
+                showToast(`⬆️ ${model.name}: 상위 티어로 자동 전환됨`);
+              }
+              addMessage(model.name, data.response, model.id, data.tier, data.escalated, data.modelUsed);
             } else {
               addMessage(model.name, `오류: ${data.error}`, model.id);
             }
@@ -806,7 +873,8 @@
             models: models.map(m => ({ id: m.id, role: m.role })),
             rounds: settings.debateRounds,
             style: settings.debateStyle,
-            summarizer: settings.summarizer
+            summarizer: settings.summarizer,
+            autoTier: settings.autoTier
           })
         });
 
@@ -825,14 +893,17 @@
               try {
                 const data = JSON.parse(line.slice(6));
 
-                if (data.type === 'thinking') {
-                  showTyping(data.model);
+                if (data.type === 'tier_info') {
+                  // 토론 시작 시 티어 정보 표시
+                  addMessage('System', `🎚️ 자동 티어: ${tierLabels[data.tier] || 'Tier ' + data.tier} (${data.description})`);
+                } else if (data.type === 'thinking') {
+                  showTyping(data.model + (data.actualModel ? ` [${data.actualModel}]` : ''));
                 } else if (data.type === 'response') {
                   hideTyping();
-                  addMessage(data.model, data.content, data.modelId);
+                  addMessage(data.model, data.content, data.modelId, data.tier);
                 } else if (data.type === 'summary') {
                   hideTyping();
-                  addMessage('📋 최종 결론', data.content, data.modelId);
+                  addMessage('📋 최종 결론', data.content, data.modelId, data.tier);
                 } else if (data.type === 'done') {
                   addMessage('System', '✅ 토론 완료!');
                 }

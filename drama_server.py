@@ -25059,6 +25059,132 @@ def api_shorts_agent_status():
 CONVERSATIONS_DIR = os.path.join(os.path.dirname(__file__), 'conversations')
 os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
 
+# 모델 티어 시스템
+MODEL_TIERS = {
+    1: {  # 간단한 질문
+        'gemini': 'gemini-1.5-flash',
+        'gpt': 'gpt-4o-mini',
+        'llama': 'llama-3.3-70b-versatile',
+        'description': '간단한 질문, 기본 정보'
+    },
+    2: {  # 중간 복잡도
+        'gemini': 'gemini-1.5-flash',  # Flash도 꽤 강력
+        'gpt': 'gpt-4o',
+        'llama': 'llama-3.3-70b-versatile',
+        'description': '분석 필요, 여러 단계'
+    },
+    3: {  # 복잡한 질문
+        'gemini': 'gemini-1.5-pro',
+        'gpt': 'gpt-4o',
+        'llama': 'llama-3.3-70b-versatile',
+        'description': '전문 지식, 아키텍처, 복잡한 분석'
+    }
+}
+
+
+def analyze_complexity(message: str) -> int:
+    """
+    질문의 복잡도를 분석하여 티어 반환 (1, 2, 3)
+
+    Tier 1: 간단한 질문 (정의, 기본 문법, 짧은 답변)
+    Tier 2: 중간 복잡도 (비교, 분석, 여러 단계 설명)
+    Tier 3: 복잡한 질문 (아키텍처, 설계, 전문 분석, 토론)
+    """
+    message_lower = message.lower()
+
+    # 복잡도 점수 계산
+    score = 0
+
+    # 길이 기반 (긴 질문은 보통 복잡)
+    if len(message) > 500:
+        score += 2
+    elif len(message) > 200:
+        score += 1
+
+    # 복잡한 주제 키워드
+    complex_keywords = [
+        '아키텍처', 'architecture', '설계', 'design pattern', '마이크로서비스',
+        '최적화', 'optimization', '성능', 'performance', '확장성', 'scalability',
+        '보안', 'security', '암호화', 'encryption', '인증', 'authentication',
+        '분산', 'distributed', '동시성', 'concurrency', '트랜잭션', 'transaction',
+        '비교해', '분석해', '장단점', 'trade-off', '트레이드오프',
+        '전략', 'strategy', '로드맵', 'roadmap', '마이그레이션', 'migration',
+        '리팩토링', 'refactoring', '테스트 전략', 'ci/cd', 'devops',
+        '머신러닝', 'machine learning', 'ai', '딥러닝', 'deep learning',
+        '왜', '어떻게 하면', '최선의 방법', 'best practice'
+    ]
+
+    for keyword in complex_keywords:
+        if keyword in message_lower:
+            score += 2
+
+    # 중간 복잡도 키워드
+    medium_keywords = [
+        '차이', 'difference', '비교', 'compare', '설명해', 'explain',
+        '어떻게', 'how to', '방법', 'method', '구현', 'implement',
+        '예제', 'example', '코드', 'code', '함수', 'function',
+        '왜', 'why', '이유', 'reason', '원리', 'principle'
+    ]
+
+    for keyword in medium_keywords:
+        if keyword in message_lower:
+            score += 1
+
+    # 간단한 질문 패턴
+    simple_patterns = [
+        '뭐야', '뭐예요', 'what is', '정의', 'definition',
+        '어디', 'where', '언제', 'when', '누구', 'who',
+        '있어?', '있나요?', '됐어', '됐나요', '해줘', '알려줘'
+    ]
+
+    for pattern in simple_patterns:
+        if pattern in message_lower:
+            score -= 1
+
+    # 질문에 여러 하위 질문이 있는 경우
+    question_marks = message.count('?')
+    if question_marks >= 3:
+        score += 2
+    elif question_marks >= 2:
+        score += 1
+
+    # 숫자나 구체적 수치가 포함된 경우 (구체적인 시나리오)
+    import re
+    if re.search(r'\d+\s*(만|천|백|gb|mb|tps|qps|users|유저|건|원)', message_lower):
+        score += 1
+
+    # 점수를 티어로 변환
+    if score <= 1:
+        return 1
+    elif score <= 4:
+        return 2
+    else:
+        return 3
+
+
+def check_response_quality(response: str) -> bool:
+    """응답 품질 체크 - 불충분하면 False 반환"""
+    # 오류 응답
+    if response.startswith('[오류]') or response.startswith('[Gemini 오류]') or response.startswith('[GPT 오류]'):
+        return False
+
+    # 너무 짧은 응답
+    if len(response) < 50:
+        return False
+
+    # "모르겠습니다" 류의 응답
+    uncertain_phrases = [
+        '잘 모르겠', '확실하지 않', '정확히 알 수 없',
+        '제 능력 밖', '답변하기 어려', '정보가 부족',
+        "i don't know", "i'm not sure", "cannot answer"
+    ]
+    response_lower = response.lower()
+    for phrase in uncertain_phrases:
+        if phrase in response_lower:
+            return False
+
+    return True
+
 
 @app.route('/ai-chat')
 def ai_chat_page():
@@ -25066,8 +25192,8 @@ def ai_chat_page():
     return render_template('ai-chat.html')
 
 
-def call_gemini_api(message: str, role: str, context: list) -> str:
-    """Gemini API 호출"""
+def call_gemini_api(message: str, role: str, context: list, tier: int = 1) -> str:
+    """Gemini API 호출 (티어 기반 모델 선택)"""
     api_key = os.getenv("GOOGLE_API_KEY", "")
     if not api_key:
         return "[오류] GOOGLE_API_KEY가 설정되지 않았습니다."
@@ -25076,7 +25202,9 @@ def call_gemini_api(message: str, role: str, context: list) -> str:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # 티어에 따른 모델 선택
+        model_name = MODEL_TIERS.get(tier, MODEL_TIERS[1])['gemini']
+        model = genai.GenerativeModel(model_name)
 
         # 컨텍스트 구성
         context_text = ""
@@ -25100,8 +25228,8 @@ def call_gemini_api(message: str, role: str, context: list) -> str:
         return f"[Gemini 오류] {str(e)}"
 
 
-def call_gpt_api(message: str, role: str, context: list) -> str:
-    """GPT API 호출"""
+def call_gpt_api(message: str, role: str, context: list, tier: int = 1) -> str:
+    """GPT API 호출 (티어 기반 모델 선택)"""
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         return "[오류] OPENAI_API_KEY가 설정되지 않았습니다."
@@ -25109,6 +25237,9 @@ def call_gpt_api(message: str, role: str, context: list) -> str:
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+
+        # 티어에 따른 모델 선택
+        model_name = MODEL_TIERS.get(tier, MODEL_TIERS[1])['gpt']
 
         messages = [
             {"role": "system", "content": f"당신의 역할: {role}. 한국어로 답변하세요."}
@@ -25123,9 +25254,9 @@ def call_gpt_api(message: str, role: str, context: list) -> str:
         messages.append({"role": "user", "content": message})
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             messages=messages,
-            max_tokens=1000,
+            max_tokens=2000 if tier >= 2 else 1000,
             temperature=0.7
         )
 
@@ -25135,14 +25266,17 @@ def call_gpt_api(message: str, role: str, context: list) -> str:
         return f"[GPT 오류] {str(e)}"
 
 
-def call_groq_api(message: str, role: str, context: list) -> str:
-    """Groq API 호출 (Llama)"""
+def call_groq_api(message: str, role: str, context: list, tier: int = 1) -> str:
+    """Groq API 호출 (Llama) - 티어 기반"""
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
         return "[오류] GROQ_API_KEY가 설정되지 않았습니다. https://console.groq.com 에서 무료로 발급받으세요."
 
     try:
         import requests
+
+        # 티어에 따른 모델 선택 (Llama는 현재 동일 모델)
+        model_name = MODEL_TIERS.get(tier, MODEL_TIERS[1])['llama']
 
         messages = [
             {"role": "system", "content": f"당신의 역할: {role}. 한국어로 답변하세요."}
@@ -25162,9 +25296,9 @@ def call_groq_api(message: str, role: str, context: list) -> str:
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": model_name,
                 "messages": messages,
-                "max_tokens": 1000,
+                "max_tokens": 2000 if tier >= 2 else 1000,
                 "temperature": 0.7
             },
             timeout=60
@@ -25179,30 +25313,88 @@ def call_groq_api(message: str, role: str, context: list) -> str:
         return f"[Groq 오류] {str(e)}"
 
 
+def call_ai_with_escalation(message: str, model_id: str, role: str, context: list, auto_tier: bool = True) -> tuple:
+    """
+    AI 호출 + 자동 에스컬레이션
+
+    Returns: (response, used_tier, escalated)
+    """
+    # 자동 티어 분석
+    if auto_tier:
+        tier = analyze_complexity(message)
+    else:
+        tier = 1
+
+    # 첫 시도
+    if model_id == 'gemini':
+        response = call_gemini_api(message, role, context, tier)
+    elif model_id == 'gpt':
+        response = call_gpt_api(message, role, context, tier)
+    elif model_id == 'llama':
+        response = call_groq_api(message, role, context, tier)
+    else:
+        return (f"[알 수 없는 모델: {model_id}]", tier, False)
+
+    # 품질 체크 및 에스컬레이션
+    if not check_response_quality(response) and tier < 3:
+        # 상위 티어로 재시도
+        higher_tier = tier + 1
+        if model_id == 'gemini':
+            response = call_gemini_api(message, role, context, higher_tier)
+        elif model_id == 'gpt':
+            response = call_gpt_api(message, role, context, higher_tier)
+        elif model_id == 'llama':
+            response = call_groq_api(message, role, context, higher_tier)
+        return (response, higher_tier, True)
+
+    return (response, tier, False)
+
+
 @app.route('/api/ai-chat/send', methods=['POST'])
 def api_ai_chat_send():
-    """단일 AI 모델에 메시지 전송"""
+    """단일 AI 모델에 메시지 전송 (자동 티어 시스템)"""
     try:
         data = request.get_json()
         message = data.get('message', '')
         model = data.get('model', 'gemini')
         role = data.get('role', '도움이 되는 AI 어시스턴트')
         context = data.get('context', [])
+        auto_tier = data.get('autoTier', True)  # 자동 티어 활성화 (기본: True)
+        force_tier = data.get('forceTier', None)  # 강제 티어 지정
 
         if not message:
             return jsonify({"ok": False, "error": "메시지가 비어있습니다."})
 
-        # 모델별 API 호출
-        if model == 'gemini':
-            response = call_gemini_api(message, role, context)
-        elif model == 'gpt':
-            response = call_gpt_api(message, role, context)
-        elif model == 'llama':
-            response = call_groq_api(message, role, context)
+        # 강제 티어가 지정된 경우
+        if force_tier:
+            tier = int(force_tier)
+            if model == 'gemini':
+                response = call_gemini_api(message, role, context, tier)
+            elif model == 'gpt':
+                response = call_gpt_api(message, role, context, tier)
+            elif model == 'llama':
+                response = call_groq_api(message, role, context, tier)
+            else:
+                return jsonify({"ok": False, "error": f"알 수 없는 모델: {model}"})
+            escalated = False
         else:
-            return jsonify({"ok": False, "error": f"알 수 없는 모델: {model}"})
+            # 자동 티어 + 에스컬레이션
+            response, tier, escalated = call_ai_with_escalation(
+                message, model, role, context, auto_tier
+            )
 
-        return jsonify({"ok": True, "response": response, "model": model})
+        # 사용된 모델 정보
+        model_used = MODEL_TIERS.get(tier, MODEL_TIERS[1]).get(model, 'unknown')
+
+        return jsonify({
+            "ok": True,
+            "response": response,
+            "model": model,
+            "tier": tier,
+            "tierDescription": MODEL_TIERS.get(tier, {}).get('description', ''),
+            "modelUsed": model_used,
+            "escalated": escalated
+        })
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -25210,18 +25402,36 @@ def api_ai_chat_send():
 
 @app.route('/api/ai-chat/debate', methods=['POST'])
 def api_ai_chat_debate():
-    """AI 토론 진행 (SSE 스트리밍)"""
+    """AI 토론 진행 (SSE 스트리밍) - 자동 티어 시스템 적용"""
     data = request.get_json()
     problem = data.get('problem', '')
     models = data.get('models', [])
     rounds = data.get('rounds', 3)
     style = data.get('style', 'collaborative')
     summarizer = data.get('summarizer', 'gemini')
+    auto_tier = data.get('autoTier', True)
 
     def generate():
         try:
             context = []
             context.append({"sender": "user", "content": problem})
+
+            # 토론은 보통 복잡한 주제 → 자동 티어 분석 (최소 Tier 2)
+            if auto_tier:
+                base_tier = analyze_complexity(problem)
+                tier = max(base_tier, 2)  # 토론은 최소 Tier 2
+            else:
+                tier = 2
+
+            # 티어에 따른 모델명 매핑
+            tier_model_names = {
+                1: {'gemini': 'Gemini Flash', 'gpt': 'GPT-4o-mini', 'llama': 'Llama 3.3'},
+                2: {'gemini': 'Gemini Flash', 'gpt': 'GPT-4o', 'llama': 'Llama 3.3'},
+                3: {'gemini': 'Gemini Pro', 'gpt': 'GPT-4o', 'llama': 'Llama 3.3'}
+            }
+
+            # 티어 정보 전송
+            yield f"data: {json.dumps({'type': 'tier_info', 'tier': tier, 'description': MODEL_TIERS.get(tier, {}).get('description', '')})}\n\n"
 
             style_instructions = {
                 'collaborative': "다른 AI의 의견을 존중하고 보완하면서 합의점을 찾으세요.",
@@ -25234,10 +25444,12 @@ def api_ai_chat_debate():
                     model_id = model_info.get('id')
                     model_role = model_info.get('role', 'AI 토론 참가자')
 
-                    # Thinking 이벤트
-                    model_names = {'gemini': 'Gemini Flash', 'gpt': 'GPT-4o-mini', 'llama': 'Llama 3.3'}
+                    # 티어에 따른 모델명
+                    model_names = tier_model_names.get(tier, tier_model_names[2])
                     model_name = model_names.get(model_id, model_id)
-                    yield f"data: {json.dumps({'type': 'thinking', 'model': model_name})}\n\n"
+                    actual_model = MODEL_TIERS.get(tier, MODEL_TIERS[2]).get(model_id, '')
+
+                    yield f"data: {json.dumps({'type': 'thinking', 'model': model_name, 'actualModel': actual_model})}\n\n"
 
                     # 토론 프롬프트 구성
                     debate_prompt = f"""[토론 문제]
@@ -25259,19 +25471,19 @@ def api_ai_chat_debate():
 
                     debate_prompt += "\n위 내용을 바탕으로 당신의 의견을 제시하세요."
 
-                    # API 호출
+                    # API 호출 (티어 적용)
                     if model_id == 'gemini':
-                        response = call_gemini_api(debate_prompt, model_role, [])
+                        response = call_gemini_api(debate_prompt, model_role, [], tier)
                     elif model_id == 'gpt':
-                        response = call_gpt_api(debate_prompt, model_role, [])
+                        response = call_gpt_api(debate_prompt, model_role, [], tier)
                     elif model_id == 'llama':
-                        response = call_groq_api(debate_prompt, model_role, [])
+                        response = call_groq_api(debate_prompt, model_role, [], tier)
                     else:
                         response = f"[알 수 없는 모델: {model_id}]"
 
                     context.append({"sender": model_name, "content": response, "modelId": model_id})
 
-                    yield f"data: {json.dumps({'type': 'response', 'model': model_name, 'modelId': model_id, 'content': response})}\n\n"
+                    yield f"data: {json.dumps({'type': 'response', 'model': model_name, 'modelId': model_id, 'content': response, 'tier': tier})}\n\n"
 
             # 최종 정리
             summary_model = summarizer
@@ -25294,11 +25506,11 @@ def api_ai_chat_debate():
 4. 다음 단계 제안"""
 
             if summary_model == 'gemini':
-                summary = call_gemini_api(summary_prompt, "토론 정리자", [])
+                summary = call_gemini_api(summary_prompt, "토론 정리자", [], tier)
             elif summary_model == 'gpt':
-                summary = call_gpt_api(summary_prompt, "토론 정리자", [])
+                summary = call_gpt_api(summary_prompt, "토론 정리자", [], tier)
             else:
-                summary = call_groq_api(summary_prompt, "토론 정리자", [])
+                summary = call_groq_api(summary_prompt, "토론 정리자", [], tier)
 
             yield f"data: {json.dumps({'type': 'summary', 'model': summary_name, 'modelId': summary_model, 'content': summary})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
