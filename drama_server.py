@@ -25054,6 +25054,434 @@ def api_shorts_agent_status():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ===== AI Multi-Chat API =====
+# conversations 폴더 생성
+CONVERSATIONS_DIR = os.path.join(os.path.dirname(__file__), 'conversations')
+os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+
+
+@app.route('/ai-chat')
+def ai_chat_page():
+    """AI Multi-Chat 페이지 렌더링"""
+    return render_template('ai-chat.html')
+
+
+def call_gemini_api(message: str, role: str, context: list) -> str:
+    """Gemini API 호출"""
+    api_key = os.getenv("GOOGLE_API_KEY", "")
+    if not api_key:
+        return "[오류] GOOGLE_API_KEY가 설정되지 않았습니다."
+
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # 컨텍스트 구성
+        context_text = ""
+        if context:
+            context_text = "\n\n[이전 대화]\n"
+            for msg in context[-5:]:
+                context_text += f"{msg.get('sender', 'Unknown')}: {msg.get('content', '')}\n"
+
+        prompt = f"""당신의 역할: {role}
+
+{context_text}
+
+사용자: {message}
+
+위 내용에 대해 당신의 역할에 맞게 답변해주세요. 한국어로 답변하세요."""
+
+        response = model.generate_content(prompt)
+        return response.text
+
+    except Exception as e:
+        return f"[Gemini 오류] {str(e)}"
+
+
+def call_gpt_api(message: str, role: str, context: list) -> str:
+    """GPT API 호출"""
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        return "[오류] OPENAI_API_KEY가 설정되지 않았습니다."
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        messages = [
+            {"role": "system", "content": f"당신의 역할: {role}. 한국어로 답변하세요."}
+        ]
+
+        # 컨텍스트 추가
+        if context:
+            for msg in context[-5:]:
+                role_type = "user" if msg.get('sender') == 'user' else "assistant"
+                messages.append({"role": role_type, "content": msg.get('content', '')})
+
+        messages.append({"role": "user", "content": message})
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=1000,
+            temperature=0.7
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"[GPT 오류] {str(e)}"
+
+
+def call_groq_api(message: str, role: str, context: list) -> str:
+    """Groq API 호출 (Llama)"""
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        return "[오류] GROQ_API_KEY가 설정되지 않았습니다. https://console.groq.com 에서 무료로 발급받으세요."
+
+    try:
+        import requests
+
+        messages = [
+            {"role": "system", "content": f"당신의 역할: {role}. 한국어로 답변하세요."}
+        ]
+
+        if context:
+            for msg in context[-5:]:
+                role_type = "user" if msg.get('sender') == 'user' else "assistant"
+                messages.append({"role": role_type, "content": msg.get('content', '')})
+
+        messages.append({"role": "user", "content": message})
+
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": messages,
+                "max_tokens": 1000,
+                "temperature": 0.7
+            },
+            timeout=60
+        )
+
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"]
+        else:
+            return f"[Groq 오류] {response.status_code}: {response.text}"
+
+    except Exception as e:
+        return f"[Groq 오류] {str(e)}"
+
+
+@app.route('/api/ai-chat/send', methods=['POST'])
+def api_ai_chat_send():
+    """단일 AI 모델에 메시지 전송"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        model = data.get('model', 'gemini')
+        role = data.get('role', '도움이 되는 AI 어시스턴트')
+        context = data.get('context', [])
+
+        if not message:
+            return jsonify({"ok": False, "error": "메시지가 비어있습니다."})
+
+        # 모델별 API 호출
+        if model == 'gemini':
+            response = call_gemini_api(message, role, context)
+        elif model == 'gpt':
+            response = call_gpt_api(message, role, context)
+        elif model == 'llama':
+            response = call_groq_api(message, role, context)
+        else:
+            return jsonify({"ok": False, "error": f"알 수 없는 모델: {model}"})
+
+        return jsonify({"ok": True, "response": response, "model": model})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/ai-chat/debate', methods=['POST'])
+def api_ai_chat_debate():
+    """AI 토론 진행 (SSE 스트리밍)"""
+    data = request.get_json()
+    problem = data.get('problem', '')
+    models = data.get('models', [])
+    rounds = data.get('rounds', 3)
+    style = data.get('style', 'collaborative')
+    summarizer = data.get('summarizer', 'gemini')
+
+    def generate():
+        try:
+            context = []
+            context.append({"sender": "user", "content": problem})
+
+            style_instructions = {
+                'collaborative': "다른 AI의 의견을 존중하고 보완하면서 합의점을 찾으세요.",
+                'debate': "다른 AI의 의견에 건설적으로 반박하고 대안을 제시하세요.",
+                'brainstorm': "자유롭게 아이디어를 제안하고 확장하세요."
+            }
+
+            for round_num in range(rounds):
+                for model_info in models:
+                    model_id = model_info.get('id')
+                    model_role = model_info.get('role', 'AI 토론 참가자')
+
+                    # Thinking 이벤트
+                    model_names = {'gemini': 'Gemini Flash', 'gpt': 'GPT-4o-mini', 'llama': 'Llama 3.3'}
+                    model_name = model_names.get(model_id, model_id)
+                    yield f"data: {json.dumps({'type': 'thinking', 'model': model_name})}\n\n"
+
+                    # 토론 프롬프트 구성
+                    debate_prompt = f"""[토론 문제]
+{problem}
+
+[당신의 역할]
+{model_role}
+
+[토론 스타일]
+{style_instructions.get(style, '')}
+
+[현재 라운드]
+{round_num + 1}/{rounds}
+
+[이전 토론 내용]
+"""
+                    for msg in context[1:]:  # 첫 번째는 문제
+                        debate_prompt += f"{msg.get('sender')}: {msg.get('content')}\n\n"
+
+                    debate_prompt += "\n위 내용을 바탕으로 당신의 의견을 제시하세요."
+
+                    # API 호출
+                    if model_id == 'gemini':
+                        response = call_gemini_api(debate_prompt, model_role, [])
+                    elif model_id == 'gpt':
+                        response = call_gpt_api(debate_prompt, model_role, [])
+                    elif model_id == 'llama':
+                        response = call_groq_api(debate_prompt, model_role, [])
+                    else:
+                        response = f"[알 수 없는 모델: {model_id}]"
+
+                    context.append({"sender": model_name, "content": response, "modelId": model_id})
+
+                    yield f"data: {json.dumps({'type': 'response', 'model': model_name, 'modelId': model_id, 'content': response})}\n\n"
+
+            # 최종 정리
+            summary_model = summarizer
+            summary_name = model_names.get(summary_model, summary_model)
+            yield f"data: {json.dumps({'type': 'thinking', 'model': f'{summary_name} (정리 중)'})}\n\n"
+
+            summary_prompt = f"""[토론 문제]
+{problem}
+
+[토론 내용]
+"""
+            for msg in context[1:]:
+                summary_prompt += f"{msg.get('sender')}: {msg.get('content')}\n\n"
+
+            summary_prompt += """
+위 토론 내용을 바탕으로 최종 결론을 정리해주세요:
+1. 합의된 사항
+2. 추가 검토 필요 사항
+3. 구현 시 주의점
+4. 다음 단계 제안"""
+
+            if summary_model == 'gemini':
+                summary = call_gemini_api(summary_prompt, "토론 정리자", [])
+            elif summary_model == 'gpt':
+                summary = call_gpt_api(summary_prompt, "토론 정리자", [])
+            else:
+                summary = call_groq_api(summary_prompt, "토론 정리자", [])
+
+            yield f"data: {json.dumps({'type': 'summary', 'model': summary_name, 'modelId': summary_model, 'content': summary})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route('/api/ai-chat/save', methods=['POST'])
+def api_ai_chat_save():
+    """대화 내용을 MD 파일로 저장"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId', f'conv_{int(dt.now().timestamp())}')
+        messages = data.get('messages', [])
+        settings = data.get('settings', {})
+        models = data.get('models', [])
+
+        if not messages:
+            return jsonify({"ok": False, "error": "저장할 대화가 없습니다."})
+
+        # 제목 추출 (첫 번째 사용자 메시지)
+        title = "제목 없음"
+        for msg in messages:
+            if msg.get('sender') == 'user':
+                title = msg.get('content', '')[:50]
+                if len(msg.get('content', '')) > 50:
+                    title += "..."
+                break
+
+        # MD 파일 생성
+        now = dt.now()
+        filename = f"{now.strftime('%Y%m%d_%H%M%S')}_{conversation_id}.md"
+        filepath = os.path.join(CONVERSATIONS_DIR, filename)
+
+        md_content = f"""# {title}
+
+**생성 시간**: {now.strftime('%Y-%m-%d %H:%M:%S')}
+**참여 모델**: {', '.join([m.get('name', m.get('id', '')) for m in models])}
+**토론 모드**: {'예' if settings.get('debateMode') else '아니오'}
+
+---
+
+## 대화 내용
+
+"""
+        for msg in messages:
+            sender = msg.get('sender', 'Unknown')
+            content = msg.get('content', '')
+            model_id = msg.get('modelId', '')
+
+            if sender == 'user':
+                md_content += f"### 👤 사용자\n\n{content}\n\n"
+            elif sender == 'System':
+                md_content += f"### ⚙️ 시스템\n\n{content}\n\n"
+            else:
+                icon = {'gemini': '🔵', 'gpt': '🟢', 'llama': '🟣'}.get(model_id, '🤖')
+                md_content += f"### {icon} {sender}\n\n{content}\n\n"
+
+        md_content += """---
+
+## Claude Code 구현 요청
+
+위 대화 내용을 바탕으로 구현이 필요한 경우, 아래 내용을 Claude Code에 전달하세요:
+
+```
+conversations 폴더의 """ + filename + """ 파일을 확인하고 구현해줘.
+```
+"""
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "path": filepath
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/ai-chat/history', methods=['GET'])
+def api_ai_chat_history():
+    """저장된 대화 목록 조회"""
+    try:
+        conversations = []
+
+        for filename in sorted(os.listdir(CONVERSATIONS_DIR), reverse=True):
+            if filename.endswith('.md'):
+                filepath = os.path.join(CONVERSATIONS_DIR, filename)
+
+                # 파일에서 제목 추출
+                title = "제목 없음"
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    first_line = f.readline().strip()
+                    if first_line.startswith('# '):
+                        title = first_line[2:]
+
+                # 파일명에서 날짜 추출
+                parts = filename.split('_')
+                if len(parts) >= 2:
+                    date_str = parts[0]
+                    try:
+                        date = dt.strptime(date_str, '%Y%m%d').strftime('%Y-%m-%d')
+                    except:
+                        date = "알 수 없음"
+                else:
+                    date = "알 수 없음"
+
+                conversations.append({
+                    "id": filename.replace('.md', ''),
+                    "title": title,
+                    "date": date,
+                    "filename": filename
+                })
+
+        return jsonify({"ok": True, "conversations": conversations[:20]})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "conversations": []})
+
+
+@app.route('/api/ai-chat/conversation/<conversation_id>', methods=['GET'])
+def api_ai_chat_get_conversation(conversation_id):
+    """특정 대화 불러오기"""
+    try:
+        filename = f"{conversation_id}.md"
+        filepath = os.path.join(CONVERSATIONS_DIR, filename)
+
+        if not os.path.exists(filepath):
+            return jsonify({"ok": False, "error": "대화를 찾을 수 없습니다."})
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 간단한 파싱 (실제로는 더 정교한 파싱 필요)
+        messages = []
+        current_sender = None
+        current_content = []
+
+        for line in content.split('\n'):
+            if line.startswith('### 👤 사용자'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                current_sender = 'user'
+                current_content = []
+            elif line.startswith('### ⚙️ 시스템'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                current_sender = 'System'
+                current_content = []
+            elif line.startswith('### 🔵'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                current_sender = 'Gemini Flash'
+                current_content = []
+            elif line.startswith('### 🟢'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                current_sender = 'GPT-4o-mini'
+                current_content = []
+            elif line.startswith('### 🟣'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                current_sender = 'Llama 3.3'
+                current_content = []
+            elif line.startswith('---'):
+                if current_sender:
+                    messages.append({"sender": current_sender, "content": '\n'.join(current_content).strip()})
+                break
+            else:
+                current_content.append(line)
+
+        return jsonify({"ok": True, "messages": messages})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 # ===== Fontconfig 설정 (일본어 폰트 인식용) =====
 def setup_fontconfig():
     """프로젝트 fonts 디렉토리를 fontconfig에 등록"""
