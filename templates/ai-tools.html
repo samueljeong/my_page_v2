@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Tools - Claude 보조 도구</title>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --youtube: #ff0000;
+      --image: #10b981;
+      --trend: #f59e0b;
+      --vision: #8b5cf6;
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --bg-input: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #475569;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-card);
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .header-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Main Layout */
+    .main-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 350px;
+      height: calc(100vh - 60px);
+    }
+
+    /* Tool Sidebar */
+    .tool-sidebar {
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .tool-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .tool-section h3 {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+
+    .tool-card {
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: var(--radius);
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tool-card:hover {
+      border-color: var(--border);
+    }
+
+    .tool-card.active {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .tool-card.active.youtube { border-color: var(--youtube); background: rgba(255, 0, 0, 0.1); }
+    .tool-card.active.image { border-color: var(--image); background: rgba(16, 185, 129, 0.1); }
+    .tool-card.active.trend { border-color: var(--trend); background: rgba(245, 158, 11, 0.1); }
+    .tool-card.active.vision { border-color: var(--vision); background: rgba(139, 92, 246, 0.1); }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .tool-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .tool-icon.youtube { background: var(--youtube); }
+    .tool-icon.image { background: var(--image); }
+    .tool-icon.trend { background: var(--trend); }
+    .tool-icon.vision { background: var(--vision); }
+
+    .tool-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .tool-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Work Area */
+    .work-area {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .tool-config {
+      padding: 1.5rem;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tool-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .config-group.full {
+      grid-column: 1 / -1;
+    }
+
+    .config-group label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .config-group input,
+    .config-group select,
+    .config-group textarea {
+      padding: 0.625rem 0.75rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+
+    .config-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .config-group input:focus,
+    .config-group select:focus,
+    .config-group textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .btn {
+      padding: 0.625rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-primary:disabled {
+      background: var(--bg-input);
+      cursor: not-allowed;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    /* Results Area */
+    .results-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+    }
+
+    .result-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border);
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .result-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .result-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .result-content {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .result-image {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 0.5rem;
+    }
+
+    .result-video {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-video img {
+      width: 120px;
+      height: 68px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+
+    .result-video-info {
+      flex: 1;
+    }
+
+    .result-video-title {
+      font-weight: 500;
+      font-size: 0.85rem;
+      margin-bottom: 0.25rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .result-video-channel {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn-small {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8rem;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-small:hover {
+      background: var(--border);
+    }
+
+    /* Chat Panel */
+    .chat-panel {
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .chat-message {
+      margin-bottom: 1rem;
+      max-width: 90%;
+    }
+
+    .chat-message.user {
+      margin-left: auto;
+    }
+
+    .chat-message.user .chat-bubble {
+      background: var(--primary);
+      color: white;
+    }
+
+    .chat-message.assistant .chat-bubble {
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .chat-bubble {
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .chat-sender {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .chat-input-area {
+      padding: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 0.75rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+      resize: none;
+    }
+
+    .chat-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      padding: 1rem;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 1001;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .toast.show { opacity: 1; }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+      .tool-sidebar, .chat-panel {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div>
+      <h1>🛠️ AI Tools</h1>
+      <div class="header-desc">Claude가 못하는 것을 도와주는 도구들</div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Tool Sidebar -->
+    <aside class="tool-sidebar">
+      <div class="tool-section">
+        <h3>🔍 리서치 도구</h3>
+
+        <div class="tool-card youtube" onclick="selectTool('youtube')" id="tool-youtube">
+          <div class="tool-header">
+            <div class="tool-icon youtube">▶</div>
+            <div class="tool-name">YouTube 리서처</div>
+          </div>
+          <div class="tool-desc">영상 검색, 자막 추출, 댓글 분석</div>
+        </div>
+
+        <div class="tool-card trend" onclick="selectTool('trend')" id="tool-trend">
+          <div class="tool-header">
+            <div class="tool-icon trend">📈</div>
+            <div class="tool-name">트렌드 스캐너</div>
+          </div>
+          <div class="tool-desc">실시간 뉴스, 검색어, 트렌드</div>
+        </div>
+      </div>
+
+      <div class="tool-section">
+        <h3>🎨 생성 도구</h3>
+
+        <div class="tool-card image" onclick="selectTool('image')" id="tool-image">
+          <div class="tool-header">
+            <div class="tool-icon image">🖼️</div>
+            <div class="tool-name">이미지 생성기</div>
+          </div>
+          <div class="tool-desc">Gemini Imagen으로 이미지 생성</div>
+        </div>
+      </div>
+
+      <div class="tool-section">
+        <h3>👁️ 분석 도구</h3>
+
+        <div class="tool-card vision" onclick="selectTool('vision')" id="tool-vision">
+          <div class="tool-header">
+            <div class="tool-icon vision">🔬</div>
+            <div class="tool-name">이미지 분석기</div>
+          </div>
+          <div class="tool-desc">이미지/URL 내용 분석 (Vision)</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Work Area -->
+    <main class="work-area">
+      <!-- Tool Config - YouTube -->
+      <div class="tool-config" id="config-youtube" style="display:none;">
+        <div class="tool-title">▶ YouTube 리서처</div>
+        <div class="config-grid">
+          <div class="config-group full">
+            <label>검색어 또는 YouTube URL</label>
+            <input type="text" id="yt-query" placeholder="검색어 또는 https://youtube.com/watch?v=...">
+          </div>
+          <div class="config-group">
+            <label>작업 유형</label>
+            <select id="yt-action">
+              <option value="search">영상 검색</option>
+              <option value="transcript">자막 추출</option>
+              <option value="comments">댓글 분석</option>
+              <option value="channel">채널 분석</option>
+            </select>
+          </div>
+          <div class="config-group">
+            <label>검색 결과 수</label>
+            <input type="number" id="yt-limit" value="10" min="1" max="50">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runYouTube()">🔍 실행</button>
+        </div>
+      </div>
+
+      <!-- Tool Config - Trend -->
+      <div class="tool-config" id="config-trend" style="display:none;">
+        <div class="tool-title">📈 트렌드 스캐너</div>
+        <div class="config-grid">
+          <div class="config-group">
+            <label>소스</label>
+            <select id="trend-source">
+              <option value="news">뉴스 (Google News)</option>
+              <option value="search">검색어 트렌드</option>
+              <option value="social">소셜 미디어</option>
+            </select>
+          </div>
+          <div class="config-group">
+            <label>카테고리</label>
+            <select id="trend-category">
+              <option value="all">전체</option>
+              <option value="economy">경제</option>
+              <option value="tech">기술</option>
+              <option value="entertainment">연예</option>
+              <option value="sports">스포츠</option>
+            </select>
+          </div>
+          <div class="config-group full">
+            <label>키워드 필터 (선택)</label>
+            <input type="text" id="trend-keyword" placeholder="특정 키워드로 필터링...">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runTrend()">📈 스캔</button>
+        </div>
+      </div>
+
+      <!-- Tool Config - Image -->
+      <div class="tool-config" id="config-image" style="display:none;">
+        <div class="tool-title">🖼️ 이미지 생성기</div>
+        <div class="config-grid">
+          <div class="config-group full">
+            <label>이미지 설명 (한글 가능)</label>
+            <textarea id="img-prompt" placeholder="생성할 이미지를 자세히 설명하세요..."></textarea>
+          </div>
+          <div class="config-group">
+            <label>스타일</label>
+            <select id="img-style">
+              <option value="realistic">사실적</option>
+              <option value="webtoon">웹툰/만화</option>
+              <option value="cinematic">시네마틱</option>
+              <option value="illustration">일러스트</option>
+              <option value="3d">3D 렌더</option>
+            </select>
+          </div>
+          <div class="config-group">
+            <label>비율</label>
+            <select id="img-ratio">
+              <option value="16:9">16:9 (가로)</option>
+              <option value="9:16">9:16 (세로)</option>
+              <option value="1:1">1:1 (정사각형)</option>
+              <option value="4:3">4:3</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runImageGen()">🎨 생성</button>
+        </div>
+      </div>
+
+      <!-- Tool Config - Vision -->
+      <div class="tool-config" id="config-vision" style="display:none;">
+        <div class="tool-title">🔬 이미지 분석기</div>
+        <div class="config-grid">
+          <div class="config-group full">
+            <label>이미지 URL 또는 파일 업로드</label>
+            <input type="text" id="vision-url" placeholder="https://... 이미지 URL">
+          </div>
+          <div class="config-group full">
+            <input type="file" id="vision-file" accept="image/*" style="margin-top:0.5rem;">
+          </div>
+          <div class="config-group full">
+            <label>분석 요청 (선택)</label>
+            <input type="text" id="vision-prompt" placeholder="이 이미지에서 무엇을 분석할까요?">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runVision()">🔬 분석</button>
+        </div>
+      </div>
+
+      <!-- Default Config -->
+      <div class="tool-config" id="config-default">
+        <div class="empty-state">
+          <div class="empty-state-icon">👈</div>
+          <div>왼쪽에서 도구를 선택하세요</div>
+        </div>
+      </div>
+
+      <!-- Results Area -->
+      <div class="results-area" id="results">
+        <div class="empty-state">
+          <div class="empty-state-icon">🛠️</div>
+          <div>도구를 선택하고 실행하면 결과가 여기에 표시됩니다</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Chat Panel -->
+    <aside class="chat-panel">
+      <div class="chat-header">💬 결과 활용하기</div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-message assistant">
+          <div class="chat-sender">Assistant</div>
+          <div class="chat-bubble">
+            도구 결과가 나오면, 여기서 추가 질문이나 요청을 할 수 있습니다.
+            <br><br>
+            예시:
+            <br>• "이 영상들 요약해줘"
+            <br>• "이 트렌드로 콘텐츠 아이디어 줘"
+            <br>• "이 이미지 프롬프트 개선해줘"
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chatInput" placeholder="결과에 대해 질문하세요..." rows="2"></textarea>
+          <button class="btn btn-primary" onclick="sendChat()" style="align-self:flex-end;">전송</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // State
+    let currentTool = null;
+    let lastResults = null;
+    let chatHistory = [];
+
+    // Tool Selection
+    function selectTool(toolId) {
+      // Deselect all
+      document.querySelectorAll('.tool-card').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tool-config').forEach(el => el.style.display = 'none');
+
+      // Select new
+      document.getElementById(`tool-${toolId}`).classList.add('active');
+      document.getElementById(`config-${toolId}`).style.display = 'block';
+      currentTool = toolId;
+    }
+
+    // Show Toast
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Show Loading
+    function showLoading(message = '처리 중...') {
+      document.getElementById('results').innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>${message}</span>
+        </div>
+      `;
+    }
+
+    // ===== YouTube 리서처 =====
+    async function runYouTube() {
+      const query = document.getElementById('yt-query').value.trim();
+      const action = document.getElementById('yt-action').value;
+      const limit = document.getElementById('yt-limit').value;
+
+      if (!query) {
+        showToast('검색어 또는 URL을 입력하세요');
+        return;
+      }
+
+      showLoading('YouTube 검색 중...');
+
+      try {
+        const response = await fetch('/api/ai-tools/youtube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, action, limit: parseInt(limit) })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          lastResults = data;
+          renderYouTubeResults(data);
+        } else {
+          document.getElementById('results').innerHTML = `
+            <div class="result-card">
+              <div class="result-content" style="color:#ef4444;">❌ 오류: ${data.error}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        document.getElementById('results').innerHTML = `
+          <div class="result-card">
+            <div class="result-content" style="color:#ef4444;">❌ 네트워크 오류: ${err.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderYouTubeResults(data) {
+      let html = '';
+
+      if (data.videos && data.videos.length > 0) {
+        html += `<div class="result-card">
+          <div class="result-header">
+            <div class="result-title">🎬 검색 결과 (${data.videos.length}개)</div>
+          </div>`;
+
+        for (const video of data.videos) {
+          html += `
+            <div class="result-video">
+              <img src="${video.thumbnail}" alt="${video.title}">
+              <div class="result-video-info">
+                <div class="result-video-title">${video.title}</div>
+                <div class="result-video-channel">${video.channel} • ${video.views || ''}</div>
+              </div>
+              <button class="btn-small" onclick="getTranscript('${video.id}')">자막</button>
+            </div>
+          `;
+        }
+
+        html += `<div class="result-actions">
+          <button class="btn-small" onclick="copyResults()">📋 복사</button>
+          <button class="btn-small" onclick="analyzeWithAI()">🤖 AI 분석</button>
+        </div></div>`;
+      }
+
+      if (data.transcript) {
+        html += `<div class="result-card">
+          <div class="result-header">
+            <div class="result-title">📝 자막</div>
+            <div class="result-meta">${data.video_title || ''}</div>
+          </div>
+          <div class="result-content">${data.transcript}</div>
+          <div class="result-actions">
+            <button class="btn-small" onclick="copyText(\`${data.transcript.replace(/`/g, '\\`')}\`)">📋 복사</button>
+            <button class="btn-small" onclick="summarizeTranscript()">📝 요약</button>
+          </div>
+        </div>`;
+      }
+
+      if (data.comments && data.comments.length > 0) {
+        html += `<div class="result-card">
+          <div class="result-header">
+            <div class="result-title">💬 댓글 분석 (${data.comments.length}개)</div>
+          </div>
+          <div class="result-content">`;
+
+        for (const comment of data.comments.slice(0, 10)) {
+          html += `<div style="margin-bottom:0.5rem;padding:0.5rem;background:var(--bg);border-radius:6px;">
+            <div style="font-size:0.75rem;color:var(--text-muted);">${comment.author} • 👍 ${comment.likes}</div>
+            <div style="font-size:0.85rem;">${comment.text}</div>
+          </div>`;
+        }
+
+        html += `</div>
+          <div class="result-actions">
+            <button class="btn-small" onclick="analyzeComments()">🔍 감정 분석</button>
+          </div>
+        </div>`;
+      }
+
+      document.getElementById('results').innerHTML = html || '<div class="empty-state">결과가 없습니다</div>';
+    }
+
+    async function getTranscript(videoId) {
+      showLoading('자막 추출 중...');
+
+      try {
+        const response = await fetch('/api/ai-tools/youtube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: videoId, action: 'transcript' })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          lastResults = data;
+          renderYouTubeResults(data);
+        } else {
+          showToast('자막 추출 실패: ' + data.error);
+        }
+      } catch (err) {
+        showToast('오류: ' + err.message);
+      }
+    }
+
+    // ===== 트렌드 스캐너 =====
+    async function runTrend() {
+      const source = document.getElementById('trend-source').value;
+      const category = document.getElementById('trend-category').value;
+      const keyword = document.getElementById('trend-keyword').value.trim();
+
+      showLoading('트렌드 스캔 중...');
+
+      try {
+        const response = await fetch('/api/ai-tools/trend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source, category, keyword })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          lastResults = data;
+          renderTrendResults(data);
+        } else {
+          document.getElementById('results').innerHTML = `
+            <div class="result-card">
+              <div class="result-content" style="color:#ef4444;">❌ 오류: ${data.error}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        document.getElementById('results').innerHTML = `
+          <div class="result-card">
+            <div class="result-content" style="color:#ef4444;">❌ 네트워크 오류: ${err.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderTrendResults(data) {
+      let html = '';
+
+      if (data.news && data.news.length > 0) {
+        html += `<div class="result-card">
+          <div class="result-header">
+            <div class="result-title">📰 뉴스 트렌드 (${data.news.length}개)</div>
+            <div class="result-meta">${new Date().toLocaleString('ko-KR')}</div>
+          </div>`;
+
+        for (const item of data.news) {
+          html += `
+            <div style="padding:0.75rem;background:var(--bg);border-radius:8px;margin-bottom:0.5rem;">
+              <div style="font-weight:500;margin-bottom:0.25rem;">${item.title}</div>
+              <div style="font-size:0.8rem;color:var(--text-muted);">${item.source} • ${item.time || ''}</div>
+              ${item.summary ? `<div style="font-size:0.85rem;margin-top:0.5rem;">${item.summary}</div>` : ''}
+            </div>
+          `;
+        }
+
+        html += `<div class="result-actions">
+          <button class="btn-small" onclick="copyResults()">📋 복사</button>
+          <button class="btn-small" onclick="generateContentIdeas()">💡 콘텐츠 아이디어</button>
+        </div></div>`;
+      }
+
+      if (data.trends && data.trends.length > 0) {
+        html += `<div class="result-card">
+          <div class="result-header">
+            <div class="result-title">🔥 인기 키워드</div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">`;
+
+        for (const trend of data.trends) {
+          html += `<span style="padding:0.5rem 1rem;background:var(--bg);border-radius:20px;font-size:0.85rem;">
+            ${trend.keyword} <span style="color:var(--text-muted);font-size:0.75rem;">${trend.volume || ''}</span>
+          </span>`;
+        }
+
+        html += `</div></div>`;
+      }
+
+      document.getElementById('results').innerHTML = html || '<div class="empty-state">트렌드 결과가 없습니다</div>';
+    }
+
+    // ===== 이미지 생성기 =====
+    async function runImageGen() {
+      const prompt = document.getElementById('img-prompt').value.trim();
+      const style = document.getElementById('img-style').value;
+      const ratio = document.getElementById('img-ratio').value;
+
+      if (!prompt) {
+        showToast('이미지 설명을 입력하세요');
+        return;
+      }
+
+      showLoading('이미지 생성 중... (약 10-30초 소요)');
+
+      try {
+        const response = await fetch('/api/ai-tools/image-generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, style, ratio })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          lastResults = data;
+          renderImageResults(data);
+        } else {
+          document.getElementById('results').innerHTML = `
+            <div class="result-card">
+              <div class="result-content" style="color:#ef4444;">❌ 생성 실패: ${data.error}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        document.getElementById('results').innerHTML = `
+          <div class="result-card">
+            <div class="result-content" style="color:#ef4444;">❌ 네트워크 오류: ${err.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderImageResults(data) {
+      let html = `<div class="result-card">
+        <div class="result-header">
+          <div class="result-title">🎨 생성된 이미지</div>
+        </div>
+        <img src="${data.image_url}" class="result-image" alt="Generated Image">
+        <div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:8px;font-size:0.85rem;">
+          <strong>사용된 프롬프트:</strong><br>${data.prompt_used || data.prompt}
+        </div>
+        <div class="result-actions">
+          <button class="btn-small" onclick="window.open('${data.image_url}', '_blank')">🔗 원본 보기</button>
+          <button class="btn-small" onclick="copyText('${data.prompt_used || data.prompt}')">📋 프롬프트 복사</button>
+          <button class="btn-small" onclick="regenerateImage()">🔄 다시 생성</button>
+        </div>
+      </div>`;
+
+      document.getElementById('results').innerHTML = html;
+    }
+
+    // ===== 이미지 분석기 =====
+    async function runVision() {
+      const url = document.getElementById('vision-url').value.trim();
+      const file = document.getElementById('vision-file').files[0];
+      const prompt = document.getElementById('vision-prompt').value.trim();
+
+      if (!url && !file) {
+        showToast('이미지 URL 또는 파일을 입력하세요');
+        return;
+      }
+
+      showLoading('이미지 분석 중...');
+
+      try {
+        let response;
+
+        if (file) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('prompt', prompt || '이 이미지를 자세히 분석해주세요.');
+
+          response = await fetch('/api/ai-tools/vision', {
+            method: 'POST',
+            body: formData
+          });
+        } else {
+          response = await fetch('/api/ai-tools/vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, prompt: prompt || '이 이미지를 자세히 분석해주세요.' })
+          });
+        }
+
+        const data = await response.json();
+
+        if (data.ok) {
+          lastResults = data;
+          renderVisionResults(data);
+        } else {
+          document.getElementById('results').innerHTML = `
+            <div class="result-card">
+              <div class="result-content" style="color:#ef4444;">❌ 분석 실패: ${data.error}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        document.getElementById('results').innerHTML = `
+          <div class="result-card">
+            <div class="result-content" style="color:#ef4444;">❌ 네트워크 오류: ${err.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderVisionResults(data) {
+      let html = `<div class="result-card">
+        <div class="result-header">
+          <div class="result-title">🔬 이미지 분석 결과</div>
+        </div>
+        ${data.image_url ? `<img src="${data.image_url}" class="result-image" style="max-height:300px;object-fit:contain;">` : ''}
+        <div class="result-content" style="margin-top:1rem;">${data.analysis}</div>
+        <div class="result-actions">
+          <button class="btn-small" onclick="copyText(\`${data.analysis.replace(/`/g, '\\`')}\`)">📋 복사</button>
+          <button class="btn-small" onclick="askMoreAboutImage()">❓ 추가 질문</button>
+        </div>
+      </div>`;
+
+      document.getElementById('results').innerHTML = html;
+    }
+
+    // ===== 유틸리티 =====
+    function copyResults() {
+      if (!lastResults) return;
+      const text = JSON.stringify(lastResults, null, 2);
+      navigator.clipboard.writeText(text);
+      showToast('결과가 복사되었습니다');
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text);
+      showToast('복사되었습니다');
+    }
+
+    // ===== 채팅 기능 =====
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      // Add user message
+      addChatMessage('user', message);
+      input.value = '';
+
+      // Prepare context
+      const context = lastResults ? JSON.stringify(lastResults).slice(0, 3000) : '';
+
+      try {
+        const response = await fetch('/api/ai-tools/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            context,
+            history: chatHistory.slice(-10)
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          addChatMessage('assistant', data.response);
+        } else {
+          addChatMessage('assistant', '오류: ' + data.error);
+        }
+      } catch (err) {
+        addChatMessage('assistant', '네트워크 오류: ' + err.message);
+      }
+    }
+
+    function addChatMessage(role, content) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = `chat-message ${role}`;
+      div.innerHTML = `
+        <div class="chat-sender">${role === 'user' ? 'You' : 'Assistant'}</div>
+        <div class="chat-bubble">${content}</div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+
+      chatHistory.push({ role, content });
+    }
+
+    // AI 분석 함수들
+    async function analyzeWithAI() {
+      if (!lastResults) return;
+      document.getElementById('chatInput').value = '이 검색 결과들을 분석해서 인사이트를 알려줘';
+      sendChat();
+    }
+
+    async function summarizeTranscript() {
+      if (!lastResults || !lastResults.transcript) return;
+      document.getElementById('chatInput').value = '이 자막 내용을 요약해줘';
+      sendChat();
+    }
+
+    async function analyzeComments() {
+      if (!lastResults || !lastResults.comments) return;
+      document.getElementById('chatInput').value = '이 댓글들의 전반적인 반응과 감정을 분석해줘';
+      sendChat();
+    }
+
+    async function generateContentIdeas() {
+      if (!lastResults) return;
+      document.getElementById('chatInput').value = '이 트렌드를 바탕으로 YouTube 콘텐츠 아이디어 5개 제안해줘';
+      sendChat();
+    }
+
+    function regenerateImage() {
+      runImageGen();
+    }
+
+    function askMoreAboutImage() {
+      const question = prompt('이미지에 대해 무엇이 궁금하세요?');
+      if (question) {
+        document.getElementById('chatInput').value = question;
+        sendChat();
+      }
+    }
+
+    // Enter to send chat
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+  </script>
+
+</body>
+</html>
