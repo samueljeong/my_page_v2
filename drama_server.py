@@ -25062,19 +25062,19 @@ os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
 # 모델 티어 시스템
 MODEL_TIERS = {
     1: {  # 간단한 질문
-        'gemini': 'gemini-1.5-flash',
+        'gemini': 'gemini-2.0-flash-exp',
         'gpt': 'gpt-4o-mini',
         'llama': 'llama-3.3-70b-versatile',
         'description': '간단한 질문, 기본 정보'
     },
     2: {  # 중간 복잡도
-        'gemini': 'gemini-1.5-flash',  # Flash도 꽤 강력
+        'gemini': 'gemini-2.0-flash-exp',
         'gpt': 'gpt-4o',
         'llama': 'llama-3.3-70b-versatile',
         'description': '분석 필요, 여러 단계'
     },
     3: {  # 복잡한 질문
-        'gemini': 'gemini-1.5-pro',
+        'gemini': 'gemini-1.5-pro-latest',
         'gpt': 'gpt-4o',
         'llama': 'llama-3.3-70b-versatile',
         'description': '전문 지식, 아키텍처, 복잡한 분석'
@@ -25569,7 +25569,7 @@ def analyze_image_with_gemini(file_content: bytes, filename: str, prompt: str) -
         import base64
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         # 이미지를 base64로 인코딩
         image_data = base64.b64encode(file_content).decode('utf-8')
