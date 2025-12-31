@@ -25402,13 +25402,13 @@ def api_ai_chat_send():
 
 @app.route('/api/ai-chat/debate', methods=['POST'])
 def api_ai_chat_debate():
-    """AI 토론 진행 (SSE 스트리밍) - 자동 티어 시스템 적용"""
+    """AI 토론 진행 (SSE 스트리밍) - 진행자 중심 + 사용자 중심 구조"""
     data = request.get_json()
     problem = data.get('problem', '')
     models = data.get('models', [])
-    rounds = data.get('rounds', 3)
+    rounds = data.get('rounds', 2)  # 기본 2라운드로 축소
     style = data.get('style', 'collaborative')
-    summarizer = data.get('summarizer', 'gemini')
+    summarizer = data.get('summarizer', 'gpt')  # GPT가 진행자 역할
     auto_tier = data.get('autoTier', True)
 
     def generate():
@@ -25416,10 +25416,10 @@ def api_ai_chat_debate():
             context = []
             context.append({"sender": "user", "content": problem})
 
-            # 토론은 보통 복잡한 주제 → 자동 티어 분석 (최소 Tier 2)
+            # 티어 분석
             if auto_tier:
                 base_tier = analyze_complexity(problem)
-                tier = max(base_tier, 2)  # 토론은 최소 Tier 2
+                tier = max(base_tier, 2)
             else:
                 tier = 2
 
@@ -25429,90 +25429,129 @@ def api_ai_chat_debate():
                 2: {'gemini': 'Gemini Flash', 'gpt': 'GPT-4o', 'llama': 'Llama 3.3'},
                 3: {'gemini': 'Gemini Pro', 'gpt': 'GPT-4o', 'llama': 'Llama 3.3'}
             }
+            model_names = tier_model_names.get(tier, tier_model_names[2])
 
-            # 티어 정보 전송
             yield f"data: {json.dumps({'type': 'tier_info', 'tier': tier, 'description': MODEL_TIERS.get(tier, {}).get('description', '')})}\n\n"
 
-            style_instructions = {
-                'collaborative': "다른 AI의 의견을 존중하고 보완하면서 합의점을 찾으세요.",
-                'debate': "다른 AI의 의견에 건설적으로 반박하고 대안을 제시하세요.",
-                'brainstorm': "자유롭게 아이디어를 제안하고 확장하세요."
-            }
+            # ========== 1. 진행자 오프닝 ==========
+            facilitator_name = "🎙️ 진행자"
+            yield f"data: {json.dumps({'type': 'thinking', 'model': facilitator_name})}\n\n"
 
+            # 진행자 오프닝 멘트 생성
+            opening_prompt = f"""당신은 AI 토론의 진행자입니다. 사용자가 다음과 같이 말했습니다:
+
+"{problem}"
+
+진행자로서 짧고 친근하게 인사하고, 사용자의 질문/요청을 명확히 정리한 뒤,
+각 AI에게 "사용자님께" 직접 답변하도록 안내하세요.
+
+규칙:
+- 2-3문장으로 짧게
+- 사용자를 "사용자님"으로 호칭
+- 참여 AI들을 소개 (예: "Gemini, GPT, Llama가 함께합니다")
+- 마지막에 "그럼 시작하겠습니다!" 같은 마무리"""
+
+            opening = call_gpt_api(opening_prompt, "진행자", [], tier)
+            context.append({"sender": facilitator_name, "content": opening})
+            yield f"data: {json.dumps({'type': 'facilitator', 'content': opening})}\n\n"
+
+            # ========== 2. 각 AI가 사용자에게 직접 답변 ==========
             for round_num in range(rounds):
+                if round_num > 0:
+                    # 2라운드부터는 진행자가 중간 정리
+                    yield f"data: {json.dumps({'type': 'thinking', 'model': facilitator_name})}\n\n"
+
+                    mid_prompt = f"""지금까지 AI들의 답변입니다:
+
+"""
+                    for msg in context[1:]:
+                        if msg.get('sender') != facilitator_name:
+                            mid_prompt += f"{msg.get('sender')}: {msg.get('content')[:200]}...\n\n"
+
+                    mid_prompt += """
+진행자로서 짧게 중간 정리하고, AI들에게 더 구체적인 아이디어나 보완점을 요청하세요.
+2-3문장으로 짧게."""
+
+                    mid_summary = call_gpt_api(mid_prompt, "진행자", [], tier)
+                    context.append({"sender": facilitator_name, "content": mid_summary})
+                    yield f"data: {json.dumps({'type': 'facilitator', 'content': mid_summary})}\n\n"
+
+                # 각 AI 답변
                 for model_info in models:
                     model_id = model_info.get('id')
-                    model_role = model_info.get('role', 'AI 토론 참가자')
-
-                    # 티어에 따른 모델명
-                    model_names = tier_model_names.get(tier, tier_model_names[2])
+                    model_role = model_info.get('role', '')
                     model_name = model_names.get(model_id, model_id)
                     actual_model = MODEL_TIERS.get(tier, MODEL_TIERS[2]).get(model_id, '')
 
                     yield f"data: {json.dumps({'type': 'thinking', 'model': model_name, 'actualModel': actual_model})}\n\n"
 
-                    # 토론 프롬프트 구성
-                    debate_prompt = f"""[토론 문제]
-{problem}
+                    # 사용자 중심 프롬프트
+                    if round_num == 0:
+                        # 첫 라운드: 사용자에게 직접 답변
+                        ai_prompt = f"""사용자가 이렇게 말했습니다: "{problem}"
 
-[당신의 역할]
-{model_role}
+당신은 {model_role if model_role else 'AI 어시스턴트'}입니다.
+**사용자에게 직접** 답변하세요 (다른 AI에게 말하는 것이 아닙니다).
 
-[토론 스타일]
-{style_instructions.get(style, '')}
+규칙:
+- "안녕하세요!" 같은 인사로 시작
+- 사용자의 질문에 직접 답변
+- 당신만의 강점이나 관점으로 답변
+- 3-5문장으로 간결하게
+- 마지막에 "더 구체적으로 알고 싶으시면 말씀해주세요" 같은 대화 유도"""
+                    else:
+                        # 추가 라운드: 보완 의견
+                        ai_prompt = f"""사용자 질문: "{problem}"
 
-[현재 라운드]
-{round_num + 1}/{rounds}
-
-[이전 토론 내용]
+이전 대화:
 """
-                    for msg in context[1:]:  # 첫 번째는 문제
-                        debate_prompt += f"{msg.get('sender')}: {msg.get('content')}\n\n"
+                        for msg in context[1:]:
+                            ai_prompt += f"{msg.get('sender')}: {msg.get('content')[:150]}...\n"
 
-                    debate_prompt += "\n위 내용을 바탕으로 당신의 의견을 제시하세요."
+                        ai_prompt += f"""
+당신은 {model_role if model_role else 'AI 어시스턴트'}입니다.
+다른 AI들의 의견을 참고하여 **사용자에게** 추가 아이디어나 보완점을 제안하세요.
 
-                    # API 호출 (티어 적용)
+규칙:
+- 다른 AI 의견 중 좋은 점 인정
+- 새로운 관점이나 추가 제안
+- 2-3문장으로 짧게"""
+
+                    # API 호출
                     if model_id == 'gemini':
-                        response = call_gemini_api(debate_prompt, model_role, [], tier)
+                        response = call_gemini_api(ai_prompt, model_role or "AI", [], tier)
                     elif model_id == 'gpt':
-                        response = call_gpt_api(debate_prompt, model_role, [], tier)
+                        response = call_gpt_api(ai_prompt, model_role or "AI", [], tier)
                     elif model_id == 'llama':
-                        response = call_groq_api(debate_prompt, model_role, [], tier)
+                        response = call_groq_api(ai_prompt, model_role or "AI", [], tier)
                     else:
                         response = f"[알 수 없는 모델: {model_id}]"
 
                     context.append({"sender": model_name, "content": response, "modelId": model_id})
-
                     yield f"data: {json.dumps({'type': 'response', 'model': model_name, 'modelId': model_id, 'content': response, 'tier': tier})}\n\n"
 
-            # 최종 정리
-            summary_model = summarizer
-            summary_name = model_names.get(summary_model, summary_model)
-            yield f"data: {json.dumps({'type': 'thinking', 'model': f'{summary_name} (정리 중)'})}\n\n"
+            # ========== 3. 진행자 최종 정리 ==========
+            yield f"data: {json.dumps({'type': 'thinking', 'model': f'{facilitator_name} (최종 정리)'})}\n\n"
 
-            summary_prompt = f"""[토론 문제]
-{problem}
+            final_prompt = f"""사용자 질문: "{problem}"
 
-[토론 내용]
+AI들의 답변:
 """
             for msg in context[1:]:
-                summary_prompt += f"{msg.get('sender')}: {msg.get('content')}\n\n"
+                if msg.get('sender') != facilitator_name:
+                    final_prompt += f"{msg.get('sender')}: {msg.get('content')}\n\n"
 
-            summary_prompt += """
-위 토론 내용을 바탕으로 최종 결론을 정리해주세요:
-1. 합의된 사항
-2. 추가 검토 필요 사항
-3. 구현 시 주의점
-4. 다음 단계 제안"""
+            final_prompt += """
+진행자로서 최종 정리를 해주세요:
 
-            if summary_model == 'gemini':
-                summary = call_gemini_api(summary_prompt, "토론 정리자", [], tier)
-            elif summary_model == 'gpt':
-                summary = call_gpt_api(summary_prompt, "토론 정리자", [], tier)
-            else:
-                summary = call_groq_api(summary_prompt, "토론 정리자", [], tier)
+1. **핵심 요약** (1-2문장): AI들이 제안한 내용 요약
+2. **선택지** (2-3개): 사용자가 다음에 할 수 있는 구체적인 행동
+3. **마무리**: 사용자에게 어떤 방향으로 진행할지 물어보기
 
-            yield f"data: {json.dumps({'type': 'summary', 'model': summary_name, 'modelId': summary_model, 'content': summary})}\n\n"
+친근하고 명확하게 작성하세요."""
+
+            final_summary = call_gpt_api(final_prompt, "진행자", [], tier)
+            yield f"data: {json.dumps({'type': 'summary', 'model': facilitator_name, 'content': final_summary})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as e:

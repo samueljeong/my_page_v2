@@ -273,6 +273,11 @@
     .message.gpt .message-content { border-left: 3px solid var(--gpt); }
     .message.claude .message-content { border-left: 3px solid var(--claude); }
     .message.llama .message-content { border-left: 3px solid var(--llama); }
+    .message.facilitator .message-content {
+      border-left: 3px solid #fbbf24;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+    .message.facilitator .message-header { color: #fbbf24; font-weight: 600; }
 
     .message.system .message-content {
       background: #2d3748;
@@ -1117,14 +1122,18 @@
                   addMessage('System', `🎚️ 자동 티어: ${tierLabels[data.tier] || 'Tier ' + data.tier} (${data.description})`);
                 } else if (data.type === 'thinking') {
                   showTyping(data.model + (data.actualModel ? ` [${data.actualModel}]` : ''));
+                } else if (data.type === 'facilitator') {
+                  // 진행자 메시지 (특별 스타일)
+                  hideTyping();
+                  addMessage('🎙️ 진행자', data.content, 'facilitator');
                 } else if (data.type === 'response') {
                   hideTyping();
                   addMessage(data.model, data.content, data.modelId, data.tier);
                 } else if (data.type === 'summary') {
                   hideTyping();
-                  addMessage('📋 최종 결론', data.content, data.modelId, data.tier);
+                  addMessage('🎙️ 진행자', data.content, 'facilitator');
                 } else if (data.type === 'done') {
-                  addMessage('System', '✅ 토론 완료!');
+                  addMessage('System', '');
                 }
               } catch (e) {}
             }
