@@ -542,8 +542,14 @@
       <div class="setting-group">
         <h3>🔄 토론 설정</h3>
         <div class="debate-settings">
+          <label>토론 목적</label>
+          <select id="debate-purpose">
+            <option value="idea">💡 아이디어 (개념, 방향성)</option>
+            <option value="implementation" selected>🔧 구현 (코드, 구체적 단계)</option>
+          </select>
+
           <label>토론 라운드 수</label>
-          <input type="number" id="debate-rounds" value="3" min="1" max="10">
+          <input type="number" id="debate-rounds" value="2" min="1" max="5">
 
           <label>토론 스타일</label>
           <select id="debate-style">
@@ -555,7 +561,7 @@
           <label>최종 정리자</label>
           <select id="debate-summarizer">
             <option value="gemini">Gemini</option>
-            <option value="gpt">GPT</option>
+            <option value="gpt" selected>GPT (진행자)</option>
             <option value="llama">Llama</option>
           </select>
         </div>
@@ -869,6 +875,7 @@
     function getSettings() {
       return {
         debateMode: document.getElementById('debateMode').checked,
+        debatePurpose: document.getElementById('debate-purpose').value,
         debateRounds: parseInt(document.getElementById('debate-rounds').value),
         debateStyle: document.getElementById('debate-style').value,
         summarizer: document.getElementById('debate-summarizer').value,
@@ -1087,7 +1094,8 @@
 
     // Run AI Debate
     async function runDebate(problem, models, settings) {
-      addMessage('System', `🔄 AI 토론 시작 (${settings.debateRounds}라운드, ${settings.debateStyle} 모드)`);
+      const purposeLabel = settings.debatePurpose === 'implementation' ? '🔧 구현' : '💡 아이디어';
+      addMessage('System', `🔄 AI 토론 시작 (${purposeLabel}, ${settings.debateRounds}라운드)`);
 
       try {
         const response = await fetch('/api/ai-chat/debate', {
@@ -1098,6 +1106,7 @@
             models: models.map(m => ({ id: m.id, role: m.role })),
             rounds: settings.debateRounds,
             style: settings.debateStyle,
+            purpose: settings.debatePurpose,
             summarizer: settings.summarizer,
             autoTier: settings.autoTier
           })
