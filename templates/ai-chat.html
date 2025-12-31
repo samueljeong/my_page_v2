@@ -471,6 +471,7 @@
     <div class="header-actions">
       <button class="btn btn-outline" onclick="toggleSidebar()">⚙️ 설정</button>
       <button class="btn btn-outline" onclick="toggleHistory()">📂 기록</button>
+      <button class="btn btn-outline" onclick="copyConversation()">📋 복사</button>
       <button class="btn btn-primary" onclick="saveConversation()">💾 저장</button>
     </div>
   </header>
@@ -1142,6 +1143,55 @@
       } catch (err) {
         hideTyping();
         addMessage('System', `토론 오류: ${err.message}`);
+      }
+    }
+
+    // Copy conversation to clipboard
+    async function copyConversation() {
+      if (messages.length === 0) {
+        showToast('복사할 대화가 없습니다');
+        return;
+      }
+
+      try {
+        const now = new Date();
+
+        // 제목 추출 (첫 번째 사용자 메시지)
+        let title = "제목 없음";
+        for (const msg of messages) {
+          if (msg.sender === 'user') {
+            title = msg.content.slice(0, 50);
+            if (msg.content.length > 50) title += "...";
+            break;
+          }
+        }
+
+        // 활성화된 모델 목록
+        const enabledModels = getEnabledModels();
+        const modelNames = enabledModels.map(m => m.name || m.id).join(', ');
+
+        // MD 내용 생성
+        let mdContent = `# ${title}\n\n`;
+        mdContent += `**생성 시간**: ${now.toLocaleString('ko-KR')}\n`;
+        mdContent += `**참여 모델**: ${modelNames}\n\n`;
+        mdContent += `---\n\n`;
+        mdContent += `## 대화 내용\n\n`;
+
+        for (const msg of messages) {
+          const time = new Date(msg.timestamp).toLocaleTimeString('ko-KR');
+          if (msg.sender === 'user') {
+            mdContent += `### 👤 사용자 (${time})\n\n${msg.content}\n\n`;
+          } else {
+            mdContent += `### 🤖 ${msg.sender} (${time})\n\n${msg.content}\n\n`;
+          }
+        }
+
+        // 클립보드에 복사
+        await navigator.clipboard.writeText(mdContent);
+        showToast('📋 클립보드에 복사됨!');
+
+      } catch (err) {
+        showToast(`복사 오류: ${err.message}`);
       }
     }
 
