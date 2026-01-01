@@ -619,3 +619,197 @@ def get_episode_by_number(
     except Exception as e:
         print(f"[HISTORY] 에피소드 조회 실패: {e}")
         return None
+
+
+# ============================================================
+# GPT-5.1 대본 자동 생성용 함수 (2025-01 신규)
+# ============================================================
+
+def get_pending_episodes_for_script(
+    service,
+    spreadsheet_id: str,
+    limit: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    '준비' 상태이면서 대본이 비어있는 에피소드 조회
+
+    통합 시트(HISTORY) 구조:
+    - 행 1: 채널ID | UCxxx
+    - 행 2: 헤더 (era, episode_slot, core_question, ..., 상태, 대본, ...)
+    - 행 3~: 데이터
+
+    Args:
+        service: Google Sheets API 서비스 객체
+        spreadsheet_id: 스프레드시트 ID
+        limit: 최대 반환 개수
+
+    Returns:
+        [
+            {
+                "row_index": 시트 행 번호 (1-based, 데이터는 3부터),
+                "era": 시대 키,
+                "era_episode": 시대 내 에피소드 번호,
+                "title": 에피소드 제목 (core_question),
+                "total_episodes": 시대 총 에피소드 수,
+            },
+            ...
+        ]
+    """
+    pending = []
+
+    try:
+        # 1) 시트 헤더(행 2) 읽기
+        header_result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{UNIFIED_HISTORY_SHEET}'!A2:Z2"
+        ).execute()
+        header_rows = header_result.get('values', [])
+
+        if not header_rows:
+            print(f"[HISTORY] '{UNIFIED_HISTORY_SHEET}' 시트 헤더 없음")
+            return []
+
+        headers = header_rows[0]
+        col_map = {h: i for i, h in enumerate(headers)}
+
+        # 필요한 열 인덱스
+        era_idx = col_map.get("era", 0)
+        slot_idx = col_map.get("episode_slot", 1)
+        title_idx = col_map.get("core_question", 3)
+        status_idx = col_map.get("상태", -1)
+        script_idx = col_map.get("대본", -1)
+
+        if status_idx < 0 or script_idx < 0:
+            print(f"[HISTORY] '상태' 또는 '대본' 열을 찾을 수 없음")
+            return []
+
+        # 2) 데이터(행 3~) 읽기
+        data_result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{UNIFIED_HISTORY_SHEET}'!A3:Z"
+        ).execute()
+        data_rows = data_result.get('values', [])
+
+        # 3) '준비' 상태 + 대본 비어있는 행 찾기
+        for i, row in enumerate(data_rows):
+            row_index = i + 3  # 시트 행 번호 (1-based, 데이터는 3부터)
+
+            # 상태 확인
+            status = row[status_idx] if len(row) > status_idx else ""
+            if status != "준비":
+                continue
+
+            # 대본 비어있는지 확인
+            script = row[script_idx] if len(row) > script_idx else ""
+            if script.strip():
+                continue  # 대본이 이미 있으면 스킵
+
+            # 에피소드 정보 추출
+            era = row[era_idx] if len(row) > era_idx else ""
+            era_episode_str = row[slot_idx] if len(row) > slot_idx else ""
+            title = row[title_idx] if len(row) > title_idx else ""
+
+            try:
+                era_episode = int(era_episode_str) if era_episode_str else 0
+            except ValueError:
+                era_episode = 0
+
+            if not era or era_episode <= 0:
+                continue
+
+            # 시대 총 에피소드 수
+            total_episodes = len(HISTORY_TOPICS.get(era, []))
+
+            pending.append({
+                "row_index": row_index,
+                "era": era,
+                "era_episode": era_episode,
+                "title": title,
+                "total_episodes": total_episodes,
+            })
+
+            if len(pending) >= limit:
+                break
+
+        print(f"[HISTORY] '준비' 상태 + 대본 없음: {len(pending)}개")
+        return pending
+
+    except Exception as e:
+        print(f"[HISTORY] 에피소드 조회 실패: {e}")
+        return []
+
+
+def update_script_and_status(
+    service,
+    spreadsheet_id: str,
+    row_index: int,
+    script: str,
+    new_status: str = "대기",
+) -> Dict[str, Any]:
+    """
+    특정 행의 대본과 상태 업데이트
+
+    Args:
+        service: Google Sheets API 서비스 객체
+        spreadsheet_id: 스프레드시트 ID
+        row_index: 시트 행 번호 (1-based)
+        script: 생성된 대본
+        new_status: 새 상태 (기본 "대기")
+
+    Returns:
+        {"success": bool, "error": str}
+    """
+    result = {"success": False, "error": None}
+
+    try:
+        # 1) 시트 헤더(행 2) 읽기
+        header_result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{UNIFIED_HISTORY_SHEET}'!A2:Z2"
+        ).execute()
+        header_rows = header_result.get('values', [])
+
+        if not header_rows:
+            result["error"] = "헤더 없음"
+            return result
+
+        headers = header_rows[0]
+        col_map = {h: i for i, h in enumerate(headers)}
+
+        status_idx = col_map.get("상태", -1)
+        script_idx = col_map.get("대본", -1)
+
+        if status_idx < 0 or script_idx < 0:
+            result["error"] = "'상태' 또는 '대본' 열을 찾을 수 없음"
+            return result
+
+        # 2) 상태 열 업데이트
+        status_col = chr(65 + status_idx)  # A=0, B=1, ...
+        status_range = f"'{UNIFIED_HISTORY_SHEET}'!{status_col}{row_index}"
+
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=status_range,
+            valueInputOption="RAW",
+            body={"values": [[new_status]]}
+        ).execute()
+
+        # 3) 대본 열 업데이트
+        script_col = chr(65 + script_idx)
+        script_range = f"'{UNIFIED_HISTORY_SHEET}'!{script_col}{row_index}"
+
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=script_range,
+            valueInputOption="RAW",
+            body={"values": [[script]]}
+        ).execute()
+
+        print(f"[HISTORY] 행 {row_index}: 상태='{new_status}', 대본={len(script):,}자 저장 완료")
+        result["success"] = True
+
+    except Exception as e:
+        result["error"] = str(e)
+        print(f"[HISTORY] 시트 업데이트 실패: {e}")
+
+    return result

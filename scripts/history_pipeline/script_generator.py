@@ -291,34 +291,124 @@ def generate_script_with_retry(
     max_retries: int = 2,
 ) -> Dict[str, Any]:
     """
-    대본 생성 (분량 부족 시 재시도)
+    대본 생성 (분량 부족 시 이어쓰기)
 
-    분량이 SCRIPT_MIN_LENGTH 미만이면 재시도
+    분량이 SCRIPT_MIN_LENGTH 미만이면 이어쓰기 요청
     """
-    for attempt in range(max_retries + 1):
-        result = generate_script_gpt51(
+    result = generate_script_gpt51(
+        era_name=era_name,
+        episode=episode,
+        total_episodes=total_episodes,
+        title=title,
+        topic=topic,
+        full_content=full_content,
+        sources=sources,
+        next_episode_info=next_episode_info,
+    )
+
+    if "error" in result:
+        return result
+
+    script = result.get("script", "")
+    total_cost = result.get("cost", 0)
+
+    # 분량 부족 시 이어쓰기
+    for attempt in range(max_retries):
+        if len(script) >= SCRIPT_MIN_LENGTH:
+            break
+
+        print(f"[SCRIPT] 분량 부족 ({len(script):,}자), 이어쓰기 시도 ({attempt + 1}/{max_retries})...")
+
+        continuation = _continue_script(
             era_name=era_name,
             episode=episode,
-            total_episodes=total_episodes,
             title=title,
-            topic=topic,
-            full_content=full_content,
-            sources=sources,
-            next_episode_info=next_episode_info,
+            current_script=script,
+            target_length=SCRIPT_TARGET_LENGTH,
         )
 
-        if "error" in result:
-            return result
+        if "error" in continuation:
+            print(f"[SCRIPT] 이어쓰기 실패: {continuation['error']}")
+            break
 
-        script_length = result.get("length", 0)
+        script += "\n\n" + continuation.get("script", "")
+        total_cost += continuation.get("cost", 0)
 
-        # 분량 충족 시 반환
-        if script_length >= SCRIPT_MIN_LENGTH:
-            return result
-
-        # 분량 부족 시 재시도
-        if attempt < max_retries:
-            print(f"[SCRIPT] 분량 부족으로 재시도 ({attempt + 1}/{max_retries})...")
-            # 재시도 시 더 긴 분량 요청하는 프롬프트 추가 가능
+    result["script"] = script
+    result["length"] = len(script)
+    result["cost"] = total_cost
 
     return result
+
+
+def _continue_script(
+    era_name: str,
+    episode: int,
+    title: str,
+    current_script: str,
+    target_length: int,
+) -> Dict[str, Any]:
+    """
+    대본 이어쓰기 (분량 부족 시)
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {"error": "OPENAI_API_KEY 없음"}
+
+    remaining = target_length - len(current_script)
+
+    prompt = f"""아래 대본의 이어쓰기를 작성하세요.
+
+[현재 대본 마지막 부분]
+{current_script[-2000:]}
+
+[지시사항]
+- 위 대본에 자연스럽게 이어지는 내용 작성
+- 약 {remaining:,}자 분량 추가
+- 기존 스타일(학술적, 객관적) 유지
+- 마무리 + 다음 에피소드 예고 포함
+"""
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        response = client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": "한국사 대본 작가입니다. 기존 대본에 이어서 작성합니다."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt}]
+                }
+            ],
+            temperature=0.7,
+        )
+
+        if getattr(response, "output_text", None):
+            continuation = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            continuation = "\n".join(text_chunks).strip()
+
+        # 비용 계산
+        input_tokens = len(prompt) // 2
+        output_tokens = len(continuation) // 2
+        cost = (input_tokens * 0.001 / 1000) + (output_tokens * 0.003 / 1000)
+
+        print(f"[SCRIPT] 이어쓰기 완료: +{len(continuation):,}자")
+
+        return {
+            "script": continuation,
+            "length": len(continuation),
+            "cost": cost,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
