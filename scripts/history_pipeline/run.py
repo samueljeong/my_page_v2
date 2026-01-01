@@ -476,12 +476,21 @@ def run_auto_script_pipeline(
 
             print(f"[AUTO-SCRIPT] 자료 수집 완료: {len(full_content):,}자, {len(sources)}개 출처")
 
-            # 2b) 다음 에피소드 정보 (예고용)
+            # 2b) 에피소드 컨텍스트 수집 ★ API 장점 활용
             next_info = _get_next_episode_preview(era, era_episode, total_episodes)
+            prev_info = _get_prev_episode_context(era, era_episode)
+            series_ctx = _get_series_context(era, era_episode, total_episodes)
 
-            # 2c) GPT-5.1 대본 생성
-            print(f"[AUTO-SCRIPT] GPT-5.1 대본 생성 중...")
-            script_result = generate_script_with_retry(
+            print(f"[AUTO-SCRIPT] 컨텍스트 수집 완료:")
+            print(f"  - 이전 에피소드: {prev_info.get('title') if prev_info else '없음 (첫 화)'}")
+            print(f"  - 다음 에피소드: {next_info.get('title') if next_info else '없음 (마지막 화)'}")
+            print(f"  - 시리즈 위치: {series_ctx.get('global_episode')}/{series_ctx.get('total_global_episodes')}화")
+
+            # 2c) GPT-5.1 파트별 대본 생성 ★ API 장점 활용
+            print(f"[AUTO-SCRIPT] GPT-5.1 파트별 대본 생성 중...")
+            from .script_generator import generate_script_by_parts
+
+            script_result = generate_script_by_parts(
                 era_name=era_name,
                 episode=era_episode,
                 total_episodes=total_episodes,
@@ -490,6 +499,8 @@ def run_auto_script_pipeline(
                 full_content=full_content,
                 sources=sources,
                 next_episode_info=next_info,
+                prev_episode_info=prev_info,      # ★ 이전 에피소드 연결
+                series_context=series_ctx,         # ★ 시리즈 전체 맥락
             )
 
             if "error" in script_result:
@@ -508,7 +519,7 @@ def run_auto_script_pipeline(
 
             print(f"[AUTO-SCRIPT] 대본 생성 완료: {script_length:,}자, ${cost:.4f}")
 
-            # 2d) 시트에 대본 저장 + 상태 "대기"로 변경
+            # 2d) 시트에 대본 저장 + 상태 "대기"로 변경 + SEO 메타데이터
             print(f"[AUTO-SCRIPT] 시트 저장 중...")
             update_result = update_script_and_status(
                 service=service,
@@ -516,6 +527,9 @@ def run_auto_script_pipeline(
                 row_index=row_index,
                 script=script,
                 new_status="대기",
+                youtube_title=script_result.get("youtube_title"),        # ★ SEO 제목
+                thumbnail_text=script_result.get("thumbnail_text"),      # ★ 썸네일 문구
+                youtube_sources=script_result.get("youtube_sources"),    # ★ 출처 링크
             )
 
             if not update_result.get("success"):
@@ -558,6 +572,75 @@ def run_auto_script_pipeline(
         traceback.print_exc()
 
     return result
+
+
+def _get_prev_episode_context(era: str, era_episode: int) -> Dict[str, Any]:
+    """
+    이전 에피소드 컨텍스트 (API 장점 활용)
+
+    대본 생성 시 이전 에피소드와 자연스럽게 연결되도록 정보 제공
+    """
+    if era_episode <= 1:
+        # 시대 첫 화인 경우
+        try:
+            idx = ERA_ORDER.index(era)
+            if idx > 0:
+                # 이전 시대 마지막 에피소드
+                prev_era = ERA_ORDER[idx - 1]
+                prev_era_topics = HISTORY_TOPICS.get(prev_era, [])
+                prev_era_info = ERAS.get(prev_era, {})
+
+                if prev_era_topics:
+                    last_topic = prev_era_topics[-1]
+                    return {
+                        "type": "new_era",
+                        "prev_era": prev_era,
+                        "prev_era_name": prev_era_info.get("name", prev_era),
+                        "title": last_topic.get("title", ""),
+                        "summary": last_topic.get("topic", ""),
+                    }
+        except ValueError:
+            pass
+        return None  # 시리즈 첫 화
+    else:
+        # 같은 시대 이전 에피소드
+        era_topics = HISTORY_TOPICS.get(era, [])
+        prev_topic = era_topics[era_episode - 2] if len(era_topics) >= era_episode - 1 else {}
+        era_info = ERAS.get(era, {})
+        return {
+            "type": "same_era",
+            "era": era,
+            "era_name": era_info.get("name", era),
+            "era_episode": era_episode - 1,
+            "title": prev_topic.get("title", ""),
+            "summary": prev_topic.get("topic", ""),
+        }
+
+
+def _get_series_context(era: str, era_episode: int, total_episodes: int) -> Dict[str, Any]:
+    """
+    시리즈 전체 컨텍스트 (API 장점 활용)
+
+    전체 60화 시리즈에서 현재 에피소드의 위치 정보
+    """
+    # 전체 에피소드 수 계산
+    total_global = 0
+    global_episode = 0
+    era_index = 0
+
+    for i, e in enumerate(ERA_ORDER):
+        era_topics = HISTORY_TOPICS.get(e, [])
+        if e == era:
+            era_index = i
+            global_episode = total_global + era_episode
+        total_global += len(era_topics)
+
+    return {
+        "global_episode": global_episode,
+        "total_global_episodes": total_global,
+        "era_index": era_index,
+        "total_eras": len(ERA_ORDER),
+    }
 
 
 def _get_next_episode_preview(era: str, era_episode: int, total_episodes: int) -> Dict[str, Any]:

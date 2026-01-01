@@ -745,9 +745,12 @@ def update_script_and_status(
     row_index: int,
     script: str,
     new_status: str = "대기",
+    youtube_title: str = None,      # ★ YouTube SEO 제목
+    thumbnail_text: str = None,     # ★ 썸네일 문구
+    youtube_sources: str = None,    # ★ YouTube 설명란 출처
 ) -> Dict[str, Any]:
     """
-    특정 행의 대본과 상태 업데이트
+    특정 행의 대본, 상태, SEO 메타데이터 업데이트
 
     Args:
         service: Google Sheets API 서비스 객체
@@ -755,6 +758,9 @@ def update_script_and_status(
         row_index: 시트 행 번호 (1-based)
         script: 생성된 대본
         new_status: 새 상태 (기본 "대기")
+        youtube_title: YouTube SEO 제목 (K열: 제목(GPT생성))
+        thumbnail_text: 썸네일 문구 (L열: 썸네일문구(입력))
+        youtube_sources: YouTube 설명란 출처 (I열: 인용링크)
 
     Returns:
         {"success": bool, "error": str}
@@ -762,10 +768,10 @@ def update_script_and_status(
     result = {"success": False, "error": None}
 
     try:
-        # 1) 시트 헤더(행 2) 읽기
+        # 1) 시트 헤더(행 2) 읽기 - 더 넓은 범위
         header_result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range=f"'{UNIFIED_HISTORY_SHEET}'!A2:Z2"
+            range=f"'{UNIFIED_HISTORY_SHEET}'!A2:AZ2"
         ).execute()
         header_rows = header_result.get('values', [])
 
@@ -776,6 +782,7 @@ def update_script_and_status(
         headers = header_rows[0]
         col_map = {h: i for i, h in enumerate(headers)}
 
+        # 필수 열 확인
         status_idx = col_map.get("상태", -1)
         script_idx = col_map.get("대본", -1)
 
@@ -784,7 +791,7 @@ def update_script_and_status(
             return result
 
         # 2) 상태 열 업데이트
-        status_col = chr(65 + status_idx)  # A=0, B=1, ...
+        status_col = _idx_to_col(status_idx)
         status_range = f"'{UNIFIED_HISTORY_SHEET}'!{status_col}{row_index}"
 
         service.spreadsheets().values().update(
@@ -795,7 +802,7 @@ def update_script_and_status(
         ).execute()
 
         # 3) 대본 열 업데이트
-        script_col = chr(65 + script_idx)
+        script_col = _idx_to_col(script_idx)
         script_range = f"'{UNIFIED_HISTORY_SHEET}'!{script_col}{row_index}"
 
         service.spreadsheets().values().update(
@@ -806,6 +813,47 @@ def update_script_and_status(
         ).execute()
 
         print(f"[HISTORY] 행 {row_index}: 상태='{new_status}', 대본={len(script):,}자 저장 완료")
+
+        # 4) ★ YouTube SEO 메타데이터 업데이트
+        if youtube_title:
+            title_idx = col_map.get("제목(GPT생성)", col_map.get("제목", -1))
+            if title_idx >= 0:
+                title_col = _idx_to_col(title_idx)
+                title_range = f"'{UNIFIED_HISTORY_SHEET}'!{title_col}{row_index}"
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=title_range,
+                    valueInputOption="RAW",
+                    body={"values": [[youtube_title]]}
+                ).execute()
+                print(f"[HISTORY] 제목 저장: {youtube_title[:30]}...")
+
+        if thumbnail_text:
+            thumb_idx = col_map.get("썸네일문구(입력)", col_map.get("thumbnail_copy", -1))
+            if thumb_idx >= 0:
+                thumb_col = _idx_to_col(thumb_idx)
+                thumb_range = f"'{UNIFIED_HISTORY_SHEET}'!{thumb_col}{row_index}"
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=thumb_range,
+                    valueInputOption="RAW",
+                    body={"values": [[thumbnail_text]]}
+                ).execute()
+                print(f"[HISTORY] 썸네일 문구 저장: {thumbnail_text.replace(chr(10), ' / ')}")
+
+        if youtube_sources:
+            sources_idx = col_map.get("인용링크", col_map.get("source_url", -1))
+            if sources_idx >= 0:
+                sources_col = _idx_to_col(sources_idx)
+                sources_range = f"'{UNIFIED_HISTORY_SHEET}'!{sources_col}{row_index}"
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=sources_range,
+                    valueInputOption="RAW",
+                    body={"values": [[youtube_sources]]}
+                ).execute()
+                print(f"[HISTORY] 인용링크 저장 완료")
+
         result["success"] = True
 
     except Exception as e:
@@ -813,3 +861,11 @@ def update_script_and_status(
         print(f"[HISTORY] 시트 업데이트 실패: {e}")
 
     return result
+
+
+def _idx_to_col(idx: int) -> str:
+    """인덱스를 열 문자로 변환 (0=A, 25=Z, 26=AA, ...)"""
+    if idx < 26:
+        return chr(65 + idx)
+    else:
+        return chr(64 + idx // 26) + chr(65 + idx % 26)
