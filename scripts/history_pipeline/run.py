@@ -464,19 +464,12 @@ def run_auto_script_pipeline(
             full_content = collected.get("full_content", "")
             sources = collected.get("sources", [])
 
-            # 자료 최소 기준 완화 (1000자 → 500자)
-            # API 실패 시에도 키워드 기반으로 대본 생성 시도
-            if len(full_content) < 500:
-                print(f"[AUTO-SCRIPT] 자료 부족 ({len(full_content)}자)")
-                result["details"].append({
-                    "era": era,
-                    "era_episode": era_episode,
-                    "title": title,
-                    "error": f"자료 부족 ({len(full_content)}자)"
-                })
-                continue
-
-            print(f"[AUTO-SCRIPT] 자료 수집 완료: {len(full_content):,}자, {len(sources)}개 출처")
+            # ★ 자료 부족해도 GPT 지식으로 대본 생성 시도
+            # 외부 API가 불안정하므로 최소 기준 제거
+            if len(full_content) < 100:
+                print(f"[AUTO-SCRIPT] 외부 자료 부족 ({len(full_content)}자) - GPT 지식으로 대본 생성")
+            else:
+                print(f"[AUTO-SCRIPT] 자료 수집 완료: {len(full_content):,}자, {len(sources)}개 출처")
 
             # 2b) 에피소드 컨텍스트 수집 ★ API 장점 활용
             next_info = _get_next_episode_preview(era, era_episode, total_episodes)
