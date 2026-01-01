@@ -77,14 +77,25 @@ def collect_topic_materials(
     keywords = topic_info.get("keywords", [])
     print(f"[HISTORY] 키워드: {', '.join(keywords[:5])}")
 
-    # ★ 2025-01 변경: 4개 공신력 있는 소스에서 자료 수집
-    # GPT-5.1에 전달하여 대본 자동 생성
+    # ★ 2025-01 변경: 위키백과 우선 + 기타 소스
+    # 외부 API가 불안정하므로 위키백과를 우선 사용
     all_materials = []
     all_sources = []
 
-    # 1. 한국민족문화대백과사전 (최우선)
+    # 1. 위키백과 (가장 안정적)
+    print(f"[HISTORY] → 위키백과 검색 중...")
+    for keyword in keywords[:3]:
+        items = _search_wikipedia_ko(keyword, max_results=2)
+        for item in items:
+            if item not in all_materials:
+                all_materials.append(item)
+                if item.get("url") and item["url"] not in all_sources:
+                    all_sources.append(item["url"])
+        time.sleep(0.3)
+
+    # 2. 한국민족문화대백과사전
     print(f"[HISTORY] → 한국민족문화대백과사전 검색 중...")
-    for keyword in keywords[:5]:
+    for keyword in keywords[:3]:
         items = _search_encykorea(keyword, max_results=2)
         for item in items:
             if item not in all_materials:
@@ -93,29 +104,7 @@ def collect_topic_materials(
                     all_sources.append(item["url"])
         time.sleep(0.3)
 
-    # 2. 국사편찬위원회 한국사DB
-    print(f"[HISTORY] → 국사편찬위원회 한국사DB 검색 중...")
-    for keyword in keywords[:3]:
-        items = _search_history_db(keyword, max_results=2)
-        for item in items:
-            if item not in all_materials:
-                all_materials.append(item)
-                if item.get("url") and item["url"] not in all_sources:
-                    all_sources.append(item["url"])
-        time.sleep(0.3)
-
-    # 3. 문화재청 국가문화유산포털
-    print(f"[HISTORY] → 문화재청 국가문화유산포털 검색 중...")
-    for keyword in keywords[:2]:
-        items = _search_heritage(keyword, max_results=2)
-        for item in items:
-            if item not in all_materials:
-                all_materials.append(item)
-                if item.get("url") and item["url"] not in all_sources:
-                    all_sources.append(item["url"])
-        time.sleep(0.3)
-
-    # 4. 국립중앙박물관
+    # 3. 국립중앙박물관
     print(f"[HISTORY] → 국립중앙박물관 검색 중...")
     items = _search_emuseum(era_name, keywords[:3], max_results=3)
     for item in items:
@@ -123,6 +112,18 @@ def collect_topic_materials(
             all_materials.append(item)
             if item.get("url") and item["url"] not in all_sources:
                 all_sources.append(item["url"])
+
+    # 4. 자료 부족 시 나무위키 추가
+    if len(all_materials) < 3:
+        print(f"[HISTORY] → 나무위키 추가 검색 중...")
+        for keyword in keywords[:2]:
+            items = _search_namu_wiki(keyword, max_results=2)
+            for item in items:
+                if item not in all_materials:
+                    all_materials.append(item)
+                    if item.get("url") and item["url"] not in all_sources:
+                        all_sources.append(item["url"])
+            time.sleep(0.3)
 
     # full_content 생성 (GPT-5.1에 전달할 자료)
     content_parts = []
