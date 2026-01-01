@@ -77,12 +77,13 @@ def collect_topic_materials(
     keywords = topic_info.get("keywords", [])
     print(f"[HISTORY] 키워드: {', '.join(keywords[:5])}")
 
-    # ★ 2025-01 변경: 4개 공신력 있는 소스에서 자료 수집
-    # GPT-5.1에 전달하여 대본 자동 생성
+    # ★ 2025-01 변경: 공신력 있는 소스만 사용
+    # 위키백과/나무위키 제외 (객관성 문제)
+    # 자료 수집 실패해도 GPT의 기존 지식으로 대본 생성 가능
     all_materials = []
     all_sources = []
 
-    # 1. 한국민족문화대백과사전 (최우선)
+    # 1. 한국민족문화대백과사전 (최우선 - 학술적 공신력)
     print(f"[HISTORY] → 한국민족문화대백과사전 검색 중...")
     for keyword in keywords[:5]:
         items = _search_encykorea(keyword, max_results=2)
@@ -93,29 +94,7 @@ def collect_topic_materials(
                     all_sources.append(item["url"])
         time.sleep(0.3)
 
-    # 2. 국사편찬위원회 한국사DB
-    print(f"[HISTORY] → 국사편찬위원회 한국사DB 검색 중...")
-    for keyword in keywords[:3]:
-        items = _search_history_db(keyword, max_results=2)
-        for item in items:
-            if item not in all_materials:
-                all_materials.append(item)
-                if item.get("url") and item["url"] not in all_sources:
-                    all_sources.append(item["url"])
-        time.sleep(0.3)
-
-    # 3. 문화재청 국가문화유산포털
-    print(f"[HISTORY] → 문화재청 국가문화유산포털 검색 중...")
-    for keyword in keywords[:2]:
-        items = _search_heritage(keyword, max_results=2)
-        for item in items:
-            if item not in all_materials:
-                all_materials.append(item)
-                if item.get("url") and item["url"] not in all_sources:
-                    all_sources.append(item["url"])
-        time.sleep(0.3)
-
-    # 4. 국립중앙박물관
+    # 2. 국립중앙박물관 (유물 정보)
     print(f"[HISTORY] → 국립중앙박물관 검색 중...")
     items = _search_emuseum(era_name, keywords[:3], max_results=3)
     for item in items:
@@ -507,71 +486,74 @@ def _search_namu_wiki(keyword: str, max_results: int = 2) -> List[Dict[str, Any]
 
 def _search_history_db(keyword: str, max_results: int = 3) -> List[Dict[str, Any]]:
     """
-    국사편찬위원회 한국사데이터베이스 검색
-    https://db.history.go.kr
+    국사편찬위원회 한국사데이터베이스 검색 (DuckDuckGo site: 검색 방식)
+
+    직접 사이트 접근이 차단되므로 DuckDuckGo를 통해 검색
     """
     items = []
 
     try:
-        # 한국사DB 통합검색 URL
-        search_url = "https://db.history.go.kr/search/searchTotalList.do"
-        params = {
-            "searchType": "TA",
-            "searchWord": keyword,
-            "searchMethod": "EXACT",
-            "itemCount": max_results,
-        }
+        # DuckDuckGo HTML 검색 (site: 제한)
+        search_query = f"site:db.history.go.kr {keyword}"
+        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(search_query)}"
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9",
-            "Referer": "https://db.history.go.kr/",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         }
 
-        response = requests.get(search_url, params=params, headers=headers, timeout=15)
+        response = requests.get(search_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
-            print(f"[HISTORY] 한국사DB 검색 실패: {response.status_code}")
+            print(f"[HISTORY] 한국사DB 검색 실패: HTTP {response.status_code}")
             return items
 
         page_html = response.text
 
-        # 검색 결과에서 링크 추출 (다양한 패턴 시도)
-        patterns = [
-            r'href="(https?://db\.history\.go\.kr/[^"]+)"[^>]*>([^<]+)</a>',
-            r'href="(/[^"]*item[^"]*)"[^>]*>([^<]+)</a>',
-            r'<a[^>]*href="([^"]+)"[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</a>',
-        ]
+        # DuckDuckGo 결과에서 db.history.go.kr 링크 추출
+        from urllib.parse import unquote
+        url_pattern = r'uddg=(https?%3A%2F%2F[^"]*db\.history\.go\.kr[^"&]*)'
+        url_matches = re.findall(url_pattern, page_html)
 
-        matches = []
-        for pattern in patterns:
-            found = re.findall(pattern, page_html, re.IGNORECASE)
-            if found:
-                matches.extend(found)
-                break
+        # 결과 텍스트 추출 (제목과 스니펫)
+        result_pattern = r'<a[^>]*class="result__a"[^>]*>([^<]+)</a>.*?<a[^>]*class="result__snippet"[^>]*>([^<]*)</a>'
+        text_matches = re.findall(result_pattern, page_html, re.DOTALL)
 
-        for url_path, title in matches[:max_results]:
-            if url_path.startswith('/'):
-                full_url = f"https://db.history.go.kr{url_path}"
-            else:
-                full_url = url_path
+        seen_urls = set()
 
-            title = html.unescape(title.strip())
-            if not title or len(title) < 2:
+        for i, encoded_url in enumerate(url_matches[:max_results]):
+            full_url = unquote(encoded_url)
+
+            if full_url in seen_urls:
                 continue
+            seen_urls.add(full_url)
 
-            # 내용 추출
+            # 제목 추출
+            title = keyword
+            snippet = ""
+            if i < len(text_matches):
+                title = html.unescape(text_matches[i][0]).strip()
+                snippet = html.unescape(re.sub(r'<[^>]+>', '', text_matches[i][1])).strip()
+
+            # 직접 접근 시도 (차단될 수 있음)
             content = _fetch_history_db_content(full_url)
 
-            items.append({
-                "title": title,
-                "url": full_url,
-                "content": content or f"[{title}] 국사편찬위원회 한국사데이터베이스 자료",
-                "source_type": "archive",
-                "source_name": "국사편찬위원회",
-            })
-            print(f"[HISTORY] 한국사DB: {title[:30]}...")
+            # 직접 접근 실패시 스니펫 사용
+            if not content and snippet:
+                content = f"[{title}]\n{snippet}"
+                print(f"[HISTORY] 한국사DB (스니펫): {title[:30]}... ({len(snippet)}자)")
+            elif content:
+                print(f"[HISTORY] 한국사DB (전문): {title[:30]}... ({len(content)}자)")
+
+            if content:
+                items.append({
+                    "title": title,
+                    "url": full_url,
+                    "content": content,
+                    "source_type": "archive",
+                    "source_name": "국사편찬위원회",
+                })
 
             time.sleep(0.3)
 
@@ -732,43 +714,84 @@ def _fetch_heritage_content(url: str) -> Optional[str]:
 
 def _search_encykorea(keyword: str, max_results: int = 3) -> List[Dict[str, Any]]:
     """
-    한국민족문화대백과사전 검색
+    한국민족문화대백과사전 검색 (DuckDuckGo site: 검색 방식)
+
+    직접 사이트 접근이 차단되므로 DuckDuckGo를 통해 검색
     """
     items = []
 
     try:
-        # 검색 URL
-        search_url = f"https://encykorea.aks.ac.kr/Article/Search/{quote_plus(keyword)}"
+        # DuckDuckGo HTML 검색 (site: 제한)
+        search_query = f"site:encykorea.aks.ac.kr {keyword}"
+        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(search_query)}"
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         }
 
-        response = requests.get(search_url, headers=headers, timeout=10)
+        response = requests.get(search_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
+            print(f"[HISTORY] 대백과사전 검색 실패: HTTP {response.status_code}")
             return items
 
-        # 검색 결과에서 링크 추출
-        pattern = r'href="(/Article/E\d+)"[^>]*>([^<]+)</a>'
-        matches = re.findall(pattern, response.text)
+        page_html = response.text
 
-        for url_path, title in matches[:max_results]:
-            full_url = f"https://encykorea.aks.ac.kr{url_path}"
+        # DuckDuckGo 결과에서 encykorea 링크 추출
+        # 패턴: href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fencykorea.aks.ac.kr%2FArticle%2FE..."
+        url_pattern = r'uddg=(https?%3A%2F%2Fencykorea\.aks\.ac\.kr%2FArticle%2FE\d+)'
+        url_matches = re.findall(url_pattern, page_html)
 
-            # 각 항목의 내용 추출
-            content = _fetch_encykorea_content(full_url)
+        # 결과 텍스트 추출 (제목과 스니펫)
+        result_pattern = r'<a[^>]*class="result__a"[^>]*>([^<]+)</a>.*?<a[^>]*class="result__snippet"[^>]*>([^<]*)</a>'
+        text_matches = re.findall(result_pattern, page_html, re.DOTALL)
 
-            items.append({
-                "title": title.strip(),
-                "url": full_url,
-                "content": content or "",
-                "source_type": "encyclopedia",
-                "source_name": "한국민족문화대백과사전",
-            })
+        # URL 디코딩 및 중복 제거
+        from urllib.parse import unquote
+        seen_urls = set()
+
+        for i, encoded_url in enumerate(url_matches[:max_results]):
+            full_url = unquote(encoded_url)
+
+            if full_url in seen_urls:
+                continue
+            seen_urls.add(full_url)
+
+            # 제목 추출 (검색 결과에서 또는 URL에서)
+            title = keyword
+            snippet = ""
+            if i < len(text_matches):
+                title = html.unescape(text_matches[i][0]).strip()
+                snippet = html.unescape(re.sub(r'<[^>]+>', '', text_matches[i][1])).strip()
+
+            # 문서 ID 추출
+            doc_id_match = re.search(r'Article/(E\d+)', full_url)
+            if doc_id_match:
+                # 직접 접근 시도 (차단될 수 있음)
+                content = _fetch_encykorea_content(full_url)
+
+                # 직접 접근 실패시 스니펫 사용
+                if not content and snippet:
+                    content = f"[{title}]\n{snippet}"
+                    print(f"[HISTORY] 대백과사전 (스니펫): {title[:30]}... ({len(snippet)}자)")
+                elif content:
+                    print(f"[HISTORY] 대백과사전 (전문): {title[:30]}... ({len(content)}자)")
+
+                if content:
+                    items.append({
+                        "title": title,
+                        "url": full_url,
+                        "content": content,
+                        "source_type": "encyclopedia",
+                        "source_name": "한국민족문화대백과사전",
+                    })
 
             time.sleep(0.3)
+
+        if not items:
+            print(f"[HISTORY] 대백과사전: '{keyword}' 검색 결과 없음")
 
     except Exception as e:
         print(f"[HISTORY] 대백과사전 검색 오류 ({keyword}): {e}")
@@ -784,8 +807,7 @@ def _search_emuseum(
     """
     국립중앙박물관 소장품 검색 (museum.go.kr)
 
-    e뮤지엄(emuseum.go.kr)은 500 에러가 발생하여
-    국립중앙박물관 본 사이트에서 검색
+    Render 서버에서 직접 접근 가능
     """
     items = []
 
