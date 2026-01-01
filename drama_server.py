@@ -20538,6 +20538,62 @@ def api_sheets_check_and_process():
                         sheets_update_cell_by_header(service, sheet_id, sheet_name, i, col_map, '에러메시지', '시작시간 없음 (서버 재시작)')
                         continue
 
+        # ========== 2.5 HISTORY 시트 '준비' → 대본 생성 → '대기' ==========
+        # 영상 생성 전에 먼저 대본이 없는 에피소드의 대본을 자동 생성
+        if 'HISTORY' in sheet_names:
+            try:
+                history_rows = sheets_read_rows(service, sheet_id, "'HISTORY'!A:Z")
+                if history_rows and len(history_rows) >= 3:
+                    history_headers = history_rows[1]
+                    history_col_map = get_column_mapping(history_headers)
+
+                    # '준비' 상태이고 대본이 없는 에피소드 찾기
+                    has_ready_without_script = False
+                    for i, row in enumerate(history_rows[2:], start=3):
+                        status = get_row_value(row, history_col_map, '상태')
+                        script = get_row_value(row, history_col_map, '대본')
+
+                        if status == '준비' and not script:
+                            has_ready_without_script = True
+                            print(f"[HISTORY] 행 {i}: '준비' 상태, 대본 없음 → 대본 자동 생성 시작")
+                            break
+
+                    if has_ready_without_script:
+                        # OpenAI API 키 확인
+                        if not os.environ.get('OPENAI_API_KEY'):
+                            print("[HISTORY] OPENAI_API_KEY 없음, 대본 생성 스킵")
+                        else:
+                            from scripts.history_pipeline import run_auto_script_pipeline
+
+                            script_result = run_auto_script_pipeline(
+                                sheet_id=sheet_id,
+                                service=service,
+                                max_scripts=1  # 한 번에 1개씩 처리
+                            )
+
+                            if script_result.get("success"):
+                                generated = script_result.get("scripts_generated", 0)
+                                cost = script_result.get("total_cost", 0)
+                                print(f"[HISTORY] 대본 생성 완료: {generated}개, 비용 ${cost:.4f}")
+
+                                if generated > 0:
+                                    # 대본 생성 완료 → 다음 cron에서 영상 생성
+                                    # (지금 바로 영상 생성하지 않고 다음 사이클에서 처리)
+                                    return jsonify({
+                                        "ok": True,
+                                        "message": f"HISTORY 대본 {generated}개 생성 완료, 다음 사이클에서 영상 생성",
+                                        "processed": 0,
+                                        "script_generated": generated,
+                                        "script_cost": cost,
+                                        "details": script_result.get("details", [])
+                                    })
+                            else:
+                                print(f"[HISTORY] 대본 생성 실패: {script_result.get('error')}")
+            except Exception as history_err:
+                print(f"[HISTORY] 대본 자동 생성 오류 (무시하고 계속): {history_err}")
+                import traceback
+                traceback.print_exc()
+
         # ========== 3. 모든 시트에서 대기 작업 수집 ==========
         pending_tasks = []  # [(예약시간, 시트순서, 시트이름, 행번호, 행데이터, 채널ID, col_map)]
 
