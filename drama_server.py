@@ -21973,6 +21973,118 @@ def api_history_test_topic():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route('/api/history/auto-generate', methods=['GET', 'POST'])
+def api_history_auto_generate():
+    """
+    한국사 대본 자동 생성 (GPT-5.1 파트별 생성)
+
+    ★ '준비' 상태 에피소드를 찾아 GPT-5.1로 대본 자동 생성
+    ★ 파트별 생성 (인트로 → 배경 → 본론 → 마무리)
+    ★ 이탈방지 훅 자동 삽입
+    ★ 출처는 YouTube 설명란용으로 별도 반환
+
+    파라미터:
+    - max_scripts: 한번에 생성할 최대 대본 수 (기본 1)
+    - force: "1"이면 이미 대본이 있어도 재생성
+
+    환경변수:
+    - OPENAI_API_KEY: GPT-5.1 API 키 (필수)
+    - HISTORY_SHEET_ID 또는 NEWS_SHEET_ID: 시트 ID
+
+    비용 예측 (GPT-5.1):
+    - 입력: ~$0.001/1K tokens
+    - 출력: ~$0.003/1K tokens
+    - 20,000자 대본: ~$0.04
+
+    응답 예시:
+    {
+        "ok": true,
+        "generated": 1,
+        "episodes": [
+            {
+                "episode": 1,
+                "title": "고조선의 건국",
+                "script_length": 20152,
+                "cost": 0.041,
+                "youtube_sources": "📚 참고 자료 및 출처..."
+            }
+        ],
+        "total_cost": 0.041
+    }
+    """
+    print("[HISTORY] ===== auto-generate 호출됨 =====")
+
+    try:
+        from scripts.history_pipeline import run_auto_script_pipeline
+
+        # 서비스 계정 인증
+        service = get_sheets_service_account()
+        if not service:
+            return jsonify({
+                "ok": False,
+                "error": "Google Sheets 서비스 계정이 설정되지 않았습니다"
+            }), 400
+
+        # OpenAI API 키 확인
+        if not os.environ.get('OPENAI_API_KEY'):
+            return jsonify({
+                "ok": False,
+                "error": "OPENAI_API_KEY 환경변수가 필요합니다"
+            }), 400
+
+        # 시트 ID
+        sheet_id = (
+            os.environ.get('HISTORY_SHEET_ID') or
+            os.environ.get('NEWS_SHEET_ID') or
+            os.environ.get('AUTOMATION_SHEET_ID')
+        )
+        if not sheet_id:
+            return jsonify({
+                "ok": False,
+                "error": "HISTORY_SHEET_ID, NEWS_SHEET_ID, 또는 AUTOMATION_SHEET_ID 환경변수가 필요합니다"
+            }), 400
+
+        # 설정
+        max_scripts = int(request.args.get('max_scripts', '1'))
+        force = request.args.get('force', '0') == '1'
+
+        print(f"[HISTORY] max_scripts: {max_scripts}, force: {force}")
+
+        # 대본 자동 생성 파이프라인 실행
+        result = run_auto_script_pipeline(
+            sheet_id=sheet_id,
+            service=service,
+            max_scripts=max_scripts
+        )
+
+        if result.get("success"):
+            return jsonify({
+                "ok": True,
+                "generated": result.get("generated", 0),
+                "episodes": result.get("episodes", []),
+                "total_cost": result.get("total_cost", 0),
+                "message": f"{result.get('generated', 0)}개 대본 생성 완료"
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "알 수 없는 오류"),
+                "details": result.get("details", [])
+            }), 500
+
+    except ImportError as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "error": f"모듈 로드 실패: {e}"
+        }), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route('/api/history/status', methods=['GET'])
 def api_history_status():
     """
