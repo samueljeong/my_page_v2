@@ -464,7 +464,9 @@ def run_auto_script_pipeline(
             full_content = collected.get("full_content", "")
             sources = collected.get("sources", [])
 
-            if len(full_content) < 1000:
+            # 자료 최소 기준 완화 (1000자 → 500자)
+            # API 실패 시에도 키워드 기반으로 대본 생성 시도
+            if len(full_content) < 500:
                 print(f"[AUTO-SCRIPT] 자료 부족 ({len(full_content)}자)")
                 result["details"].append({
                     "era": era,
