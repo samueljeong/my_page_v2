@@ -3637,13 +3637,32 @@ def propagate_extended_family_relationships(member, related_member, relationship
             sibling = Member.query.get(sib_rel.related_member_id)
             sibling_spouse = get_spouse(sibling)
 
+            # member가 sibling보다 연상인지 확인
+            member_is_older = False
+            if member.birth_date and sibling.birth_date:
+                member_is_older = member.birth_date < sibling.birth_date
+
             # 새 배우자(related_member) ↔ 형제자매
+            # member가 남자인 경우: related_member(아내)가 sibling에게
             if member.gender == 'M':
-                detail_new = '올케' if sibling.gender == 'F' else '형수'
-                detail_sib = '시누이' if sibling.gender == 'F' else '시동생'
+                if sibling.gender == 'F':  # 여자 형제
+                    detail_new = '올케'  # 오빠/남동생의 아내
+                    detail_sib = '시누이'  # 오빠/남동생의 아내에게
+                else:  # 남자 형제
+                    # 형수: 형의 아내, 제수: 동생의 아내
+                    detail_new = '형수' if member_is_older else '제수'
+                    detail_sib = '시동생' if member_is_older else '시숙'
+            # member가 여자인 경우: related_member(남편)이 sibling에게
             else:
-                detail_new = '매부' if sibling.gender == 'M' else '형부'
-                detail_sib = '처남' if sibling.gender == 'M' else '처제'
+                if sibling.gender == 'M':  # 남자 형제
+                    # 매형: 누나/언니의 남편, 매부: 여동생의 남편
+                    detail_new = '매형' if member_is_older else '매부'
+                    detail_sib = '처남'  # 아내의 남자 형제
+                else:  # 여자 형제
+                    # 형부: 언니의 남편, 제부: 동생의 남편
+                    detail_new = '형부' if member_is_older else '제부'
+                    detail_sib = '처제' if member_is_older else '처형'
+
             add_relation_if_not_exists(
                 related_member.id, sibling.id, 'in_law', detail_new, detail_sib
             )
@@ -4663,17 +4682,47 @@ def api_sync_god4u_to_registry():
             Member.family_members != ''
         ).all()
 
+        app.logger.info(f"[가족관계] family_members가 있는 교인 수: {len(members_with_family)}")
+
         for member in members_with_family:
             try:
                 # 공백으로 구분된 이름들 파싱
                 family_names = member.family_members.split()
+                app.logger.info(f"[가족관계] {member.name}의 family_members: {family_names}")
+
                 for name in family_names:
                     name = name.strip()
                     if not name or name == member.name:
                         continue
 
-                    # 같은 이름의 교인 찾기
-                    related = Member.query.filter_by(name=name).first()
+                    # 같은 이름의 교인 찾기 (동명이인 고려: 같은 교구/구역 우선)
+                    related_candidates = Member.query.filter_by(name=name).all()
+
+                    if not related_candidates:
+                        app.logger.warning(f"[가족관계] {member.name}의 가족 '{name}'을 찾을 수 없음")
+                        continue
+
+                    # 후보가 여러 명이면 같은 교구/구역 우선
+                    related = None
+                    if len(related_candidates) == 1:
+                        related = related_candidates[0]
+                    else:
+                        # 같은 교구 + 구역인 사람 우선
+                        for candidate in related_candidates:
+                            if candidate.district == member.district and candidate.section == member.section:
+                                related = candidate
+                                break
+                        # 못 찾으면 같은 교구만이라도
+                        if not related:
+                            for candidate in related_candidates:
+                                if candidate.district == member.district:
+                                    related = candidate
+                                    break
+                        # 그래도 못 찾으면 첫 번째
+                        if not related:
+                            related = related_candidates[0]
+                        app.logger.info(f"[가족관계] 동명이인 {len(related_candidates)}명 중 '{related.name}'({related.district}/{related.section}) 선택")
+
                     if related and related.id != member.id:
                         # 이미 관계가 있는지 확인 (모든 유형)
                         existing = FamilyRelationship.query.filter_by(
@@ -4697,9 +4746,18 @@ def api_sync_god4u_to_registry():
                             # 나이 차이 및 성별 확인
                             age_diff = None
                             is_diff_gender = False
+                            member_age = None
+                            related_age = None
+                            from datetime import date
+                            today = date.today()
+
                             if member.birth_date and related.birth_date:
                                 age_diff = (member.birth_date - related.birth_date).days / 365
                                 abs_age_diff = abs(age_diff)
+
+                                # 각자의 나이 계산
+                                member_age = (today - member.birth_date).days / 365
+                                related_age = (today - related.birth_date).days / 365
 
                                 # 성별 확인
                                 m_gender = (member.gender or '').upper()
@@ -4714,6 +4772,11 @@ def api_sync_god4u_to_registry():
                                 rel_type = 'spouse'
                             elif age_diff is not None:
                                 abs_age_diff = abs(age_diff)
+
+                                # 둘 중 한 명이라도 20세 미만이면 미성년자로 판단
+                                is_minor = (member_age is not None and member_age < 20) or \
+                                          (related_age is not None and related_age < 20)
+
                                 if abs_age_diff >= 18:
                                     # 나이 차이 18년 이상 → 부모/자녀
                                     if age_diff >= 18:  # 내가 18살 이상 어리면 → 상대는 부모
@@ -4722,11 +4785,11 @@ def api_sync_god4u_to_registry():
                                     else:  # 내가 18살 이상 많으면 → 상대는 자녀
                                         rel_type = 'parent'
                                         rel_detail = '자녀'
-                                elif is_diff_gender and abs_age_diff < 5:
-                                    # 성별 다름 + 나이 차이 5년 미만 → 배우자 가능성 높음
+                                elif is_diff_gender and abs_age_diff < 5 and not is_minor:
+                                    # 성별 다름 + 나이 차이 5년 미만 + 둘 다 성인 → 배우자 가능성 높음
                                     rel_type = 'spouse'
                                 else:
-                                    # 나이 차이 5~18년 또는 동성 → 형제자매
+                                    # 나이 차이 5~18년 또는 동성 또는 미성년자 → 형제자매
                                     rel_type = 'sibling'
 
                             rel = FamilyRelationship(
