@@ -108,8 +108,11 @@ class Member(db.Model):
     family_id = db.Column(db.Integer, db.ForeignKey('families.id'))
     family_role = db.Column(db.String(20))  # 가장, 배우자, 자녀 등
 
-    # 상태
-    status = db.Column(db.String(20), default='active')  # active, inactive, newcomer
+    # 상태 (active: 활동, inactive: 비활동, newcomer: 새신자, deceased: 별세, transferred: 타교회)
+    status = db.Column(db.String(20), default='active')
+    member_status = db.Column(db.String(30))  # god4u state 필드 (재적, 별세, 타교회 등)
+    deceased_date = db.Column(db.Date)  # 별세일자
+    transferred_date = db.Column(db.Date)  # 타교회 이적일자
     notes = db.Column(db.Text)  # 메모
 
     # 성도 구분 (god4u 매핑)
@@ -157,12 +160,107 @@ class Member(db.Model):
         return age
 
     @property
+    def korean_age(self):
+        """한국 나이 (세는 나이) - 새해에 나이가 바뀜"""
+        if not self.birth_date:
+            return None
+        today = get_seoul_today()
+        return today.year - self.birth_date.year + 1
+
+    @property
+    def church_school_department(self):
+        """교회학교 부서 자동 분류 (한국 나이 기준)
+
+        새해가 되면 자동으로 진급됨:
+        - 영아부: 1-3세 (0-2세 만 나이)
+        - 유치부: 4-7세 (3-6세 만 나이)
+        - 유년부: 8-10세 (초등 1-3학년)
+        - 초등부: 11-13세 (초등 4-6학년)
+        - 중등부: 14-16세 (중학교)
+        - 고등부: 17-19세 (고등학교)
+        - 청년부: 20-39세
+        - 장년부: 40세 이상
+        """
+        k_age = self.korean_age
+        if k_age is None:
+            return None
+
+        if k_age <= 3:
+            return '영아부'
+        elif k_age <= 7:
+            return '유치부'
+        elif k_age <= 10:
+            return '유년부'
+        elif k_age <= 13:
+            return '초등부'
+        elif k_age <= 16:
+            return '중등부'
+        elif k_age <= 19:
+            return '고등부'
+        elif k_age <= 39:
+            return '청년부'
+        else:
+            return '장년부'
+
+    @property
     def is_newcomer(self):
-        """새가족 여부 (등록 후 2년 이내)"""
+        """새신자 여부 (등록 후 2년 이내, 한국 시간 기준)"""
         if not self.registration_date:
             return False
-        two_years_ago = get_seoul_today() - timedelta(days=730)  # 약 2년
+        two_years_ago = get_seoul_today() - timedelta(days=730)  # 2년
         return self.registration_date > two_years_ago
+
+    @property
+    def status_display(self):
+        """상태 표시 텍스트"""
+        # 별세자와 타교회는 우선 표시
+        if self.status == 'deceased' or self.member_status in ['별세', '소천']:
+            return '별세'
+        if self.status == 'transferred' or self.member_status in ['타교회', '타교인', '이명']:
+            return '타교회'
+        # 새신자 체크 (등록 2년 이내)
+        if self.is_newcomer:
+            return '새신자'
+        # 일반 상태
+        if self.status == 'active':
+            return '활동'
+        if self.status == 'inactive':
+            return '비활동'
+        return self.status or '활동'
+
+    @property
+    def status_display_with_date(self):
+        """상태 표시 텍스트 (날짜 포함)"""
+        # 별세자
+        if self.status == 'deceased' or self.member_status in ['별세', '소천']:
+            if self.deceased_date:
+                return f'별세 ({self.deceased_date.strftime("%Y.%m.%d")})'
+            return '별세'
+        # 타교회
+        if self.status == 'transferred' or self.member_status in ['타교회', '타교인', '이명']:
+            if self.transferred_date:
+                return f'타교회 ({self.transferred_date.strftime("%Y.%m.%d")})'
+            return '타교회'
+        # 새신자 체크 (등록 2년 이내)
+        if self.is_newcomer:
+            return '새신자'
+        # 일반 상태
+        if self.status == 'active':
+            return '활동'
+        if self.status == 'inactive':
+            return '비활동'
+        return self.status or '활동'
+
+    @property
+    def status_class(self):
+        """CSS 클래스용 상태"""
+        if self.status == 'deceased' or self.member_status in ['별세', '소천']:
+            return 'deceased'
+        if self.status == 'transferred' or self.member_status in ['타교회', '타교인', '이명']:
+            return 'transferred'
+        if self.is_newcomer:
+            return 'newcomer'
+        return self.status or 'active'
 
     @property
     def display_name(self):
@@ -276,18 +374,18 @@ class Family(db.Model):
 
 
 class FamilyRelationship(db.Model):
-    """가족 관계 모델 - 개별 관계 정의"""
+    """가족 관계 모델 - 개별 관계 정의 (한국 가족 관계 전체 지원)"""
     __tablename__ = 'family_relationships'
 
     id = db.Column(db.Integer, primary_key=True)
     member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)  # 기준 교인
     related_member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)  # 관계 대상
 
-    # 관계 유형: spouse(배우자), parent(부모), child(자녀), sibling(형제자매)
+    # 관계 유형: spouse, parent, child, sibling, in_law, grandparent, grandchild, extended
     relationship_type = db.Column(db.String(20), nullable=False)
 
-    # 상세 관계 (선택): 아버지, 어머니, 아들, 딸, 형, 누나, 동생 등
-    relationship_detail = db.Column(db.String(20))
+    # 상세 관계: 아버지, 어머니, 시어머니, 장인, 동서, 시누이, 조카 등
+    relationship_detail = db.Column(db.String(30))
 
     created_at = db.Column(db.DateTime, default=get_seoul_now)
 
@@ -301,10 +399,14 @@ class FamilyRelationship(db.Model):
     )
 
     # 관계 유형 상수
-    SPOUSE = 'spouse'      # 배우자
-    PARENT = 'parent'      # 부모 (member가 related_member의 부모)
-    CHILD = 'child'        # 자녀 (member가 related_member의 자녀)
-    SIBLING = 'sibling'    # 형제자매
+    SPOUSE = 'spouse'           # 배우자
+    PARENT = 'parent'           # 부모
+    CHILD = 'child'             # 자녀
+    SIBLING = 'sibling'         # 형제자매
+    IN_LAW = 'in_law'           # 인척 (시댁/처가/사돈)
+    GRANDPARENT = 'grandparent' # 조부모
+    GRANDCHILD = 'grandchild'   # 손자녀
+    EXTENDED = 'extended'       # 확대가족 (삼촌, 고모, 조카 등)
 
     # 관계 역방향 매핑
     REVERSE_RELATIONSHIPS = {
@@ -312,16 +414,118 @@ class FamilyRelationship(db.Model):
         'parent': 'child',
         'child': 'parent',
         'sibling': 'sibling',
+        'in_law': 'in_law',
+        'grandparent': 'grandchild',
+        'grandchild': 'grandparent',
+        'extended': 'extended',
     }
 
-    # 상세 관계 역방향 매핑
+    # 한국 가족 관계 상세 목록 (relationship_detail에 사용)
+    KOREAN_RELATIONSHIPS = {
+        # 배우자
+        'spouse': ['남편', '아내', '배우자'],
+
+        # 부모
+        'parent': ['아버지', '어머니', '부모'],
+
+        # 자녀
+        'child': ['아들', '딸', '자녀'],
+
+        # 형제자매
+        'sibling': ['형', '오빠', '누나', '언니', '남동생', '여동생', '동생', '형제', '자매', '남매'],
+
+        # 인척 - 시댁
+        'in_law_husband_side': [
+            '시아버지', '시어머니', '시부모',  # 배우자의 부모
+            '시형', '시동생', '시누이', '시숙', '형님', '아주버님',  # 배우자의 형제자매
+            '시조부', '시조모',  # 배우자의 조부모
+        ],
+
+        # 인척 - 처가
+        'in_law_wife_side': [
+            '장인', '장모', '처부모',  # 배우자의 부모
+            '처형', '처남', '처제', '처남댁', '형님',  # 배우자의 형제자매
+        ],
+
+        # 인척 - 형제자매의 배우자
+        'in_law_sibling_spouse': [
+            '형수', '제수', '올케',  # 형제의 아내
+            '매형', '매부', '제부', '형부',  # 자매의 남편
+            '동서',  # 형제자매의 배우자끼리
+        ],
+
+        # 인척 - 자녀의 배우자
+        'in_law_child_spouse': [
+            '며느리', '사위',  # 자녀의 배우자
+            '손자며느리', '손녀사위',  # 손자녀의 배우자
+        ],
+
+        # 인척 - 사돈
+        'in_law_saddon': [
+            '사돈', '바깥사돈', '안사돈', '사돈어른',
+        ],
+
+        # 조부모
+        'grandparent': ['할아버지', '할머니', '조부', '조모', '외할아버지', '외할머니', '외조부', '외조모'],
+
+        # 손자녀
+        'grandchild': ['손자', '손녀', '외손자', '외손녀'],
+
+        # 확대가족 - 삼촌/고모/이모
+        'extended_parent_sibling': [
+            '삼촌', '큰아버지', '작은아버지', '막내삼촌',
+            '고모', '큰고모', '작은고모',
+            '외삼촌', '큰외삼촌', '작은외삼촌',
+            '이모', '큰이모', '작은이모',
+            '숙부', '숙모', '고모부', '이모부',
+        ],
+
+        # 확대가족 - 조카
+        'extended_niece_nephew': [
+            '조카', '조카딸', '조카아들', '생질', '생질녀',
+            '외조카', '이종조카', '고종조카',
+        ],
+
+        # 확대가족 - 사촌
+        'extended_cousin': [
+            '사촌', '사촌형', '사촌누나', '사촌오빠', '사촌언니', '사촌동생',
+            '고종사촌', '이종사촌', '외사촌',
+        ],
+    }
+
+    # 상세 관계 역방향 매핑 (남성↔여성 기준)
     REVERSE_DETAILS = {
+        # 배우자
         '남편': '아내', '아내': '남편',
-        '아버지': '아들', '아들': '아버지',
-        '아버지': '딸', '딸': '아버지',
-        '어머니': '아들', '어머니': '딸',
-        '형': '동생', '누나': '동생', '오빠': '동생', '언니': '동생',
-        '동생': None,  # 동생은 상대방 성별에 따라 다름
+
+        # 부모↔자녀
+        '아버지': '아들', '어머니': '아들',  # 아들 입장
+        '아버지': '딸', '어머니': '딸',      # 딸 입장
+
+        # 형제자매 (성별에 따라 다름)
+        '형': '동생', '오빠': '동생', '누나': '동생', '언니': '동생',
+        '남동생': '형', '여동생': '언니',
+
+        # 조부모↔손자녀
+        '할아버지': '손자', '할머니': '손자',
+        '외할아버지': '외손자', '외할머니': '외손자',
+
+        # 시댁 관계
+        '시아버지': '며느리', '시어머니': '며느리',
+        '며느리': '시어머니',
+
+        # 처가 관계
+        '장인': '사위', '장모': '사위',
+        '사위': '장인',
+
+        # 형제자매의 배우자
+        '형수': '시동생', '제수': '시형',
+        '매형': '처제', '매부': '처형',
+        '동서': '동서',
+
+        # 삼촌/조카
+        '삼촌': '조카', '고모': '조카', '이모': '조카', '외삼촌': '조카',
+        '조카': '삼촌',
     }
 
     @classmethod
@@ -346,6 +550,58 @@ class FamilyRelationship(db.Model):
 
         return [rel1, rel2]
 
+    @classmethod
+    def get_all_relationship_options(cls):
+        """UI용 관계 선택 옵션 반환"""
+        options = []
+
+        # 직계가족
+        options.append({'group': '배우자', 'items': cls.KOREAN_RELATIONSHIPS['spouse']})
+        options.append({'group': '부모', 'items': cls.KOREAN_RELATIONSHIPS['parent']})
+        options.append({'group': '자녀', 'items': cls.KOREAN_RELATIONSHIPS['child']})
+        options.append({'group': '형제자매', 'items': cls.KOREAN_RELATIONSHIPS['sibling']})
+
+        # 조부모/손자녀
+        options.append({'group': '조부모', 'items': cls.KOREAN_RELATIONSHIPS['grandparent']})
+        options.append({'group': '손자녀', 'items': cls.KOREAN_RELATIONSHIPS['grandchild']})
+
+        # 인척
+        options.append({'group': '시댁', 'items': cls.KOREAN_RELATIONSHIPS['in_law_husband_side']})
+        options.append({'group': '처가', 'items': cls.KOREAN_RELATIONSHIPS['in_law_wife_side']})
+        options.append({'group': '형제자매의 배우자', 'items': cls.KOREAN_RELATIONSHIPS['in_law_sibling_spouse']})
+        options.append({'group': '자녀의 배우자', 'items': cls.KOREAN_RELATIONSHIPS['in_law_child_spouse']})
+        options.append({'group': '사돈', 'items': cls.KOREAN_RELATIONSHIPS['in_law_saddon']})
+
+        # 확대가족
+        options.append({'group': '삼촌/고모/이모', 'items': cls.KOREAN_RELATIONSHIPS['extended_parent_sibling']})
+        options.append({'group': '조카', 'items': cls.KOREAN_RELATIONSHIPS['extended_niece_nephew']})
+        options.append({'group': '사촌', 'items': cls.KOREAN_RELATIONSHIPS['extended_cousin']})
+
+        return options
+
+    @classmethod
+    def detail_to_type(cls, detail):
+        """상세 관계에서 관계 유형 추론"""
+        if detail in cls.KOREAN_RELATIONSHIPS['spouse']:
+            return 'spouse'
+        elif detail in cls.KOREAN_RELATIONSHIPS['parent']:
+            return 'parent'
+        elif detail in cls.KOREAN_RELATIONSHIPS['child']:
+            return 'child'
+        elif detail in cls.KOREAN_RELATIONSHIPS['sibling']:
+            return 'sibling'
+        elif detail in cls.KOREAN_RELATIONSHIPS['grandparent']:
+            return 'grandparent'
+        elif detail in cls.KOREAN_RELATIONSHIPS['grandchild']:
+            return 'grandchild'
+        elif any(detail in cls.KOREAN_RELATIONSHIPS[k] for k in ['in_law_husband_side', 'in_law_wife_side',
+                 'in_law_sibling_spouse', 'in_law_child_spouse', 'in_law_saddon']):
+            return 'in_law'
+        elif any(detail in cls.KOREAN_RELATIONSHIPS[k] for k in ['extended_parent_sibling',
+                 'extended_niece_nephew', 'extended_cousin']):
+            return 'extended'
+        return 'extended'  # 기본값
+
     def get_display_text(self):
         """표시용 텍스트 (예: 배우자, 아버지, 딸 등)"""
         if self.relationship_detail:
@@ -356,6 +612,10 @@ class FamilyRelationship(db.Model):
             'parent': '부모',
             'child': '자녀',
             'sibling': '형제자매',
+            'in_law': '인척',
+            'grandparent': '조부모',
+            'grandchild': '손자녀',
+            'extended': '친척',
         }
         return type_names.get(self.relationship_type, self.relationship_type)
 
@@ -462,36 +722,121 @@ def member_list():
     """교인 목록"""
     # 검색 파라미터
     query = request.args.get('q', '')
-    status_filter = request.args.get('status', '')
-    group_filter = request.args.get('group', '')
+    cat1 = request.args.get('cat1', '')  # 1단계 카테고리: district, position, reg_status, attendance, mission, cell
+    cat2 = request.args.get('cat2', '')  # 2단계: 세부 값
 
-    # 기본 쿼리
+    # 기본 쿼리 (기본적으로 별세/타교인 제외)
     members_query = Member.query
 
     # 이름 검색
     if query:
         members_query = members_query.filter(Member.name.contains(query))
 
-    # 상태 필터
-    if status_filter:
-        members_query = members_query.filter(Member.status == status_filter)
-
-    # 그룹 필터
-    if group_filter:
-        try:
-            members_query = members_query.filter(Member.group_id == int(group_filter))
-        except ValueError:
-            pass  # 잘못된 그룹 ID는 무시
+    # 카테고리 필터링
+    if cat1 == 'district' and cat2:
+        # 교구 필터
+        members_query = members_query.filter(Member.district.contains(cat2))
+        # 별세/타교인 제외
+        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+    elif cat1 == 'position' and cat2:
+        # 직분 필터
+        members_query = members_query.filter(Member.member_type == cat2)
+        # 별세/타교인 제외
+        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+    elif cat1 == 'reg_status':
+        # 등록상태 필터 (교인/별세/타교인)
+        if cat2 == 'active_member':
+            # 현재 재적 교인 (별세, 타교인 제외)
+            members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+        elif cat2 == 'deceased':
+            members_query = members_query.filter(
+                db.or_(Member.status == 'deceased', Member.member_status.in_(['별세', '소천']))
+            )
+        elif cat2 == 'transferred':
+            members_query = members_query.filter(
+                db.or_(Member.status == 'transferred', Member.member_status.in_(['타교회', '타교인', '이명']))
+            )
+    elif cat1 == 'attendance' and cat2:
+        # 출석상태 필터
+        if cat2 == 'active':
+            members_query = members_query.filter(Member.status == 'active')
+        elif cat2 == 'inactive':
+            members_query = members_query.filter(Member.status == 'inactive')
+        elif cat2 == 'newcomer':
+            # 새신자: 등록 2년 이내
+            two_years_ago = get_seoul_today() - timedelta(days=730)
+            members_query = members_query.filter(Member.registration_date > two_years_ago)
+        # 별세/타교인 제외
+        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+    elif cat1 == 'mission' and cat2:
+        # 선교회 필터
+        members_query = members_query.filter(Member.mission_group.contains(cat2))
+        # 별세/타교인 제외
+        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+    elif cat1 == 'cell' and cat2:
+        # 속회 필터
+        members_query = members_query.filter(Member.cell_group.contains(cat2))
+        # 별세/타교인 제외
+        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+    else:
+        # 기본: 별세/타교인 제외
+        if not query:  # 검색어가 있으면 모두 표시 (별세/타교인 포함)
+            members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
 
     members = members_query.order_by(Member.name).all()
-    groups = Group.query.all()
+
+    # 2단계 옵션 데이터 수집
+    cat2_options = {}
+    if cat1 == 'district':
+        # 교구 목록
+        districts = db.session.query(Member.district).filter(Member.district.isnot(None)).distinct().all()
+        cat2_options = {d[0]: d[0] for d in districts if d[0]}
+    elif cat1 == 'position':
+        # 직분 목록
+        positions = db.session.query(Member.member_type).filter(Member.member_type.isnot(None)).distinct().all()
+        cat2_options = {p[0]: p[0] for p in positions if p[0]}
+    elif cat1 == 'reg_status':
+        cat2_options = {
+            'active_member': '현재 교인',
+            'deceased': '별세',
+            'transferred': '타교회'
+        }
+    elif cat1 == 'attendance':
+        cat2_options = {
+            'active': '활동',
+            'inactive': '비활동',
+            'newcomer': '새신자'
+        }
+    elif cat1 == 'mission':
+        missions = db.session.query(Member.mission_group).filter(Member.mission_group.isnot(None)).distinct().all()
+        cat2_options = {m[0]: m[0] for m in missions if m[0]}
+    elif cat1 == 'cell':
+        cells = db.session.query(Member.cell_group).filter(Member.cell_group.isnot(None)).distinct().all()
+        cat2_options = {c[0]: c[0] for c in cells if c[0]}
+
+    # JavaScript용 전체 옵션 데이터
+    all_districts = db.session.query(Member.district).filter(Member.district.isnot(None)).distinct().all()
+    district_options = {d[0]: d[0] for d in all_districts if d[0]}
+
+    all_positions = db.session.query(Member.member_type).filter(Member.member_type.isnot(None)).distinct().all()
+    position_options = {p[0]: p[0] for p in all_positions if p[0]}
+
+    all_missions = db.session.query(Member.mission_group).filter(Member.mission_group.isnot(None)).distinct().all()
+    mission_options = {m[0]: m[0] for m in all_missions if m[0]}
+
+    all_cells = db.session.query(Member.cell_group).filter(Member.cell_group.isnot(None)).distinct().all()
+    cell_options = {c[0]: c[0] for c in all_cells if c[0]}
 
     return render_template('members/list.html',
                          members=members,
-                         groups=groups,
                          query=query,
-                         status_filter=status_filter,
-                         group_filter=group_filter)
+                         cat1=cat1,
+                         cat2=cat2,
+                         cat2_options=cat2_options,
+                         district_options=district_options,
+                         position_options=position_options,
+                         mission_options=mission_options,
+                         cell_options=cell_options)
 
 
 @app.route('/members/new', methods=['GET', 'POST'])
@@ -537,6 +882,15 @@ def member_new():
         else:
             registration_date = get_seoul_today()
 
+        # 별세일자 / 타교일자
+        deceased_date = None
+        if request.form.get('deceased_date'):
+            deceased_date = datetime.strptime(request.form.get('deceased_date'), '%Y-%m-%d').date()
+
+        transferred_date = None
+        if request.form.get('transferred_date'):
+            transferred_date = datetime.strptime(request.form.get('transferred_date'), '%Y-%m-%d').date()
+
         # 유효성 검사
         if not name:
             flash('이름은 필수 입력 항목입니다.', 'danger')
@@ -566,7 +920,9 @@ def member_new():
             mission_group=mission_group if mission_group else None,
             barnabas=barnabas if barnabas else None,
             referrer=referrer if referrer else None,
-            faith_level=faith_level if faith_level else None
+            faith_level=faith_level if faith_level else None,
+            deceased_date=deceased_date,
+            transferred_date=transferred_date
         )
 
         db.session.add(member)
@@ -655,6 +1011,17 @@ def member_edit(member_id):
 
         if request.form.get('registration_date'):
             member.registration_date = datetime.strptime(request.form.get('registration_date'), '%Y-%m-%d').date()
+
+        # 별세일자 / 타교일자
+        if request.form.get('deceased_date'):
+            member.deceased_date = datetime.strptime(request.form.get('deceased_date'), '%Y-%m-%d').date()
+        else:
+            member.deceased_date = None
+
+        if request.form.get('transferred_date'):
+            member.transferred_date = datetime.strptime(request.form.get('transferred_date'), '%Y-%m-%d').date()
+        else:
+            member.transferred_date = None
 
         # 유효성 검사
         if not member.name:
@@ -1048,8 +1415,18 @@ def offering_delete(offering_id):
 
 @app.route('/newcomers')
 def newcomer_list():
-    """새신자 목록"""
-    newcomers = Member.query.filter_by(status='newcomer').order_by(Member.registration_date.desc()).all()
+    """새신자 목록 (등록 후 2년 이내)"""
+    from sqlalchemy import or_
+    two_years_ago = get_seoul_today() - timedelta(days=730)
+    # 등록일이 2년 이내인 교인 (별세자, 타교회 제외)
+    newcomers = Member.query.filter(
+        Member.registration_date > two_years_ago,
+        Member.status.notin_(['deceased', 'transferred']),
+        or_(
+            Member.member_status.is_(None),
+            ~Member.member_status.in_(['별세', '소천', '타교회', '타교인', '이명'])
+        )
+    ).order_by(Member.registration_date.desc()).all()
     return render_template('newcomers/list.html', newcomers=newcomers)
 
 
@@ -2554,6 +2931,9 @@ def migrate_db():
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS zipcode VARCHAR(20)",  # 우편번호
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS occupation VARCHAR(100)",  # 직업
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS partner_id INTEGER",  # 배우자 ID
+        "ALTER TABLE members ADD COLUMN IF NOT EXISTS member_status VARCHAR(30)",  # god4u state (재적, 별세, 타교회 등)
+        "ALTER TABLE members ADD COLUMN IF NOT EXISTS deceased_date DATE",  # 별세일자
+        "ALTER TABLE members ADD COLUMN IF NOT EXISTS transferred_date DATE",  # 타교회 이적일자
 
         # Group 테이블 새 컬럼들 (계층 구조)
         "ALTER TABLE groups ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES groups(id)",
@@ -2566,10 +2946,13 @@ def migrate_db():
             member_id INTEGER NOT NULL REFERENCES members(id),
             related_member_id INTEGER NOT NULL REFERENCES members(id),
             relationship_type VARCHAR(20) NOT NULL,
-            relationship_detail VARCHAR(20),
+            relationship_detail VARCHAR(30),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(member_id, related_member_id, relationship_type)
         )""",
+
+        # relationship_detail 컬럼 크기 확장 (기존 테이블용)
+        "ALTER TABLE family_relationships ALTER COLUMN relationship_detail TYPE VARCHAR(30)",
     ]
 
     results = []
@@ -2934,6 +3317,10 @@ def api_get_member_family(member_id):
         "parents": [],
         "children": [],
         "siblings": [],
+        "in_laws": [],       # 인척 (시댁/처가/형제자매 배우자)
+        "grandparents": [],  # 조부모
+        "grandchildren": [], # 손자녀
+        "extended": [],      # 확대가족 (삼촌/고모/조카/사촌 등)
     }
 
     for rel in relationships:
@@ -2942,16 +3329,25 @@ def api_get_member_family(member_id):
             **member_summary(related),
             "relationship_id": rel.id,
             "relationship_detail": rel.relationship_detail,
+            "relationship_type": rel.relationship_type,
         }
 
         if rel.relationship_type == 'spouse':
             family_data["spouse"] = rel_info
-        elif rel.relationship_type == 'child':  # 내가 자녀 = 상대가 부모
+        elif rel.relationship_type == 'child':  # 내가 자녀의 부모 = 상대가 부모
             family_data["parents"].append(rel_info)
         elif rel.relationship_type == 'parent':  # 내가 부모 = 상대가 자녀
             family_data["children"].append(rel_info)
         elif rel.relationship_type == 'sibling':
             family_data["siblings"].append(rel_info)
+        elif rel.relationship_type == 'in_law':
+            family_data["in_laws"].append(rel_info)
+        elif rel.relationship_type == 'grandparent':
+            family_data["grandchildren"].append(rel_info)
+        elif rel.relationship_type == 'grandchild':
+            family_data["grandparents"].append(rel_info)
+        elif rel.relationship_type == 'extended':
+            family_data["extended"].append(rel_info)
 
     # 대가족 (Family 모델)
     if member.family_id:
@@ -2966,22 +3362,140 @@ def api_get_member_family(member_id):
     return jsonify(family_data)
 
 
+def propagate_extended_family_relationships(member, related_member, relationship_type, detail):
+    """
+    확대 가족 관계 자동 전파
+    예: C와 D가 형제이고, C의 배우자가 E, D의 배우자가 F이면:
+    - E와 D는 형제자매의 배우자 관계 (올케/시누이/형수 등)
+    - F와 C는 형제자매의 배우자 관계 (올케/시누이/형수 등)
+    - E와 F는 동서 관계
+    """
+    created_relations = []
+
+    def get_spouse(m):
+        """배우자 찾기"""
+        rel = FamilyRelationship.query.filter_by(member_id=m.id, relationship_type='spouse').first()
+        return Member.query.get(rel.related_member_id) if rel else None
+
+    def add_relation_if_not_exists(m1_id, m2_id, rel_type, det1, det2):
+        """중복 없이 관계 추가"""
+        existing = FamilyRelationship.query.filter_by(
+            member_id=m1_id, related_member_id=m2_id
+        ).first()
+        if not existing and m1_id != m2_id:
+            rels = FamilyRelationship.create_bidirectional(m1_id, m2_id, rel_type, det1, det2)
+            for r in rels:
+                db.session.add(r)
+            created_relations.extend(rels)
+
+    # 1. 형제자매 관계 추가 시: 배우자들 사이의 관계 자동 생성
+    if relationship_type == 'sibling':
+        member_spouse = get_spouse(member)
+        related_spouse = get_spouse(related_member)
+
+        # member의 배우자 ↔ related_member (형제자매의 배우자)
+        if member_spouse:
+            # 내 배우자가 상대방의 형제자매의 배우자가 됨
+            if member.gender == 'M':  # 남자의 배우자(아내) → 상대에게 형수/제수/올케
+                detail_to_related = '형수' if detail in ['형', '오빠'] else '올케'
+                detail_from_related = '시동생' if detail in ['형', '오빠'] else '시누이'
+            else:  # 여자의 배우자(남편) → 상대에게 매형/매부/형부
+                detail_to_related = '매형' if detail in ['누나', '언니'] else '매부'
+                detail_from_related = '처제' if detail in ['누나', '언니'] else '처형'
+            add_relation_if_not_exists(
+                member_spouse.id, related_member.id, 'in_law',
+                detail_to_related, detail_from_related
+            )
+
+        # related_member의 배우자 ↔ member (형제자매의 배우자)
+        if related_spouse:
+            if related_member.gender == 'M':
+                detail_to_member = '형수' if detail in ['동생', '남동생', '여동생'] else '올케'
+                detail_from_member = '시누이' if detail in ['동생', '남동생', '여동생'] else '시동생'
+            else:
+                detail_to_member = '매형' if detail in ['동생', '남동생', '여동생'] else '매부'
+                detail_from_member = '처형' if detail in ['동생', '남동생', '여동생'] else '처제'
+            add_relation_if_not_exists(
+                related_spouse.id, member.id, 'in_law',
+                detail_to_member, detail_from_member
+            )
+
+        # 두 배우자끼리 동서 관계
+        if member_spouse and related_spouse:
+            add_relation_if_not_exists(
+                member_spouse.id, related_spouse.id, 'in_law', '동서', '동서'
+            )
+
+    # 2. 배우자 관계 추가 시: 기존 형제자매의 배우자와의 관계 자동 생성
+    elif relationship_type == 'spouse':
+        # member의 형제자매 찾기
+        siblings = FamilyRelationship.query.filter_by(
+            member_id=member.id, relationship_type='sibling'
+        ).all()
+
+        for sib_rel in siblings:
+            sibling = Member.query.get(sib_rel.related_member_id)
+            sibling_spouse = get_spouse(sibling)
+
+            # 새 배우자(related_member) ↔ 형제자매
+            if member.gender == 'M':
+                detail_new = '올케' if sibling.gender == 'F' else '형수'
+                detail_sib = '시누이' if sibling.gender == 'F' else '시동생'
+            else:
+                detail_new = '매부' if sibling.gender == 'M' else '형부'
+                detail_sib = '처남' if sibling.gender == 'M' else '처제'
+            add_relation_if_not_exists(
+                related_member.id, sibling.id, 'in_law', detail_new, detail_sib
+            )
+
+            # 새 배우자(related_member) ↔ 형제자매의 배우자
+            if sibling_spouse:
+                add_relation_if_not_exists(
+                    related_member.id, sibling_spouse.id, 'in_law', '동서', '동서'
+                )
+
+    # 3. 부모 관계 추가 시: 자녀들끼리 형제자매 관계
+    elif relationship_type == 'parent':
+        # related_member(자녀)의 다른 부모의 자녀들을 찾아서 형제자매로
+        children_of_member = FamilyRelationship.query.filter_by(
+            member_id=member.id, relationship_type='parent'
+        ).all()
+
+        for child_rel in children_of_member:
+            if child_rel.related_member_id != related_member.id:
+                other_child = Member.query.get(child_rel.related_member_id)
+                # 형제자매 관계 추가
+                add_relation_if_not_exists(
+                    related_member.id, other_child.id, 'sibling', '형제', '형제'
+                )
+
+    return created_relations
+
+
 @app.route('/api/members/<int:member_id>/family', methods=['POST'])
 def api_add_family_relationship(member_id):
-    """가족 관계 추가"""
+    """가족 관계 추가 (확대 가족 자동 연결 지원)"""
     member = Member.query.get_or_404(member_id)
     data = request.get_json() or {}
 
     related_member_id = data.get('related_member_id')
-    relationship_type = data.get('relationship_type')  # spouse, parent, child, sibling
-    detail = data.get('detail')  # 아버지, 어머니, 아들, 딸 등
+    relationship_type = data.get('relationship_type')  # spouse, parent, child, sibling, in_law, extended
+    detail = data.get('detail')  # 아버지, 어머니, 아들, 딸, 시누이, 동서 등
     reverse_detail = data.get('reverse_detail')  # 역방향 상세 관계
 
-    if not related_member_id or not relationship_type:
-        return jsonify({"error": "related_member_id와 relationship_type이 필요합니다"}), 400
+    if not related_member_id:
+        return jsonify({"error": "related_member_id가 필요합니다"}), 400
 
-    if relationship_type not in ['spouse', 'parent', 'child', 'sibling']:
-        return jsonify({"error": "relationship_type은 spouse, parent, child, sibling 중 하나여야 합니다"}), 400
+    # relationship_type이 없으면 detail에서 추론
+    if not relationship_type and detail:
+        relationship_type = FamilyRelationship.detail_to_type(detail)
+
+    if not relationship_type:
+        return jsonify({"error": "relationship_type 또는 detail이 필요합니다"}), 400
+
+    valid_types = ['spouse', 'parent', 'child', 'sibling', 'in_law', 'grandparent', 'grandchild', 'extended']
+    if relationship_type not in valid_types:
+        return jsonify({"error": f"relationship_type은 {', '.join(valid_types)} 중 하나여야 합니다"}), 400
 
     related_member = Member.query.get(related_member_id)
     if not related_member:
@@ -3010,6 +3524,11 @@ def api_add_family_relationship(member_id):
         for rel in relationships:
             db.session.add(rel)
 
+        # 확대 가족 관계 자동 전파
+        extended_rels = propagate_extended_family_relationships(
+            member, related_member, relationship_type, detail
+        )
+
         # 같은 Family 그룹으로 연결 (없으면 생성)
         if not member.family_id and not related_member.family_id:
             # 둘 다 가족이 없으면 새 가족 생성
@@ -3028,12 +3547,41 @@ def api_add_family_relationship(member_id):
         return jsonify({
             "success": True,
             "message": f"{member.name}님과 {related_member.name}님의 관계가 등록되었습니다",
-            "relationship_ids": [rel.id for rel in relationships]
+            "relationship_ids": [rel.id for rel in relationships],
+            "extended_relations_created": len(extended_rels) // 2 if extended_rels else 0,
         })
 
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"관계 등록 실패: {str(e)}"}), 500
+
+
+@app.route('/api/relationship-options', methods=['GET'])
+def api_get_relationship_options():
+    """한국 가족 관계 옵션 목록 반환 (UI용)"""
+    return jsonify(FamilyRelationship.get_all_relationship_options())
+
+
+@app.route('/api/members/<int:member_id>/notes', methods=['PUT'])
+def api_update_member_notes(member_id):
+    """교인 메모 수정 API"""
+    member = Member.query.get_or_404(member_id)
+    data = request.get_json() or {}
+
+    notes = data.get('notes', '').strip()
+
+    try:
+        member.notes = notes
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "메모가 저장되었습니다",
+            "notes": member.notes
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"메모 저장 실패: {str(e)}"}), 500
 
 
 @app.route('/api/family-relationships/<int:relationship_id>', methods=['DELETE'])
@@ -3119,6 +3667,112 @@ def api_get_family_detail(family_id):
         "id": family.id,
         "family_name": family.family_name,
         "members": members_with_relations,
+    })
+
+
+@app.route('/api/organization', methods=['GET'])
+def api_get_organization_structure():
+    """교회 조직 구조 자동 분류 API (교구/구역/속회/선교회)"""
+    from collections import defaultdict
+
+    members = Member.query.filter_by(status='active').all()
+
+    # 조직별로 그룹화
+    org_structure = {
+        "districts": defaultdict(list),      # 교구별
+        "sections": defaultdict(list),       # 구역별
+        "cell_groups": defaultdict(list),    # 속회별
+        "mission_groups": defaultdict(list), # 선교회별
+    }
+
+    for member in members:
+        member_info = {
+            "id": member.id,
+            "name": member.name,
+            "member_type": member.member_type,
+            "photo_url": member.photo_url,
+            "phone": member.phone,
+        }
+
+        if member.district:
+            org_structure["districts"][member.district].append(member_info)
+        if member.section:
+            org_structure["sections"][member.section].append(member_info)
+        if member.cell_group:
+            org_structure["cell_groups"][member.cell_group].append(member_info)
+        if member.mission_group:
+            org_structure["mission_groups"][member.mission_group].append(member_info)
+
+    # dict로 변환하고 각 그룹 인원수 추가
+    result = {}
+    for org_type, groups in org_structure.items():
+        result[org_type] = [
+            {
+                "name": name,
+                "member_count": len(members_list),
+                "members": members_list
+            }
+            for name, members_list in sorted(groups.items())
+        ]
+
+    # 전체 통계
+    result["statistics"] = {
+        "total_active": len(members),
+        "district_count": len(result["districts"]),
+        "section_count": len(result["sections"]),
+        "cell_group_count": len(result["cell_groups"]),
+        "mission_group_count": len(result["mission_groups"]),
+    }
+
+    return jsonify(result)
+
+
+@app.route('/api/organization/<org_type>', methods=['GET'])
+def api_get_organization_by_type(org_type):
+    """특정 조직 유형별 분류 (district, section, cell_group, mission_group)"""
+    from collections import defaultdict
+
+    valid_types = ['district', 'section', 'cell_group', 'mission_group']
+    if org_type not in valid_types:
+        return jsonify({"error": f"유효한 조직 유형: {', '.join(valid_types)}"}), 400
+
+    field_map = {
+        'district': 'district',
+        'section': 'section',
+        'cell_group': 'cell_group',
+        'mission_group': 'mission_group',
+    }
+
+    members = Member.query.filter_by(status='active').all()
+    groups = defaultdict(list)
+
+    for member in members:
+        group_name = getattr(member, field_map[org_type])
+        if group_name:
+            groups[group_name].append({
+                "id": member.id,
+                "name": member.name,
+                "member_type": member.member_type,
+                "position_detail": member.position_detail,
+                "photo_url": member.photo_url,
+                "phone": member.phone,
+                "age": member.age,
+            })
+
+    result = [
+        {
+            "name": name,
+            "member_count": len(members_list),
+            "members": members_list
+        }
+        for name, members_list in sorted(groups.items())
+    ]
+
+    return jsonify({
+        "org_type": org_type,
+        "groups": result,
+        "total_groups": len(result),
+        "total_members": sum(g["member_count"] for g in result),
     })
 
 
@@ -3654,6 +4308,9 @@ def api_sync_god4u_to_registry():
                     "registration_date": _parse_date(person.get("regday", "")),
                     "last_visit_date": _parse_date(person.get("lastvisitday", "")),
 
+                    # 등록번호 (god4u id)
+                    "registration_number": str(external_id) if external_id else None,
+
                     # 직분 정보
                     "member_type": person.get("cvname", ""),  # 권사, 집사 등
                     "position_detail": person.get("cvname1", ""),  # 시무권사, 은퇴권사 등
@@ -3667,6 +4324,7 @@ def api_sync_god4u_to_registry():
                     # 상태 정보
                     "age_group": person.get("state1", ""),  # 장년, 청년 등
                     "attendance_status": person.get("state3", ""),  # 예배출석, 장기결석 등
+                    "member_status": person.get("state", ""),  # 재적, 별세, 타교회 등
 
                     # 기타 정보
                     "occupation": person.get("occu") or person.get("occu1", ""),
@@ -3682,22 +4340,37 @@ def api_sync_god4u_to_registry():
                 if partner_id_str:
                     god4u_data["partner_id"] = partner_id_str  # 나중에 매핑 필요
 
-                # 신규 회원용 로컬 필드 기본값
+                # 메모 및 가족 정보 (god4u etc, ran1 필드)
                 etc_notes = person.get("etc", "").strip()
-                ran1 = person.get("ran1", "").strip()
+                ran1 = person.get("ran1", "").strip()  # 가족 정보
                 carnum = person.get("carnum", "").strip()
 
                 notes_parts = []
                 if etc_notes:
                     notes_parts.append(etc_notes)
-                if ran1:
-                    notes_parts.append(f"가족: {ran1}")
                 if carnum:
                     notes_parts.append(f"차량: {carnum}")
 
+                god4u_notes = "\n".join(notes_parts) if notes_parts else ""
+                god4u_family_info = ran1  # 별도로 저장하여 가족 관계 연결에 사용
+
+                # 상태 결정 로직
+                # god4u state 필드 기반 (별세, 타교회 우선)
+                member_state = person.get("state", "")
+                attendance_state = person.get("state3", "")
+
+                if member_state in ['별세', '소천']:
+                    determined_status = "deceased"
+                elif member_state in ['타교회', '타교인', '이명']:
+                    determined_status = "transferred"
+                elif attendance_state == "예배출석":
+                    determined_status = "active"
+                else:
+                    determined_status = "inactive"
+
                 local_data = {
-                    "status": "active" if person.get("state3") == "예배출석" else "inactive",
-                    "notes": "\n".join(notes_parts) if notes_parts else "",
+                    "status": determined_status,
+                    "notes": god4u_notes,
                 }
 
                 if existing:
@@ -3709,7 +4382,14 @@ def api_sync_god4u_to_registry():
                     for key, value in god4u_data.items():
                         if value is not None:
                             setattr(existing, key, value)
-                    # LOCAL_FIELDS는 건드리지 않음!
+
+                    # 상태 업데이트: god4u state 기반으로 덮어씀
+                    existing.status = determined_status
+
+                    # 메모: 기존에 없으면 god4u에서 가져옴
+                    if not existing.notes and god4u_notes:
+                        existing.notes = god4u_notes
+
                     results["updated"] += 1
                 else:
                     # 신규 회원: 전체 데이터로 생성

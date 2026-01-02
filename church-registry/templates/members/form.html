@@ -356,11 +356,25 @@
 
                 <div class="form-group">
                     <label for="status" class="form-label">상태</label>
-                    <select class="form-select" id="status" name="status">
+                    <select class="form-select" id="status" name="status" onchange="toggleStatusDateFields()">
                         <option value="active" {{ 'selected' if not member or member.status == 'active' else '' }}>활동</option>
                         <option value="inactive" {{ 'selected' if member and member.status == 'inactive' else '' }}>비활동</option>
                         <option value="newcomer" {{ 'selected' if member and member.status == 'newcomer' else '' }}>새신자</option>
+                        <option value="deceased" {{ 'selected' if member and member.status == 'deceased' else '' }}>별세</option>
+                        <option value="transferred" {{ 'selected' if member and member.status == 'transferred' else '' }}>타교회</option>
                     </select>
+                </div>
+
+                <div class="form-group" id="deceased_date_group" style="display: {{ 'block' if member and member.status == 'deceased' else 'none' }};">
+                    <label for="deceased_date" class="form-label">별세일자</label>
+                    <input type="date" class="form-control" id="deceased_date" name="deceased_date"
+                           value="{{ member.deceased_date.strftime('%Y-%m-%d') if member and member.deceased_date else '' }}">
+                </div>
+
+                <div class="form-group" id="transferred_date_group" style="display: {{ 'block' if member and member.status == 'transferred' else 'none' }};">
+                    <label for="transferred_date" class="form-label">타교회 이적일자</label>
+                    <input type="date" class="form-control" id="transferred_date" name="transferred_date"
+                           value="{{ member.transferred_date.strftime('%Y-%m-%d') if member and member.transferred_date else '' }}">
                 </div>
             </div>
         </div>
@@ -438,6 +452,16 @@
 </div>
 
 <script>
+// 상태에 따른 날짜 필드 토글
+function toggleStatusDateFields() {
+    const status = document.getElementById('status').value;
+    const deceasedGroup = document.getElementById('deceased_date_group');
+    const transferredGroup = document.getElementById('transferred_date_group');
+
+    deceasedGroup.style.display = status === 'deceased' ? 'block' : 'none';
+    transferredGroup.style.display = status === 'transferred' ? 'block' : 'none';
+}
+
 const dropzone = document.getElementById('photoDropzone');
 const photoInput = document.getElementById('photoInput');
 const photoPreview = document.getElementById('photoPreview');
