@@ -11,49 +11,76 @@
         </a>
     </div>
 
-    <!-- 프로필 헤더 -->
+    <!-- 프로필 헤더 + 메모 -->
     <div class="form-section" style="margin-bottom: 24px;">
-        <div class="detail-header">
-            <div class="detail-avatar">
-                {% if member.photo_url %}
-                <img src="{{ member.photo_url }}" alt="{{ member.name }}">
-                {% else %}
-                {{ member.name[0] }}
-                {% endif %}
+        <div style="display: flex; gap: 24px; align-items: flex-start;">
+            <!-- 프로필 정보 -->
+            <div class="detail-header" style="flex: 1;">
+                <div class="detail-avatar">
+                    {% if member.photo_url %}
+                    <img src="{{ member.photo_url }}" alt="{{ member.name }}">
+                    {% else %}
+                    {{ member.name[0] }}
+                    {% endif %}
+                </div>
+                <div class="detail-title">
+                    <h1>
+                        {{ member.display_name }}
+                        <span class="status-badge status-{{ member.status }}" style="font-size: 14px; vertical-align: middle;">
+                            {% if member.status == 'active' %}활동
+                            {% elif member.status == 'inactive' %}비활동
+                            {% else %}새신자{% endif %}
+                        </span>
+                    </h1>
+                    <p style="color: var(--apple-text-secondary); margin: 0;">
+                        {% if member.registration_number %}등록번호: {{ member.registration_number }} · {% endif %}
+                        {{ member.group.name if member.group else '그룹 없음' }}
+                        {% if member.registration_date %}
+                        · {{ member.registration_date.strftime('%Y년 %m월 %d일') }} 등록
+                        {% endif %}
+                    </p>
+                    <div class="detail-actions">
+                        <a href="{{ url_for('member_edit', member_id=member.id) }}" class="apple-btn apple-btn-primary">
+                            <i class="bi bi-pencil"></i> 수정
+                        </a>
+                        <button type="button" class="apple-btn apple-btn-secondary" onclick="showDeleteModal()">
+                            <i class="bi bi-trash"></i> 삭제
+                        </button>
+                        {% if member.phone %}
+                        <a href="tel:{{ member.phone }}" class="icon-btn" title="전화하기">
+                            <i class="bi bi-telephone"></i>
+                        </a>
+                        {% endif %}
+                        {% if member.email %}
+                        <a href="mailto:{{ member.email }}" class="icon-btn" title="이메일 보내기">
+                            <i class="bi bi-envelope"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            <div class="detail-title">
-                <h1>
-                    {{ member.display_name }}
-                    <span class="status-badge status-{{ member.status }}" style="font-size: 14px; vertical-align: middle;">
-                        {% if member.status == 'active' %}활동
-                        {% elif member.status == 'inactive' %}비활동
-                        {% else %}새신자{% endif %}
-                    </span>
-                </h1>
-                <p style="color: var(--apple-text-secondary); margin: 0;">
-                    {% if member.registration_number %}등록번호: {{ member.registration_number }} · {% endif %}
-                    {{ member.group.name if member.group else '그룹 없음' }}
-                    {% if member.registration_date %}
-                    · {{ member.registration_date.strftime('%Y년 %m월 %d일') }} 등록
-                    {% endif %}
-                </p>
-                <div class="detail-actions">
-                    <a href="{{ url_for('member_edit', member_id=member.id) }}" class="apple-btn apple-btn-primary">
-                        <i class="bi bi-pencil"></i> 수정
-                    </a>
-                    <button type="button" class="apple-btn apple-btn-secondary" onclick="showDeleteModal()">
-                        <i class="bi bi-trash"></i> 삭제
-                    </button>
-                    {% if member.phone %}
-                    <a href="tel:{{ member.phone }}" class="icon-btn" title="전화하기">
-                        <i class="bi bi-telephone"></i>
-                    </a>
-                    {% endif %}
-                    {% if member.email %}
-                    <a href="mailto:{{ member.email }}" class="icon-btn" title="이메일 보내기">
-                        <i class="bi bi-envelope"></i>
-                    </a>
-                    {% endif %}
+
+            <!-- 메모 영역 (프로필 오른쪽) -->
+            <div style="flex: 0 0 300px; min-width: 280px;">
+                <div style="background: #fef9e7; border: 1px solid #f9e79f; border-radius: 12px; padding: 16px; position: relative;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 13px; color: #b7950b;">
+                            <i class="bi bi-sticky"></i> 메모
+                        </span>
+                        <button type="button" onclick="toggleMemoEdit()" style="background: none; border: none; cursor: pointer; color: #b7950b; font-size: 12px;">
+                            <i class="bi bi-pencil-square" id="memoEditIcon"></i>
+                        </button>
+                    </div>
+                    <!-- 메모 표시 (읽기 모드) -->
+                    <div id="memoDisplay" style="font-size: 14px; color: #5d4e37; line-height: 1.6; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">{{ member.notes or '메모가 없습니다. 클릭하여 추가하세요.' }}</div>
+                    <!-- 메모 편집 (편집 모드) -->
+                    <div id="memoEdit" style="display: none;">
+                        <textarea id="memoTextarea" style="width: 100%; height: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; resize: none; font-family: inherit;">{{ member.notes or '' }}</textarea>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;">
+                            <button type="button" onclick="cancelMemoEdit()" style="padding: 4px 12px; border: 1px solid #ddd; background: white; border-radius: 6px; font-size: 13px; cursor: pointer;">취소</button>
+                            <button type="button" onclick="saveMemo()" style="padding: 4px 12px; border: none; background: #b7950b; color: white; border-radius: 6px; font-size: 13px; cursor: pointer;">저장</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -238,12 +265,6 @@
             </div>
         </div>
 
-        {% if member.notes %}
-        <div style="margin-top: 20px; padding: 16px; background: #f9f9fb; border-radius: var(--apple-radius-sm);">
-            <div class="info-label" style="margin-bottom: 8px;">메모 (등록동기/기타사항)</div>
-            <p style="margin: 0; color: var(--apple-text); line-height: 1.6; white-space: pre-wrap;">{{ member.notes }}</p>
-        </div>
-        {% endif %}
     </div>
 
     <!-- 가족 관계 -->
@@ -452,7 +473,10 @@ async function loadFamilyRelationships() {
 function renderFamilyRelationships(data) {
     const container = document.getElementById('familyRelationships');
 
-    const hasAnyRelation = data.spouse || data.parents.length > 0 || data.children.length > 0 || data.siblings.length > 0;
+    const hasAnyRelation = data.spouse || data.parents.length > 0 || data.children.length > 0 ||
+        data.siblings.length > 0 || (data.in_laws && data.in_laws.length > 0) ||
+        (data.grandparents && data.grandparents.length > 0) || (data.grandchildren && data.grandchildren.length > 0) ||
+        (data.extended && data.extended.length > 0);
 
     if (!hasAnyRelation) {
         container.innerHTML = `
@@ -521,6 +545,62 @@ function renderFamilyRelationships(data) {
         `;
     }
 
+    // 인척 (시댁/처가/형제자매 배우자)
+    if (data.in_laws && data.in_laws.length > 0) {
+        html += `
+            <div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--apple-text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <i class="bi bi-link-45deg" style="color: #06b6d4;"></i> 인척 (시댁/처가/동서)
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    ${data.in_laws.map(i => renderFamilyCard(i, 'in_law')).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 조부모
+    if (data.grandparents && data.grandparents.length > 0) {
+        html += `
+            <div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--apple-text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <i class="bi bi-house" style="color: #78716c;"></i> 조부모
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    ${data.grandparents.map(g => renderFamilyCard(g, 'grandparent')).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 손자녀
+    if (data.grandchildren && data.grandchildren.length > 0) {
+        html += `
+            <div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--apple-text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <i class="bi bi-emoji-smile" style="color: #f472b6;"></i> 손자녀
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    ${data.grandchildren.map(g => renderFamilyCard(g, 'grandchild')).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 확대가족 (삼촌/고모/조카/사촌 등)
+    if (data.extended && data.extended.length > 0) {
+        html += `
+            <div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--apple-text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <i class="bi bi-diagram-3" style="color: #a855f7;"></i> 친척 (삼촌/고모/조카/사촌)
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    ${data.extended.map(e => renderFamilyCard(e, 'extended')).join('')}
+                </div>
+            </div>
+        `;
+    }
+
     // 대가족 그룹 정보
     if (data.family_group) {
         html += `
@@ -546,7 +626,11 @@ function renderFamilyCard(member, relationType) {
         'spouse': 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
         'parent': 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
         'child': 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-        'sibling': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+        'sibling': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        'in_law': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+        'grandparent': 'linear-gradient(135deg, #78716c 0%, #57534e 100%)',
+        'grandchild': 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
+        'extended': 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)'
     }[relationType] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
     return `
@@ -689,6 +773,70 @@ async function saveFamilyRelationship() {
 
 // 페이지 로드 시 가족 관계 로드
 document.addEventListener('DOMContentLoaded', loadFamilyRelationships);
+
+// ===== 메모 편집 기능 =====
+let memoOriginalValue = '';
+
+function toggleMemoEdit() {
+    const displayEl = document.getElementById('memoDisplay');
+    const editEl = document.getElementById('memoEdit');
+    const textareaEl = document.getElementById('memoTextarea');
+    const iconEl = document.getElementById('memoEditIcon');
+
+    if (editEl.style.display === 'none') {
+        // 편집 모드로 전환
+        memoOriginalValue = textareaEl.value;
+        displayEl.style.display = 'none';
+        editEl.style.display = 'block';
+        textareaEl.focus();
+        iconEl.className = 'bi bi-x-lg';
+    } else {
+        // 읽기 모드로 전환
+        cancelMemoEdit();
+    }
+}
+
+function cancelMemoEdit() {
+    const displayEl = document.getElementById('memoDisplay');
+    const editEl = document.getElementById('memoEdit');
+    const textareaEl = document.getElementById('memoTextarea');
+    const iconEl = document.getElementById('memoEditIcon');
+
+    textareaEl.value = memoOriginalValue;
+    displayEl.style.display = 'block';
+    editEl.style.display = 'none';
+    iconEl.className = 'bi bi-pencil-square';
+}
+
+async function saveMemo() {
+    const textareaEl = document.getElementById('memoTextarea');
+    const displayEl = document.getElementById('memoDisplay');
+    const editEl = document.getElementById('memoEdit');
+    const iconEl = document.getElementById('memoEditIcon');
+    const notes = textareaEl.value.trim();
+
+    try {
+        const resp = await fetch(`/api/members/${MEMBER_ID}/notes`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ notes: notes })
+        });
+
+        const data = await resp.json();
+
+        if (resp.ok) {
+            displayEl.textContent = notes || '메모가 없습니다. 클릭하여 추가하세요.';
+            memoOriginalValue = notes;
+            displayEl.style.display = 'block';
+            editEl.style.display = 'none';
+            iconEl.className = 'bi bi-pencil-square';
+        } else {
+            alert(data.error || '저장에 실패했습니다');
+        }
+    } catch (e) {
+        alert('오류가 발생했습니다: ' + e.message);
+    }
+}
 </script>
 
 <!-- 가족 관계 추가 모달 -->
@@ -716,12 +864,16 @@ document.addEventListener('DOMContentLoaded', loadFamilyRelationships);
                 <option value="parent">부모 (내가 이 사람의 부모)</option>
                 <option value="child">자녀 (내가 이 사람의 자녀)</option>
                 <option value="sibling">형제자매</option>
+                <option value="in_law">인척 (시댁/처가/동서)</option>
+                <option value="grandparent">조부모 (내가 이 사람의 조부모)</option>
+                <option value="grandchild">손자녀 (내가 이 사람의 손자녀)</option>
+                <option value="extended">친척 (삼촌/고모/조카/사촌)</option>
             </select>
         </div>
 
         <div style="margin-bottom: 24px;">
             <label style="display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px;">상세 관계 (선택)</label>
-            <select id="relationshipDetail" style="width: 100%; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 15px; background: white;">
+            <select id="relationshipDetail" style="width: 100%; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 15px; background: white; max-height: 300px;">
                 <option value="">선택하세요</option>
                 <optgroup label="배우자">
                     <option value="남편">남편</option>
@@ -742,6 +894,75 @@ document.addEventListener('DOMContentLoaded', loadFamilyRelationships);
                     <option value="언니">언니</option>
                     <option value="남동생">남동생</option>
                     <option value="여동생">여동생</option>
+                </optgroup>
+                <optgroup label="조부모">
+                    <option value="할아버지">할아버지</option>
+                    <option value="할머니">할머니</option>
+                    <option value="외할아버지">외할아버지</option>
+                    <option value="외할머니">외할머니</option>
+                </optgroup>
+                <optgroup label="손자녀">
+                    <option value="손자">손자</option>
+                    <option value="손녀">손녀</option>
+                    <option value="외손자">외손자</option>
+                    <option value="외손녀">외손녀</option>
+                </optgroup>
+                <optgroup label="시댁">
+                    <option value="시아버지">시아버지</option>
+                    <option value="시어머니">시어머니</option>
+                    <option value="시형">시형 (남편의 형)</option>
+                    <option value="시동생">시동생 (남편의 남동생)</option>
+                    <option value="시누이">시누이 (남편의 여형제)</option>
+                </optgroup>
+                <optgroup label="처가">
+                    <option value="장인">장인</option>
+                    <option value="장모">장모</option>
+                    <option value="처남">처남 (아내의 남형제)</option>
+                    <option value="처형">처형 (아내의 언니)</option>
+                    <option value="처제">처제 (아내의 여동생)</option>
+                </optgroup>
+                <optgroup label="형제자매의 배우자">
+                    <option value="형수">형수 (형의 아내)</option>
+                    <option value="제수">제수 (남동생의 아내)</option>
+                    <option value="올케">올케 (남형제의 아내)</option>
+                    <option value="매형">매형 (누나/언니의 남편)</option>
+                    <option value="매부">매부 (여동생의 남편)</option>
+                    <option value="동서">동서</option>
+                </optgroup>
+                <optgroup label="자녀의 배우자">
+                    <option value="며느리">며느리</option>
+                    <option value="사위">사위</option>
+                </optgroup>
+                <optgroup label="사돈">
+                    <option value="사돈">사돈</option>
+                    <option value="바깥사돈">바깥사돈</option>
+                    <option value="안사돈">안사돈</option>
+                </optgroup>
+                <optgroup label="삼촌/고모/이모">
+                    <option value="삼촌">삼촌</option>
+                    <option value="큰아버지">큰아버지</option>
+                    <option value="작은아버지">작은아버지</option>
+                    <option value="고모">고모</option>
+                    <option value="외삼촌">외삼촌</option>
+                    <option value="이모">이모</option>
+                    <option value="숙모">숙모 (삼촌의 아내)</option>
+                    <option value="고모부">고모부</option>
+                    <option value="이모부">이모부</option>
+                </optgroup>
+                <optgroup label="조카">
+                    <option value="조카">조카</option>
+                    <option value="조카아들">조카아들 (생질)</option>
+                    <option value="조카딸">조카딸 (생질녀)</option>
+                    <option value="외조카">외조카</option>
+                </optgroup>
+                <optgroup label="사촌">
+                    <option value="사촌">사촌</option>
+                    <option value="사촌형">사촌형</option>
+                    <option value="사촌누나">사촌누나</option>
+                    <option value="사촌동생">사촌동생</option>
+                    <option value="고종사촌">고종사촌 (고모의 자녀)</option>
+                    <option value="이종사촌">이종사촌 (이모의 자녀)</option>
+                    <option value="외사촌">외사촌 (외삼촌의 자녀)</option>
                 </optgroup>
             </select>
         </div>
