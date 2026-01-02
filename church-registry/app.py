@@ -3051,10 +3051,10 @@ def api_sync_god4u_to_registry():
             'name', 'phone', 'email', 'address', 'birth_date', 'gender', 'registration_date',
             'member_type', 'position_detail', 'district', 'section', 'cell_group', 'mission_group',
             'age_group', 'attendance_status', 'birth_lunar', 'last_visit_date', 'tel', 'zipcode',
-            'occupation', 'previous_church', 'partner_id'
+            'occupation', 'previous_church', 'partner_id', 'photo_url'
         ]
         # 로컬 우선 필드 (기존 값 유지)
-        LOCAL_FIELDS = ['status', 'notes', 'photo_url', 'barnabas', 'referrer']
+        LOCAL_FIELDS = ['status', 'notes', 'barnabas', 'referrer']
 
         # 선택적 동기화: 특정 회원만 업데이트
         selected_ids = data.get('selected_ids', None)  # None이면 전체, 리스트면 해당 회원만
@@ -3100,6 +3100,9 @@ def api_sync_god4u_to_registry():
                     "occupation": person.get("occu") or person.get("occu1", ""),
                     "previous_church": person.get("prechurch", ""),
                     "external_id": external_id,
+
+                    # 사진 URL (god4u에서 직접 링크)
+                    "photo_url": f"{GOD4U_PHOTO_URL}?id={external_id}" if external_id else None,
                 }
 
                 # 배우자 연결 (partnerid가 있으면 저장)
