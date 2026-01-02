@@ -22,10 +22,9 @@ from pathlib import Path
 # 설정: 브라우저에서 복사한 쿠키를 여기에 붙여넣으세요
 # ============================================================
 COOKIES = {
-    "ASP.NET_SessionId": "여기에_세션ID_붙여넣기",  # 예: xgsyv0zp5q0b14znzorohsk2
-    "pastorinfo": "여기에_pastorinfo_붙여넣기",
+    "ASP.NET_SessionId": "xgsyv0zp5q0b14znzorohsk2",
+    "pastorinfo": "sUser=%c1%a4%bb%e7%b9%ab%bf%a4&sID=5700&sUserName=%c1%a4%bb%e7%b9%ab%bf%a4&sIsAdmin=1&churchid=god4u&chname=%c0%c7%c1%a4%ba%ce%c1%df%be%d3%b1%b3%c8%b8&sChurchAuth=OK&sCashAuth=OK&sSCashAuth=&sRangeAuth=OK&sSchoolAuth=OK&sYouthAuth=OK",
     "AUTOLOGIN": "YES",
-    # 필요시 추가 쿠키
 }
 
 # API 설정
