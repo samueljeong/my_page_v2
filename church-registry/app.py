@@ -4629,7 +4629,7 @@ def api_sync_god4u_to_registry():
                             rel_type = 'extended'  # 기본값
                             rel_detail = None
 
-                            # 1. partner_id로 배우자 관계인지 확인
+                            # 1. partner_id로 배우자 관계인지 확인 (가장 신뢰)
                             is_spouse = False
                             if member.partner_id and related.external_id:
                                 if str(member.partner_id) == str(related.external_id):
@@ -4638,31 +4638,40 @@ def api_sync_god4u_to_registry():
                                 if str(related.partner_id) == str(member.external_id):
                                     is_spouse = True
 
-                            # 2. partner_id 없어도 배우자 추론: 성별 다름 + 나이 비슷(18년 미만) + 가족목록 첫번째/두번째
-                            if not is_spouse and member.birth_date and related.birth_date:
-                                age_diff = abs((member.birth_date - related.birth_date).days / 365)
-                                # 성별이 다르고 나이 차이 18년 미만이면 배우자 가능성
-                                if age_diff < 18:
-                                    # 성별 확인 (M/F 또는 남/여)
-                                    m_gender = (member.gender or '').upper()
-                                    r_gender = (related.gender or '').upper()
-                                    if m_gender and r_gender:
-                                        m_is_male = m_gender in ['M', '남', '남성', '남자']
-                                        r_is_male = r_gender in ['M', '남', '남성', '남자']
-                                        if m_is_male != r_is_male:  # 성별이 다름
-                                            is_spouse = True
+                            # 나이 차이 및 성별 확인
+                            age_diff = None
+                            is_diff_gender = False
+                            if member.birth_date and related.birth_date:
+                                age_diff = (member.birth_date - related.birth_date).days / 365
+                                abs_age_diff = abs(age_diff)
 
+                                # 성별 확인
+                                m_gender = (member.gender or '').upper()
+                                r_gender = (related.gender or '').upper()
+                                if m_gender and r_gender:
+                                    m_is_male = m_gender in ['M', '남', '남성', '남자']
+                                    r_is_male = r_gender in ['M', '남', '남성', '남자']
+                                    is_diff_gender = (m_is_male != r_is_male)
+
+                            # 2. 관계 유형 결정
                             if is_spouse:
                                 rel_type = 'spouse'
-                            # 나이 차이로 부모/자녀 추론
-                            elif member.birth_date and related.birth_date:
-                                age_diff = (member.birth_date - related.birth_date).days / 365
-                                if age_diff >= 18:  # 내가 18살 이상 어리면 → 상대는 부모
-                                    rel_type = 'child'
-                                    rel_detail = '부모'
-                                elif age_diff <= -18:  # 내가 18살 이상 많으면 → 상대는 자녀
-                                    rel_type = 'parent'
-                                    rel_detail = '자녀'
+                            elif age_diff is not None:
+                                abs_age_diff = abs(age_diff)
+                                if abs_age_diff >= 18:
+                                    # 나이 차이 18년 이상 → 부모/자녀
+                                    if age_diff >= 18:  # 내가 18살 이상 어리면 → 상대는 부모
+                                        rel_type = 'child'
+                                        rel_detail = '부모'
+                                    else:  # 내가 18살 이상 많으면 → 상대는 자녀
+                                        rel_type = 'parent'
+                                        rel_detail = '자녀'
+                                elif is_diff_gender and abs_age_diff < 5:
+                                    # 성별 다름 + 나이 차이 5년 미만 → 배우자 가능성 높음
+                                    rel_type = 'spouse'
+                                else:
+                                    # 나이 차이 5~18년 또는 동성 → 형제자매
+                                    rel_type = 'sibling'
 
                             rel = FamilyRelationship(
                                 member_id=member.id,
