@@ -720,10 +720,27 @@ def index():
 @app.route('/members')
 def member_list():
     """교인 목록"""
+    import re
+
     # 검색 파라미터
     query = request.args.get('q', '')
-    cat1 = request.args.get('cat1', '')  # 1단계 카테고리: district, position, reg_status, attendance, mission, cell
-    cat2 = request.args.get('cat2', '')  # 2단계: 세부 값
+    cat1 = request.args.get('cat1', '')  # 1단계: district, position, reg_status, attendance, mission
+    cat2 = request.args.get('cat2', '')  # 2단계: 교구(1교구 등), 직분(장로 등)
+    cat3 = request.args.get('cat3', '')  # 3단계: 구역 (교구별에서만)
+    cat4 = request.args.get('cat4', '')  # 4단계: 속회 (교구별에서만)
+
+    # 교구 이름에서 기본 교구 추출 (예: "1교구[2012]" → "1교구")
+    def extract_base_district(district_str):
+        if not district_str:
+            return None
+        # "1교구", "2교구", "3교구" 패턴 추출
+        match = re.match(r'^(\d+교구)', district_str)
+        if match:
+            return match.group(1)
+        # "교회학교" 포함 여부
+        if '교회학교' in district_str or '청년교구' in district_str:
+            return '교회학교'
+        return None
 
     # 기본 쿼리 (기본적으로 별세/타교인 제외)
     members_query = Member.query
@@ -733,20 +750,64 @@ def member_list():
         members_query = members_query.filter(Member.name.contains(query))
 
     # 카테고리 필터링
-    if cat1 == 'district' and cat2:
-        # 교구 필터
-        members_query = members_query.filter(Member.district.contains(cat2))
+    if cat1 == 'district':
+        # 교구별 필터 (3단계 계층)
+        if cat2:
+            if cat2 == '미등록':
+                members_query = members_query.filter(
+                    db.or_(Member.district.is_(None), Member.district == '')
+                )
+            elif cat2 == '교회학교':
+                members_query = members_query.filter(
+                    db.or_(
+                        Member.district.contains('교회학교'),
+                        Member.district.contains('청년교구')
+                    )
+                )
+            else:
+                # 1교구, 2교구, 3교구 등
+                members_query = members_query.filter(Member.district.contains(cat2))
+
+            # 3단계: 구역 필터
+            if cat3:
+                members_query = members_query.filter(Member.section.contains(cat3))
+
+                # 4단계: 속회 필터
+                if cat4:
+                    members_query = members_query.filter(Member.cell_group.contains(cat4))
+
         # 별세/타교인 제외
         members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
-    elif cat1 == 'position' and cat2:
-        # 직분 필터
-        members_query = members_query.filter(Member.member_type == cat2)
+
+    elif cat1 == 'position':
+        # 직분 필터 (장로, 권사, 집사, 성도, 교회학교만)
+        if cat2:
+            if cat2 == '성도':
+                # 성도: 직분이 없거나 '성도'인 경우
+                members_query = members_query.filter(
+                    db.or_(
+                        Member.member_type.is_(None),
+                        Member.member_type == '',
+                        Member.member_type == '성도'
+                    )
+                )
+            elif cat2 == '교회학교':
+                # 교회학교: department가 있거나 교회학교 관련 교구
+                members_query = members_query.filter(
+                    db.or_(
+                        Member.department.isnot(None),
+                        Member.district.contains('교회학교'),
+                        Member.district.contains('청년교구')
+                    )
+                )
+            else:
+                members_query = members_query.filter(Member.member_type == cat2)
         # 별세/타교인 제외
         members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+
     elif cat1 == 'reg_status':
         # 등록상태 필터 (교인/별세/타교인)
         if cat2 == 'active_member':
-            # 현재 재적 교인 (별세, 타교인 제외)
             members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
         elif cat2 == 'deceased':
             members_query = members_query.filter(
@@ -756,87 +817,107 @@ def member_list():
             members_query = members_query.filter(
                 db.or_(Member.status == 'transferred', Member.member_status.in_(['타교회', '타교인', '이명']))
             )
-    elif cat1 == 'attendance' and cat2:
+
+    elif cat1 == 'attendance':
         # 출석상태 필터
         if cat2 == 'active':
             members_query = members_query.filter(Member.status == 'active')
         elif cat2 == 'inactive':
             members_query = members_query.filter(Member.status == 'inactive')
         elif cat2 == 'newcomer':
-            # 새신자: 등록 2년 이내
             two_years_ago = get_seoul_today() - timedelta(days=730)
             members_query = members_query.filter(Member.registration_date > two_years_ago)
         # 별세/타교인 제외
         members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+
     elif cat1 == 'mission' and cat2:
         # 선교회 필터
         members_query = members_query.filter(Member.mission_group.contains(cat2))
         # 별세/타교인 제외
         members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
-    elif cat1 == 'cell' and cat2:
-        # 속회 필터
-        members_query = members_query.filter(Member.cell_group.contains(cat2))
-        # 별세/타교인 제외
-        members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
+
     else:
         # 기본: 별세/타교인 제외
-        if not query:  # 검색어가 있으면 모두 표시 (별세/타교인 포함)
+        if not query:
             members_query = members_query.filter(Member.status.notin_(['deceased', 'transferred']))
 
     members = members_query.order_by(Member.name).all()
 
     # 2단계 옵션 데이터 수집
     cat2_options = {}
+    cat3_options = {}
+    cat4_options = {}
+
     if cat1 == 'district':
-        # 교구 목록
-        districts = db.session.query(Member.district).filter(Member.district.isnot(None)).distinct().all()
-        cat2_options = {d[0]: d[0] for d in districts if d[0]}
+        # 교구 옵션: 1교구, 2교구, 3교구, 교회학교, 미등록만
+        cat2_options = {
+            '1교구': '1교구',
+            '2교구': '2교구',
+            '3교구': '3교구',
+            '교회학교': '교회학교',
+            '미등록': '미등록'
+        }
+
+        # 선택된 교구의 구역 목록
+        if cat2 and cat2 not in ['미등록', '교회학교']:
+            sections = db.session.query(Member.section).filter(
+                Member.district.contains(cat2),
+                Member.section.isnot(None)
+            ).distinct().all()
+            cat3_options = {s[0]: s[0] for s in sections if s[0]}
+
+            # 선택된 구역의 속회 목록
+            if cat3:
+                cells = db.session.query(Member.cell_group).filter(
+                    Member.district.contains(cat2),
+                    Member.section.contains(cat3),
+                    Member.cell_group.isnot(None)
+                ).distinct().all()
+                cat4_options = {c[0]: c[0] for c in cells if c[0]}
+
     elif cat1 == 'position':
-        # 직분 목록
-        positions = db.session.query(Member.member_type).filter(Member.member_type.isnot(None)).distinct().all()
-        cat2_options = {p[0]: p[0] for p in positions if p[0]}
+        # 직분 옵션: 장로, 권사, 집사, 성도, 교회학교만
+        cat2_options = {
+            '장로': '장로',
+            '권사': '권사',
+            '집사': '집사',
+            '성도': '성도',
+            '교회학교': '교회학교'
+        }
+
     elif cat1 == 'reg_status':
         cat2_options = {
             'active_member': '현재 교인',
             'deceased': '별세',
             'transferred': '타교회'
         }
+
     elif cat1 == 'attendance':
         cat2_options = {
             'active': '활동',
             'inactive': '비활동',
             'newcomer': '새신자'
         }
+
     elif cat1 == 'mission':
         missions = db.session.query(Member.mission_group).filter(Member.mission_group.isnot(None)).distinct().all()
         cat2_options = {m[0]: m[0] for m in missions if m[0]}
-    elif cat1 == 'cell':
-        cells = db.session.query(Member.cell_group).filter(Member.cell_group.isnot(None)).distinct().all()
-        cat2_options = {c[0]: c[0] for c in cells if c[0]}
 
-    # JavaScript용 전체 옵션 데이터
-    all_districts = db.session.query(Member.district).filter(Member.district.isnot(None)).distinct().all()
-    district_options = {d[0]: d[0] for d in all_districts if d[0]}
-
-    all_positions = db.session.query(Member.member_type).filter(Member.member_type.isnot(None)).distinct().all()
-    position_options = {p[0]: p[0] for p in all_positions if p[0]}
-
+    # 선교회 옵션 (JavaScript에서 동적 로드용)
     all_missions = db.session.query(Member.mission_group).filter(Member.mission_group.isnot(None)).distinct().all()
     mission_options = {m[0]: m[0] for m in all_missions if m[0]}
-
-    all_cells = db.session.query(Member.cell_group).filter(Member.cell_group.isnot(None)).distinct().all()
-    cell_options = {c[0]: c[0] for c in all_cells if c[0]}
 
     return render_template('members/list.html',
                          members=members,
                          query=query,
                          cat1=cat1,
                          cat2=cat2,
+                         cat3=cat3,
+                         cat4=cat4,
                          cat2_options=cat2_options,
-                         district_options=district_options,
-                         position_options=position_options,
-                         mission_options=mission_options,
-                         cell_options=cell_options)
+                         cat3_options=cat3_options,
+                         cat4_options=cat4_options,
+                         mission_options=mission_options)
 
 
 @app.route('/members/new', methods=['GET', 'POST'])
