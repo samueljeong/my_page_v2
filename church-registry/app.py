@@ -111,6 +111,8 @@ class Member(db.Model):
     # 상태 (active: 활동, inactive: 비활동, newcomer: 새신자, deceased: 별세, transferred: 타교회)
     status = db.Column(db.String(20), default='active')
     member_status = db.Column(db.String(30))  # god4u state 필드 (재적, 별세, 타교회 등)
+    deceased_date = db.Column(db.Date)  # 별세일자
+    transferred_date = db.Column(db.Date)  # 타교회 이적일자
     notes = db.Column(db.Text)  # 메모
 
     # 성도 구분 (god4u 매핑)
@@ -158,12 +160,55 @@ class Member(db.Model):
         return age
 
     @property
+    def korean_age(self):
+        """한국 나이 (세는 나이) - 새해에 나이가 바뀜"""
+        if not self.birth_date:
+            return None
+        today = get_seoul_today()
+        return today.year - self.birth_date.year + 1
+
+    @property
+    def church_school_department(self):
+        """교회학교 부서 자동 분류 (한국 나이 기준)
+
+        새해가 되면 자동으로 진급됨:
+        - 영아부: 1-3세 (0-2세 만 나이)
+        - 유치부: 4-7세 (3-6세 만 나이)
+        - 유년부: 8-10세 (초등 1-3학년)
+        - 초등부: 11-13세 (초등 4-6학년)
+        - 중등부: 14-16세 (중학교)
+        - 고등부: 17-19세 (고등학교)
+        - 청년부: 20-39세
+        - 장년부: 40세 이상
+        """
+        k_age = self.korean_age
+        if k_age is None:
+            return None
+
+        if k_age <= 3:
+            return '영아부'
+        elif k_age <= 7:
+            return '유치부'
+        elif k_age <= 10:
+            return '유년부'
+        elif k_age <= 13:
+            return '초등부'
+        elif k_age <= 16:
+            return '중등부'
+        elif k_age <= 19:
+            return '고등부'
+        elif k_age <= 39:
+            return '청년부'
+        else:
+            return '장년부'
+
+    @property
     def is_newcomer(self):
-        """새신자 여부 (등록 후 1년 이내, 한국 시간 기준)"""
+        """새신자 여부 (등록 후 2년 이내, 한국 시간 기준)"""
         if not self.registration_date:
             return False
-        one_year_ago = get_seoul_today() - timedelta(days=365)  # 1년
-        return self.registration_date > one_year_ago
+        two_years_ago = get_seoul_today() - timedelta(days=730)  # 2년
+        return self.registration_date > two_years_ago
 
     @property
     def status_display(self):
@@ -173,7 +218,30 @@ class Member(db.Model):
             return '별세'
         if self.status == 'transferred' or self.member_status in ['타교회', '타교인', '이명']:
             return '타교회'
-        # 새신자 체크 (등록 1년 이내)
+        # 새신자 체크 (등록 2년 이내)
+        if self.is_newcomer:
+            return '새신자'
+        # 일반 상태
+        if self.status == 'active':
+            return '활동'
+        if self.status == 'inactive':
+            return '비활동'
+        return self.status or '활동'
+
+    @property
+    def status_display_with_date(self):
+        """상태 표시 텍스트 (날짜 포함)"""
+        # 별세자
+        if self.status == 'deceased' or self.member_status in ['별세', '소천']:
+            if self.deceased_date:
+                return f'별세 ({self.deceased_date.strftime("%Y.%m.%d")})'
+            return '별세'
+        # 타교회
+        if self.status == 'transferred' or self.member_status in ['타교회', '타교인', '이명']:
+            if self.transferred_date:
+                return f'타교회 ({self.transferred_date.strftime("%Y.%m.%d")})'
+            return '타교회'
+        # 새신자 체크 (등록 2년 이내)
         if self.is_newcomer:
             return '새신자'
         # 일반 상태
@@ -729,6 +797,15 @@ def member_new():
         else:
             registration_date = get_seoul_today()
 
+        # 별세일자 / 타교일자
+        deceased_date = None
+        if request.form.get('deceased_date'):
+            deceased_date = datetime.strptime(request.form.get('deceased_date'), '%Y-%m-%d').date()
+
+        transferred_date = None
+        if request.form.get('transferred_date'):
+            transferred_date = datetime.strptime(request.form.get('transferred_date'), '%Y-%m-%d').date()
+
         # 유효성 검사
         if not name:
             flash('이름은 필수 입력 항목입니다.', 'danger')
@@ -758,7 +835,9 @@ def member_new():
             mission_group=mission_group if mission_group else None,
             barnabas=barnabas if barnabas else None,
             referrer=referrer if referrer else None,
-            faith_level=faith_level if faith_level else None
+            faith_level=faith_level if faith_level else None,
+            deceased_date=deceased_date,
+            transferred_date=transferred_date
         )
 
         db.session.add(member)
@@ -847,6 +926,17 @@ def member_edit(member_id):
 
         if request.form.get('registration_date'):
             member.registration_date = datetime.strptime(request.form.get('registration_date'), '%Y-%m-%d').date()
+
+        # 별세일자 / 타교일자
+        if request.form.get('deceased_date'):
+            member.deceased_date = datetime.strptime(request.form.get('deceased_date'), '%Y-%m-%d').date()
+        else:
+            member.deceased_date = None
+
+        if request.form.get('transferred_date'):
+            member.transferred_date = datetime.strptime(request.form.get('transferred_date'), '%Y-%m-%d').date()
+        else:
+            member.transferred_date = None
 
         # 유효성 검사
         if not member.name:
@@ -1240,8 +1330,18 @@ def offering_delete(offering_id):
 
 @app.route('/newcomers')
 def newcomer_list():
-    """새신자 목록"""
-    newcomers = Member.query.filter_by(status='newcomer').order_by(Member.registration_date.desc()).all()
+    """새신자 목록 (등록 후 2년 이내)"""
+    from sqlalchemy import or_
+    two_years_ago = get_seoul_today() - timedelta(days=730)
+    # 등록일이 2년 이내인 교인 (별세자, 타교회 제외)
+    newcomers = Member.query.filter(
+        Member.registration_date > two_years_ago,
+        Member.status.notin_(['deceased', 'transferred']),
+        or_(
+            Member.member_status.is_(None),
+            ~Member.member_status.in_(['별세', '소천', '타교회', '타교인', '이명'])
+        )
+    ).order_by(Member.registration_date.desc()).all()
     return render_template('newcomers/list.html', newcomers=newcomers)
 
 
@@ -2747,6 +2847,8 @@ def migrate_db():
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS occupation VARCHAR(100)",  # 직업
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS partner_id INTEGER",  # 배우자 ID
         "ALTER TABLE members ADD COLUMN IF NOT EXISTS member_status VARCHAR(30)",  # god4u state (재적, 별세, 타교회 등)
+        "ALTER TABLE members ADD COLUMN IF NOT EXISTS deceased_date DATE",  # 별세일자
+        "ALTER TABLE members ADD COLUMN IF NOT EXISTS transferred_date DATE",  # 타교회 이적일자
 
         # Group 테이블 새 컬럼들 (계층 구조)
         "ALTER TABLE groups ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES groups(id)",

@@ -27,7 +27,7 @@
                     <h1>
                         {{ member.display_name }}
                         <span class="status-badge status-{{ member.status_class }}" style="font-size: 14px; vertical-align: middle;">
-                            {{ member.status_display }}
+                            {{ member.status_display_with_date }}
                         </span>
                     </h1>
                     <p style="color: var(--apple-text-secondary); margin: 0;">
@@ -166,7 +166,16 @@
                 </div>
                 <div class="info-item">
                     <div class="info-label">교회학교</div>
-                    <div class="info-value">{{ member.department or '-' }}</div>
+                    <div class="info-value">
+                        {% if member.department %}
+                            {{ member.department }}
+                        {% elif member.church_school_department and member.church_school_department != '장년부' %}
+                            {{ member.church_school_department }}
+                            <span style="background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 8px; font-size: 11px; margin-left: 4px;">자동</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">신급</div>
