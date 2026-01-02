@@ -3840,7 +3840,7 @@ def api_get_member_family(member_id):
             "children": []
         }
 
-        # 형제의 배우자 찾기
+        # 형제의 배우자 찾기 (인척 섹션에 있어도 여기에 표시)
         sibling_spouse_rel = FamilyRelationship.query.filter_by(
             member_id=sibling_id, relationship_type='spouse'
         ).first()
@@ -3853,14 +3853,15 @@ def api_get_member_family(member_id):
             spouse_member = (sibling_spouse_rel.related_member
                            if sibling_spouse_rel.member_id == sibling_id
                            else sibling_spouse_rel.member)
-            if spouse_member and spouse_member.id not in existing_ids:
+            if spouse_member:
                 sibling_family["spouse"] = {
                     **member_summary(spouse_member),
                     "relationship_id": sibling_spouse_rel.id,
                     "relationship_detail": "형제 배우자",
                 }
 
-        # 형제의 자녀 찾기
+        # 형제의 자녀 찾기 (중복 제거용 set)
+        seen_children_ids = set()
         sibling_children_rels = FamilyRelationship.query.filter_by(
             member_id=sibling_id, relationship_type='parent'
         ).all()
@@ -3873,7 +3874,8 @@ def api_get_member_family(member_id):
             child_member = (rel.related_member
                           if rel.member_id == sibling_id
                           else rel.member)
-            if child_member and child_member.id not in existing_ids:
+            if child_member and child_member.id not in seen_children_ids:
+                seen_children_ids.add(child_member.id)
                 sibling_family["children"].append({
                     **member_summary(child_member),
                     "relationship_id": rel.id,
