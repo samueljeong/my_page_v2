@@ -135,6 +135,12 @@ class Member(db.Model):
     # 직업
     occupation = db.Column(db.String(100))  # 직업 (occu)
 
+    # 차량번호 (god4u carnum)
+    car_number = db.Column(db.String(20))  # 차량번호
+
+    # 가족 정보 (god4u ran1 - 텍스트 형태의 가족 명단)
+    family_members = db.Column(db.String(200))  # 가족 (예: "김진일 이효연 김예원 김주원")
+
     # 사진
     photo_url = db.Column(db.String(500))  # 프로필 사진 URL
 
@@ -4358,10 +4364,11 @@ def api_sync_god4u_to_registry():
             'name', 'phone', 'email', 'address', 'birth_date', 'gender', 'registration_date',
             'member_type', 'position_detail', 'district', 'section', 'cell_group', 'mission_group',
             'age_group', 'attendance_status', 'birth_lunar', 'last_visit_date', 'tel', 'zipcode',
-            'occupation', 'previous_church', 'partner_id', 'photo_url'
+            'occupation', 'previous_church', 'partner_id', 'photo_url',
+            'car_number', 'family_members', 'notes'  # 추가: 차량번호, 가족정보, 메모
         ]
         # 로컬 우선 필드 (기존 값 유지)
-        LOCAL_FIELDS = ['status', 'notes', 'barnabas', 'referrer']
+        LOCAL_FIELDS = ['status', 'barnabas', 'referrer']  # notes는 god4u에서 동기화
 
         # 선택적 동기화: 특정 회원만 업데이트
         selected_ids = data.get('selected_ids', None)  # None이면 전체, 리스트면 해당 회원만
@@ -4421,19 +4428,20 @@ def api_sync_god4u_to_registry():
                 if partner_id_str:
                     god4u_data["partner_id"] = partner_id_str  # 나중에 매핑 필요
 
-                # 메모 및 가족 정보 (god4u etc, ran1 필드)
-                etc_notes = person.get("etc", "").strip()
-                ran1 = person.get("ran1", "").strip()  # 가족 정보
+                # 차량번호 (god4u carnum)
                 carnum = person.get("carnum", "").strip()
-
-                notes_parts = []
-                if etc_notes:
-                    notes_parts.append(etc_notes)
                 if carnum:
-                    notes_parts.append(f"차량: {carnum}")
+                    god4u_data["car_number"] = carnum
 
-                god4u_notes = "\n".join(notes_parts) if notes_parts else ""
-                god4u_family_info = ran1  # 별도로 저장하여 가족 관계 연결에 사용
+                # 가족 정보 (god4u ran1)
+                ran1 = person.get("ran1", "").strip()
+                if ran1:
+                    god4u_data["family_members"] = ran1
+
+                # 메모 (god4u etc)
+                etc_notes = person.get("etc", "").strip()
+                if etc_notes:
+                    god4u_data["notes"] = etc_notes
 
                 # 상태 결정 로직
                 # god4u state 필드 기반 (별세, 타교회 우선)
@@ -4451,7 +4459,6 @@ def api_sync_god4u_to_registry():
 
                 local_data = {
                     "status": determined_status,
-                    "notes": god4u_notes,
                 }
 
                 if existing:
@@ -4459,17 +4466,13 @@ def api_sync_god4u_to_registry():
                     if selected_ids is not None and external_id not in selected_ids:
                         continue
 
-                    # 기존 회원: god4u 필드만 업데이트 (로컬 필드 유지)
+                    # 기존 회원: god4u 필드 업데이트 (car_number, family_members, notes 포함)
                     for key, value in god4u_data.items():
                         if value is not None:
                             setattr(existing, key, value)
 
                     # 상태 업데이트: god4u state 기반으로 덮어씀
                     existing.status = determined_status
-
-                    # 메모: 기존에 없으면 god4u에서 가져옴
-                    if not existing.notes and god4u_notes:
-                        existing.notes = god4u_notes
 
                     results["updated"] += 1
                 else:
