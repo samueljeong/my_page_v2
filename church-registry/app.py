@@ -4697,9 +4697,18 @@ def api_sync_god4u_to_registry():
                             # 나이 차이 및 성별 확인
                             age_diff = None
                             is_diff_gender = False
+                            member_age = None
+                            related_age = None
+                            from datetime import date
+                            today = date.today()
+
                             if member.birth_date and related.birth_date:
                                 age_diff = (member.birth_date - related.birth_date).days / 365
                                 abs_age_diff = abs(age_diff)
+
+                                # 각자의 나이 계산
+                                member_age = (today - member.birth_date).days / 365
+                                related_age = (today - related.birth_date).days / 365
 
                                 # 성별 확인
                                 m_gender = (member.gender or '').upper()
@@ -4714,6 +4723,11 @@ def api_sync_god4u_to_registry():
                                 rel_type = 'spouse'
                             elif age_diff is not None:
                                 abs_age_diff = abs(age_diff)
+
+                                # 둘 중 한 명이라도 20세 미만이면 미성년자로 판단
+                                is_minor = (member_age is not None and member_age < 20) or \
+                                          (related_age is not None and related_age < 20)
+
                                 if abs_age_diff >= 18:
                                     # 나이 차이 18년 이상 → 부모/자녀
                                     if age_diff >= 18:  # 내가 18살 이상 어리면 → 상대는 부모
@@ -4722,11 +4736,11 @@ def api_sync_god4u_to_registry():
                                     else:  # 내가 18살 이상 많으면 → 상대는 자녀
                                         rel_type = 'parent'
                                         rel_detail = '자녀'
-                                elif is_diff_gender and abs_age_diff < 5:
-                                    # 성별 다름 + 나이 차이 5년 미만 → 배우자 가능성 높음
+                                elif is_diff_gender and abs_age_diff < 5 and not is_minor:
+                                    # 성별 다름 + 나이 차이 5년 미만 + 둘 다 성인 → 배우자 가능성 높음
                                     rel_type = 'spouse'
                                 else:
-                                    # 나이 차이 5~18년 또는 동성 → 형제자매
+                                    # 나이 차이 5~18년 또는 동성 또는 미성년자 → 형제자매
                                     rel_type = 'sibling'
 
                             rel = FamilyRelationship(
