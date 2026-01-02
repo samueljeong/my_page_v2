@@ -31,10 +31,14 @@
                         </span>
                     </h1>
                     <p style="color: var(--apple-text-secondary); margin: 0;">
-                        {% if member.registration_number %}등록번호: {{ member.registration_number }} · {% endif %}
-                        {{ member.group.name if member.group else '그룹 없음' }}
+                        {% set org_parts = [] %}
+                        {% if member.district %}{% set _ = org_parts.append(member.district) %}{% endif %}
+                        {% if member.section %}{% set _ = org_parts.append(member.section) %}{% endif %}
+                        {% if member.cell_group %}{% set _ = org_parts.append(member.cell_group) %}{% endif %}
+                        {% if member.mission_group %}{% set _ = org_parts.append(member.mission_group) %}{% endif %}
+                        {{ org_parts | join(' ') if org_parts else '' }}
                         {% if member.registration_date %}
-                        · {{ member.registration_date.strftime('%Y년 %m월 %d일') }} 등록
+                        {% if org_parts %}· {% endif %}{{ member.registration_date.strftime('%Y년 %m월 %d일') }} 등록
                         {% endif %}
                     </p>
                     <div class="detail-actions">
@@ -47,11 +51,6 @@
                         {% if member.phone %}
                         <a href="tel:{{ member.phone }}" class="icon-btn" title="전화하기">
                             <i class="bi bi-telephone"></i>
-                        </a>
-                        {% endif %}
-                        {% if member.email %}
-                        <a href="mailto:{{ member.email }}" class="icon-btn" title="이메일 보내기">
-                            <i class="bi bi-envelope"></i>
                         </a>
                         {% endif %}
                     </div>
@@ -93,12 +92,27 @@
             </div>
             <div class="info-grid">
                 <div class="info-item">
-                    <div class="info-label">이름</div>
-                    <div class="info-value">{{ member.name }}</div>
+                    <div class="info-label">성별</div>
+                    <div class="info-value">
+                        {% if member.gender == 'M' or member.gender == '남' or member.gender == '남성' %}
+                            남자
+                        {% elif member.gender == 'F' or member.gender == '여' or member.gender == '여성' %}
+                            여자
+                        {% else %}
+                            {{ member.gender or '-' }}
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">직분</div>
-                    <div class="info-value">{{ member.member_type or '-' }}</div>
+                    <div class="info-label">생년월일</div>
+                    <div class="info-value">
+                        {% if member.birth_date %}
+                            {{ member.birth_date.strftime('%Y년 %m월 %d일') }}
+                            {% if member.age is not none %}
+                            <span style="color: var(--apple-blue); font-weight: 600;">({{ member.age }}세)</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">전화번호</div>
@@ -113,29 +127,6 @@
                 <div class="info-item">
                     <div class="info-label">주소</div>
                     <div class="info-value">{{ member.address or '-' }}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">생년월일</div>
-                    <div class="info-value">
-                        {% if member.birth_date %}
-                            {{ member.birth_date.strftime('%Y년 %m월 %d일') }}
-                            {% if member.age is not none %}
-                            <span style="color: var(--apple-blue); font-weight: 600;">({{ member.age }}세)</span>
-                            {% endif %}
-                        {% else %}-{% endif %}
-                    </div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">성별</div>
-                    <div class="info-value">
-                        {% if member.gender == 'M' or member.gender == '남' or member.gender == '남성' %}
-                            남자
-                        {% elif member.gender == 'F' or member.gender == '여' or member.gender == '여성' %}
-                            여자
-                        {% else %}
-                            {{ member.gender or '-' }}
-                        {% endif %}
-                    </div>
                 </div>
             </div>
         </div>
@@ -162,19 +153,19 @@
                         {% else %}-{% endif %}
                     </div>
                 </div>
+                {% if member.church_school_department and member.church_school_department != '장년부' %}
                 <div class="info-item">
                     <div class="info-label">교회학교</div>
                     <div class="info-value">
                         {% if member.department %}
                             {{ member.department }}
-                        {% elif member.church_school_department and member.church_school_department != '장년부' %}
+                        {% else %}
                             {{ member.church_school_department }}
                             <span style="background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 8px; font-size: 11px; margin-left: 4px;">자동</span>
-                        {% else %}
-                            -
                         {% endif %}
                     </div>
                 </div>
+                {% endif %}
                 <div class="info-item">
                     <div class="info-label">신급</div>
                     <div class="info-value">{{ member.faith_level or '-' }}</div>
@@ -186,10 +177,6 @@
                 <div class="info-item">
                     <div class="info-label">이전 교회</div>
                     <div class="info-value">{{ member.previous_church or '-' }}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">이전 교회 주소</div>
-                    <div class="info-value">{{ member.previous_church_address or '-' }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">인도자</div>
@@ -222,14 +209,12 @@
                 <div class="info-label">선교회</div>
                 <div class="info-value">{{ member.mission_group or '-' }}</div>
             </div>
+            {% if member.is_newcomer and member.barnabas %}
             <div class="info-item">
                 <div class="info-label">바나바</div>
-                <div class="info-value">{{ member.barnabas or '-' }}</div>
+                <div class="info-value">{{ member.barnabas }}</div>
             </div>
-            <div class="info-item">
-                <div class="info-label">소속 그룹</div>
-                <div class="info-value">{{ member.group.name if member.group else '-' }}</div>
-            </div>
+            {% endif %}
             <div class="info-item">
                 <div class="info-label">직분 상세</div>
                 <div class="info-value">{{ member.position_detail or '-' }}</div>
@@ -259,10 +244,6 @@
             <div class="info-item">
                 <div class="info-label">직업</div>
                 <div class="info-value">{{ member.occupation or '-' }}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">집 전화</div>
-                <div class="info-value">{{ member.tel or '-' }}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">우편번호</div>
