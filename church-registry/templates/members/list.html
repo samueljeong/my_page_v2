@@ -20,29 +20,35 @@
 
     <!-- 검색 및 필터 -->
     <div class="form-section" style="margin-bottom: 24px;">
-        <form method="GET" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <form method="GET" id="filterForm" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
             <div class="search-bar" style="flex: 1; min-width: 200px; max-width: none;">
                 <i class="bi bi-search"></i>
                 <input type="text" name="q" placeholder="이름으로 검색..." value="{{ query }}">
             </div>
-            <select class="form-select" name="group" style="width: auto; min-width: 150px;">
-                <option value="">전체 그룹</option>
-                {% for group in groups %}
-                <option value="{{ group.id }}" {{ 'selected' if group_filter == group.id|string else '' }}>
-                    {{ group.name }}
-                </option>
+
+            <!-- 1단계 카테고리 -->
+            <select class="form-select" name="cat1" id="cat1Select" style="width: auto; min-width: 140px;" onchange="onCat1Change()">
+                <option value="">전체 교인</option>
+                <option value="district" {{ 'selected' if cat1 == 'district' else '' }}>교구별</option>
+                <option value="position" {{ 'selected' if cat1 == 'position' else '' }}>직분별</option>
+                <option value="reg_status" {{ 'selected' if cat1 == 'reg_status' else '' }}>등록상태</option>
+                <option value="attendance" {{ 'selected' if cat1 == 'attendance' else '' }}>출석상태</option>
+                <option value="mission" {{ 'selected' if cat1 == 'mission' else '' }}>선교회별</option>
+                <option value="cell" {{ 'selected' if cat1 == 'cell' else '' }}>속회별</option>
+            </select>
+
+            <!-- 2단계 카테고리 -->
+            <select class="form-select" name="cat2" id="cat2Select" style="width: auto; min-width: 140px; {% if not cat1 %}display: none;{% endif %}">
+                <option value="">전체</option>
+                {% for key, value in cat2_options.items() %}
+                <option value="{{ key }}" {{ 'selected' if cat2 == key else '' }}>{{ value }}</option>
                 {% endfor %}
             </select>
-            <select class="form-select" name="status" style="width: auto; min-width: 130px;">
-                <option value="">전체 상태</option>
-                <option value="active" {{ 'selected' if status_filter == 'active' else '' }}>활동</option>
-                <option value="inactive" {{ 'selected' if status_filter == 'inactive' else '' }}>비활동</option>
-                <option value="newcomer" {{ 'selected' if status_filter == 'newcomer' else '' }}>새신자</option>
-            </select>
+
             <button type="submit" class="apple-btn apple-btn-primary">
                 <i class="bi bi-search"></i> 검색
             </button>
-            {% if query or status_filter or group_filter %}
+            {% if query or cat1 %}
             <a href="{{ url_for('member_list') }}" class="apple-btn apple-btn-secondary">
                 <i class="bi bi-x-lg"></i> 초기화
             </a>
@@ -50,12 +56,23 @@
         </form>
     </div>
 
-    <!-- 검색 결과 알림 -->
-    {% if query or status_filter or group_filter %}
-    <div class="apple-alert success" style="background: #e3f2fd; color: #1565c0;">
+    <!-- 필터 상태 표시 -->
+    {% if cat1 or query %}
+    <div class="apple-alert success" style="background: #e3f2fd; color: #1565c0; margin-bottom: 16px;">
         <i class="bi bi-funnel"></i>
-        필터 적용 중: <strong>{{ members|length }}명</strong>
-        {% if query %}(검색어: "{{ query }}"){% endif %}
+        {% if query %}
+        검색: "<strong>{{ query }}</strong>" ·
+        {% endif %}
+        {% if cat1 == 'district' %}교구별{% endif %}
+        {% if cat1 == 'position' %}직분별{% endif %}
+        {% if cat1 == 'reg_status' %}등록상태{% endif %}
+        {% if cat1 == 'attendance' %}출석상태{% endif %}
+        {% if cat1 == 'mission' %}선교회별{% endif %}
+        {% if cat1 == 'cell' %}속회별{% endif %}
+        {% if cat2 and cat2_options %}
+         › <strong>{{ cat2_options.get(cat2, cat2) }}</strong>
+        {% endif %}
+         · <strong>{{ members|length }}명</strong>
     </div>
     {% endif %}
 
@@ -75,17 +92,15 @@
                 <div class="member-info">
                     <h3>{{ member.display_name }}</h3>
                     <p>
-                        {% if member.registration_number %}{{ member.registration_number }} · {% endif %}
-                        {% if member.department %}{{ member.department }}
-                        {% elif member.mission_group %}{{ member.mission_group }}
-                        {% elif member.group %}{{ member.group.name }}
-                        {% else %}그룹 없음{% endif %}
+                        {% set org_parts = [] %}
+                        {% if member.district %}{% set _ = org_parts.append(member.district) %}{% endif %}
+                        {% if member.section %}{% set _ = org_parts.append(member.section) %}{% endif %}
+                        {% if member.cell_group %}{% set _ = org_parts.append(member.cell_group) %}{% endif %}
+                        {{ org_parts | join(' ') if org_parts else '소속 없음' }}
                     </p>
                 </div>
-                <span class="status-badge status-{{ member.status }}">
-                    {% if member.status == 'active' %}활동
-                    {% elif member.status == 'inactive' %}비활동
-                    {% else %}새신자{% endif %}
+                <span class="status-badge status-{{ member.status_class }}">
+                    {{ member.status_display }}
                 </span>
             </div>
             <div class="member-meta">
@@ -108,14 +123,14 @@
         <div class="empty-state">
             <i class="bi bi-people"></i>
             <h3>
-                {% if query or status_filter or group_filter %}
+                {% if query or cat1 %}
                 검색 결과가 없습니다
                 {% else %}
                 등록된 교인이 없습니다
                 {% endif %}
             </h3>
             <p>
-                {% if query or status_filter or group_filter %}
+                {% if query or cat1 %}
                 다른 검색어나 필터를 시도해보세요
                 {% else %}
                 첫 번째 교인을 등록해보세요
@@ -128,4 +143,56 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+// 1단계 카테고리 변경 시
+function onCat1Change() {
+    const cat1 = document.getElementById('cat1Select').value;
+    const cat2Select = document.getElementById('cat2Select');
+
+    if (!cat1) {
+        cat2Select.style.display = 'none';
+        cat2Select.value = '';
+        return;
+    }
+
+    // 2단계 옵션 데이터
+    const cat2Data = {
+        'district': {{ district_options | default({}) | tojson | safe }},
+        'position': {{ position_options | default({}) | tojson | safe }},
+        'reg_status': {
+            'active_member': '현재 교인',
+            'deceased': '별세',
+            'transferred': '타교회'
+        },
+        'attendance': {
+            'active': '활동',
+            'inactive': '비활동',
+            'newcomer': '새신자'
+        },
+        'mission': {{ mission_options | default({}) | tojson | safe }},
+        'cell': {{ cell_options | default({}) | tojson | safe }}
+    };
+
+    const options = cat2Data[cat1] || {};
+
+    // 옵션 재구성
+    cat2Select.innerHTML = '<option value="">전체</option>';
+    for (const [key, value] of Object.entries(options)) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = value;
+        cat2Select.appendChild(opt);
+    }
+
+    cat2Select.style.display = 'block';
+}
+
+// 2단계 변경 시 자동 제출
+document.getElementById('cat2Select').addEventListener('change', function() {
+    if (this.value) {
+        document.getElementById('filterForm').submit();
+    }
+});
+</script>
 {% endblock %}
