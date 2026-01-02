@@ -177,9 +177,91 @@ class Member(db.Model):
     def __repr__(self):
         return f'<Member {self.name}>'
 
+    # ===== 가족 관계 헬퍼 메서드 =====
+
+    def get_family_relationships(self):
+        """모든 가족 관계 반환"""
+        return FamilyRelationship.query.filter_by(member_id=self.id).all()
+
+    def get_spouse(self):
+        """배우자 반환"""
+        rel = FamilyRelationship.query.filter_by(
+            member_id=self.id,
+            relationship_type='spouse'
+        ).first()
+        return rel.related_member if rel else None
+
+    def get_parents(self):
+        """부모 목록 반환 (나의 부모 = 나를 자녀로 둔 사람)"""
+        rels = FamilyRelationship.query.filter_by(
+            member_id=self.id,
+            relationship_type='child'  # 내가 자녀인 관계
+        ).all()
+        return [rel.related_member for rel in rels]
+
+    def get_children(self):
+        """자녀 목록 반환 (나의 자녀 = 나를 부모로 둔 사람)"""
+        rels = FamilyRelationship.query.filter_by(
+            member_id=self.id,
+            relationship_type='parent'  # 내가 부모인 관계
+        ).all()
+        return [rel.related_member for rel in rels]
+
+    def get_siblings(self):
+        """형제자매 목록 반환"""
+        rels = FamilyRelationship.query.filter_by(
+            member_id=self.id,
+            relationship_type='sibling'
+        ).all()
+        return [rel.related_member for rel in rels]
+
+    def get_family_tree(self):
+        """전체 가족 트리 반환 (딕셔너리 형태)"""
+        return {
+            'spouse': self.get_spouse(),
+            'parents': self.get_parents(),
+            'children': self.get_children(),
+            'siblings': self.get_siblings(),
+        }
+
+    def get_extended_family(self):
+        """대가족 전체 목록 반환 (중복 제거)"""
+        family_members = set()
+
+        # 직계 가족 추가
+        spouse = self.get_spouse()
+        if spouse:
+            family_members.add(spouse)
+
+        for parent in self.get_parents():
+            family_members.add(parent)
+            # 부모의 배우자 (다른 부모)
+            parent_spouse = parent.get_spouse()
+            if parent_spouse:
+                family_members.add(parent_spouse)
+            # 부모의 자녀 (형제자매)
+            for sibling in parent.get_children():
+                if sibling.id != self.id:
+                    family_members.add(sibling)
+
+        for child in self.get_children():
+            family_members.add(child)
+            # 자녀의 배우자
+            child_spouse = child.get_spouse()
+            if child_spouse:
+                family_members.add(child_spouse)
+            # 손주
+            for grandchild in child.get_children():
+                family_members.add(grandchild)
+
+        for sibling in self.get_siblings():
+            family_members.add(sibling)
+
+        return list(family_members)
+
 
 class Family(db.Model):
-    """가족 모델"""
+    """가족 모델 - 대가족 단위 그룹"""
     __tablename__ = 'families'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -187,6 +269,95 @@ class Family(db.Model):
     members = db.relationship('Member', backref='family', lazy=True)
 
     created_at = db.Column(db.DateTime, default=get_seoul_now)
+
+    def get_all_members(self):
+        """가족 구성원 전체 반환"""
+        return Member.query.filter_by(family_id=self.id).all()
+
+
+class FamilyRelationship(db.Model):
+    """가족 관계 모델 - 개별 관계 정의"""
+    __tablename__ = 'family_relationships'
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)  # 기준 교인
+    related_member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)  # 관계 대상
+
+    # 관계 유형: spouse(배우자), parent(부모), child(자녀), sibling(형제자매)
+    relationship_type = db.Column(db.String(20), nullable=False)
+
+    # 상세 관계 (선택): 아버지, 어머니, 아들, 딸, 형, 누나, 동생 등
+    relationship_detail = db.Column(db.String(20))
+
+    created_at = db.Column(db.DateTime, default=get_seoul_now)
+
+    # 관계 정의
+    member = db.relationship('Member', foreign_keys=[member_id], backref='relationships_as_member')
+    related_member = db.relationship('Member', foreign_keys=[related_member_id], backref='relationships_as_related')
+
+    # 유니크 제약 (같은 관계 중복 방지)
+    __table_args__ = (
+        db.UniqueConstraint('member_id', 'related_member_id', 'relationship_type', name='unique_relationship'),
+    )
+
+    # 관계 유형 상수
+    SPOUSE = 'spouse'      # 배우자
+    PARENT = 'parent'      # 부모 (member가 related_member의 부모)
+    CHILD = 'child'        # 자녀 (member가 related_member의 자녀)
+    SIBLING = 'sibling'    # 형제자매
+
+    # 관계 역방향 매핑
+    REVERSE_RELATIONSHIPS = {
+        'spouse': 'spouse',
+        'parent': 'child',
+        'child': 'parent',
+        'sibling': 'sibling',
+    }
+
+    # 상세 관계 역방향 매핑
+    REVERSE_DETAILS = {
+        '남편': '아내', '아내': '남편',
+        '아버지': '아들', '아들': '아버지',
+        '아버지': '딸', '딸': '아버지',
+        '어머니': '아들', '어머니': '딸',
+        '형': '동생', '누나': '동생', '오빠': '동생', '언니': '동생',
+        '동생': None,  # 동생은 상대방 성별에 따라 다름
+    }
+
+    @classmethod
+    def create_bidirectional(cls, member_id, related_member_id, relationship_type, detail=None, reverse_detail=None):
+        """양방향 관계 생성"""
+        # 정방향 관계
+        rel1 = cls(
+            member_id=member_id,
+            related_member_id=related_member_id,
+            relationship_type=relationship_type,
+            relationship_detail=detail
+        )
+
+        # 역방향 관계
+        reverse_type = cls.REVERSE_RELATIONSHIPS.get(relationship_type, relationship_type)
+        rel2 = cls(
+            member_id=related_member_id,
+            related_member_id=member_id,
+            relationship_type=reverse_type,
+            relationship_detail=reverse_detail or cls.REVERSE_DETAILS.get(detail)
+        )
+
+        return [rel1, rel2]
+
+    def get_display_text(self):
+        """표시용 텍스트 (예: 배우자, 아버지, 딸 등)"""
+        if self.relationship_detail:
+            return self.relationship_detail
+
+        type_names = {
+            'spouse': '배우자',
+            'parent': '부모',
+            'child': '자녀',
+            'sibling': '형제자매',
+        }
+        return type_names.get(self.relationship_type, self.relationship_type)
 
 
 class Group(db.Model):
@@ -2675,6 +2846,351 @@ def api_bulk_create_members():
         "success": True,
         "results": results
     })
+
+
+# =============================================================================
+# 가족 관계 API
+# =============================================================================
+
+@app.route('/api/members/<int:member_id>/family', methods=['GET'])
+def api_get_member_family(member_id):
+    """교인의 가족 관계 조회"""
+    member = Member.query.get_or_404(member_id)
+
+    def member_summary(m):
+        if not m:
+            return None
+        return {
+            "id": m.id,
+            "name": m.name,
+            "member_type": m.member_type,
+            "photo_url": m.photo_url,
+            "gender": m.gender,
+            "age": m.age,
+        }
+
+    # 관계별 정리
+    relationships = FamilyRelationship.query.filter_by(member_id=member_id).all()
+
+    family_data = {
+        "member": member_summary(member),
+        "spouse": None,
+        "parents": [],
+        "children": [],
+        "siblings": [],
+    }
+
+    for rel in relationships:
+        related = rel.related_member
+        rel_info = {
+            **member_summary(related),
+            "relationship_id": rel.id,
+            "relationship_detail": rel.relationship_detail,
+        }
+
+        if rel.relationship_type == 'spouse':
+            family_data["spouse"] = rel_info
+        elif rel.relationship_type == 'child':  # 내가 자녀 = 상대가 부모
+            family_data["parents"].append(rel_info)
+        elif rel.relationship_type == 'parent':  # 내가 부모 = 상대가 자녀
+            family_data["children"].append(rel_info)
+        elif rel.relationship_type == 'sibling':
+            family_data["siblings"].append(rel_info)
+
+    # 대가족 (Family 모델)
+    if member.family_id:
+        family = Family.query.get(member.family_id)
+        if family:
+            family_data["family_group"] = {
+                "id": family.id,
+                "name": family.family_name,
+                "member_count": len(family.members),
+            }
+
+    return jsonify(family_data)
+
+
+@app.route('/api/members/<int:member_id>/family', methods=['POST'])
+def api_add_family_relationship(member_id):
+    """가족 관계 추가"""
+    member = Member.query.get_or_404(member_id)
+    data = request.get_json() or {}
+
+    related_member_id = data.get('related_member_id')
+    relationship_type = data.get('relationship_type')  # spouse, parent, child, sibling
+    detail = data.get('detail')  # 아버지, 어머니, 아들, 딸 등
+    reverse_detail = data.get('reverse_detail')  # 역방향 상세 관계
+
+    if not related_member_id or not relationship_type:
+        return jsonify({"error": "related_member_id와 relationship_type이 필요합니다"}), 400
+
+    if relationship_type not in ['spouse', 'parent', 'child', 'sibling']:
+        return jsonify({"error": "relationship_type은 spouse, parent, child, sibling 중 하나여야 합니다"}), 400
+
+    related_member = Member.query.get(related_member_id)
+    if not related_member:
+        return jsonify({"error": "관계 대상 교인을 찾을 수 없습니다"}), 404
+
+    # 이미 존재하는 관계 확인
+    existing = FamilyRelationship.query.filter_by(
+        member_id=member_id,
+        related_member_id=related_member_id,
+        relationship_type=relationship_type
+    ).first()
+
+    if existing:
+        return jsonify({"error": "이미 등록된 관계입니다"}), 409
+
+    try:
+        # 양방향 관계 생성
+        relationships = FamilyRelationship.create_bidirectional(
+            member_id=member_id,
+            related_member_id=related_member_id,
+            relationship_type=relationship_type,
+            detail=detail,
+            reverse_detail=reverse_detail
+        )
+
+        for rel in relationships:
+            db.session.add(rel)
+
+        # 같은 Family 그룹으로 연결 (없으면 생성)
+        if not member.family_id and not related_member.family_id:
+            # 둘 다 가족이 없으면 새 가족 생성
+            family = Family(family_name=f"{member.name} 가정")
+            db.session.add(family)
+            db.session.flush()
+            member.family_id = family.id
+            related_member.family_id = family.id
+        elif member.family_id and not related_member.family_id:
+            related_member.family_id = member.family_id
+        elif not member.family_id and related_member.family_id:
+            member.family_id = related_member.family_id
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"{member.name}님과 {related_member.name}님의 관계가 등록되었습니다",
+            "relationship_ids": [rel.id for rel in relationships]
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"관계 등록 실패: {str(e)}"}), 500
+
+
+@app.route('/api/family-relationships/<int:relationship_id>', methods=['DELETE'])
+def api_delete_family_relationship(relationship_id):
+    """가족 관계 삭제 (양방향)"""
+    rel = FamilyRelationship.query.get_or_404(relationship_id)
+
+    member_id = rel.member_id
+    related_member_id = rel.related_member_id
+    relationship_type = rel.relationship_type
+
+    try:
+        # 역방향 관계도 삭제
+        reverse_type = FamilyRelationship.REVERSE_RELATIONSHIPS.get(relationship_type, relationship_type)
+        reverse_rel = FamilyRelationship.query.filter_by(
+            member_id=related_member_id,
+            related_member_id=member_id,
+            relationship_type=reverse_type
+        ).first()
+
+        db.session.delete(rel)
+        if reverse_rel:
+            db.session.delete(reverse_rel)
+
+        db.session.commit()
+
+        return jsonify({"success": True, "message": "관계가 삭제되었습니다"})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"관계 삭제 실패: {str(e)}"}), 500
+
+
+@app.route('/api/families', methods=['GET'])
+def api_get_families():
+    """대가족 목록 조회"""
+    families = Family.query.all()
+
+    result = []
+    for family in families:
+        members = Member.query.filter_by(family_id=family.id).all()
+        result.append({
+            "id": family.id,
+            "family_name": family.family_name,
+            "member_count": len(members),
+            "members": [{
+                "id": m.id,
+                "name": m.name,
+                "member_type": m.member_type,
+                "photo_url": m.photo_url,
+            } for m in members]
+        })
+
+    return jsonify(result)
+
+
+@app.route('/api/families/<int:family_id>', methods=['GET'])
+def api_get_family_detail(family_id):
+    """대가족 상세 조회 (가계도 포함)"""
+    family = Family.query.get_or_404(family_id)
+    members = Member.query.filter_by(family_id=family_id).all()
+
+    # 각 멤버의 관계 정보 포함
+    members_with_relations = []
+    for member in members:
+        relationships = FamilyRelationship.query.filter_by(member_id=member.id).all()
+        members_with_relations.append({
+            "id": member.id,
+            "name": member.name,
+            "member_type": member.member_type,
+            "photo_url": member.photo_url,
+            "gender": member.gender,
+            "age": member.age,
+            "birth_date": member.birth_date.isoformat() if member.birth_date else None,
+            "relationships": [{
+                "related_id": rel.related_member_id,
+                "type": rel.relationship_type,
+                "detail": rel.relationship_detail,
+            } for rel in relationships]
+        })
+
+    return jsonify({
+        "id": family.id,
+        "family_name": family.family_name,
+        "members": members_with_relations,
+    })
+
+
+@app.route('/api/families', methods=['POST'])
+def api_create_family():
+    """대가족 그룹 생성"""
+    data = request.get_json() or {}
+
+    family_name = data.get('family_name')
+    member_ids = data.get('member_ids', [])
+
+    if not family_name:
+        return jsonify({"error": "family_name이 필요합니다"}), 400
+
+    family = Family(family_name=family_name)
+    db.session.add(family)
+    db.session.flush()
+
+    # 멤버들을 가족에 추가
+    for member_id in member_ids:
+        member = Member.query.get(member_id)
+        if member:
+            member.family_id = family.id
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "family_id": family.id,
+        "family_name": family.family_name,
+    })
+
+
+@app.route('/api/families/<int:family_id>/members', methods=['POST'])
+def api_add_family_member(family_id):
+    """대가족에 멤버 추가"""
+    family = Family.query.get_or_404(family_id)
+    data = request.get_json() or {}
+
+    member_id = data.get('member_id')
+    if not member_id:
+        return jsonify({"error": "member_id가 필요합니다"}), 400
+
+    member = Member.query.get(member_id)
+    if not member:
+        return jsonify({"error": "교인을 찾을 수 없습니다"}), 404
+
+    member.family_id = family_id
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": f"{member.name}님이 {family.family_name}에 추가되었습니다"
+    })
+
+
+@app.route('/api/sync/auto-link-families', methods=['POST'])
+def api_auto_link_families():
+    """god4u 데이터 기반 자동 가족 연결"""
+    data = request.get_json() or {}
+
+    results = {
+        "spouse_linked": 0,
+        "families_created": 0,
+        "errors": []
+    }
+
+    try:
+        # 1. partner_id 기반 배우자 연결
+        members_with_partner = Member.query.filter(Member.partner_id.isnot(None)).all()
+
+        for member in members_with_partner:
+            partner_external_id = member.partner_id
+            partner = Member.query.filter_by(external_id=str(partner_external_id)).first()
+
+            if partner:
+                # 이미 배우자 관계가 있는지 확인
+                existing = FamilyRelationship.query.filter_by(
+                    member_id=member.id,
+                    related_member_id=partner.id,
+                    relationship_type='spouse'
+                ).first()
+
+                if not existing:
+                    # 성별에 따라 상세 관계 설정
+                    if member.gender == 'M':
+                        detail, reverse_detail = '남편', '아내'
+                    elif member.gender == 'F':
+                        detail, reverse_detail = '아내', '남편'
+                    else:
+                        detail, reverse_detail = '배우자', '배우자'
+
+                    relationships = FamilyRelationship.create_bidirectional(
+                        member_id=member.id,
+                        related_member_id=partner.id,
+                        relationship_type='spouse',
+                        detail=detail,
+                        reverse_detail=reverse_detail
+                    )
+
+                    for rel in relationships:
+                        db.session.add(rel)
+
+                    # 같은 가족 그룹으로 연결
+                    if not member.family_id and not partner.family_id:
+                        family = Family(family_name=f"{member.name} 가정")
+                        db.session.add(family)
+                        db.session.flush()
+                        member.family_id = family.id
+                        partner.family_id = family.id
+                        results["families_created"] += 1
+                    elif member.family_id and not partner.family_id:
+                        partner.family_id = member.family_id
+                    elif not member.family_id and partner.family_id:
+                        member.family_id = partner.family_id
+
+                    results["spouse_linked"] += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "results": results
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"자동 연결 실패: {str(e)}"}), 500
 
 
 def _member_to_dict(member):
