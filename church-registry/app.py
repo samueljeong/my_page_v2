@@ -3759,7 +3759,7 @@ def api_delete_family_relationship(relationship_id):
         return jsonify({"error": f"관계 삭제 실패: {str(e)}"}), 500
 
 
-@app.route('/api/family-relationships/reset', methods=['POST'])
+@app.route('/api/family-relationships/reset', methods=['GET', 'POST'])
 def api_reset_family_relationships():
     """모든 가족 관계 삭제 (재생성 전 초기화용)"""
     try:
@@ -4510,10 +4510,9 @@ def api_sync_god4u_to_registry():
                 if ran1:
                     god4u_data["family_members"] = ran1
 
-                # 메모 (god4u etc)
+                # 메모 (god4u etc) - 항상 덮어씀 (이전 "가족:" "차량:" 텍스트 제거)
                 etc_notes = person.get("etc", "").strip()
-                if etc_notes:
-                    god4u_data["notes"] = etc_notes
+                god4u_data["notes"] = etc_notes  # 빈 값이어도 저장하여 이전 데이터 정리
 
                 # 상태 결정 로직
                 # god4u state 필드 기반 (별세, 타교회 우선)
