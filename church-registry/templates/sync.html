@@ -51,29 +51,16 @@
 
     <!-- 동기화 섹션 -->
     <div class="apple-card mb-4">
-        <h3><i class="bi bi-arrow-left-right"></i> 2단계: 동기화</h3>
+        <h3><i class="bi bi-cloud-download"></i> 2단계: 데이터 가져오기</h3>
+        <p class="text-secondary">god4u의 교적 데이터를 이 시스템으로 가져옵니다. (단방향)</p>
 
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <div class="p-3 border rounded">
-                    <h5>god4u → church-registry</h5>
-                    <p class="text-secondary small">god4u의 교적을 이 시스템으로 가져옵니다.</p>
-                    <button onclick="syncFromGod4u()" class="btn btn-primary w-100">
-                        <i class="bi bi-cloud-download"></i> god4u에서 가져오기
-                    </button>
-                </div>
-            </div>
-
-            <div class="col-md-6 mb-3">
-                <div class="p-3 border rounded">
-                    <h5>church-registry → god4u</h5>
-                    <p class="text-secondary small">이 시스템의 변경사항을 god4u에 반영합니다.</p>
-                    <button onclick="syncToGod4u()" class="btn btn-success w-100">
-                        <i class="bi bi-cloud-upload"></i> god4u로 내보내기
-                    </button>
-                </div>
-            </div>
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> <strong>안전 모드:</strong> god4u 데이터는 변경되지 않습니다. 읽기만 합니다.
         </div>
+
+        <button onclick="syncFromGod4u()" class="btn btn-primary btn-lg">
+            <i class="bi bi-cloud-download"></i> god4u에서 가져오기
+        </button>
     </div>
 
     <!-- 진행 상황 -->
@@ -241,43 +228,6 @@ async function syncFromGod4u() {
     }
 }
 
-async function syncToGod4u() {
-    const cookies = getCookies();
-    if (!cookies['ASP.NET_SessionId']) {
-        alert('god4u 쿠키를 먼저 입력하세요.');
-        return;
-    }
-
-    if (!confirm('church-registry 데이터를 god4u로 내보냅니다.\n\n주의: god4u의 기존 데이터가 덮어쓰여질 수 있습니다.\n백업을 먼저 하셨나요?')) {
-        return;
-    }
-
-    showProgress();
-    log('church-registry → god4u 동기화 시작...');
-    updateProgress(10);
-
-    try {
-        const resp = await fetch('/api/sync/registry-to-god4u', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({cookies: cookies})
-        });
-
-        updateProgress(90);
-        const data = await resp.json();
-
-        if (resp.ok) {
-            updateProgress(100);
-            log(`god4u 동기화 완료!`, 'success');
-            log(`- 성공: ${data.results.success}명`, 'success');
-            log(`- 실패: ${data.results.failed}명`, data.results.failed > 0 ? 'error' : 'info');
-            log(`- 건너뜀 (external_id 없음): ${data.results.skipped}명`, 'info');
-        } else {
-            log('동기화 실패: ' + data.error, 'error');
-        }
-    } catch (e) {
-        log('오류: ' + e.message, 'error');
-    }
-}
+// god4u → registry 단방향만 지원 (안전 모드)
 </script>
 {% endblock %}
