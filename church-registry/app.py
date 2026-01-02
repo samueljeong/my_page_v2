@@ -4686,8 +4686,9 @@ def api_sync_god4u_to_registry():
 
         for member in members_with_family:
             try:
-                # 공백으로 구분된 이름들 파싱
-                family_names = member.family_members.split()
+                # 공백 또는 쉼표로 구분된 이름들 파싱 (예: "남궁일곤,김혜숙2" 또는 "남궁일곤 김혜숙2")
+                import re
+                family_names = [n.strip() for n in re.split(r'[,\s]+', member.family_members) if n.strip()]
                 app.logger.info(f"[가족관계] {member.name}의 family_members: {family_names}")
 
                 for name in family_names:
@@ -4802,8 +4803,71 @@ def api_sync_god4u_to_registry():
                             family_results["created"] += 1
                         else:
                             family_results["skipped"] += 1
-            except:
-                pass
+            except Exception as e:
+                app.logger.error(f"[가족관계] {member.name} 처리 중 오류: {str(e)}")
+
+        # 3. 같은 자녀를 둔 부모들을 배우자로 연결
+        # 자녀(child role)인 모든 관계를 찾아서 부모들을 그룹화
+        app.logger.info("[가족관계] 부모 배우자 추론 시작...")
+        child_relationships = FamilyRelationship.query.filter_by(relationship_type='child').all()
+
+        # 자녀별 부모 목록 생성
+        child_parents = {}  # {child_id: [parent_ids]}
+        for rel in child_relationships:
+            child_id = rel.member_id
+            parent_id = rel.related_member_id
+            if child_id not in child_parents:
+                child_parents[child_id] = []
+            child_parents[child_id].append(parent_id)
+
+        # 같은 자녀를 둔 부모들끼리 배우자 관계 생성
+        spouse_created = 0
+        for child_id, parent_ids in child_parents.items():
+            if len(parent_ids) >= 2:
+                # 부모가 2명 이상이면 서로 배우자로 연결
+                for i, p1_id in enumerate(parent_ids):
+                    for p2_id in parent_ids[i+1:]:
+                        # 이미 관계가 있는지 확인
+                        existing = FamilyRelationship.query.filter_by(
+                            member_id=p1_id,
+                            related_member_id=p2_id,
+                            relationship_type='spouse'
+                        ).first()
+                        if not existing:
+                            existing_reverse = FamilyRelationship.query.filter_by(
+                                member_id=p2_id,
+                                related_member_id=p1_id,
+                                relationship_type='spouse'
+                            ).first()
+                            if not existing_reverse:
+                                p1 = Member.query.get(p1_id)
+                                p2 = Member.query.get(p2_id)
+                                if p1 and p2:
+                                    # 성별에 따른 호칭 결정
+                                    if p1.gender in ['M', '남', '남성', '남자']:
+                                        detail1, detail2 = '남편', '아내'
+                                    else:
+                                        detail1, detail2 = '아내', '남편'
+
+                                    rel1 = FamilyRelationship(
+                                        member_id=p1_id,
+                                        related_member_id=p2_id,
+                                        relationship_type='spouse',
+                                        relationship_detail=detail2
+                                    )
+                                    rel2 = FamilyRelationship(
+                                        member_id=p2_id,
+                                        related_member_id=p1_id,
+                                        relationship_type='spouse',
+                                        relationship_detail=detail1
+                                    )
+                                    db.session.add(rel1)
+                                    db.session.add(rel2)
+                                    spouse_created += 1
+                                    app.logger.info(f"[가족관계] 부모 배우자 추론: {p1.name} ↔ {p2.name}")
+
+        family_results["created"] += spouse_created * 2
+        app.logger.info(f"[가족관계] 부모 배우자 추론 완료: {spouse_created}쌍 생성")
 
         db.session.commit()
         results["family_created"] = family_results["created"]
