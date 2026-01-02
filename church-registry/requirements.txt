@@ -30,3 +30,6 @@ psycopg2-binary==2.9.9
 
 # 클라우드 이미지 저장소
 cloudinary==1.36.0
+
+# HTTP 요청 (god4u 동기화용)
+requests==2.31.0
