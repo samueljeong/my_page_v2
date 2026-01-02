@@ -7,6 +7,7 @@
 - 실제 내용을 추출하여 Opus에게 전달
 
 수집 소스:
+- Gemini Grounding (Google Search) - 우선 사용
 - 한국민족문화대백과사전 (encykorea.aks.ac.kr) - 웹 접근
 - 국립중앙박물관 e뮤지엄 (API 키 필요)
 - 국사편찬위원회 한국사DB (db.history.go.kr)
@@ -16,6 +17,7 @@ import os
 import re
 import time
 import html
+import json
 import requests
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -27,6 +29,153 @@ from .config import (
     ERA_KEYWORDS,
     HISTORY_TOPICS,
 )
+
+
+def _search_with_gemini_grounding(
+    query: str,
+    era_name: str = "",
+    max_results: int = 3
+) -> List[Dict[str, Any]]:
+    """
+    Gemini 2.0 Flash + Google Search Grounding을 활용한 자료 검색
+
+    환경변수: GOOGLE_API_KEY 필요
+
+    Args:
+        query: 검색 쿼리 (예: "광개토대왕 정복 전쟁")
+        era_name: 시대명 (컨텍스트용)
+        max_results: 최대 결과 수
+
+    Returns:
+        수집된 자료 리스트
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        print("[HISTORY] GOOGLE_API_KEY 없음, Gemini Grounding 스킵")
+        return []
+
+    items = []
+
+    try:
+        # Gemini 2.0 Flash with Google Search Grounding
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+        # 한국사 전문 검색 프롬프트
+        search_prompt = f"""당신은 한국사 전문 리서처입니다.
+
+검색 주제: {query}
+시대: {era_name}
+
+위 주제에 대해 학술적으로 신뢰할 수 있는 정보를 검색해주세요.
+
+출력 형식 (JSON):
+{{
+    "results": [
+        {{
+            "title": "자료 제목",
+            "content": "핵심 내용 요약 (500자 이상)",
+            "source": "출처명 (예: 한국민족문화대백과사전, 국사편찬위원회)",
+            "url": "출처 URL (있는 경우)"
+        }}
+    ]
+}}
+
+중요:
+- 한국민족문화대백과사전, 국사편찬위원회, 학술 논문 등 공신력 있는 소스 우선
+- 위키백과, 나무위키는 제외
+- 역사적 사실 위주로 정확하게
+- 최소 {max_results}개 자료 수집"""
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": search_prompt}]
+                }
+            ],
+            "tools": [
+                {
+                    "google_search_retrieval": {
+                        "dynamic_retrieval_config": {
+                            "mode": "MODE_DYNAMIC",
+                            "dynamic_threshold": 0.3
+                        }
+                    }
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 4096,
+            }
+        }
+
+        response = requests.post(
+            url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            print(f"[HISTORY] Gemini Grounding 실패: HTTP {response.status_code}")
+            return []
+
+        data = response.json()
+
+        # 응답에서 텍스트 추출
+        candidates = data.get("candidates", [])
+        if not candidates:
+            print("[HISTORY] Gemini Grounding: 응답 없음")
+            return []
+
+        text = ""
+        for candidate in candidates:
+            content = candidate.get("content", {})
+            for part in content.get("parts", []):
+                if "text" in part:
+                    text += part["text"]
+
+        # JSON 파싱 시도
+        json_match = re.search(r'\{[\s\S]*"results"[\s\S]*\}', text)
+        if json_match:
+            try:
+                result_data = json.loads(json_match.group())
+                results = result_data.get("results", [])
+
+                for r in results[:max_results]:
+                    items.append({
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "content": r.get("content", ""),
+                        "source_type": "grounding",
+                        "source_name": r.get("source", "Google Search"),
+                    })
+                    print(f"[HISTORY] Gemini Grounding: {r.get('title', '')[:40]}...")
+
+            except json.JSONDecodeError:
+                # JSON 파싱 실패 시 텍스트 그대로 사용
+                if len(text) > 200:
+                    items.append({
+                        "title": query,
+                        "url": "",
+                        "content": text[:3000],
+                        "source_type": "grounding",
+                        "source_name": "Gemini Search",
+                    })
+                    print(f"[HISTORY] Gemini Grounding (raw): {len(text)}자")
+
+        # grounding_metadata에서 URL 추출 (있는 경우)
+        grounding_meta = data.get("candidates", [{}])[0].get("groundingMetadata", {})
+        search_entries = grounding_meta.get("searchEntryPoint", {}).get("renderedContent", "")
+        if search_entries and not items:
+            print(f"[HISTORY] Gemini Grounding: 검색 결과 메타데이터 확인됨")
+
+        if items:
+            print(f"[HISTORY] Gemini Grounding: {len(items)}개 자료 수집 완료")
+
+    except Exception as e:
+        print(f"[HISTORY] Gemini Grounding 오류: {e}")
+
+    return items
 
 
 def collect_topic_materials(
@@ -83,25 +232,38 @@ def collect_topic_materials(
     all_materials = []
     all_sources = []
 
-    # 1. 한국민족문화대백과사전 (최우선 - 학술적 공신력)
-    print(f"[HISTORY] → 한국민족문화대백과사전 검색 중...")
-    for keyword in keywords[:5]:
-        items = _search_encykorea(keyword, max_results=2)
+    # ★ 0. Gemini Grounding (Google Search) - 최우선
+    # DuckDuckGo 차단 문제 해결을 위해 Gemini의 Google Search 활용
+    print(f"[HISTORY] → Gemini Grounding 검색 중...")
+    search_query = f"{topic_info['title']} {' '.join(keywords[:3])}"
+    gemini_items = _search_with_gemini_grounding(search_query, era_name, max_results=3)
+    for item in gemini_items:
+        if item not in all_materials:
+            all_materials.append(item)
+            if item.get("url") and item["url"] not in all_sources:
+                all_sources.append(item["url"])
+
+    # 1. 한국민족문화대백과사전 (Gemini 결과 부족 시 보조)
+    if len(all_materials) < 3:
+        print(f"[HISTORY] → 한국민족문화대백과사전 검색 중...")
+        for keyword in keywords[:3]:
+            items = _search_encykorea(keyword, max_results=2)
+            for item in items:
+                if item not in all_materials:
+                    all_materials.append(item)
+                    if item.get("url") and item["url"] not in all_sources:
+                        all_sources.append(item["url"])
+            time.sleep(0.3)
+
+    # 2. 국립중앙박물관 (유물 정보 - 선택적)
+    if len(all_materials) < 5:
+        print(f"[HISTORY] → 국립중앙박물관 검색 중...")
+        items = _search_emuseum(era_name, keywords[:3], max_results=3)
         for item in items:
             if item not in all_materials:
                 all_materials.append(item)
                 if item.get("url") and item["url"] not in all_sources:
                     all_sources.append(item["url"])
-        time.sleep(0.3)
-
-    # 2. 국립중앙박물관 (유물 정보)
-    print(f"[HISTORY] → 국립중앙박물관 검색 중...")
-    items = _search_emuseum(era_name, keywords[:3], max_results=3)
-    for item in items:
-        if item not in all_materials:
-            all_materials.append(item)
-            if item.get("url") and item["url"] not in all_sources:
-                all_sources.append(item["url"])
 
     # full_content 생성 (GPT-5.1에 전달할 자료)
     content_parts = []
