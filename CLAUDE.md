@@ -233,7 +233,8 @@ A: 대본 | B: 상태 | C: 영상URL | D: 제목 | ...  (순서 2) - 둘 다 OK
 ## 이미지 개수 계산
 
 ```python
-# 한국어 TTS 기준: 910자 ≈ 1분 (15분=13,650자, 20분=18,200자)
+# 한국어 TTS 기준: 910자 ≈ 1분
+# 히스토리 채널: 12,000~15,000자 (약 13~16분 영상)
 # ~8분: 5컷, 8~10분: 8컷, 10~15분: 11컷, 15분+: 12컷
 estimated_minutes = len(script) / 910
 ```
@@ -935,7 +936,7 @@ curl -X POST "https://drama-s2ns.onrender.com/api/news/run-pipeline?channel=ECON
 ```
 /api/news/run-pipeline 호출 시:
 1. 뉴스 수집 파이프라인 실행
-2. 히스토리 파이프라인 실행 (준비 10개 미만이면 에피소드 추가)
+2. 히스토리 파이프라인 실행 (준비 1개 미만이면 에피소드 추가)
 ```
 
 **응답 예시:**
@@ -945,17 +946,42 @@ curl -X POST "https://drama-s2ns.onrender.com/api/news/run-pipeline?channel=ECON
     "result": { ... },  // 뉴스 결과
     "history": {        // 히스토리 결과
         "success": true,
-        "pending_before": 6,
-        "pending_after": 10,
-        "episodes_added": 4
+        "pending_before": 0,
+        "pending_after": 1,
+        "episodes_added": 1
     }
 }
 ```
 
 **히스토리 파이프라인 참고 파일:**
 - `scripts/history_pipeline/run.py` - 메인 오케스트레이션
-- `scripts/history_pipeline/config.py` - 시대/주제 설정 (11개 시대)
-- `scripts/history_pipeline/collector.py` - 자료 수집 (Opus 직접 검색 모드)
+- `scripts/history_pipeline/config.py` - 시대/주제 설정 (11개 시대), 대본 분량 설정
+- `scripts/history_pipeline/collector.py` - 자료 수집 (4개 공신력 소스)
+- `scripts/history_pipeline/script_generator.py` - GPT-5.2 대본 자동 생성 (12,000~15,000자)
+- `scripts/history_pipeline/sheets.py` - HISTORY 시트 CRUD
+
+**히스토리 파이프라인 워크플로우:**
+```
+1. HISTORY 시트에서 '준비' 상태 에피소드 확인
+2. PENDING_TARGET_COUNT (1개) 미만이면:
+   - 다음 에피소드 자료 수집 (Gemini, 한국민족문화대백과, e뮤지엄, 한국사DB)
+   - Opus 프롬프트 생성 → 시트 저장 (상태: '준비')
+3. (선택) /api/history/auto-generate 호출 시:
+   - GPT-5.2로 대본 자동 생성 (12,000~15,000자, 약 15분 영상)
+   - 시트 업데이트 (상태: '대본완료')
+4. 사용자가 상태를 '대기'로 변경
+5. /api/sheets/check-and-process가 자동 감지 → 영상 생성 시작
+```
+
+**HISTORY 시트 열 구조 (VIDEO_AUTOMATION_HEADERS 포함):**
+```
+A: era            G: 상태           M: 공개설정
+B: episode_slot   H: 대본           N: 예약시간
+C: core_question  I: 인용링크       O: 플레이리스트ID
+D: source_url     J: 제목(GPT생성)  P: 음성
+E: opus_prompt    K: 제목(입력)     Q: 영상URL
+F: thumbnail_copy L: 썸네일문구(입력)
+```
 
 ---
 

@@ -1069,11 +1069,11 @@ LLM_MODEL_DEFAULT = "gpt-4o-mini"
 # 대본 분량 설정 (문자수 기준)
 # ============================================================
 
-# 15~20분 분량 = 13,650~18,200자 (한국어 TTS 기준 약 910자/분)
-SCRIPT_LEN_MIN = 13650
-SCRIPT_LEN_MAX = 18200
-SCRIPT_DURATION_MIN = 15  # 분
-SCRIPT_DURATION_MAX = 20  # 분
+# 13~16분 분량 = 12,000~15,000자 (한국어 TTS 기준 약 910자/분)
+SCRIPT_LEN_MIN = 12000
+SCRIPT_LEN_MAX = 15000
+SCRIPT_DURATION_MIN = 13  # 분
+SCRIPT_DURATION_MAX = 16  # 분
 
 
 # ============================================================
