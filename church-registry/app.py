@@ -6930,7 +6930,12 @@ def auto_fix_family_relationships():
 with app.app_context():
     db.create_all()
     run_migrations()
-    auto_fix_family_relationships()
+    try:
+        auto_fix_family_relationships()
+    except Exception as e:
+        print(f'[AutoFix] 에러 발생 (서버는 정상 시작): {e}')
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
