@@ -6851,9 +6851,86 @@ def run_migrations():
 
         db.session.commit()
 
+def auto_fix_family_relationships():
+    """서버 시작 시 잘못된 가족관계 자동 수정 (동성 배우자만)"""
+    print('[AutoFix] 가족관계 검사 시작...')
+
+    male_genders = ['M', '남', '남성', '남자']
+    female_genders = ['F', '여', '여성', '여자']
+
+    # 모든 배우자 관계 조회
+    spouse_rels = FamilyRelationship.query.filter_by(relationship_type='spouse').all()
+    processed_pairs = set()
+    fixed_count = 0
+
+    for rel in spouse_rels:
+        pair_key = tuple(sorted([rel.member_id, rel.related_member_id]))
+        if pair_key in processed_pairs:
+            continue
+        processed_pairs.add(pair_key)
+
+        member = rel.member
+        related = rel.related_member
+
+        if not member or not related:
+            continue
+
+        member_is_male = member.gender in male_genders
+        member_is_female = member.gender in female_genders
+        related_is_male = related.gender in male_genders
+        related_is_female = related.gender in female_genders
+
+        # 동성 배우자만 자동 수정
+        if (member_is_male and related_is_male) or (member_is_female and related_is_female):
+            # 나이 차이로 형/동생 결정
+            suggested_detail = '형제자매'
+            if member.age and related.age:
+                if member_is_male:
+                    suggested_detail = '형' if related.age > member.age else '남동생'
+                else:
+                    suggested_detail = '언니' if related.age > member.age else '여동생'
+
+            try:
+                # 역방향 관계 찾기
+                reverse_rel = FamilyRelationship.query.filter_by(
+                    member_id=rel.related_member_id,
+                    related_member_id=rel.member_id,
+                    relationship_type='spouse'
+                ).first()
+
+                # 삭제
+                db.session.delete(rel)
+                if reverse_rel:
+                    db.session.delete(reverse_rel)
+                db.session.flush()
+
+                # 새 관계 생성
+                new_rels = FamilyRelationship.create_bidirectional(
+                    member_id=member.id,
+                    related_member_id=related.id,
+                    relationship_type='sibling',
+                    detail=suggested_detail
+                )
+                for new_rel in new_rels:
+                    db.session.add(new_rel)
+
+                fixed_count += 1
+                print(f'[AutoFix] {member.name} ↔ {related.name}: 배우자 → 형제({suggested_detail})')
+
+            except Exception as e:
+                print(f'[AutoFix] 오류: {member.name} ↔ {related.name}: {e}')
+
+    if fixed_count > 0:
+        db.session.commit()
+        print(f'[AutoFix] 완료: {fixed_count}건의 동성 배우자 관계를 형제로 수정')
+    else:
+        print('[AutoFix] 수정할 동성 배우자 관계 없음')
+
+
 with app.app_context():
     db.create_all()
     run_migrations()
+    auto_fix_family_relationships()
 
 
 if __name__ == '__main__':
