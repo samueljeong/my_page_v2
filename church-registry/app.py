@@ -3911,6 +3911,7 @@ def api_get_member_family(member_id):
         "spouse": None,
         "parents": [],
         "children": [],
+        "separated_children": [],  # 분가한 자녀 (결혼하여 독립한 자녀)
         "siblings": [],
         "in_laws": [],       # 인척 (시댁/처가/형제자매 배우자)
         "grandparents": [],  # 조부모
@@ -4002,6 +4003,69 @@ def api_get_member_family(member_id):
                 "name": family.family_name,
                 "member_count": len(family.members),
             }
+
+    # 2.5. 분가한 자녀 분류 (배우자가 있는 자녀)
+    children_to_keep = []
+    for child_info in family_data["children"]:
+        child_id = child_info["id"]
+        child_member = Member.query.get(child_id)
+
+        # 자녀의 배우자 확인
+        child_spouse_rel = FamilyRelationship.query.filter(
+            db.or_(
+                db.and_(FamilyRelationship.member_id == child_id,
+                       FamilyRelationship.relationship_type == 'spouse'),
+                db.and_(FamilyRelationship.related_member_id == child_id,
+                       FamilyRelationship.relationship_type == 'spouse')
+            )
+        ).first()
+
+        if child_spouse_rel:
+            # 분가한 자녀: 배우자가 있음
+            spouse_id = (child_spouse_rel.related_member_id
+                        if child_spouse_rel.member_id == child_id
+                        else child_spouse_rel.member_id)
+            spouse_member = Member.query.get(spouse_id)
+
+            # 손자녀 찾기
+            grandchildren = []
+            grandchild_rels = FamilyRelationship.query.filter(
+                db.or_(
+                    db.and_(FamilyRelationship.member_id == child_id,
+                           FamilyRelationship.relationship_type == 'parent'),
+                    db.and_(FamilyRelationship.related_member_id == child_id,
+                           FamilyRelationship.relationship_type == 'child')
+                )
+            ).all()
+
+            seen_gc_ids = set()
+            for gc_rel in grandchild_rels:
+                gc_id = (gc_rel.related_member_id
+                        if gc_rel.member_id == child_id
+                        else gc_rel.member_id)
+                if gc_id not in seen_gc_ids:
+                    seen_gc_ids.add(gc_id)
+                    gc_member = Member.query.get(gc_id)
+                    if gc_member:
+                        grandchildren.append({
+                            **member_summary(gc_member),
+                            "relationship_detail": "손자" if gc_member.gender in ['M', '남', '남성', '남자'] else "손녀"
+                        })
+
+            separated_child = {
+                **child_info,
+                "spouse": {
+                    **member_summary(spouse_member),
+                    "relationship_detail": "며느리" if spouse_member.gender not in ['M', '남', '남성', '남자'] else "사위"
+                } if spouse_member else None,
+                "grandchildren": grandchildren
+            }
+            family_data["separated_children"].append(separated_child)
+        else:
+            # 미혼 자녀: 그대로 유지
+            children_to_keep.append(child_info)
+
+    family_data["children"] = children_to_keep
 
     # 3. 형제자매 가족 정보 (형제의 배우자, 자녀) + 배우자의 형제 가족
     sibling_families = []
