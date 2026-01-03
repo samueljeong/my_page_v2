@@ -24911,8 +24911,101 @@ def api_ai_tools_chat():
 
 # ===== GPT Chat API (가족 공용 GPT) =====
 
-# 대화 저장소 (메모리 + 파일 백업)
-GPT_CONVERSATIONS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'gpt_conversations.json')
+# 데이터 저장 경로
+GPT_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data', 'gpt_chat')
+GPT_CONVERSATIONS_FILE = os.path.join(GPT_DATA_DIR, 'conversations.json')
+GPT_USERS_FILE = os.path.join(GPT_DATA_DIR, 'users.json')
+
+# 기본 사용자 목록
+DEFAULT_USERS = ["아빠", "엄마", "재하", "하윤"]
+
+# 사용자별 프로필 (나이, 학년 등)
+USER_PROFILES = {
+    "재하": {
+        "grade": "중학교 2학년",
+        "age": 14,
+        "system_prompt": """당신은 친절하고 유능한 AI 튜터입니다.
+지금 대화하는 사람은 중학교 2학년 학생입니다.
+
+답변 시 다음을 지켜주세요:
+- 중학생 수준에 맞는 어휘와 설명을 사용하세요
+- 개념을 설명할 때 구체적인 예시를 들어주세요
+- 수학, 과학, 영어 등 학업 질문에는 단계별로 풀이 과정을 보여주세요
+- 어려운 용어는 쉽게 풀어서 설명하세요
+- 호기심을 자극하고 스스로 생각해볼 수 있는 질문을 던져주세요
+- 격려와 칭찬을 아끼지 마세요"""
+    },
+    "하윤": {
+        "grade": "초등학교 4학년",
+        "age": 10,
+        "system_prompt": """당신은 친절하고 재미있는 AI 선생님입니다.
+지금 대화하는 사람은 초등학교 4학년 학생입니다.
+
+답변 시 다음을 지켜주세요:
+- 초등학생도 이해할 수 있는 쉬운 말로 설명하세요
+- 복잡한 개념은 그림이나 비유를 활용해 설명하세요 (예: "마치 ~처럼")
+- 긴 문장보다 짧고 명확한 문장을 사용하세요
+- 이모지를 적절히 사용해서 재미있게 답변하세요 😊
+- 학습에 흥미를 느낄 수 있도록 격려해주세요
+- 어려운 한자어나 영어 단어는 피하거나 쉽게 풀어서 설명하세요
+- "잘했어!", "대단해!" 같은 칭찬을 자주 해주세요"""
+    },
+    "엄마": {
+        "grade": None,
+        "age": None,
+        "system_prompt": """당신은 친절하고 유능한 AI 어시스턴트입니다.
+지금 대화하는 사람은 중학생과 초등학생 자녀를 둔 엄마입니다.
+
+답변 시 다음을 지켜주세요:
+- 자녀 학업 관련 질문에는 아이들에게 설명하기 쉬운 방식으로 답변하세요
+- 학습 지도에 도움이 되는 팁을 함께 제공하세요
+- 복잡한 개념도 아이들 눈높이에서 설명할 수 있도록 도와주세요
+- 가정에서 활용할 수 있는 실생활 예시를 포함하세요
+- 아이들의 학습 동기 부여 방법도 제안해주세요"""
+    },
+    "아빠": {
+        "grade": None,
+        "age": None,
+        "system_prompt": """당신은 친절하고 유능한 AI 어시스턴트입니다.
+사용자의 질문에 정확하고 도움이 되는 답변을 제공합니다.
+한국어로 대화하며, 필요시 코드나 예시를 포함할 수 있습니다.
+전문적인 내용도 이해하기 쉽게 설명하되, 핵심을 빠르게 전달하세요."""
+    }
+}
+
+def get_system_prompt_for_user(user_id: str) -> str:
+    """사용자별 맞춤 시스템 프롬프트 반환"""
+    if user_id in USER_PROFILES:
+        return USER_PROFILES[user_id]["system_prompt"]
+
+    # 기본 프롬프트
+    return "당신은 친절하고 유능한 AI 어시스턴트입니다. 사용자의 질문에 정확하고 도움이 되는 답변을 제공합니다. 한국어로 대화하며, 필요시 코드나 예시를 포함할 수 있습니다."
+
+def ensure_gpt_data_dir():
+    """GPT 데이터 디렉토리 생성"""
+    os.makedirs(GPT_DATA_DIR, exist_ok=True)
+
+def load_gpt_users():
+    """사용자 목록 로드"""
+    try:
+        if os.path.exists(GPT_USERS_FILE):
+            with open(GPT_USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[GPT] 사용자 로드 실패: {e}")
+    return DEFAULT_USERS.copy()
+
+def save_gpt_users(users):
+    """사용자 목록 저장"""
+    try:
+        ensure_gpt_data_dir()
+        with open(GPT_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        print(f"[GPT] 사용자 저장 완료: {users}")
+        return True
+    except Exception as e:
+        print(f"[GPT] 사용자 저장 실패: {e}")
+        return False
 
 def load_gpt_conversations():
     """저장된 대화 로드"""
@@ -24927,11 +25020,16 @@ def load_gpt_conversations():
 def save_gpt_conversations(data):
     """대화 저장"""
     try:
-        os.makedirs(os.path.dirname(GPT_CONVERSATIONS_FILE), exist_ok=True)
+        ensure_gpt_data_dir()
         with open(GPT_CONVERSATIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"[GPT] 대화 저장 완료: {len(data)} users")
+        return True
     except Exception as e:
         print(f"[GPT] 대화 저장 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def analyze_question_complexity(message: str, has_image: bool = False) -> str:
     """질문 복잡도 분석하여 적절한 모델 선택
@@ -25027,13 +25125,16 @@ def api_gpt_chat():
         else:
             selected_model = model_preference
 
-        print(f"[GPT] 모델 선택: {selected_model} (preference: {model_preference}, has_image: {bool(image_base64)})")
+        print(f"[GPT] 모델 선택: {selected_model} (preference: {model_preference}, user: {user_id}, has_image: {bool(image_base64)})")
+
+        # 사용자별 맞춤 시스템 프롬프트
+        system_prompt = get_system_prompt_for_user(user_id)
 
         # 대화 히스토리 구성
         messages = [
             {
                 "role": "system",
-                "content": "당신은 친절하고 유능한 AI 어시스턴트입니다. 사용자의 질문에 정확하고 도움이 되는 답변을 제공합니다. 한국어로 대화하며, 필요시 코드나 예시를 포함할 수 있습니다."
+                "content": system_prompt
             }
         ]
 
@@ -25251,8 +25352,8 @@ def api_gpt_delete_conversation(conversation_id):
 def api_gpt_get_users():
     """등록된 사용자 목록 조회"""
     try:
+        users = load_gpt_users()
         conversations = load_gpt_conversations()
-        users = list(conversations.keys())
 
         result = []
         for user_id in users:
@@ -25265,6 +25366,55 @@ def api_gpt_get_users():
             })
 
         return jsonify({"ok": True, "users": result})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/users', methods=['POST'])
+def api_gpt_add_user():
+    """사용자 추가"""
+    try:
+        data = request.get_json() or {}
+        user_name = data.get('name', '').strip()
+
+        if not user_name:
+            return jsonify({"ok": False, "error": "사용자 이름을 입력하세요"})
+
+        users = load_gpt_users()
+
+        if user_name in users:
+            return jsonify({"ok": False, "error": "이미 존재하는 사용자입니다"})
+
+        users.append(user_name)
+        save_gpt_users(users)
+
+        return jsonify({"ok": True, "users": users})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/users/<user_id>', methods=['DELETE'])
+def api_gpt_delete_user(user_id):
+    """사용자 삭제 (대화 기록도 함께 삭제)"""
+    try:
+        users = load_gpt_users()
+
+        if user_id not in users:
+            return jsonify({"ok": False, "error": "사용자를 찾을 수 없습니다"})
+
+        # 사용자 삭제
+        users.remove(user_id)
+        save_gpt_users(users)
+
+        # 해당 사용자의 대화 기록도 삭제
+        conversations = load_gpt_conversations()
+        if user_id in conversations:
+            del conversations[user_id]
+            save_gpt_conversations(conversations)
+
+        return jsonify({"ok": True, "users": users})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
