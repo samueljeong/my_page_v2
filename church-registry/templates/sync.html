@@ -93,6 +93,34 @@
         </div>
     </div>
 
+    <!-- 가족관계 재구축 섹션 (god4u 없이 실행 가능) -->
+    <div class="form-section" style="margin-bottom: 24px; border-left: 4px solid #8b5cf6;">
+        <div class="form-section-title">
+            <i class="bi bi-people"></i>
+            가족 관계 재구축 (god4u 불필요)
+        </div>
+        <p style="color: var(--apple-text-secondary); margin-bottom: 16px;">
+            이미 저장된 부모/자녀 관계를 기반으로 배우자, 형제 관계를 자동 추론합니다.<br>
+            <strong>god4u 쿠키 없이도 실행 가능합니다.</strong>
+        </p>
+
+        <div class="apple-alert success" style="background: #f3e8ff; color: #7c3aed; margin-bottom: 16px;">
+            <i class="bi bi-info-circle"></i>
+            <span>
+                <strong>추론 로직:</strong><br>
+                • 같은 자녀를 둔 부모 → 배우자로 연결<br>
+                • 같은 부모를 둔 자녀 → 형제로 연결 (성별/나이 기반 호칭)
+            </span>
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <button onclick="rebuildFamilyRelations()" class="apple-btn" style="background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 15px; padding: 14px 28px; border: none;">
+                <i class="bi bi-arrow-repeat"></i> 가족관계 재구축
+            </button>
+            <span id="rebuildStatus"></span>
+        </div>
+    </div>
+
     <!-- 미리보기 결과 섹션 -->
     <div class="form-section" id="previewCard" style="display: none; margin-bottom: 24px;">
         <div class="form-section-title">
@@ -201,6 +229,28 @@ async function testConnection() {
             statusEl.innerHTML = '<span style="color: #16a34a;"><i class="bi bi-check-circle"></i> 연결 성공</span>';
         } else {
             statusEl.innerHTML = '<span style="color: #dc2626;"><i class="bi bi-x-circle"></i> 연결 실패</span>';
+        }
+    } catch (e) {
+        statusEl.innerHTML = '<span style="color: #dc2626;"><i class="bi bi-x-circle"></i> 오류: ' + e.message + '</span>';
+    }
+}
+
+async function rebuildFamilyRelations() {
+    const statusEl = document.getElementById('rebuildStatus');
+    statusEl.innerHTML = '<span style="color: #8b5cf6;"><i class="bi bi-hourglass-split"></i> 재구축 중...</span>';
+
+    try {
+        const resp = await fetch('/api/members/rebuild-family-relations', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        const data = await resp.json();
+
+        if (resp.ok) {
+            statusEl.innerHTML = `<span style="color: #16a34a;"><i class="bi bi-check-circle"></i> 완료! 배우자 ${data.results.spouse_created}쌍, 형제 ${data.results.sibling_created}쌍 생성</span>`;
+        } else {
+            statusEl.innerHTML = `<span style="color: #dc2626;"><i class="bi bi-x-circle"></i> ${data.error || '실패'}</span>`;
         }
     } catch (e) {
         statusEl.innerHTML = '<span style="color: #dc2626;"><i class="bi bi-x-circle"></i> 오류: ' + e.message + '</span>';
