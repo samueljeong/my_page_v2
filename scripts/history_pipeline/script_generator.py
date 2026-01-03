@@ -1,5 +1,5 @@
 """
-Claude Opus 4.5 기반 대본 자동 생성 모듈 (OpenRouter 사용)
+Claude Opus 4.5 기반 대본 + 이미지 프롬프트 통합 생성 모듈 (OpenRouter 사용)
 
 2025-01 신규:
 - 4개 공신력 있는 소스에서 수집한 자료 기반
@@ -10,10 +10,14 @@ Claude Opus 4.5 기반 대본 자동 생성 모듈 (OpenRouter 사용)
 - GPT-5.2 → Claude Opus 4.5 모델 변경 (OpenRouter 경유)
 - 비용: $15/1M input, $75/1M output
 - Prompt Caching 적용 (System Prompt 90% 할인)
+- 대본 생성과 동시에 씬별 이미지 프롬프트 생성 (GPT 분석 단계 제거)
+- 썸네일 이미지 프롬프트 통합 출력
 """
 
 import os
-from typing import Dict, Any, Optional
+import json
+import re
+from typing import Dict, Any, Optional, List
 
 # OpenRouter API 사용 (OpenAI 호환)
 from openai import OpenAI
@@ -40,6 +44,9 @@ SCRIPT_MAX_LENGTH = 15000     # 최대 글자수
 # - 본론2: 최소 4,000자 (권장 4,500자)
 # - 마무리: 최소 2,000자 (권장 2,500자)
 # - 총 최소: 12,500자 → 권장: ~15,000자
+
+# 씬 이미지 설정
+IMAGES_PER_EPISODE = 10  # 에피소드당 이미지 수 (15분 영상 기준)
 
 
 # ============================================================
@@ -504,6 +511,23 @@ def generate_script_by_parts(
         )
         total_cost += seo_result.get("cost", 0)
 
+        # ========================================
+        # ★★★ 이미지 프롬프트 생성 (대본 작성 후) ★★★
+        # ========================================
+        print(f"[SCRIPT] 씬별 이미지 프롬프트 생성 중...")
+        image_result = _generate_image_prompts(
+            client=client,
+            script=full_script,
+            era_name=era_name,
+            title=title,
+            num_scenes=IMAGES_PER_EPISODE,
+        )
+        total_cost += image_result.get("cost", 0)
+
+        scenes = image_result.get("scenes", [])
+        thumbnail_image = image_result.get("thumbnail", {})
+        print(f"[SCRIPT] 이미지 프롬프트 생성 완료: {len(scenes)}개 씬")
+
         return {
             "script": full_script,
             "length": script_length,
@@ -520,6 +544,13 @@ def generate_script_by_parts(
             # ★ YouTube SEO 메타데이터
             "youtube_title": seo_result.get("title", title),
             "thumbnail_text": seo_result.get("thumbnail_text", ""),
+            # ★★★ 이미지 프롬프트 (GPT 분석 단계 제거) ★★★
+            "scenes": scenes,  # 씬별 이미지 프롬프트
+            "thumbnail": {
+                "text_line1": seo_result.get("thumbnail_text", "").split("\n")[0] if seo_result.get("thumbnail_text") else "",
+                "text_line2": seo_result.get("thumbnail_text", "").split("\n")[1] if seo_result.get("thumbnail_text") and "\n" in seo_result.get("thumbnail_text", "") else "",
+                "image_prompt": thumbnail_image.get("image_prompt", ""),
+            },
         }
 
     except Exception as e:
@@ -527,7 +558,7 @@ def generate_script_by_parts(
         return {"error": str(e)}
 
 
-def _call_opus45_cached(client, user_prompt: str) -> Dict[str, Any]:
+def _call_opus45_cached(client, user_prompt: str, system_prompt: str = None) -> Dict[str, Any]:
     """Claude Opus 4.5 API 호출 via OpenRouter (Prompt Caching 적용)
 
     ★★★ Prompt Caching 최적화 ★★★
@@ -538,14 +569,21 @@ def _call_opus45_cached(client, user_prompt: str) -> Dict[str, Any]:
     - Input (정가): $15 / 1M tokens
     - Input (캐시): $1.5 / 1M tokens (90% 할인)
     - Output: $75 / 1M tokens
+
+    Args:
+        client: OpenAI client
+        user_prompt: 사용자 프롬프트
+        system_prompt: 시스템 프롬프트 (None이면 MASTER_SYSTEM_PROMPT 사용)
     """
+    sys_prompt = system_prompt or MASTER_SYSTEM_PROMPT
+
     try:
         # OpenRouter API 호출 (OpenAI 호환)
         response = client.chat.completions.create(
             model=CLAUDE_OPUS_MODEL,
             max_tokens=8192,
             messages=[
-                {"role": "system", "content": MASTER_SYSTEM_PROMPT},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
@@ -556,7 +594,7 @@ def _call_opus45_cached(client, user_prompt: str) -> Dict[str, Any]:
 
         # ★★★ 비용 계산 (Prompt Caching 적용) ★★★
         # 한국어 약 2자 = 1토큰
-        system_tokens = len(MASTER_SYSTEM_PROMPT) // 2  # 캐시됨 (90% 할인)
+        system_tokens = len(sys_prompt) // 2  # 캐시됨 (90% 할인)
         user_tokens = len(user_prompt) // 2              # 정가
         output_tokens = len(text) // 2
 
@@ -842,6 +880,210 @@ THUMBNAIL:
     except Exception as e:
         print(f"[SCRIPT] SEO 생성 실패: {e}")
         return {"title": title, "thumbnail_text": "", "cost": 0}
+
+
+# ============================================================
+# ★★★ 이미지 프롬프트 생성 (대본 작성 후 통합 생성) ★★★
+# ============================================================
+
+IMAGE_PROMPT_SYSTEM = """당신은 역사 다큐멘터리 영상의 시각 디렉터입니다.
+대본을 읽고 각 씬에 적합한 이미지 프롬프트를 생성합니다.
+
+════════════════════════════════════════
+★★★ 출력 형식: JSON ★★★
+════════════════════════════════════════
+반드시 아래 JSON 형식으로 출력하세요:
+
+```json
+{
+  "scenes": [
+    {
+      "scene_number": 1,
+      "scene_title": "씬 제목 (한글, 10자 이내)",
+      "narration_preview": "이 씬의 나레이션 첫 50자...",
+      "image_prompt": "English image prompt for this scene..."
+    }
+  ],
+  "thumbnail": {
+    "image_prompt": "English thumbnail image prompt..."
+  }
+}
+```
+
+════════════════════════════════════════
+★★★ 이미지 프롬프트 규칙 (영문 필수!) ★★★
+════════════════════════════════════════
+
+**스타일 고정 (역사 다큐멘터리)**:
+- "Korean historical documentary style"
+- "Cinematic wide shot, dramatic lighting"
+- "Realistic oil painting style" OR "Historical illustration"
+- "Period-accurate Korean costumes and architecture"
+- "16:9 aspect ratio, high resolution"
+- "No text, no letters, no words, no watermarks"
+
+**시대별 비주얼 가이드**:
+
+【고조선/청동기】
+- "Bronze age Korea, dolmen monuments"
+- "Shamanic rituals, ancient Korean wilderness"
+- "Bronze daggers, earthen structures"
+
+【삼국시대】
+- "Three Kingdoms of Korea era"
+- "Goguryeo: Mountain fortresses, armored cavalry, tomb murals"
+- "Baekje: Elegant architecture, maritime trade, refined culture"
+- "Silla: Gold crowns, Buddhist temples, aristocratic court"
+
+【고려시대】
+- "Goryeo dynasty, Buddhist temples"
+- "Celadon pottery, scholarly court life"
+- "Mongol invasion, warrior monks"
+
+【조선시대】
+- "Joseon dynasty Korea"
+- "Confucian scholars, Hanyang palace"
+- "Yangban aristocrats, traditional hanbok"
+- "Japanese invasions, Admiral Yi Sun-sin"
+
+**씬 유형별 프롬프트 예시**:
+
+1. 인물 장면:
+   "Portrait of [historical figure description], wearing [period costume], [expression], dramatic rim lighting, historical painting style"
+
+2. 전투 장면:
+   "Epic battle scene, [army description], [location], dust and smoke, dynamic composition, cinematic wide shot"
+
+3. 궁정/정치 장면:
+   "Royal court of [dynasty], [king/officials] in formal attire, grand throne room, candlelight, solemn atmosphere"
+
+4. 풍경/지도 장면:
+   "Aerial view of ancient Korea, [specific location], misty mountains, traditional architecture, golden hour lighting"
+
+5. 문화재/유물 장면:
+   "Close-up of [artifact], museum lighting, detailed texture, historical significance"
+
+════════════════════════════════════════
+★★★ 썸네일 규칙 ★★★
+════════════════════════════════════════
+- 가장 임팩트 있는 장면 선택
+- 인물 클로즈업 또는 극적인 순간
+- 시선을 사로잡는 구도
+- 영문 프롬프트 50-100 단어
+
+════════════════════════════════════════
+★ 절대 금지
+════════════════════════════════════════
+❌ 한글 이미지 프롬프트 (영문만!)
+❌ 텍스트/글자 포함 요청
+❌ 현대적 요소 (현대 건물, 의상 등)
+❌ 부정확한 시대 고증
+
+반드시 위 JSON 형식으로만 출력하세요."""
+
+
+def _generate_image_prompts(
+    client,
+    script: str,
+    era_name: str,
+    title: str,
+    num_scenes: int = IMAGES_PER_EPISODE,
+) -> Dict[str, Any]:
+    """
+    대본 기반 씬별 이미지 프롬프트 생성
+
+    Args:
+        client: OpenAI client
+        script: 생성된 대본
+        era_name: 시대명
+        title: 에피소드 제목
+        num_scenes: 생성할 씬 수
+
+    Returns:
+        {
+            "scenes": [...],
+            "thumbnail": {...},
+            "cost": 0.xx
+        }
+    """
+    # 대본을 씬 수에 맞게 분할
+    script_length = len(script)
+    chars_per_scene = script_length // num_scenes
+
+    # 대본 미리보기 (각 씬 위치의 텍스트)
+    scene_previews = []
+    for i in range(num_scenes):
+        start = i * chars_per_scene
+        end = min(start + 300, script_length)
+        preview = script[start:end].replace("\n", " ")[:200]
+        scene_previews.append(f"씬 {i+1}: {preview}...")
+
+    scene_context = "\n".join(scene_previews)
+
+    prompt = f"""[역사 다큐멘터리 이미지 프롬프트 생성]
+
+[에피소드 정보]
+- 시대: {era_name}
+- 제목: {title}
+- 총 씬 수: {num_scenes}개
+
+[대본 전체 요약 (시간순)]
+{scene_context}
+
+════════════════════════════════════════
+[작업]
+════════════════════════════════════════
+
+1. 위 대본을 {num_scenes}개 씬으로 나누어 각각의 이미지 프롬프트 생성
+2. 썸네일용 이미지 프롬프트 생성 (가장 임팩트 있는 장면)
+
+★ 시대({era_name})에 맞는 고증 필수
+★ 모든 프롬프트는 영문으로 작성
+★ 위 JSON 형식으로 출력"""
+
+    try:
+        result = _call_opus45_cached(client, prompt, system_prompt=IMAGE_PROMPT_SYSTEM)
+        if "error" in result:
+            return {"scenes": [], "thumbnail": {}, "cost": 0}
+
+        text = result.get("text", "")
+        cost = result.get("cost", 0)
+
+        # JSON 파싱
+        parsed = _parse_json_response(text)
+
+        if parsed:
+            return {
+                "scenes": parsed.get("scenes", []),
+                "thumbnail": parsed.get("thumbnail", {}),
+                "cost": cost,
+            }
+
+        return {"scenes": [], "thumbnail": {}, "cost": cost}
+
+    except Exception as e:
+        print(f"[SCRIPT] 이미지 프롬프트 생성 실패: {e}")
+        return {"scenes": [], "thumbnail": {}, "cost": 0}
+
+
+def _parse_json_response(text: str) -> Optional[Dict]:
+    """JSON 응답 파싱 (마크다운 코드블록 처리)"""
+    # 마크다운 코드블록 제거
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # 중첩 JSON 찾기
+        match = re.search(r'\{[\s\S]*\}', text)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+    return None
 
 
 def _format_sources_for_youtube(sources: list, materials: list = None) -> str:
