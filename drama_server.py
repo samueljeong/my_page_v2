@@ -24909,6 +24909,367 @@ def api_ai_tools_chat():
         return jsonify({"ok": False, "error": str(e)})
 
 
+# ===== GPT Chat API (가족 공용 GPT) =====
+
+# 대화 저장소 (메모리 + 파일 백업)
+GPT_CONVERSATIONS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'gpt_conversations.json')
+
+def load_gpt_conversations():
+    """저장된 대화 로드"""
+    try:
+        if os.path.exists(GPT_CONVERSATIONS_FILE):
+            with open(GPT_CONVERSATIONS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[GPT] 대화 로드 실패: {e}")
+    return {}
+
+def save_gpt_conversations(data):
+    """대화 저장"""
+    try:
+        os.makedirs(os.path.dirname(GPT_CONVERSATIONS_FILE), exist_ok=True)
+        with open(GPT_CONVERSATIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[GPT] 대화 저장 실패: {e}")
+
+def analyze_question_complexity(message: str, has_image: bool = False) -> str:
+    """질문 복잡도 분석하여 적절한 모델 선택
+
+    Returns:
+        'gpt-5.2' for complex questions
+        'gpt-4o' for simple questions
+    """
+    # 이미지가 있으면 Vision 모델 필요
+    if has_image:
+        return 'gpt-4o'  # GPT-4o는 Vision 지원
+
+    # 복잡한 질문 패턴
+    complex_patterns = [
+        # 코딩/프로그래밍
+        '코드', 'code', '프로그래밍', 'python', 'javascript', 'java', 'c++',
+        '함수', 'function', '클래스', 'class', '알고리즘', '구현', 'implement',
+        '버그', 'debug', '에러', 'error', 'API', '데이터베이스', 'SQL',
+        # 분석/추론
+        '분석', 'analyze', '비교', 'compare', '왜', 'why', '어떻게', 'how',
+        '장단점', '차이점', '원인', '이유', '전략', 'strategy',
+        # 창작/작문
+        '작성', 'write', '만들어', 'create', '기획', '스토리', 'story',
+        '대본', 'script', '에세이', 'essay', '보고서', 'report',
+        # 수학/과학
+        '계산', 'calculate', '공식', 'formula', '증명', 'prove', '수학',
+        '통계', 'statistics', '확률', 'probability',
+        # 긴 텍스트
+        '요약', 'summarize', '정리', '설명해', 'explain',
+    ]
+
+    # 간단한 질문 패턴
+    simple_patterns = [
+        # 단순 사실
+        '뭐야', '뭔가요', '무엇', 'what is', '정의', '의미',
+        # 번역
+        '번역', 'translate', '영어로', '한국어로', 'in english',
+        # 날씨/시간
+        '날씨', 'weather', '시간', 'time', '오늘',
+        # 짧은 대화
+        '안녕', 'hello', 'hi', '고마워', 'thanks', '네', '아니',
+        # 단순 질문
+        '몇', '언제', 'when', '어디', 'where', '누구', 'who',
+    ]
+
+    message_lower = message.lower()
+
+    # 복잡한 패턴 확인
+    for pattern in complex_patterns:
+        if pattern in message_lower:
+            return 'gpt-5.2'
+
+    # 간단한 패턴 확인
+    for pattern in simple_patterns:
+        if pattern in message_lower:
+            return 'gpt-4o'
+
+    # 메시지 길이 기반 판단
+    if len(message) > 200:
+        return 'gpt-5.2'
+    elif len(message) < 50:
+        return 'gpt-4o'
+
+    # 기본값: 복잡한 질문으로 간주
+    return 'gpt-5.2'
+
+
+@app.route('/gpt-chat')
+def gpt_chat_page():
+    """GPT Chat 페이지 렌더링"""
+    return render_template('gpt-chat.html')
+
+
+@app.route('/api/gpt/chat', methods=['POST'])
+def api_gpt_chat():
+    """GPT Chat API - 질문 복잡도에 따른 자동 모델 라우팅"""
+    try:
+        data = request.get_json() or {}
+        message = data.get('message', '').strip()
+        model_preference = data.get('model', 'auto')  # 'auto', 'gpt-5.2', 'gpt-4o'
+        history = data.get('history', [])
+        user_id = data.get('user_id', 'default')
+        conversation_id = data.get('conversation_id')
+        has_image = data.get('has_image', False)
+        image_base64 = data.get('image')
+
+        if not message and not image_base64:
+            return jsonify({"ok": False, "error": "메시지를 입력하세요"})
+
+        # 모델 선택
+        if model_preference == 'auto':
+            selected_model = analyze_question_complexity(message, has_image or bool(image_base64))
+        else:
+            selected_model = model_preference
+
+        print(f"[GPT] 모델 선택: {selected_model} (preference: {model_preference}, has_image: {bool(image_base64)})")
+
+        # 대화 히스토리 구성
+        messages = [
+            {
+                "role": "system",
+                "content": "당신은 친절하고 유능한 AI 어시스턴트입니다. 사용자의 질문에 정확하고 도움이 되는 답변을 제공합니다. 한국어로 대화하며, 필요시 코드나 예시를 포함할 수 있습니다."
+            }
+        ]
+
+        # 이전 대화 추가 (최근 10개)
+        for h in history[-10:]:
+            messages.append({
+                "role": h.get('role', 'user'),
+                "content": h.get('content', '')
+            })
+
+        # 현재 메시지 구성
+        if image_base64 and selected_model == 'gpt-4o':
+            # Vision API 사용 (GPT-4o)
+            user_content = [
+                {"type": "text", "text": message or "이 이미지에 대해 설명해주세요."}
+            ]
+
+            # 이미지 추가
+            if image_base64.startswith('data:'):
+                # data URL 형식
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_base64}
+                })
+            else:
+                # base64만 있는 경우
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                })
+
+            messages.append({"role": "user", "content": user_content})
+
+            # GPT-4o Vision 호출
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=4000
+            )
+
+            assistant_response = response.choices[0].message.content
+            model_used = "gpt-4o"
+
+        elif selected_model == 'gpt-5.2':
+            # GPT-5.2 Responses API 사용
+            messages.append({"role": "user", "content": message})
+
+            # Responses API 형식으로 변환
+            input_messages = []
+            for msg in messages:
+                input_messages.append({
+                    "role": msg["role"],
+                    "content": [{"type": "input_text", "text": msg["content"]}]
+                })
+
+            response = client.responses.create(
+                model="gpt-5.2",
+                input=input_messages,
+                temperature=0.7
+            )
+
+            # 응답 추출
+            if getattr(response, "output_text", None):
+                assistant_response = response.output_text.strip()
+            else:
+                text_chunks = []
+                for item in getattr(response, "output", []) or []:
+                    for content in getattr(item, "content", []) or []:
+                        if getattr(content, "type", "") == "text":
+                            text_chunks.append(getattr(content, "text", ""))
+                assistant_response = "\n".join(text_chunks).strip()
+
+            model_used = "gpt-5.2"
+
+        else:
+            # GPT-4o Chat Completions API 사용
+            messages.append({"role": "user", "content": message})
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=4000
+            )
+
+            assistant_response = response.choices[0].message.content
+            model_used = "gpt-4o"
+
+        # 대화 저장
+        if conversation_id:
+            try:
+                conversations = load_gpt_conversations()
+                if user_id not in conversations:
+                    conversations[user_id] = {}
+                if conversation_id not in conversations[user_id]:
+                    conversations[user_id][conversation_id] = {
+                        'created_at': datetime.now().isoformat(),
+                        'messages': []
+                    }
+
+                conversations[user_id][conversation_id]['messages'].append({
+                    'role': 'user',
+                    'content': message,
+                    'timestamp': datetime.now().isoformat(),
+                    'has_image': bool(image_base64)
+                })
+                conversations[user_id][conversation_id]['messages'].append({
+                    'role': 'assistant',
+                    'content': assistant_response,
+                    'model': model_used,
+                    'timestamp': datetime.now().isoformat()
+                })
+                conversations[user_id][conversation_id]['updated_at'] = datetime.now().isoformat()
+
+                save_gpt_conversations(conversations)
+            except Exception as e:
+                print(f"[GPT] 대화 저장 오류: {e}")
+
+        return jsonify({
+            "ok": True,
+            "response": assistant_response,
+            "model_used": model_used,
+            "complexity": "complex" if model_used == "gpt-5.2" else "simple"
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/conversations', methods=['GET'])
+def api_gpt_get_conversations():
+    """사용자별 대화 목록 조회"""
+    try:
+        user_id = request.args.get('user_id', 'default')
+        conversations = load_gpt_conversations()
+
+        user_convs = conversations.get(user_id, {})
+
+        # 목록 형태로 변환
+        result = []
+        for conv_id, conv_data in user_convs.items():
+            # 첫 번째 사용자 메시지를 제목으로 사용
+            title = "새 대화"
+            for msg in conv_data.get('messages', []):
+                if msg.get('role') == 'user':
+                    title = msg.get('content', '')[:50] + ('...' if len(msg.get('content', '')) > 50 else '')
+                    break
+
+            result.append({
+                'id': conv_id,
+                'title': title,
+                'created_at': conv_data.get('created_at'),
+                'updated_at': conv_data.get('updated_at'),
+                'message_count': len(conv_data.get('messages', []))
+            })
+
+        # 최신순 정렬
+        result.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+
+        return jsonify({"ok": True, "conversations": result})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/conversations/<conversation_id>', methods=['GET'])
+def api_gpt_get_conversation(conversation_id):
+    """특정 대화 조회"""
+    try:
+        user_id = request.args.get('user_id', 'default')
+        conversations = load_gpt_conversations()
+
+        user_convs = conversations.get(user_id, {})
+        conv_data = user_convs.get(conversation_id)
+
+        if not conv_data:
+            return jsonify({"ok": False, "error": "대화를 찾을 수 없습니다"})
+
+        return jsonify({
+            "ok": True,
+            "conversation": {
+                'id': conversation_id,
+                'messages': conv_data.get('messages', []),
+                'created_at': conv_data.get('created_at'),
+                'updated_at': conv_data.get('updated_at')
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/conversations/<conversation_id>', methods=['DELETE'])
+def api_gpt_delete_conversation(conversation_id):
+    """대화 삭제"""
+    try:
+        user_id = request.args.get('user_id', 'default')
+        conversations = load_gpt_conversations()
+
+        if user_id in conversations and conversation_id in conversations[user_id]:
+            del conversations[user_id][conversation_id]
+            save_gpt_conversations(conversations)
+            return jsonify({"ok": True})
+
+        return jsonify({"ok": False, "error": "대화를 찾을 수 없습니다"})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route('/api/gpt/users', methods=['GET'])
+def api_gpt_get_users():
+    """등록된 사용자 목록 조회"""
+    try:
+        conversations = load_gpt_conversations()
+        users = list(conversations.keys())
+
+        result = []
+        for user_id in users:
+            user_convs = conversations.get(user_id, {})
+            total_messages = sum(len(c.get('messages', [])) for c in user_convs.values())
+            result.append({
+                'id': user_id,
+                'conversation_count': len(user_convs),
+                'total_messages': total_messages
+            })
+
+        return jsonify({"ok": True, "users": result})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 # ===== Fontconfig 설정 (일본어 폰트 인식용) =====
 def setup_fontconfig():
     """프로젝트 fonts 디렉토리를 fontconfig에 등록"""
