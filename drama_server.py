@@ -24936,10 +24936,10 @@ USER_PROFILES = {
 - 격려와 칭찬을 아끼지 마세요"""
     },
     "하윤": {
-        "grade": "초등학교 4학년",
-        "age": 10,
+        "grade": "초등학교 5학년",
+        "age": 11,
         "system_prompt": """당신은 친절하고 재미있는 AI 선생님입니다.
-지금 대화하는 사람은 초등학교 4학년 학생입니다.
+지금 대화하는 사람은 초등학교 5학년 학생입니다.
 
 답변 시 다음을 지켜주세요:
 - 초등학생도 이해할 수 있는 쉬운 말로 설명하세요
@@ -25035,66 +25035,87 @@ def analyze_question_complexity(message: str, has_image: bool = False) -> str:
     """질문 복잡도 분석하여 적절한 모델 선택
 
     Returns:
-        'gpt-5.2' for complex questions
-        'gpt-4o' for simple questions
+        'gpt-5.2' for complex questions (분석, 코딩, 창작)
+        'gpt-4o' for medium questions (설명, 번역, 중간 길이)
+        'gpt-4o-mini' for simple questions (짧은 대화, 단순 사실)
     """
     # 이미지가 있으면 Vision 모델 필요
     if has_image:
         return 'gpt-4o'  # GPT-4o는 Vision 지원
 
-    # 복잡한 질문 패턴
+    # 복잡한 질문 패턴 → GPT-5.2
     complex_patterns = [
         # 코딩/프로그래밍
         '코드', 'code', '프로그래밍', 'python', 'javascript', 'java', 'c++',
         '함수', 'function', '클래스', 'class', '알고리즘', '구현', 'implement',
         '버그', 'debug', '에러', 'error', 'API', '데이터베이스', 'SQL',
         # 분석/추론
-        '분석', 'analyze', '비교', 'compare', '왜', 'why', '어떻게', 'how',
-        '장단점', '차이점', '원인', '이유', '전략', 'strategy',
+        '분석', 'analyze', '비교', 'compare', '장단점', '차이점', '전략', 'strategy',
         # 창작/작문
-        '작성', 'write', '만들어', 'create', '기획', '스토리', 'story',
+        '작성해', 'write', '만들어줘', 'create', '기획', '스토리', 'story',
         '대본', 'script', '에세이', 'essay', '보고서', 'report',
-        # 수학/과학
-        '계산', 'calculate', '공식', 'formula', '증명', 'prove', '수학',
-        '통계', 'statistics', '확률', 'probability',
-        # 긴 텍스트
-        '요약', 'summarize', '정리', '설명해', 'explain',
+        # 수학/과학 (복잡)
+        '증명', 'prove', '통계', 'statistics', '확률', 'probability',
+        # 긴 설명
+        '자세히', '상세히', 'detailed', '요약', 'summarize',
     ]
 
-    # 간단한 질문 패턴
+    # 중간 복잡도 패턴 → GPT-4o
+    medium_patterns = [
+        # 설명 요청
+        '설명해', 'explain', '알려줘', '가르쳐', '어떻게', 'how',
+        # 번역
+        '번역', 'translate', '영어로', '한국어로', 'in english',
+        # 개념/정의 (긴 설명 필요)
+        '개념', 'concept', '원리', 'principle',
+        # 왜/이유
+        '왜', 'why', '원인', '이유',
+        # 수학/과학 (기본)
+        '계산', 'calculate', '공식', 'formula', '수학', '과학',
+    ]
+
+    # 간단한 질문 패턴 → GPT-4o-mini (가장 빠름)
     simple_patterns = [
         # 단순 사실
         '뭐야', '뭔가요', '무엇', 'what is', '정의', '의미',
-        # 번역
-        '번역', 'translate', '영어로', '한국어로', 'in english',
         # 날씨/시간
         '날씨', 'weather', '시간', 'time', '오늘',
         # 짧은 대화
         '안녕', 'hello', 'hi', '고마워', 'thanks', '네', '아니',
+        '잘가', 'bye', '좋아', '싫어', '맞아', '틀려',
         # 단순 질문
         '몇', '언제', 'when', '어디', 'where', '누구', 'who',
+        # 예/아니오 질문
+        '맞아?', '될까?', '있어?', '없어?',
     ]
 
     message_lower = message.lower()
 
-    # 복잡한 패턴 확인
+    # 복잡한 패턴 확인 → GPT-5.2
     for pattern in complex_patterns:
         if pattern in message_lower:
             return 'gpt-5.2'
 
-    # 간단한 패턴 확인
-    for pattern in simple_patterns:
+    # 중간 복잡도 패턴 확인 → GPT-4o
+    for pattern in medium_patterns:
         if pattern in message_lower:
             return 'gpt-4o'
 
+    # 간단한 패턴 확인 → GPT-4o-mini
+    for pattern in simple_patterns:
+        if pattern in message_lower:
+            return 'gpt-4o-mini'
+
     # 메시지 길이 기반 판단
     if len(message) > 200:
-        return 'gpt-5.2'
-    elif len(message) < 50:
-        return 'gpt-4o'
+        return 'gpt-5.2'  # 긴 질문 → 복잡할 가능성
+    elif len(message) > 50:
+        return 'gpt-4o'   # 중간 길이 → 중간 복잡도
+    else:
+        return 'gpt-4o-mini'  # 짧은 질문 → 간단
 
-    # 기본값: 복잡한 질문으로 간주
-    return 'gpt-5.2'
+    # 기본값
+    return 'gpt-4o'
 
 
 @app.route('/gpt-chat')
@@ -25109,7 +25130,7 @@ def api_gpt_chat():
     try:
         data = request.get_json() or {}
         message = data.get('message', '').strip()
-        model_preference = data.get('model', 'auto')  # 'auto', 'gpt-5.2', 'gpt-4o'
+        model_preference = data.get('model', 'auto')  # 'auto', 'gpt-5.2', 'gpt-4o', 'gpt-4o-mini'
         history = data.get('history', [])
         user_id = data.get('user_id', 'default')
         conversation_id = data.get('conversation_id')
@@ -25211,18 +25232,21 @@ def api_gpt_chat():
             model_used = "gpt-5.2"
 
         else:
-            # GPT-4o Chat Completions API 사용
+            # GPT-4o / GPT-4o-mini Chat Completions API 사용
             messages.append({"role": "user", "content": message})
 
+            # gpt-4o-mini는 빠른 응답을 위해 max_tokens 줄임
+            max_tokens = 2000 if selected_model == 'gpt-4o-mini' else 4000
+
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=selected_model,  # 'gpt-4o' 또는 'gpt-4o-mini'
                 messages=messages,
                 temperature=0.7,
-                max_tokens=4000
+                max_tokens=max_tokens
             )
 
             assistant_response = response.choices[0].message.content
-            model_used = "gpt-4o"
+            model_used = selected_model
 
         # 대화 저장
         if conversation_id:

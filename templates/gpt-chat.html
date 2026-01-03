@@ -220,6 +220,11 @@
       color: white;
     }
 
+    .model-badge.mini {
+      background: #6b7280;
+      color: white;
+    }
+
     .model-badge.auto {
       background: var(--border);
       color: var(--text-primary);
@@ -857,7 +862,7 @@
           <div class="model-option-icon" style="background: var(--border);">⚡</div>
           <div class="model-option-info">
             <div class="model-option-name">자동 선택</div>
-            <div class="model-option-desc">질문 복잡도에 따라 GPT-5.2 또는 GPT-4o 자동 선택</div>
+            <div class="model-option-desc">질문 복잡도에 따라 GPT-5.2/4o/4o-mini 자동 선택</div>
           </div>
           <span class="model-option-check" id="check-auto">✓</span>
         </div>
@@ -873,9 +878,17 @@
           <div class="model-option-icon" style="background: var(--gpt4);">💬</div>
           <div class="model-option-info">
             <div class="model-option-name">GPT-4o</div>
-            <div class="model-option-desc">빠른 응답, 일상적인 대화와 이미지 분석에 적합</div>
+            <div class="model-option-desc">이미지 분석, 번역, 설명에 적합</div>
           </div>
           <span class="model-option-check" id="check-gpt-4o" style="display:none;">✓</span>
+        </div>
+        <div class="model-option" data-model="gpt-4o-mini" onclick="selectModel('gpt-4o-mini')">
+          <div class="model-option-icon" style="background: #6b7280;">⚡</div>
+          <div class="model-option-info">
+            <div class="model-option-name">GPT-4o-mini</div>
+            <div class="model-option-desc">간단한 질문에 초고속 응답</div>
+          </div>
+          <span class="model-option-check" id="check-gpt-4o-mini" style="display:none;">✓</span>
         </div>
       </div>
 
@@ -1153,10 +1166,15 @@
         badge.className = 'model-badge gpt5';
         badge.textContent = '5.2';
         name.textContent = 'GPT-5.2';
-      } else {
+      } else if (model === 'gpt-4o') {
         badge.className = 'model-badge gpt4';
         badge.textContent = '4o';
         name.textContent = 'GPT-4o';
+      } else if (model === 'gpt-4o-mini') {
+        badge.className = 'model-badge';
+        badge.style.background = '#6b7280';
+        badge.textContent = 'mini';
+        name.textContent = 'GPT-4o-mini';
       }
 
       toggleModelPopup();
@@ -1367,7 +1385,7 @@
         <div class="message-content">
           ${hasImage ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">📷 이미지 첨부됨</div>' : ''}
           ${formattedContent}
-          ${model ? `<div class="message-meta"><span class="model-badge ${model === 'gpt-5.2' ? 'gpt5' : 'gpt4'}">${model}</span></div>` : ''}
+          ${model ? `<div class="message-meta"><span class="model-badge ${model === 'gpt-5.2' ? 'gpt5' : model === 'gpt-4o-mini' ? 'mini' : 'gpt4'}">${model}</span></div>` : ''}
         </div>
       `;
 
