@@ -57,8 +57,8 @@
                 </div>
             </div>
 
-            <!-- 메모 영역 (프로필 오른쪽) -->
-            <div style="flex: 0 0 300px; min-width: 280px;">
+            <!-- 메모 영역 (프로필 오른쪽) - 내용에 따라 확장 -->
+            <div id="memoContainer" style="flex: 0 0 auto; min-width: 280px; max-width: 500px; transition: all 0.3s ease;">
                 <div style="background: #fef9e7; border: 1px solid #f9e79f; border-radius: 12px; padding: 16px; position: relative;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-weight: 600; font-size: 13px; color: #b7950b;">
@@ -68,11 +68,11 @@
                             <i class="bi bi-pencil-square" id="memoEditIcon"></i>
                         </button>
                     </div>
-                    <!-- 메모 표시 (읽기 모드) -->
-                    <div id="memoDisplay" style="font-size: 14px; color: #5d4e37; line-height: 1.6; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">{{ member.notes or '' }}</div>
+                    <!-- 메모 표시 (읽기 모드) - 내용에 따라 높이 자동 조절 -->
+                    <div id="memoDisplay" style="font-size: 14px; color: #5d4e37; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ member.notes or '' }}</div>
                     <!-- 메모 편집 (편집 모드) -->
                     <div id="memoEdit" style="display: none;">
-                        <textarea id="memoTextarea" style="width: 100%; height: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; resize: none; font-family: inherit;">{{ member.notes or '' }}</textarea>
+                        <textarea id="memoTextarea" style="width: 100%; min-height: 100px; max-height: 250px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; resize: vertical; font-family: inherit;">{{ member.notes or '' }}</textarea>
                         <div style="margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;">
                             <button type="button" onclick="cancelMemoEdit()" style="padding: 4px 12px; border: 1px solid #ddd; background: white; border-radius: 6px; font-size: 13px; cursor: pointer;">취소</button>
                             <button type="button" onclick="saveMemo()" style="padding: 4px 12px; border: none; background: #b7950b; color: white; border-radius: 6px; font-size: 13px; cursor: pointer;">저장</button>
@@ -910,6 +910,31 @@ document.addEventListener('DOMContentLoaded', loadFamilyRelationships);
 // ===== 메모 편집 기능 =====
 let memoOriginalValue = '';
 
+// 메모 내용에 따라 박스 크기 조절
+function autoResizeMemoBox() {
+    const container = document.getElementById('memoContainer');
+    const displayEl = document.getElementById('memoDisplay');
+    const content = displayEl.textContent || '';
+
+    // 내용 길이에 따라 너비 조절 (280px ~ 500px)
+    const charCount = content.length;
+    const lineCount = content.split('\n').length;
+
+    let targetWidth = 280; // 기본 너비
+
+    if (charCount > 200 || lineCount > 5) {
+        targetWidth = 400; // 중간 크기
+    }
+    if (charCount > 400 || lineCount > 10) {
+        targetWidth = 500; // 최대 크기
+    }
+
+    container.style.minWidth = targetWidth + 'px';
+}
+
+// 페이지 로드 시 메모 박스 크기 조절
+document.addEventListener('DOMContentLoaded', autoResizeMemoBox);
+
 function toggleMemoEdit() {
     const displayEl = document.getElementById('memoDisplay');
     const editEl = document.getElementById('memoEdit');
@@ -923,10 +948,19 @@ function toggleMemoEdit() {
         editEl.style.display = 'block';
         textareaEl.focus();
         iconEl.className = 'bi bi-x-lg';
+        // 텍스트 영역 높이 자동 조절
+        autoResizeTextarea(textareaEl);
     } else {
         // 읽기 모드로 전환
         cancelMemoEdit();
     }
+}
+
+// textarea 높이 자동 조절
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 100), 250);
+    textarea.style.height = newHeight + 'px';
 }
 
 function cancelMemoEdit() {
@@ -963,6 +997,8 @@ async function saveMemo() {
             displayEl.style.display = 'block';
             editEl.style.display = 'none';
             iconEl.className = 'bi bi-pencil-square';
+            // 저장 후 메모 박스 크기 재조절
+            autoResizeMemoBox();
         } else {
             alert(data.error || '저장에 실패했습니다');
         }

@@ -26,9 +26,18 @@
                        style="width: 100%; padding: 14px 16px 14px 44px; border: none; border-radius: 12px; font-size: 15px; background: rgba(255,255,255,0.95); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
                 <i class="bi bi-stars" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #667eea; font-size: 18px;"></i>
             </div>
+            <!-- 파일 첨부 버튼 -->
+            <input type="file" id="aiSearchFiles" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.txt" style="display: none;">
+            <button type="button" onclick="document.getElementById('aiSearchFiles').click()" class="apple-btn" style="background: rgba(255,255,255,0.2); color: white; padding: 14px 16px; border-radius: 12px;" title="파일 첨부 (PDF, 이미지)">
+                <i class="bi bi-paperclip"></i>
+            </button>
             <button type="button" onclick="performAISearch()" class="apple-btn" style="background: white; color: #667eea; font-weight: 600; padding: 14px 24px; border-radius: 12px;">
                 <i class="bi bi-search"></i> AI 검색
             </button>
+        </div>
+        <!-- 첨부 파일 목록 -->
+        <div id="aiSearchFileList" style="display: none; margin-top: 10px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
         </div>
         <div id="aiSearchStatus" style="color: rgba(255,255,255,0.9); font-size: 13px; margin-top: 8px; display: none;">
             <i class="bi bi-hourglass-split"></i> 검색 중...
@@ -304,9 +313,43 @@ function onCat3Change() {
     }
 }
 
+// 파일 첨부 시 목록 표시
+document.getElementById('aiSearchFiles').addEventListener('change', function(e) {
+    const fileListEl = document.getElementById('aiSearchFileList');
+    const containerEl = fileListEl.querySelector('div');
+    const files = e.target.files;
+
+    if (files.length > 0) {
+        containerEl.innerHTML = Array.from(files).map((f, i) => `
+            <span style="background: rgba(255,255,255,0.2); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="bi ${f.name.endsWith('.pdf') ? 'bi-file-pdf' : 'bi-image'}"></i>
+                ${f.name.length > 15 ? f.name.substring(0, 12) + '...' : f.name}
+                <button type="button" onclick="removeAIFile(${i})" style="background: none; border: none; color: white; cursor: pointer; padding: 0; font-size: 14px;">&times;</button>
+            </span>
+        `).join('');
+        fileListEl.style.display = 'block';
+    } else {
+        fileListEl.style.display = 'none';
+    }
+});
+
+function removeAIFile(index) {
+    const input = document.getElementById('aiSearchFiles');
+    const dt = new DataTransfer();
+    const files = input.files;
+    for (let i = 0; i < files.length; i++) {
+        if (i !== index) dt.items.add(files[i]);
+    }
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
+}
+
 // AI 자연어 검색
 async function performAISearch() {
     const query = document.getElementById('aiSearchInput').value.trim();
+    const filesInput = document.getElementById('aiSearchFiles');
+    const hasFiles = filesInput.files.length > 0;
+
     if (!query) {
         alert('검색어를 입력해주세요');
         return;
@@ -319,15 +362,31 @@ async function performAISearch() {
     const explanationEl = document.getElementById('aiSearchExplanation');
 
     // 로딩 표시
+    statusEl.innerHTML = hasFiles ? '<i class="bi bi-hourglass-split"></i> 파일 분석 및 검색 중...' : '<i class="bi bi-hourglass-split"></i> 검색 중...';
     statusEl.style.display = 'block';
     resultsEl.style.display = 'none';
 
     try {
-        const resp = await fetch('/api/members/natural-search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
+        let resp;
+        if (hasFiles) {
+            // 파일이 있으면 FormData 사용
+            const formData = new FormData();
+            formData.append('query', query);
+            for (let i = 0; i < filesInput.files.length; i++) {
+                formData.append('files', filesInput.files[i]);
+            }
+            resp = await fetch('/api/members/natural-search', {
+                method: 'POST',
+                body: formData
+            });
+        } else {
+            // 파일 없으면 JSON 사용
+            resp = await fetch('/api/members/natural-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+        }
 
         const data = await resp.json();
         statusEl.style.display = 'none';
@@ -409,6 +468,11 @@ function renderMemberCard(member) {
 function clearAISearch() {
     document.getElementById('aiSearchResults').style.display = 'none';
     document.getElementById('aiSearchInput').value = '';
+
+    // 파일 첨부 초기화
+    const filesInput = document.getElementById('aiSearchFiles');
+    filesInput.value = '';
+    document.getElementById('aiSearchFileList').style.display = 'none';
 
     // 기존 요소 복원
     const existingGrid = document.querySelector('.card-grid:not(#aiSearchGrid)');

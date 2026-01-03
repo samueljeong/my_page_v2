@@ -3796,6 +3796,43 @@ def api_create_member():
     }), 201
 
 
+def extract_text_from_pdf(file_content):
+    """PDF 파일에서 텍스트 추출"""
+    try:
+        from PyPDF2 import PdfReader
+        import io
+        reader = PdfReader(io.BytesIO(file_content))
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return "\n".join(text_parts)
+    except Exception as e:
+        app.logger.error(f"[PDF추출] 오류: {str(e)}")
+        return None
+
+
+def extract_text_from_image(file_content, filename):
+    """이미지 파일을 base64로 변환 (GPT-5.1 Vision용)"""
+    import base64
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'png'
+    mime_types = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+    }
+    mime = mime_types.get(ext, 'image/png')
+    b64 = base64.b64encode(file_content).decode('utf-8')
+    return {
+        "type": "image",
+        "mime": mime,
+        "base64": b64
+    }
+
+
 @app.route('/api/members/natural-search', methods=['POST'])
 def api_natural_search_members():
     """
@@ -3809,53 +3846,96 @@ def api_natural_search_members():
     - "의정부 거주하는 권사님"
     - "3교구 집사"
     - "010-1234로 시작하는 번호"
+
+    파일 첨부 지원:
+    - PDF: 텍스트 추출 후 검색 컨텍스트에 포함
+    - 이미지: GPT-5.1 Vision으로 분석
     """
-    data = request.get_json() or {}
-    query_text = data.get('query', '').strip()
+    # multipart form-data 또는 JSON 둘 다 지원
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        query_text = request.form.get('query', '').strip()
+        files = request.files.getlist('files')
+    else:
+        data = request.get_json() or {}
+        query_text = data.get('query', '').strip()
+        files = []
 
     if not query_text:
         return jsonify({"error": "검색어(query)가 필요합니다"}), 400
 
-    # === 빠른 검색 (GPT 없이 직접 처리) ===
-    # 1. 단순 이름 검색 (한글 2-4자, 공백 없음)
+    # === 파일 처리 ===
+    file_contents = []  # 추출된 텍스트 또는 이미지 데이터
+    image_contents = []  # GPT-5.1 Vision용 이미지
+
+    for file in files:
+        if file and file.filename:
+            filename = file.filename.lower()
+            content = file.read()
+
+            if filename.endswith('.pdf'):
+                # PDF 텍스트 추출
+                text = extract_text_from_pdf(content)
+                if text:
+                    file_contents.append(f"[첨부파일: {file.filename}]\n{text[:5000]}")  # 5000자 제한
+                    app.logger.info(f"[자연어검색] PDF 첨부: {file.filename}, 추출 길이: {len(text)}")
+            elif filename.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                # 이미지 처리
+                img_data = extract_text_from_image(content, filename)
+                image_contents.append(img_data)
+                app.logger.info(f"[자연어검색] 이미지 첨부: {file.filename}")
+            elif filename.endswith('.txt'):
+                # 텍스트 파일
+                try:
+                    text = content.decode('utf-8')
+                    file_contents.append(f"[첨부파일: {file.filename}]\n{text[:5000]}")
+                except:
+                    pass
+
+    # 파일이 있으면 GPT 검색으로 강제 (빠른 검색 스킵)
+    has_attachments = bool(file_contents or image_contents)
+
+    # === 빠른 검색 (GPT 없이 직접 처리) - 파일 첨부 시 스킵 ===
     import re
-    is_simple_name = re.match(r'^[가-힣]{2,4}$', query_text)
 
-    # 2. 숫자만 있는 경우 (차량번호 일부)
-    is_car_number_partial = re.match(r'^[0-9]{2,4}$', query_text)
+    if not has_attachments:
+        # 1. 단순 이름 검색 (한글 2-4자, 공백 없음)
+        is_simple_name = re.match(r'^[가-힣]{2,4}$', query_text)
 
-    # 3. 전화번호 일부 (숫자와 하이픈)
-    is_phone_partial = re.match(r'^[0-9-]{4,}$', query_text) and not is_car_number_partial
+        # 2. 숫자만 있는 경우 (차량번호 일부)
+        is_car_number_partial = re.match(r'^[0-9]{2,4}$', query_text)
 
-    if is_simple_name or is_car_number_partial or is_phone_partial:
-        # GPT 호출 없이 직접 검색 (토큰 절약)
-        try:
-            if is_simple_name:
-                members = Member.query.filter(
-                    Member.name.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"'{query_text}' 이름으로 직접 검색"
-            elif is_car_number_partial:
-                members = Member.query.filter(
-                    Member.car_number.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"차량번호 '{query_text}' 포함 검색"
-            else:  # is_phone_partial
-                members = Member.query.filter(
-                    Member.phone.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"전화번호 '{query_text}' 포함 검색"
+        # 3. 전화번호 일부 (숫자와 하이픈)
+        is_phone_partial = re.match(r'^[0-9-]{4,}$', query_text) and not is_car_number_partial
 
-            return jsonify({
-                "success": True,
-                "query": query_text,
-                "criteria": {"explanation": explanation, "gpt_used": False},
-                "count": len(members),
-                "members": [_member_to_dict(m) for m in members]
-            })
-        except Exception as e:
-            app.logger.error(f"[빠른검색] 오류: {str(e)}")
-            # 에러 발생 시 GPT 검색으로 fallback
+        if is_simple_name or is_car_number_partial or is_phone_partial:
+            # GPT 호출 없이 직접 검색 (토큰 절약)
+            try:
+                if is_simple_name:
+                    members = Member.query.filter(
+                        Member.name.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"'{query_text}' 이름으로 직접 검색"
+                elif is_car_number_partial:
+                    members = Member.query.filter(
+                        Member.car_number.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"차량번호 '{query_text}' 포함 검색"
+                else:  # is_phone_partial
+                    members = Member.query.filter(
+                        Member.phone.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"전화번호 '{query_text}' 포함 검색"
+
+                return jsonify({
+                    "success": True,
+                    "query": query_text,
+                    "criteria": {"explanation": explanation, "gpt_used": False},
+                    "count": len(members),
+                    "members": [_member_to_dict(m) for m in members]
+                })
+            except Exception as e:
+                app.logger.error(f"[빠른검색] 오류: {str(e)}")
+                # 에러 발생 시 GPT 검색으로 fallback
 
     if not openai_client:
         return jsonify({"error": "OpenAI API 키가 설정되지 않았습니다"}), 500
@@ -3944,12 +4024,33 @@ def api_natural_search_members():
 반드시 유효한 JSON만 출력하세요. 다른 텍스트 없이 JSON만 출력합니다."""
 
     try:
+        # 사용자 메시지 구성 (텍스트 + 파일 내용 + 이미지)
+        user_content = []
+
+        # 기본 쿼리 텍스트
+        full_query = query_text
+
+        # 파일 내용 추가 (PDF, TXT 등)
+        if file_contents:
+            full_query += "\n\n--- 첨부 파일 내용 ---\n" + "\n\n".join(file_contents)
+            app.logger.info(f"[자연어검색] 파일 내용 {len(file_contents)}개 추가됨")
+
+        user_content.append({"type": "input_text", "text": full_query})
+
+        # 이미지 추가 (GPT-5.1 Vision)
+        for img in image_contents:
+            user_content.append({
+                "type": "input_image",
+                "image_url": f"data:{img['mime']};base64,{img['base64']}"
+            })
+            app.logger.info(f"[자연어검색] 이미지 추가됨")
+
         # GPT-5.1 Responses API 호출
         response = openai_client.responses.create(
             model="gpt-5.1",
             input=[
                 {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
-                {"role": "user", "content": [{"type": "input_text", "text": query_text}]}
+                {"role": "user", "content": user_content}
             ],
             temperature=0.3
         )
@@ -3984,13 +4085,22 @@ def api_natural_search_members():
         # 검색 실행
         members = _execute_natural_search(search_criteria)
 
-        return jsonify({
+        response_data = {
             "success": True,
             "query": query_text,
             "criteria": search_criteria,
             "count": len(members),
             "members": [_member_to_dict(m) for m in members]
-        })
+        }
+
+        # 파일 첨부 정보 추가
+        if has_attachments:
+            response_data["attachments"] = {
+                "pdf_count": len([f for f in file_contents if '[첨부파일:' in f]),
+                "image_count": len(image_contents)
+            }
+
+        return jsonify(response_data)
 
     except json.JSONDecodeError as e:
         app.logger.error(f"[자연어검색] JSON 파싱 실패: {result_text}")
@@ -5138,130 +5248,146 @@ def api_audit_family_relationships():
     2. 비정상 나이차 배우자 (20살 이상 차이나는데 spouse)
     3. 같은 성씨 + 비슷한 나이인데 spouse (형제일 가능성)
     """
-    issues = []
+    try:
+        issues = []
 
-    # 모든 배우자 관계 조회
-    spouse_rels = FamilyRelationship.query.filter_by(relationship_type='spouse').all()
+        # 모든 배우자 관계 조회
+        spouse_rels = FamilyRelationship.query.filter_by(relationship_type='spouse').all()
 
-    processed_pairs = set()
-    male_genders = ['M', '남', '남성', '남자']
-    female_genders = ['F', '여', '여성', '여자']
+        processed_pairs = set()
+        male_genders = ['M', '남', '남성', '남자']
+        female_genders = ['F', '여', '여성', '여자']
 
-    for rel in spouse_rels:
-        # 중복 체크 (양방향 관계이므로)
-        pair_key = tuple(sorted([rel.member_id, rel.related_member_id]))
-        if pair_key in processed_pairs:
-            continue
-        processed_pairs.add(pair_key)
+        for rel in spouse_rels:
+            try:
+                # 중복 체크 (양방향 관계이므로)
+                pair_key = tuple(sorted([rel.member_id, rel.related_member_id]))
+                if pair_key in processed_pairs:
+                    continue
+                processed_pairs.add(pair_key)
 
-        member = rel.member
-        related = rel.related_member
+                member = rel.member
+                related = rel.related_member
 
-        if not member or not related:
-            continue
+                if not member or not related:
+                    continue
 
-        issue = None
+                issue = None
 
-        # 1. 동성 배우자 체크
-        member_is_male = member.gender in male_genders
-        member_is_female = member.gender in female_genders
-        related_is_male = related.gender in male_genders
-        related_is_female = related.gender in female_genders
+                # 1. 동성 배우자 체크
+                member_is_male = member.gender in male_genders
+                member_is_female = member.gender in female_genders
+                related_is_male = related.gender in male_genders
+                related_is_female = related.gender in female_genders
 
-        if (member_is_male and related_is_male) or (member_is_female and related_is_female):
-            # 같은 성씨인지 확인
-            member_surname = member.name[0] if member.name else ''
-            related_surname = related.name[0] if related.name else ''
+                if (member_is_male and related_is_male) or (member_is_female and related_is_female):
+                    # 같은 성씨인지 확인
+                    member_surname = member.name[0] if member.name else ''
+                    related_surname = related.name[0] if related.name else ''
 
-            suggested_type = 'sibling'
-            suggested_detail = '형제자매'
-
-            # 나이 차이로 형/동생 결정
-            if member.age and related.age:
-                age_diff = abs(member.age - related.age)
-                if age_diff <= 15:  # 15살 이하 차이면 형제
-                    if member_is_male:
-                        if member.age > related.age:
-                            suggested_detail = '형' if related_is_male else '오빠'
-                        else:
-                            suggested_detail = '남동생'
-                    else:
-                        if member.age > related.age:
-                            suggested_detail = '언니' if related_is_female else '누나'
-                        else:
-                            suggested_detail = '여동생'
-
-            issue = {
-                'type': 'same_gender_spouse',
-                'severity': 'high',
-                'relationship_id': rel.id,
-                'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
-                'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
-                'current': {'type': 'spouse', 'detail': rel.relationship_detail},
-                'suggested': {'type': suggested_type, 'detail': suggested_detail},
-                'reason': f"동성({member.gender})끼리 배우자로 등록됨"
-            }
-
-        # 2. 같은 성씨 + 비슷한 나이 (7살 이내) = 형제일 가능성
-        elif member.name and related.name and member.name[0] == related.name[0]:
-            if member.age and related.age:
-                age_diff = abs(member.age - related.age)
-                if age_diff <= 7:  # 7살 이내 차이
+                    suggested_type = 'sibling'
                     suggested_detail = '형제자매'
-                    if member_is_male and related_is_male:
-                        suggested_detail = '형' if related.age > member.age else '남동생'
-                    elif member_is_female and related_is_female:
-                        suggested_detail = '언니' if related.age > member.age else '여동생'
-                    else:
-                        suggested_detail = '남매'
+
+                    # 나이 차이로 형/동생 결정
+                    if member.age and related.age:
+                        age_diff = abs(member.age - related.age)
+                        if age_diff <= 15:  # 15살 이하 차이면 형제
+                            if member_is_male:
+                                if member.age > related.age:
+                                    suggested_detail = '형' if related_is_male else '오빠'
+                                else:
+                                    suggested_detail = '남동생'
+                            else:
+                                if member.age > related.age:
+                                    suggested_detail = '언니' if related_is_female else '누나'
+                                else:
+                                    suggested_detail = '여동생'
 
                     issue = {
-                        'type': 'likely_sibling',
-                        'severity': 'medium',
+                        'type': 'same_gender_spouse',
+                        'severity': 'high',
                         'relationship_id': rel.id,
                         'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
                         'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
                         'current': {'type': 'spouse', 'detail': rel.relationship_detail},
-                        'suggested': {'type': 'sibling', 'detail': suggested_detail},
-                        'reason': f"같은 성씨({member.name[0]}) + 나이차 {age_diff}살 → 형제일 가능성"
+                        'suggested': {'type': suggested_type, 'detail': suggested_detail},
+                        'reason': f"동성({member.gender})끼리 배우자로 등록됨"
                     }
 
-        # 3. 나이차가 20살 이상이면 부모-자녀일 가능성
-        if not issue and member.age and related.age:
-            age_diff = abs(member.age - related.age)
-            if age_diff >= 20:
-                older = member if member.age > related.age else related
-                younger = related if member.age > related.age else member
+                # 2. 같은 성씨 + 비슷한 나이 (7살 이내) = 형제일 가능성
+                elif member.name and related.name and member.name[0] == related.name[0]:
+                    if member.age and related.age:
+                        age_diff = abs(member.age - related.age)
+                        if age_diff <= 7:  # 7살 이내 차이
+                            suggested_detail = '형제자매'
+                            if member_is_male and related_is_male:
+                                suggested_detail = '형' if related.age > member.age else '남동생'
+                            elif member_is_female and related_is_female:
+                                suggested_detail = '언니' if related.age > member.age else '여동생'
+                            else:
+                                suggested_detail = '남매'
 
-                suggested_detail = '아들' if younger.gender in male_genders else '딸'
+                            issue = {
+                                'type': 'likely_sibling',
+                                'severity': 'medium',
+                                'relationship_id': rel.id,
+                                'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
+                                'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
+                                'current': {'type': 'spouse', 'detail': rel.relationship_detail},
+                                'suggested': {'type': 'sibling', 'detail': suggested_detail},
+                                'reason': f"같은 성씨({member.name[0]}) + 나이차 {age_diff}살 → 형제일 가능성"
+                            }
 
-                issue = {
-                    'type': 'likely_parent_child',
-                    'severity': 'medium',
-                    'relationship_id': rel.id,
-                    'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
-                    'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
-                    'current': {'type': 'spouse', 'detail': rel.relationship_detail},
-                    'suggested': {
-                        'type': 'parent',
-                        'detail': suggested_detail,
-                        'note': f"{older.name}이(가) 부모, {younger.name}이(가) 자녀"
-                    },
-                    'reason': f"나이차 {age_diff}살 → 부모-자녀일 가능성"
-                }
+                # 3. 나이차가 20살 이상이면 부모-자녀일 가능성
+                if not issue and member.age and related.age:
+                    age_diff = abs(member.age - related.age)
+                    if age_diff >= 20:
+                        older = member if member.age > related.age else related
+                        younger = related if member.age > related.age else member
 
-        if issue:
-            issues.append(issue)
+                        suggested_detail = '아들' if younger.gender in male_genders else '딸'
 
-    # 심각도순 정렬 (high > medium > low)
-    severity_order = {'high': 0, 'medium': 1, 'low': 2}
-    issues.sort(key=lambda x: severity_order.get(x['severity'], 3))
+                        issue = {
+                            'type': 'likely_parent_child',
+                            'severity': 'medium',
+                            'relationship_id': rel.id,
+                            'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
+                            'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
+                            'current': {'type': 'spouse', 'detail': rel.relationship_detail},
+                            'suggested': {
+                                'type': 'parent',
+                                'detail': suggested_detail,
+                                'note': f"{older.name}이(가) 부모, {younger.name}이(가) 자녀"
+                            },
+                            'reason': f"나이차 {age_diff}살 → 부모-자녀일 가능성"
+                        }
 
-    return jsonify({
-        'total_spouse_relationships': len(processed_pairs),
-        'issues_found': len(issues),
-        'issues': issues
-    })
+                if issue:
+                    issues.append(issue)
+
+            except Exception as e:
+                # 개별 관계 처리 중 에러는 무시하고 계속 진행
+                print(f"[AUDIT] 관계 처리 중 에러 (rel_id={rel.id}): {e}")
+                continue
+
+        # 심각도순 정렬 (high > medium > low)
+        severity_order = {'high': 0, 'medium': 1, 'low': 2}
+        issues.sort(key=lambda x: severity_order.get(x['severity'], 3))
+
+        return jsonify({
+            'total_spouse_relationships': len(processed_pairs),
+            'issues_found': len(issues),
+            'issues': issues
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': f'감지 중 오류 발생: {str(e)}',
+            'issues': [],
+            'issues_found': 0
+        }), 500
 
 
 @app.route('/api/family/fix', methods=['POST'])
