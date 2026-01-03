@@ -5334,6 +5334,118 @@ def api_fix_family_relationship():
         return jsonify({"error": f"관계 수정 실패: {str(e)}"}), 500
 
 
+@app.route('/admin/fix-family')
+def admin_fix_family_page():
+    """가족관계 수정 관리자 페이지"""
+    return '''
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가족관계 자동 수정</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f5f5f7; }
+        .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        p { color: #666; margin-bottom: 20px; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 16px; cursor: pointer; margin-right: 10px; }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        #result { margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 12px; white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 400px; overflow-y: auto; }
+        .issue { padding: 12px; margin: 8px 0; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107; }
+        .issue.high { background: #f8d7da; border-color: #dc3545; }
+        .fixed { background: #d4edda; border-color: #28a745; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat { flex: 1; padding: 16px; background: #f0f0f0; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 13px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔧 가족관계 자동 수정</h1>
+        <p>잘못 등록된 가족관계(동성 배우자 등)를 자동으로 감지하고 수정합니다.</p>
+
+        <div class="stats" id="stats" style="display:none;">
+            <div class="stat">
+                <div class="stat-value" id="total">-</div>
+                <div class="stat-label">전체 배우자 관계</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="issues">-</div>
+                <div class="stat-label">문제 발견</div>
+            </div>
+        </div>
+
+        <button onclick="audit()">1. 문제 감지</button>
+        <button onclick="fixAll()" class="btn-danger" id="fixBtn" disabled>2. 자동 수정</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let auditData = null;
+
+        async function audit() {
+            document.getElementById('result').textContent = '검사 중...';
+            try {
+                const res = await fetch('/api/family/audit');
+                auditData = await res.json();
+
+                document.getElementById('stats').style.display = 'flex';
+                document.getElementById('total').textContent = auditData.total_spouse_relationships;
+                document.getElementById('issues').textContent = auditData.issues_found;
+
+                if (auditData.issues_found > 0) {
+                    document.getElementById('fixBtn').disabled = false;
+                    let html = `<strong>${auditData.issues_found}건의 문제 발견:</strong>\\n\\n`;
+                    auditData.issues.forEach((issue, i) => {
+                        html += `<div class="issue ${issue.severity}">${i+1}. ${issue.member.name}(${issue.member.gender}, ${issue.member.age}세) ↔ ${issue.related.name}(${issue.related.gender}, ${issue.related.age}세)\\n`;
+                        html += `   현재: ${issue.current.type} → 제안: ${issue.suggested.type}(${issue.suggested.detail})\\n`;
+                        html += `   사유: ${issue.reason}</div>`;
+                    });
+                    document.getElementById('result').innerHTML = html;
+                } else {
+                    document.getElementById('result').textContent = '✅ 문제 없음! 모든 가족관계가 정상입니다.';
+                }
+            } catch (e) {
+                document.getElementById('result').textContent = '오류: ' + e.message;
+            }
+        }
+
+        async function fixAll() {
+            if (!confirm(`${auditData.issues_found}건의 문제를 자동 수정하시겠습니까?`)) return;
+
+            document.getElementById('result').textContent = '수정 중...';
+            document.getElementById('fixBtn').disabled = true;
+
+            try {
+                const res = await fetch('/api/family/fix-all', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({severity: 'high', dry_run: false})
+                });
+                const data = await res.json();
+
+                let html = `<strong>✅ 수정 완료!</strong>\\n\\n`;
+                html += `수정됨: ${data.fixed}건, 실패: ${data.failed}건\\n\\n`;
+                data.details.forEach((d, i) => {
+                    html += `<div class="issue fixed">${i+1}. ${d.member} ↔ ${d.related}: ${d.action}</div>`;
+                });
+                document.getElementById('result').innerHTML = html;
+                document.getElementById('issues').textContent = '0';
+            } catch (e) {
+                document.getElementById('result').textContent = '오류: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
+    '''
+
+
 @app.route('/api/family/fix-all', methods=['POST'])
 def api_fix_all_family_relationships():
     """감지된 모든 문제 자동 수정 (high severity만)
@@ -6930,12 +7042,6 @@ def auto_fix_family_relationships():
 with app.app_context():
     db.create_all()
     run_migrations()
-    try:
-        auto_fix_family_relationships()
-    except Exception as e:
-        print(f'[AutoFix] 에러 발생 (서버는 정상 시작): {e}')
-        import traceback
-        traceback.print_exc()
 
 
 if __name__ == '__main__':
