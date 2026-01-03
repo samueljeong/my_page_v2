@@ -994,7 +994,7 @@ SHEET_HEADERS = {
         "thumbnail_copy",    # 썸네일 문구 추천
         # === 영상 자동화 영역 ===
         "상태",              # 준비/대기/처리중/완료/실패
-        "대본",              # ★ GPT-5.2 자동 생성 대본
+        "대본",              # ★ Claude Opus 4.5 자동 생성 대본
         "제목(GPT생성)",     # YouTube SEO 제목
         "썸네일문구(입력)",  # 썸네일 문구
         "공개설정",          # public/private/unlisted

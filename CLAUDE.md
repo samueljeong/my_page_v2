@@ -445,6 +445,7 @@ curl "https://drama-s2ns.onrender.com/api/sheets/create-unified?channel_id_NEWS=
 | 환경변수 | 기본값 | 설명 |
 |---------|-------|------|
 | `VIDEO_PARALLEL_WORKERS` | `1` | 씬 클립 생성 병렬 워커 수 |
+| `OPENROUTER_API_KEY` | - | OpenRouter API 키 (Claude Opus 4.5 대본 생성용) |
 
 ### VIDEO_PARALLEL_WORKERS 설정 가이드
 
@@ -489,6 +490,49 @@ else:
                 text_chunks.append(getattr(content, "text", ""))
     result = "\n".join(text_chunks).strip()
 ```
+
+---
+
+## Claude Opus 4.5 API 사용 가이드 (OpenRouter)
+
+히스토리 파이프라인 대본 생성에 Claude Opus 4.5를 사용합니다.
+OpenRouter를 통해 접근하므로 **OpenAI 호환 API** 사용:
+
+```python
+from openai import OpenAI
+
+# OpenRouter 설정
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+CLAUDE_OPUS_MODEL = "anthropic/claude-opus-4-5-20251101"
+
+client = OpenAI(
+    api_key=os.environ.get("OPENROUTER_API_KEY"),
+    base_url=OPENROUTER_BASE_URL,
+)
+
+response = client.chat.completions.create(
+    model=CLAUDE_OPUS_MODEL,
+    max_tokens=8192,
+    messages=[
+        {"role": "system", "content": "시스템 프롬프트"},
+        {"role": "user", "content": "사용자 프롬프트"}
+    ],
+    temperature=0.7,
+)
+
+# 결과 추출
+text = response.choices[0].message.content or ""
+```
+
+### 비용 (2026-01 기준)
+
+| 항목 | 가격 |
+|------|------|
+| Input (정가) | $15 / 1M tokens |
+| Input (캐시) | $1.5 / 1M tokens (90% 할인) |
+| Output | $75 / 1M tokens |
+
+**Prompt Caching**: System Prompt가 1024 토큰 이상이면 자동 캐싱됨.
 
 ---
 
@@ -957,7 +1001,7 @@ curl -X POST "https://drama-s2ns.onrender.com/api/news/run-pipeline?channel=ECON
 - `scripts/history_pipeline/run.py` - 메인 오케스트레이션
 - `scripts/history_pipeline/config.py` - 시대/주제 설정 (11개 시대), 대본 분량 설정
 - `scripts/history_pipeline/collector.py` - 자료 수집 (4개 공신력 소스)
-- `scripts/history_pipeline/script_generator.py` - GPT-5.2 대본 자동 생성 (12,000~15,000자)
+- `scripts/history_pipeline/script_generator.py` - **Claude Opus 4.5 대본 자동 생성 (OpenRouter, 12,000~15,000자)**
 - `scripts/history_pipeline/sheets.py` - HISTORY 시트 CRUD
 
 **히스토리 파이프라인 워크플로우:**
@@ -967,11 +1011,17 @@ curl -X POST "https://drama-s2ns.onrender.com/api/news/run-pipeline?channel=ECON
    - 다음 에피소드 자료 수집 (Gemini, 한국민족문화대백과, e뮤지엄, 한국사DB)
    - Opus 프롬프트 생성 → 시트 저장 (상태: '준비')
 3. (선택) /api/history/auto-generate 호출 시:
-   - GPT-5.2로 대본 자동 생성 (12,000~15,000자, 약 15분 영상)
+   - Claude Opus 4.5로 대본 자동 생성 (OpenRouter 경유, 12,000~15,000자, 약 15분 영상)
    - 시트 업데이트 (상태: '대본완료')
 4. 사용자가 상태를 '대기'로 변경
 5. /api/sheets/check-and-process가 자동 감지 → 영상 생성 시작
 ```
+
+**대본 생성 모델 (2026-01 업데이트):**
+- 모델: Claude Opus 4.5 (`anthropic/claude-opus-4-5-20251101`)
+- API: OpenRouter (https://openrouter.ai/api/v1)
+- 환경변수: `OPENROUTER_API_KEY`
+- 비용: $15/1M input, $75/1M output (Prompt Caching 시 System Prompt 90% 할인)
 
 **HISTORY 시트 열 구조 (VIDEO_AUTOMATION_HEADERS 포함):**
 ```
