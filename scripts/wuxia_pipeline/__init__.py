@@ -12,7 +12,10 @@ from .config import (
     EXTRA_TAGS,
     SCRIPT_CONFIG,
     EPISODE_TEMPLATES,
+    SHEET_NAME,
     SHEET_HEADERS,
+    COLLECT_HEADERS,
+    VIDEO_AUTOMATION_HEADERS,
 )
 
 from .multi_voice_tts import (
@@ -27,6 +30,14 @@ from .script_generator import (
     generate_youtube_metadata,
 )
 
+from .sheets import (
+    create_wuxia_sheet,
+    add_episode_template,
+    get_pending_episodes,
+    update_episode_status,
+    initialize_sheet_with_templates,
+)
+
 __all__ = [
     # Config
     "SERIES_INFO",
@@ -35,7 +46,10 @@ __all__ = [
     "EXTRA_TAGS",
     "SCRIPT_CONFIG",
     "EPISODE_TEMPLATES",
+    "SHEET_NAME",
     "SHEET_HEADERS",
+    "COLLECT_HEADERS",
+    "VIDEO_AUTOMATION_HEADERS",
     # Multi-voice TTS
     "parse_script_to_segments",
     "generate_multi_voice_tts",
@@ -44,4 +58,10 @@ __all__ = [
     # Script Generator
     "generate_episode_script",
     "generate_youtube_metadata",
+    # Sheets
+    "create_wuxia_sheet",
+    "add_episode_template",
+    "get_pending_episodes",
+    "update_episode_status",
+    "initialize_sheet_with_templates",
 ]

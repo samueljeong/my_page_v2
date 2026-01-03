@@ -22795,6 +22795,19 @@ UNIFIED_SHEETS_CONFIG = {
             "thumbnail_copy",   # 썸네일 문구 추천
         ],
     },
+    "혈영": {
+        "description": "무협 소설 채널 - 혈영 시리즈 (다중 음성 TTS)",
+        "collect_headers": [
+            "episode",          # 에피소드 번호 (EP001, EP002, ...)
+            "title",            # 에피소드 제목
+            "summary",          # 에피소드 요약
+            "characters",       # 등장 캐릭터 (쉼표 구분)
+            "key_events",       # 주요 사건 (줄바꿈 구분)
+            "prev_episode",     # 이전 에피소드 요약 (연결용)
+            "next_preview",     # 다음 에피소드 예고
+            "thumbnail_copy",   # 썸네일 문구
+        ],
+    },
 }
 
 # 영상 자동화 공통 헤더
@@ -22947,6 +22960,58 @@ def api_create_unified_sheets():
             "results": results,
             "message": f"{created_count}개 시트 생성됨"
         })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/sheets/create-wuxia', methods=['GET', 'POST'])
+def api_create_wuxia_sheet():
+    """
+    무협 소설 (혈영) 시트 생성 API
+
+    - 시리즈 제목 "혈영"으로 시트 탭 생성
+    - 에피소드 템플릿 데이터 자동 등록 (5개 에피소드)
+    - 다중 음성 TTS 지원
+
+    파라미터:
+    - channel_id: YouTube 채널 ID (선택)
+    - with_templates: "1"이면 에피소드 템플릿 데이터 자동 등록 (기본: 1)
+
+    예시:
+    - GET /api/sheets/create-wuxia
+    - GET /api/sheets/create-wuxia?channel_id=UCxxx
+    - GET /api/sheets/create-wuxia?with_templates=0  (시트만 생성, 데이터 없음)
+    """
+    print("[WUXIA] ===== create-wuxia 호출됨 =====")
+
+    try:
+        from scripts.wuxia_pipeline.sheets import (
+            create_wuxia_sheet,
+            initialize_sheet_with_templates,
+        )
+        from scripts.wuxia_pipeline.config import SERIES_INFO
+
+        channel_id = request.args.get('channel_id', '')
+        with_templates = request.args.get('with_templates', '1') == '1'
+
+        if with_templates:
+            # 시트 생성 + 템플릿 데이터 등록
+            result = initialize_sheet_with_templates(channel_id)
+        else:
+            # 시트만 생성
+            result = create_wuxia_sheet(channel_id)
+
+        if result.get("ok"):
+            return jsonify({
+                "ok": True,
+                "series": SERIES_INFO["title"],
+                **result
+            })
+        else:
+            return jsonify(result), 400
 
     except Exception as e:
         import traceback

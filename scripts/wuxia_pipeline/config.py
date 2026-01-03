@@ -154,33 +154,43 @@ EPISODE_TEMPLATES = {
 # Google Sheets 설정
 # =====================================================
 
-SHEET_NAME = "WUXIA"  # 시트 탭 이름
+SHEET_NAME = "혈영"  # 시트 탭 이름 (시리즈 제목)
 
-# 시트 헤더 (HISTORY와 유사한 구조)
-SHEET_HEADERS = [
-    "episode",           # EP001, EP002, ...
-    "title",             # 에피소드 제목
-    "summary",           # 에피소드 요약
-    "opus_prompt",       # 대본 생성용 프롬프트
-    "thumbnail_copy",    # 썸네일 문구
-    # === 영상 자동화 헤더 (VIDEO_AUTOMATION_HEADERS) ===
-    "상태",              # 대기/처리중/완료/실패
-    "대본",              # 생성된 대본
-    "제목(GPT생성)",     # 자동 생성 제목
-    "제목(입력)",        # 수동 입력 제목
-    "썸네일문구(입력)",  # 수동 입력 썸네일
-    "공개설정",          # public/private/unlisted
-    "예약시간",          # YouTube 예약 공개 시간
-    "플레이리스트ID",    # YouTube 플레이리스트
-    "음성",              # TTS 음성 설정 (다중 음성은 기본 VOICE_MAP 사용)
-    "영상URL",           # 업로드된 URL
-    "쇼츠URL",           # 쇼츠 URL
-    "제목2",             # 대안 제목
-    "제목3",             # 대안 제목
-    "비용",              # 생성 비용
-    "에러메시지",        # 에러 메시지
-    "작업시간",          # 실행 시간
+# 수집 헤더 (무협 파이프라인 전용)
+COLLECT_HEADERS = [
+    "episode",          # EP001, EP002, ...
+    "title",            # 에피소드 제목
+    "summary",          # 에피소드 요약
+    "characters",       # 등장 캐릭터 (쉼표 구분)
+    "key_events",       # 주요 사건 (줄바꿈 구분)
+    "prev_episode",     # 이전 에피소드 요약 (연결용)
+    "next_preview",     # 다음 에피소드 예고
+    "thumbnail_copy",   # 썸네일 문구
 ]
+
+# 영상 자동화 헤더 (drama_server.py의 VIDEO_AUTOMATION_HEADERS와 동일)
+VIDEO_AUTOMATION_HEADERS = [
+    "상태",             # 대기/처리중/완료/실패
+    "대본",             # 생성된 대본 (다중 음성 태그 포함)
+    "인용링크",         # 유튜브 설명에 포함할 출처
+    "제목(GPT생성)",    # 자동 생성 제목
+    "제목(입력)",       # 수동 입력 제목
+    "썸네일문구(입력)", # 수동 입력 썸네일
+    "공개설정",         # public/private/unlisted
+    "예약시간",         # YouTube 예약 공개 시간
+    "플레이리스트ID",   # YouTube 플레이리스트
+    "음성",             # TTS 음성 (다중 음성은 VOICE_MAP 자동 적용)
+    "영상URL",          # 업로드된 URL
+    "쇼츠URL",          # 쇼츠 URL
+    "제목2",            # 대안 제목
+    "제목3",            # 대안 제목
+    "비용",             # 생성 비용
+    "에러메시지",       # 에러 메시지
+    "작업시간",         # 실행 시간
+]
+
+# 전체 헤더 (수집 + 영상 자동화)
+SHEET_HEADERS = COLLECT_HEADERS + VIDEO_AUTOMATION_HEADERS
 
 # =====================================================
 # 환경변수
