@@ -3544,6 +3544,148 @@ def _execute_natural_search(criteria: dict) -> list:
     return query.all()
 
 
+@app.route('/api/members/rebuild-family-relations', methods=['POST'])
+def api_rebuild_family_relations():
+    """
+    가족 관계 재구축 API (동기화 없이 기존 데이터로 추론)
+
+    기존 parent/child 관계를 기반으로:
+    1. 같은 자녀를 둔 부모들 → 배우자로 연결
+    2. 같은 부모를 둔 자녀들 → 형제로 연결
+    """
+    results = {
+        "spouse_created": 0,
+        "sibling_created": 0
+    }
+
+    try:
+        # 1. 같은 자녀를 둔 부모들을 배우자로 연결
+        app.logger.info("[가족관계 재구축] 부모 배우자 추론 시작...")
+
+        child_relationships = FamilyRelationship.query.filter_by(relationship_type='child').all()
+        child_parents = {}
+        for rel in child_relationships:
+            child_id = rel.member_id
+            parent_id = rel.related_member_id
+            if child_id not in child_parents:
+                child_parents[child_id] = []
+            if parent_id not in child_parents[child_id]:
+                child_parents[child_id].append(parent_id)
+
+        for child_id, parent_ids in child_parents.items():
+            if len(parent_ids) >= 2:
+                for i, p1_id in enumerate(parent_ids):
+                    for p2_id in parent_ids[i+1:]:
+                        existing = FamilyRelationship.query.filter(
+                            db.or_(
+                                db.and_(FamilyRelationship.member_id == p1_id,
+                                       FamilyRelationship.related_member_id == p2_id,
+                                       FamilyRelationship.relationship_type == 'spouse'),
+                                db.and_(FamilyRelationship.member_id == p2_id,
+                                       FamilyRelationship.related_member_id == p1_id,
+                                       FamilyRelationship.relationship_type == 'spouse')
+                            )
+                        ).first()
+
+                        if not existing:
+                            p1 = Member.query.get(p1_id)
+                            p2 = Member.query.get(p2_id)
+                            if p1 and p2:
+                                if p1.gender in ['M', '남', '남성', '남자']:
+                                    detail1, detail2 = '남편', '아내'
+                                else:
+                                    detail1, detail2 = '아내', '남편'
+
+                                db.session.add(FamilyRelationship(
+                                    member_id=p1_id, related_member_id=p2_id,
+                                    relationship_type='spouse', relationship_detail=detail2
+                                ))
+                                db.session.add(FamilyRelationship(
+                                    member_id=p2_id, related_member_id=p1_id,
+                                    relationship_type='spouse', relationship_detail=detail1
+                                ))
+                                results["spouse_created"] += 1
+                                app.logger.info(f"[가족관계] 부모 배우자: {p1.name} ↔ {p2.name}")
+
+        db.session.commit()
+
+        # 2. 같은 부모를 둔 자녀들을 형제로 연결
+        app.logger.info("[가족관계 재구축] 형제 관계 추론 시작...")
+
+        parent_relationships = FamilyRelationship.query.filter_by(relationship_type='parent').all()
+        parent_children = {}
+        for rel in parent_relationships:
+            parent_id = rel.member_id
+            child_id = rel.related_member_id
+            if parent_id not in parent_children:
+                parent_children[parent_id] = []
+            if child_id not in parent_children[parent_id]:
+                parent_children[parent_id].append(child_id)
+
+        for parent_id, child_ids in parent_children.items():
+            if len(child_ids) >= 2:
+                for i, c1_id in enumerate(child_ids):
+                    for c2_id in child_ids[i+1:]:
+                        existing = FamilyRelationship.query.filter(
+                            db.or_(
+                                db.and_(FamilyRelationship.member_id == c1_id,
+                                       FamilyRelationship.related_member_id == c2_id,
+                                       FamilyRelationship.relationship_type == 'sibling'),
+                                db.and_(FamilyRelationship.member_id == c2_id,
+                                       FamilyRelationship.related_member_id == c1_id,
+                                       FamilyRelationship.relationship_type == 'sibling')
+                            )
+                        ).first()
+
+                        if not existing:
+                            c1 = Member.query.get(c1_id)
+                            c2 = Member.query.get(c2_id)
+                            if c1 and c2:
+                                detail1, detail2 = '형제', '형제'
+                                c1_male = c1.gender in ['M', '남', '남성', '남자']
+                                c2_male = c2.gender in ['M', '남', '남성', '남자']
+                                c1_older = True
+                                if c1.birth_date and c2.birth_date:
+                                    c1_older = c1.birth_date < c2.birth_date
+
+                                if c1_male and c2_male:
+                                    detail1 = '형' if not c1_older else '동생'
+                                    detail2 = '형' if c1_older else '동생'
+                                elif not c1_male and not c2_male:
+                                    detail1 = '언니' if not c1_older else '동생'
+                                    detail2 = '언니' if c1_older else '동생'
+                                elif c1_male:
+                                    detail1 = '오빠' if not c1_older else '남동생'
+                                    detail2 = '누나' if c1_older else '여동생'
+                                else:
+                                    detail1 = '누나' if not c1_older else '여동생'
+                                    detail2 = '오빠' if c1_older else '남동생'
+
+                                db.session.add(FamilyRelationship(
+                                    member_id=c1_id, related_member_id=c2_id,
+                                    relationship_type='sibling', relationship_detail=detail2
+                                ))
+                                db.session.add(FamilyRelationship(
+                                    member_id=c2_id, related_member_id=c1_id,
+                                    relationship_type='sibling', relationship_detail=detail1
+                                ))
+                                results["sibling_created"] += 1
+                                app.logger.info(f"[가족관계] 형제: {c1.name} ↔ {c2.name}")
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"가족 관계 재구축 완료: 배우자 {results['spouse_created']}쌍, 형제 {results['sibling_created']}쌍 생성",
+            "results": results
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"[가족관계 재구축] 오류: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/members/<int:member_id>', methods=['GET'])
 def api_get_member(member_id):
     """교인 상세 조회 API"""
