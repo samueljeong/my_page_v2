@@ -1,13 +1,15 @@
 """
-무협 소설 대본 자동 생성 모듈 (Claude Opus 4.5 via OpenRouter)
+무협 소설 대본 + 이미지 프롬프트 통합 생성 모듈 (Claude Opus 4.5 via OpenRouter)
 
 특징:
 - 다중 음성 TTS용 태그 기반 대본 형식
-- [나레이션], [무영], [설하] 등 캐릭터별 태그
-- 오디오북 스타일의 몰입감 있는 스토리텔링
+- 대본 생성과 동시에 씬별 이미지 프롬프트 생성
+- 썸네일 프롬프트 + YouTube 메타데이터 통합 출력
 """
 
 import os
+import json
+import re
 from typing import Dict, Any, Optional, List
 
 from openai import OpenAI
@@ -30,21 +32,53 @@ SCRIPT_TARGET_LENGTH = SCRIPT_CONFIG.get("target_chars", 13000)
 SCRIPT_MIN_LENGTH = SCRIPT_CONFIG.get("min_chars", 11000)
 SCRIPT_MAX_LENGTH = SCRIPT_CONFIG.get("max_chars", 15000)
 
+# 씬당 이미지 수 (대본 길이에 따라 조정)
+IMAGES_PER_EPISODE = 8
+
 
 # ============================================================
-# ★★★ MASTER SYSTEM PROMPT - 무협 소설 스타일 ★★★
+# ★★★ MASTER SYSTEM PROMPT - 대본 + 이미지 통합 ★★★
 # ============================================================
-MASTER_SYSTEM_PROMPT = f"""당신은 한국 무협 소설의 베테랑 작가입니다.
+MASTER_SYSTEM_PROMPT = f"""당신은 한국 무협 소설의 베테랑 작가이자 영상 콘텐츠 기획자입니다.
 시리즈명: {SERIES_INFO['title']} ({SERIES_INFO['title_en']})
 주인공: {SERIES_INFO['protagonist']}
 여주인공: {SERIES_INFO.get('heroine', '설하')}
 
-목표: 시청자가 다음 화가 기다려지는 몰입감 있는 오디오북 대본 작성
+목표: 오디오북 대본 + 씬별 이미지 프롬프트 + 썸네일/YouTube 메타데이터를 한 번에 생성
 
 ════════════════════════════════════════
-★★★ 대본 형식 (필수!) ★★★
+★★★ 출력 형식: JSON ★★★
 ════════════════════════════════════════
-모든 대사와 나레이션은 반드시 [태그] 형식으로 작성:
+반드시 아래 JSON 형식으로 출력하세요:
+
+```json
+{{
+  "script": "[나레이션] 대본 내용...\n\n[무영] \"대사\"...",
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "scene_title": "씬 제목 (한글)",
+      "narration_preview": "이 씬의 나레이션 첫 50자...",
+      "image_prompt": "English image prompt for this scene..."
+    }}
+  ],
+  "thumbnail": {{
+    "text_line1": "메인 문구 (8자 이내)",
+    "text_line2": "서브 문구 (10자 이내)",
+    "image_prompt": "English thumbnail image prompt..."
+  }},
+  "youtube": {{
+    "title": "영상 제목 (50자 이내)",
+    "description": "영상 설명 (300자)",
+    "tags": ["태그1", "태그2", "태그3"]
+  }}
+}}
+```
+
+════════════════════════════════════════
+★★★ 대본 형식 규칙 ★★★
+════════════════════════════════════════
+모든 대사와 나레이션은 [태그] 형식:
 
 [나레이션] 어느 깊은 밤, 산중의 오두막에서 한 청년이 잠에서 깨어났다.
 
@@ -55,64 +89,71 @@ MASTER_SYSTEM_PROMPT = f"""당신은 한국 무협 소설의 베테랑 작가입
 [노인] "젊은이, 아직 깨어 있었군."
 
 ★ 사용 가능한 태그:
-  - [나레이션] : 상황 설명, 장면 전환, 인물 소개
+  - [나레이션] : 상황 설명, 장면 전환
   - [무영] : 주인공 대사
-  - [설하] : 여주인공 대사 (4화 이후 등장)
+  - [설하] : 여주인공 대사 (4화 이후)
   - [노인] : 스승 대사
   - [각주] : 조연 대사
   - [악역] : 적대 인물 대사
-  - [남자] [남자1] [남자2] : 남자 엑스트라
-  - [여자] [여자1] [여자2] : 여자 엑스트라
+  - [남자] [여자] : 엑스트라
 
 ════════════════════════════════════════
-★ 핵심 규칙 - 주인공 소개 방식
+★★★ 이미지 프롬프트 규칙 (영문 필수!) ★★★
 ════════════════════════════════════════
-✅ 주요 인물(무영, 설하, 노인, 각주, 악역)은 나레이션이 먼저 소개:
-  [나레이션] 무영이 고개를 들며 말했다.
-  [무영] "누구냐!"
+모든 image_prompt는 영어로 작성:
 
-✅ 엑스트라(남자, 여자)는 나레이션 없이 바로 대사:
-  [남자] 이봐! 거기 서!
-  [여자] 도망쳐요!
+**스타일 고정**:
+- "Chinese martial arts wuxia illustration style"
+- "Ink wash painting with vibrant accent colors"
+- "Dynamic action poses, flowing robes"
+- "Ancient Chinese fantasy setting"
+- "Dramatic cinematic lighting"
+- "16:9 aspect ratio, high resolution"
+- "No text, no letters, no words"
+
+**캐릭터 묘사**:
+- 무영: "Young Korean man in his early 20s, short black hair, sharp eyes, wearing worn gray martial arts robes, stoic expression"
+- 설하: "Beautiful young Korean woman, long flowing black hair, elegant white hanbok-style robes, graceful posture, stunning beauty that captivates all"
+- 노인: "Elderly Asian master with long white beard, wise eyes, wearing faded brown robes, mysterious aura"
+
+**씬별 프롬프트 예시**:
+- 액션씬: "Dynamic sword fight scene, [character], blade glowing with inner energy, motion blur, sparks flying, dramatic low angle shot"
+- 감정씬: "Close-up portrait of [character], emotional expression, soft moonlight, serene atmosphere"
+- 풍경씬: "Vast mountain landscape, ancient Chinese temple on cliff, misty clouds, golden sunset"
 
 ════════════════════════════════════════
-★ 무협 소설 문체
+★★★ 썸네일 규칙 ★★★
 ════════════════════════════════════════
-• 생생한 액션 묘사: 검광, 권경, 보법 등 무공 장면
-• 긴장감 있는 전개: 위기, 반전, 각성
-• 캐릭터 매력: 무영의 과묵함, 설하의 우아함, 노인의 깊은 지혜
-• 무협 용어 적절히 사용: 내공, 경맥, 기혈, 경공, 암기 등
+- text_line1: 강렬한 키워드 (8자 이내) - 예: "절체절명", "각성의 순간"
+- text_line2: 호기심 유발 (10자 이내) - 예: "노비에서 고수로"
+- image_prompt: 가장 임팩트 있는 장면, 인물 클로즈업 권장
 
 ════════════════════════════════════════
 ★ 캐릭터 설정
 ════════════════════════════════════════
 【무영】
-- 노비 출신의 청년 (20대 초반)
-- 과묵하고 냉정하지만 속은 따뜻함
+- 노비 출신 청년 (20대 초반), 과묵하고 냉정
 - 의문의 노인에게 절세무공 전수받음
-- 여자에게 관심 없음 (하지만 설하만은 예외적으로 곁에 둠)
+- 여자에게 관심 없음
 
 【설하】 (4화부터 등장)
 - 명문 세가의 영애, 절세미녀
 - 무영에게 목숨을 구해져 은혜를 갚겠다며 따라다님
-- 우아하고 총명하지만 때로는 당찬 면도 있음
-- 모든 남자가 부러워하지만, 무영만은 무관심
+- 우아하고 총명함
 
 【노인】
 - 무영의 스승, 정체불명의 고수
-- 깊은 지혜와 절세무공의 소유자
-- 무영에게 무공을 전수하고 떠남 (3화 이후)
+- 깊은 지혜와 절세무공
 
 ════════════════════════════════════════
 ★ 절대 금지
 ════════════════════════════════════════
 ❌ 태그 없는 대사/나레이션
-❌ 메타 라벨 ("Part 1", "장면 전환" 등)
-❌ 격식체 ("~습니다", "~입니다") - 편안한 구어체만
-❌ 감정 과장 ("놀랍게도", "충격적으로")
-❌ 지나친 설명 (Show, don't tell)
+❌ 한글 이미지 프롬프트 (영문만!)
+❌ 격식체 ("~습니다") - 구어체만
+❌ 감정 과장 ("놀랍게도")
 
-대본만 출력하세요. [태그] 형식의 대본만 제공하세요."""
+반드시 위 JSON 형식으로만 출력하세요."""
 
 
 def generate_episode_script(
@@ -125,21 +166,15 @@ def generate_episode_script(
     next_episode_preview: str = None,
 ) -> Dict[str, Any]:
     """
-    에피소드 대본 생성
-
-    Args:
-        episode: 에피소드 번호
-        title: 에피소드 제목 (없으면 템플릿에서 가져옴)
-        summary: 에피소드 요약 (없으면 템플릿에서 가져옴)
-        key_events: 주요 사건 목록
-        characters: 등장 캐릭터 목록
-        prev_episode_summary: 이전 에피소드 요약
-        next_episode_preview: 다음 에피소드 예고
+    에피소드 대본 + 이미지 프롬프트 통합 생성
 
     Returns:
         {
             "ok": True,
-            "script": "...",  # 태그 형식 대본
+            "script": "...",           # 태그 형식 대본
+            "scenes": [...],           # 씬별 이미지 프롬프트
+            "thumbnail": {...},        # 썸네일 정보
+            "youtube": {...},          # YouTube 메타데이터
             "char_count": 13500,
             "cost": 0.15
         }
@@ -190,8 +225,9 @@ def generate_episode_script(
 [에피소드 정보]
 - 제목: {title}
 - 요약: {summary}
+- 시리즈: {SERIES_INFO['title']} (무협 오디오북)
 
-[등장 캐릭터 & TTS 음성]
+[등장 캐릭터]
 {char_info}
 
 [주요 사건]
@@ -201,35 +237,32 @@ def generate_episode_script(
 {next_context}
 
 ════════════════════════════════════════
-[대본 구조]
+[요청 사항]
 ════════════════════════════════════════
-1. 오프닝 (1,500자)
-   - 이전 화 연결 (있으면)
-   - 몰입감 있는 도입
-   - 첫 장면 설정
 
-2. 전개 (4,000자)
-   - 주요 사건 1, 2 전개
-   - 캐릭터 대화와 액션
-   - 긴장감 조성
+1. **대본 (script)**
+   - 분량: {SCRIPT_MIN_LENGTH:,}~{SCRIPT_MAX_LENGTH:,}자
+   - 형식: [태그] 대사/나레이션
+   - 구조: 오프닝 → 전개 → 클라이맥스 → 마무리
 
-3. 클라이맥스 (4,500자)
-   - 주요 사건 3, 4 전개
-   - 액션 장면 또는 감정적 절정
-   - 반전 또는 위기
+2. **씬 이미지 (scenes)**
+   - 총 {IMAGES_PER_EPISODE}개 씬으로 분할
+   - 각 씬별 영문 이미지 프롬프트 (wuxia illustration style)
+   - scene_title은 한글, image_prompt는 영문
 
-4. 마무리 (3,000자)
-   - 사건 마무리
-   - 다음 화 예고 (여운 남기기)
-   - 기대감 조성
+3. **썸네일 (thumbnail)**
+   - 가장 임팩트 있는 장면
+   - text_line1 (8자 이내), text_line2 (10자 이내)
+   - 영문 이미지 프롬프트
 
-════════════════════════════════════════
-★★★ 분량: 최소 {SCRIPT_MIN_LENGTH:,}자, 권장 {SCRIPT_TARGET_LENGTH:,}자 ★★★
-★★★ 반드시 [태그] 형식으로 모든 대사/나레이션 작성 ★★★
+4. **YouTube 메타데이터 (youtube)**
+   - title: 50자 이내, 호기심 유발
+   - description: 300자
+   - tags: 5~10개
 
-대본만 출력하세요:"""
+위 JSON 형식으로 출력하세요."""
 
-    print(f"[WUXIA-SCRIPT] === 제{episode}화 대본 생성 시작 ===")
+    print(f"[WUXIA-SCRIPT] === 제{episode}화 통합 생성 시작 ===")
     print(f"[WUXIA-SCRIPT] 제목: {title}")
     print(f"[WUXIA-SCRIPT] 캐릭터: {', '.join(characters)}")
 
@@ -241,29 +274,47 @@ def generate_episode_script(
 
         response = client.chat.completions.create(
             model=CLAUDE_OPUS_MODEL,
-            max_tokens=16384,  # 긴 대본을 위해 충분한 토큰
+            max_tokens=20000,  # 대본 + 이미지 프롬프트 + 메타데이터
             messages=[
                 {"role": "system", "content": MASTER_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.8,  # 창의성을 위해 약간 높게
+            temperature=0.8,
         )
 
-        script = response.choices[0].message.content or ""
-        script = script.strip()
+        result_text = response.choices[0].message.content or ""
+        result_text = result_text.strip()
 
-        # 비용 계산 (Claude Opus 4.5)
+        # 비용 계산
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
-
-        # Prompt Caching 가정 (System Prompt 90% 할인)
-        input_cost = input_tokens * 1.5 / 1_000_000  # 캐싱 적용 시
+        input_cost = input_tokens * 1.5 / 1_000_000  # Prompt Caching 가정
         output_cost = output_tokens * 75 / 1_000_000
         total_cost = input_cost + output_cost
 
+        # JSON 파싱
+        parsed = _parse_json_response(result_text)
+
+        if not parsed:
+            print(f"[WUXIA-SCRIPT] JSON 파싱 실패, 원본 텍스트 사용")
+            # 폴백: 원본 텍스트를 대본으로 사용
+            return {
+                "ok": True,
+                "script": result_text,
+                "scenes": [],
+                "thumbnail": {},
+                "youtube": {"title": f"[{SERIES_INFO['title']}] {title}", "description": summary, "tags": []},
+                "char_count": len(result_text.replace(" ", "").replace("\n", "")),
+                "cost": round(total_cost, 4),
+                "episode": episode,
+                "title": title,
+            }
+
+        script = parsed.get("script", "")
         char_count = len(script.replace(" ", "").replace("\n", ""))
 
         print(f"[WUXIA-SCRIPT] 생성 완료: {char_count:,}자")
+        print(f"[WUXIA-SCRIPT] 씬 이미지: {len(parsed.get('scenes', []))}개")
         print(f"[WUXIA-SCRIPT] 비용: ${total_cost:.4f}")
 
         # 분량 부족 시 이어쓰기
@@ -280,6 +331,9 @@ def generate_episode_script(
         return {
             "ok": True,
             "script": script,
+            "scenes": parsed.get("scenes", []),
+            "thumbnail": parsed.get("thumbnail", {}),
+            "youtube": parsed.get("youtube", {}),
             "char_count": char_count,
             "cost": round(total_cost, 4),
             "episode": episode,
@@ -288,7 +342,29 @@ def generate_episode_script(
 
     except Exception as e:
         print(f"[WUXIA-SCRIPT] 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return {"ok": False, "error": str(e)}
+
+
+def _parse_json_response(text: str) -> Optional[Dict]:
+    """JSON 응답 파싱 (마크다운 코드블록 처리)"""
+    # 마크다운 코드블록 제거
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # 중첩 JSON 찾기
+        match = re.search(r'\{[\s\S]*\}', text)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+    return None
 
 
 def _continue_script(client: OpenAI, current_script: str, current_length: int) -> Dict[str, Any]:
@@ -307,7 +383,7 @@ def _continue_script(client: OpenAI, current_script: str, current_length: int) -
 
 ★ 위 대본에 이어서 자연스럽게 작성하세요.
 ★ 동일한 [태그] 형식 유지
-★ 스토리가 자연스럽게 이어지도록
+★ 대본 텍스트만 출력 (JSON 아님)
 
 이어서 작성:"""
 
@@ -316,7 +392,7 @@ def _continue_script(client: OpenAI, current_script: str, current_length: int) -
             model=CLAUDE_OPUS_MODEL,
             max_tokens=8192,
             messages=[
-                {"role": "system", "content": MASTER_SYSTEM_PROMPT},
+                {"role": "system", "content": "무협 소설 작가입니다. [태그] 형식으로 대본을 이어 작성합니다."},
                 {"role": "user", "content": continue_prompt}
             ],
             temperature=0.8,
@@ -347,13 +423,12 @@ def _continue_script(client: OpenAI, current_script: str, current_length: int) -
 
 def generate_youtube_metadata(script: str, episode: int, title: str) -> Dict[str, Any]:
     """
-    YouTube 메타데이터 생성 (제목, 설명, 썸네일 문구)
+    YouTube 메타데이터 생성 (기존 호환용 - 통합 생성 권장)
     """
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         return {"ok": False, "error": "OPENROUTER_API_KEY 없음"}
 
-    # 대본에서 핵심 장면 추출 (앞부분)
     script_preview = script[:2000] if len(script) > 2000 else script
 
     prompt = f"""[{SERIES_INFO['title']} 제{episode}화: {title}]
@@ -361,22 +436,15 @@ def generate_youtube_metadata(script: str, episode: int, title: str) -> Dict[str
 대본 미리보기:
 {script_preview}
 
-아래 형식으로 YouTube 메타데이터를 생성하세요:
+아래 JSON 형식으로 YouTube 메타데이터를 생성하세요:
 
-1. 영상 제목 (50자 이내)
-   - 궁금증 유발, 클릭 욕구
-   - 예: "[혈영] 노비 청년이 강호 최강이 되기까지 | 1화"
-
-2. 영상 설명 (300자)
-   - 줄거리 힌트
-   - 시청 유도 문구
-
-3. 썸네일 문구 (2줄, 각 10자 이내)
-   - Line1: 강렬한 키워드
-   - Line2: 호기심 자극
-
-JSON 형식으로만 출력:
-{{"title": "...", "description": "...", "thumbnail_line1": "...", "thumbnail_line2": "..."}}"""
+{{
+  "title": "영상 제목 (50자 이내, 호기심 유발)",
+  "description": "영상 설명 (300자)",
+  "thumbnail_line1": "썸네일 메인 문구 (8자 이내)",
+  "thumbnail_line2": "썸네일 서브 문구 (10자 이내)",
+  "tags": ["태그1", "태그2", "태그3"]
+}}"""
 
     try:
         client = OpenAI(
@@ -394,15 +462,10 @@ JSON 형식으로만 출력:
         )
 
         result_text = response.choices[0].message.content or ""
+        parsed = _parse_json_response(result_text)
 
-        # JSON 파싱
-        import json
-        import re
-
-        json_match = re.search(r'\{[^}]+\}', result_text, re.DOTALL)
-        if json_match:
-            metadata = json.loads(json_match.group())
-            return {"ok": True, **metadata}
+        if parsed:
+            return {"ok": True, **parsed}
 
         return {"ok": False, "error": "JSON 파싱 실패"}
 
@@ -415,11 +478,8 @@ JSON 형식으로만 출력:
 # =====================================================
 
 if __name__ == "__main__":
-    import json
+    print("=== 무협 대본 + 이미지 통합 생성 테스트 ===\n")
 
-    print("=== 무협 대본 생성 테스트 ===\n")
-
-    # 1화 테스트
     result = generate_episode_script(
         episode=1,
         prev_episode_summary=None,
@@ -429,8 +489,24 @@ if __name__ == "__main__":
     if result.get("ok"):
         print(f"\n제목: {result['title']}")
         print(f"분량: {result['char_count']:,}자")
+        print(f"씬 이미지: {len(result.get('scenes', []))}개")
         print(f"비용: ${result['cost']:.4f}")
-        print("\n=== 대본 미리보기 (첫 1000자) ===")
-        print(result['script'][:1000])
+
+        print("\n=== 대본 미리보기 (첫 500자) ===")
+        print(result['script'][:500])
+
+        print("\n=== 씬 이미지 프롬프트 ===")
+        for scene in result.get("scenes", [])[:3]:
+            print(f"  Scene {scene.get('scene_number')}: {scene.get('scene_title')}")
+            print(f"    → {scene.get('image_prompt', '')[:80]}...")
+
+        print("\n=== 썸네일 ===")
+        thumb = result.get("thumbnail", {})
+        print(f"  {thumb.get('text_line1')} / {thumb.get('text_line2')}")
+        print(f"  → {thumb.get('image_prompt', '')[:80]}...")
+
+        print("\n=== YouTube ===")
+        yt = result.get("youtube", {})
+        print(f"  제목: {yt.get('title')}")
     else:
         print(f"오류: {result.get('error')}")
