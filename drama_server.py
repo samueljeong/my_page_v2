@@ -22486,13 +22486,14 @@ def run_wuxia_video_pipeline(
         ep_num = row_data.get('episode_num', 1)
         ep_title = row_data.get('title', row_data.get('제목', '')).strip() or '무제'
 
-        # 기본 제목 설정 (검색 최적화)
-        # 형식: [무협 오디오북 1화] 혈영 - 운명의 시작 | 웹소설 낭독
+        # 기본 제목 설정 (한자 병기 + 검색 최적화)
+        # 형식: [혈영(血影)] 제N화: 부제목 | 무협 오디오북
+        # 벤치마킹: 무림일초 채널 스타일
         if not title:
-            title = f"[무협 오디오북 {ep_num}화] 혈영 - {ep_title} | 웹소설 낭독"
-        elif "[혈영]" in title and "화]" not in title:
-            # 기존 형식 → 검색 최적화 형식으로 변환
-            title = f"[무협 오디오북 {ep_num}화] 혈영 - {ep_title} | 웹소설 낭독"
+            title = f"[혈영(血影)] 제{ep_num}화: {ep_title} | 무협 오디오북"
+        elif "[혈영]" in title or "무협 오디오북" not in title:
+            # 기존 형식 → 한자 병기 형식으로 변환
+            title = f"[혈영(血影)] 제{ep_num}화: {ep_title} | 무협 오디오북"
 
         print(f"[WUXIA-VIDEO] 대본: {len(script)}자")
         print(f"[WUXIA-VIDEO] 제목: {title}")
@@ -22565,94 +22566,54 @@ def run_wuxia_video_pipeline(
         generate_srt_from_timeline(timeline, srt_path)
         print(f"[WUXIA-VIDEO] 자막 완료: {len(timeline)}개 항목")
 
-        # ========== 4. 이미지 생성 (무협 스타일 강제) ==========
-        print(f"\n[WUXIA-VIDEO] 4. 이미지 생성 (무협 스타일)...")
+        # ========== 4. 시리즈 대표 이미지 (A안: 1개 재사용) ==========
+        print(f"\n[WUXIA-VIDEO] 4. 시리즈 대표 이미지 준비 (A안)...")
 
-        # 씬 수 결정 (대본 길이 기반)
-        image_count, estimated_minutes = get_image_count_by_script(len(script))
-        print(f"[WUXIA-VIDEO] 이미지 {image_count}개 생성 예정")
+        # config에서 시리즈 이미지 설정 가져오기
+        from scripts.wuxia_pipeline.config import THUMBNAIL_CONFIG
+        series_image_path = THUMBNAIL_CONFIG.get("series_image_path", "static/images/wuxia/hyulyoung_series.png")
+        series_image_prompt = THUMBNAIL_CONFIG.get("series_image_prompt", "")
 
-        # 이미지 프롬프트에 무협 스타일 강제 추가
-        wuxia_style_prefix = IMAGE_STYLE.get('base_style', '')
-        wuxia_negative = IMAGE_STYLE.get('negative_prompt', '')
+        # 디렉토리 생성
+        os.makedirs(os.path.dirname(series_image_path), exist_ok=True)
 
-        # 대본에서 씬 분할 (간단한 분할)
-        # [나레이션] 태그 기준으로 분할
-        scene_texts = []
-        current_scene = []
-        for line in script.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            current_scene.append(line)
-            # 일정 길이마다 씬 분할
-            if len('\n'.join(current_scene)) > len(script) // image_count:
-                scene_texts.append('\n'.join(current_scene))
-                current_scene = []
-        if current_scene:
-            scene_texts.append('\n'.join(current_scene))
+        # 시리즈 대표 이미지 확인/생성
+        if os.path.exists(series_image_path):
+            # ★ 기존 이미지 재사용 (비용 $0)
+            print(f"[WUXIA-VIDEO] ✅ 시리즈 이미지 재사용: {series_image_path}")
+            main_image_path = series_image_path
+        else:
+            # ★ 최초 1회만 생성
+            print(f"[WUXIA-VIDEO] 시리즈 이미지 없음 → 1회 생성 중...")
+            wuxia_negative = IMAGE_STYLE.get('negative_prompt', '')
 
-        # 씬 수 조정
-        while len(scene_texts) < image_count and scene_texts:
-            # 가장 긴 씬을 분할
-            longest_idx = max(range(len(scene_texts)), key=lambda i: len(scene_texts[i]))
-            longest = scene_texts.pop(longest_idx)
-            mid = len(longest) // 2
-            scene_texts.insert(longest_idx, longest[:mid])
-            scene_texts.insert(longest_idx + 1, longest[mid:])
-
-        scene_texts = scene_texts[:image_count]
-
-        # 이미지 생성
-        image_paths = []
-        for i, scene_text in enumerate(scene_texts):
-            print(f"[WUXIA-VIDEO] 씬 {i+1}/{len(scene_texts)} 이미지 생성 중...")
-
-            # 씬에서 등장 캐릭터 추출
-            characters_in_scene = []
-            for char_name in CHARACTER_APPEARANCES.keys():
-                if f"[{char_name}]" in scene_text:
-                    characters_in_scene.append(char_name)
-
-            # 캐릭터 외모 설명 추가
-            char_desc = ""
-            for char in characters_in_scene[:2]:  # 최대 2명
-                if char in CHARACTER_APPEARANCES:
-                    char_desc += CHARACTER_APPEARANCES[char] + ", "
-
-            # 씬 내용에서 프롬프트 힌트 추출
-            scene_keywords = []
-            if "전투" in scene_text or "검" in scene_text or "대결" in scene_text:
-                scene_keywords.append(IMAGE_STYLE.get('action_style', ''))
-            if "눈물" in scene_text or "슬픔" in scene_text or "마음" in scene_text:
-                scene_keywords.append(IMAGE_STYLE.get('emotional_style', ''))
-            if "산" in scene_text or "숲" in scene_text or "하늘" in scene_text:
-                scene_keywords.append(IMAGE_STYLE.get('landscape_style', ''))
-
-            # 최종 프롬프트 구성
-            final_prompt = f"{wuxia_style_prefix}, {char_desc} {' '.join(scene_keywords)}".strip(', ')
-
-            # 이미지 생성 (기존 함수 사용)
             try:
                 img_result = generate_scene_image_gemini(
-                    prompt=final_prompt,
+                    prompt=series_image_prompt,
                     negative_prompt=wuxia_negative,
-                    scene_index=i,
-                    output_dir=f"outputs/wuxia/images/{episode_id}"
+                    scene_index=0,
+                    output_dir=os.path.dirname(series_image_path)
                 )
 
                 if img_result.get("ok"):
-                    image_paths.append(img_result.get("image_path"))
+                    # 생성된 이미지를 시리즈 이미지 경로로 복사
+                    generated_path = img_result.get("image_path")
+                    import shutil
+                    shutil.copy(generated_path, series_image_path)
+                    main_image_path = series_image_path
                     total_cost += img_result.get("cost", 0.02)
+                    print(f"[WUXIA-VIDEO] ✅ 시리즈 이미지 생성 완료: {series_image_path}")
+                    print(f"[WUXIA-VIDEO] ⚠️ Git 커밋 필요: git add {series_image_path}")
                 else:
-                    print(f"[WUXIA-VIDEO] ⚠️ 씬 {i+1} 이미지 생성 실패: {img_result.get('error')}")
-                    # 폴백: 기본 이미지 사용
-                    image_paths.append(None)
+                    print(f"[WUXIA-VIDEO] ⚠️ 이미지 생성 실패, 기본 이미지 사용")
+                    main_image_path = None
             except Exception as img_err:
-                print(f"[WUXIA-VIDEO] ⚠️ 씬 {i+1} 이미지 예외: {img_err}")
-                image_paths.append(None)
+                print(f"[WUXIA-VIDEO] ⚠️ 이미지 예외: {img_err}")
+                main_image_path = None
 
-        print(f"[WUXIA-VIDEO] 이미지 생성 완료: {len([p for p in image_paths if p])}개 성공")
+        # 이미지 리스트 (A안: 1개만)
+        image_paths = [main_image_path] if main_image_path else []
+        print(f"[WUXIA-VIDEO] 영상용 이미지: {len(image_paths)}개")
 
         # ========== 5. BGM 선택 (무협 전용) ==========
         print(f"\n[WUXIA-VIDEO] 5. BGM 선택 (무협 전용)...")
@@ -22710,8 +22671,8 @@ def run_wuxia_video_pipeline(
             sheets_update_cell_by_header(service, sheet_id, sheet_name, row_index, col_map, '에러메시지', error_msg)
             return {"ok": False, "error": error_msg, "video_url": None, "cost": total_cost}
 
-        # ========== 7. 무협 전용 썸네일 생성 ==========
-        print(f"\n[WUXIA-VIDEO] 7. 무협 전용 썸네일 생성...")
+        # ========== 7. 시리즈 통일 썸네일 생성 (A안) ==========
+        print(f"\n[WUXIA-VIDEO] 7. 시리즈 통일 썸네일 생성 (A안)...")
 
         thumbnail_path = None
         try:
@@ -22721,32 +22682,15 @@ def run_wuxia_video_pipeline(
             thumbnail_dir = f"outputs/wuxia/thumbnails"
             os.makedirs(thumbnail_dir, exist_ok=True)
 
-            # 썸네일 문구 (시트에서 가져오거나 기본값)
-            thumbnail_text_raw = thumbnail_text or f"혈영 {ep_num}화\n{ep_title}"
-            thumbnail_lines = thumbnail_text_raw.replace('\\n', '\n').split('\n')
+            # ★ 시리즈 대표 이미지 재사용 (이미 4단계에서 준비됨)
+            if main_image_path and os.path.exists(main_image_path):
+                base_thumbnail = main_image_path
+                print(f"[WUXIA-VIDEO] ✅ 시리즈 이미지 재사용 (비용 $0)")
+            else:
+                print(f"[WUXIA-VIDEO] ⚠️ 시리즈 이미지 없음, 썸네일 생성 스킵")
+                base_thumbnail = None
 
-            # 무협 스타일 썸네일 이미지 생성
-            wuxia_thumbnail_prompt = (
-                "Traditional Korean wuxia martial arts manhwa illustration, "
-                "dramatic close-up of young Korean martial artist with intense expression, "
-                "wearing traditional hemp martial arts robes, "
-                "ink wash painting style with vibrant accent colors, "
-                "cinematic lighting, misty mountain background, "
-                "16:9 YouTube thumbnail composition, "
-                "NO text NO letters NO writing, high quality masterpiece"
-            )
-
-            img_result = generate_scene_image_gemini(
-                prompt=wuxia_thumbnail_prompt,
-                negative_prompt=wuxia_negative,
-                scene_index=99,  # 썸네일용
-                output_dir=thumbnail_dir
-            )
-
-            if img_result.get("ok"):
-                base_thumbnail = img_result.get("image_path")
-                total_cost += img_result.get("cost", 0.02)
-
+            if base_thumbnail:
                 # PIL로 텍스트 오버레이
                 img = Image.open(base_thumbnail)
                 if img.mode != 'RGBA':
@@ -22760,48 +22704,67 @@ def run_wuxia_video_pipeline(
                 if not os.path.exists(font_path):
                     font_path = "static/fonts/NotoSansKR-Bold.ttf"
 
-                # 메인 폰트 (큰 글씨)
+                # config에서 텍스트 스타일 가져오기
+                text_style = THUMBNAIL_CONFIG.get("text_style", {})
+                series_title = text_style.get("series_title", "혈영 [血影]")
+                series_color = text_style.get("series_font_color", (255, 215, 0))
+                episode_color = text_style.get("episode_font_color", (255, 255, 255))
+                outline_color = text_style.get("outline_color", (0, 0, 0))
+                outline_width = text_style.get("outline_width", 4)
+
+                # 썸네일 텍스트 구성
+                # Line 1: 시리즈명 (금색)
+                # Line 2: 에피소드 정보 (흰색)
+                thumbnail_lines = [
+                    series_title,
+                    f"제{ep_num}화: {ep_title}"
+                ]
+
+                # 폰트 크기
                 try:
-                    font_size = int(height * 0.12)  # 썸네일 높이의 12%
-                    font = ImageFont.truetype(font_path, font_size)
+                    title_font_size = int(height * 0.10)
+                    episode_font_size = int(height * 0.08)
+                    title_font = ImageFont.truetype(font_path, title_font_size)
+                    episode_font = ImageFont.truetype(font_path, episode_font_size)
                 except:
-                    font = ImageFont.load_default()
-                    font_size = 40
+                    title_font = ImageFont.load_default()
+                    episode_font = ImageFont.load_default()
+                    title_font_size = 40
+                    episode_font_size = 32
 
-                # 텍스트 위치 계산 (중앙 하단)
-                total_text_height = len(thumbnail_lines) * (font_size + 10)
-                y_start = height - total_text_height - int(height * 0.15)
+                # 텍스트 위치 계산 (하단 중앙)
+                y_start = height - int(height * 0.25)
 
-                for i, line in enumerate(thumbnail_lines[:3]):  # 최대 3줄
-                    line = line.strip()
-                    if not line:
-                        continue
+                # 시리즈명 (금색)
+                line1 = thumbnail_lines[0]
+                bbox1 = draw.textbbox((0, 0), line1, font=title_font)
+                x1 = (width - (bbox1[2] - bbox1[0])) // 2
+                y1 = y_start
 
-                    # 텍스트 크기 계산
-                    bbox = draw.textbbox((0, 0), line, font=font)
-                    text_width = bbox[2] - bbox[0]
-                    x = (width - text_width) // 2
-                    y = y_start + i * (font_size + 15)
+                # 테두리
+                for dx in range(-outline_width, outline_width + 1):
+                    for dy in range(-outline_width, outline_width + 1):
+                        if dx != 0 or dy != 0:
+                            draw.text((x1 + dx, y1 + dy), line1, font=title_font, fill=(*outline_color, 255))
+                draw.text((x1, y1), line1, font=title_font, fill=(*series_color, 255))
 
-                    # 검은색 테두리 (가독성)
-                    for dx in [-3, -2, 0, 2, 3]:
-                        for dy in [-3, -2, 0, 2, 3]:
-                            draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 255))
+                # 에피소드 정보 (흰색)
+                line2 = thumbnail_lines[1]
+                bbox2 = draw.textbbox((0, 0), line2, font=episode_font)
+                x2 = (width - (bbox2[2] - bbox2[0])) // 2
+                y2 = y1 + title_font_size + 15
 
-                    # 흰색 또는 금색 텍스트
-                    if i == 0:
-                        text_color = (255, 215, 0, 255)  # 금색 (제목)
-                    else:
-                        text_color = (255, 255, 255, 255)  # 흰색
-
-                    draw.text((x, y), line, font=font, fill=text_color)
+                # 테두리
+                for dx in range(-outline_width, outline_width + 1):
+                    for dy in range(-outline_width, outline_width + 1):
+                        if dx != 0 or dy != 0:
+                            draw.text((x2 + dx, y2 + dy), line2, font=episode_font, fill=(*outline_color, 255))
+                draw.text((x2, y2), line2, font=episode_font, fill=(*episode_color, 255))
 
                 # 저장
                 thumbnail_path = os.path.join(thumbnail_dir, f"thumb_ep{ep_num:03d}.png")
                 img.save(thumbnail_path)
-                print(f"[WUXIA-VIDEO] 썸네일 생성 완료: {thumbnail_path}")
-            else:
-                print(f"[WUXIA-VIDEO] ⚠️ 썸네일 이미지 생성 실패, 스킵")
+                print(f"[WUXIA-VIDEO] ✅ 썸네일 완료: {thumbnail_path}")
 
         except Exception as thumb_err:
             print(f"[WUXIA-VIDEO] ⚠️ 썸네일 생성 예외: {thumb_err}")
