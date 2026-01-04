@@ -18,6 +18,11 @@ from .config import (
     VIDEO_AUTOMATION_HEADERS,
     CHARACTER_APPEARANCES,
     IMAGE_STYLE,
+    # BGM 설정
+    BGM_DIR,
+    WUXIA_BGM_MAP,
+    DEFAULT_BGM,
+    BGM_KEYWORD_MAP,
 )
 
 from .multi_voice_tts import (
@@ -61,6 +66,11 @@ __all__ = [
     "VIDEO_AUTOMATION_HEADERS",
     "CHARACTER_APPEARANCES",
     "IMAGE_STYLE",
+    # BGM 설정
+    "BGM_DIR",
+    "WUXIA_BGM_MAP",
+    "DEFAULT_BGM",
+    "BGM_KEYWORD_MAP",
     # Multi-voice TTS
     "parse_script_to_segments",
     "generate_multi_voice_tts",
