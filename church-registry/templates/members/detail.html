@@ -57,8 +57,8 @@
                 </div>
             </div>
 
-            <!-- 메모 영역 (프로필 오른쪽) -->
-            <div style="flex: 0 0 300px; min-width: 280px;">
+            <!-- 메모 영역 (프로필 오른쪽) - 내용에 따라 확장 -->
+            <div id="memoContainer" style="flex: 0 0 auto; min-width: 280px; max-width: 500px; transition: all 0.3s ease;">
                 <div style="background: #fef9e7; border: 1px solid #f9e79f; border-radius: 12px; padding: 16px; position: relative;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-weight: 600; font-size: 13px; color: #b7950b;">
@@ -68,11 +68,11 @@
                             <i class="bi bi-pencil-square" id="memoEditIcon"></i>
                         </button>
                     </div>
-                    <!-- 메모 표시 (읽기 모드) -->
-                    <div id="memoDisplay" style="font-size: 14px; color: #5d4e37; line-height: 1.6; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">{{ member.notes or '' }}</div>
+                    <!-- 메모 표시 (읽기 모드) - 내용에 따라 높이 자동 조절 -->
+                    <div id="memoDisplay" style="font-size: 14px; color: #5d4e37; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ member.notes or '' }}</div>
                     <!-- 메모 편집 (편집 모드) -->
                     <div id="memoEdit" style="display: none;">
-                        <textarea id="memoTextarea" style="width: 100%; height: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; resize: none; font-family: inherit;">{{ member.notes or '' }}</textarea>
+                        <textarea id="memoTextarea" style="width: 100%; min-height: 100px; max-height: 250px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; resize: vertical; font-family: inherit;">{{ member.notes or '' }}</textarea>
                         <div style="margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;">
                             <button type="button" onclick="cancelMemoEdit()" style="padding: 4px 12px; border: 1px solid #ddd; background: white; border-radius: 6px; font-size: 13px; cursor: pointer;">취소</button>
                             <button type="button" onclick="saveMemo()" style="padding: 4px 12px; border: none; background: #b7950b; color: white; border-radius: 6px; font-size: 13px; cursor: pointer;">저장</button>
@@ -464,7 +464,8 @@ function renderFamilyRelationships(data) {
     const hasAnyRelation = data.spouse || data.parents.length > 0 || data.children.length > 0 ||
         data.siblings.length > 0 || (data.in_laws && data.in_laws.length > 0) ||
         (data.grandparents && data.grandparents.length > 0) || (data.grandchildren && data.grandchildren.length > 0) ||
-        (data.extended && data.extended.length > 0) || (data.sibling_families && data.sibling_families.length > 0);
+        (data.extended && data.extended.length > 0) || (data.sibling_families && data.sibling_families.length > 0) ||
+        (data.separated_children && data.separated_children.length > 0);
 
     if (!hasAnyRelation) {
         container.innerHTML = `
@@ -517,6 +518,52 @@ function renderFamilyRelationships(data) {
                 </div>
             </div>
         `;
+    }
+
+    // 분가한 자녀 (결혼하여 독립한 자녀)
+    if (data.separated_children && data.separated_children.length > 0) {
+        html += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                <div style="font-size: 15px; font-weight: 600; color: var(--apple-text); margin-bottom: 16px;">
+                    <i class="bi bi-house-door" style="color: #ea580c;"></i> 분가한 자녀
+                    <span style="font-size: 12px; font-weight: 400; color: var(--apple-text-secondary); margin-left: 8px;">결혼하여 독립한 가정</span>
+                </div>
+        `;
+
+        data.separated_children.forEach((child) => {
+            const childName = child.name;
+            const childDetail = child.relationship_detail || '';
+            html += `
+                <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-radius: 12px; border: 1px solid #fed7aa;">
+                    <div style="font-size: 14px; font-weight: 600; color: #c2410c; margin-bottom: 12px;">
+                        <i class="bi bi-house-heart" style="color: #ea580c;"></i> ${childName}${childDetail ? ` (${childDetail})` : ''}님 가정
+                        <span style="background: #ea580c; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 8px;">분가</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+            `;
+
+            // 분가한 자녀 본인
+            html += renderFamilyCard(child, 'child');
+
+            // 자녀의 배우자 (며느리/사위)
+            if (child.spouse) {
+                html += renderFamilyCard(child.spouse, 'in_law');
+            }
+
+            // 손자녀
+            if (child.grandchildren && child.grandchildren.length > 0) {
+                child.grandchildren.forEach(gc => {
+                    html += renderFamilyCard(gc, 'grandchild');
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
     }
 
     // 형제자매
@@ -632,6 +679,49 @@ function renderFamilyRelationships(data) {
         html += '</div>';
     }
 
+    // 인척 가족들 (인척의 배우자 및 자녀)
+    if (data.in_law_families && data.in_law_families.length > 0) {
+        html += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                <div style="font-size: 15px; font-weight: 600; color: var(--apple-text); margin-bottom: 16px;">
+                    <i class="bi bi-houses" style="color: #06b6d4;"></i> 인척 가족
+                </div>
+        `;
+
+        data.in_law_families.forEach((family, index) => {
+            const inLawName = family.in_law.name;
+            html += `
+                <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%); border-radius: 12px; border: 1px solid #a5f3fc;">
+                    <div style="font-size: 14px; font-weight: 600; color: #0e7490; margin-bottom: 12px;">
+                        <i class="bi bi-house-door" style="color: #06b6d4;"></i> ${inLawName}님 가족
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+            `;
+
+            // 인척 본인
+            html += renderFamilyCard(family.in_law, 'in_law');
+
+            // 인척의 배우자
+            if (family.spouse) {
+                html += renderFamilyCard(family.spouse, 'in_law');
+            }
+
+            // 인척의 자녀들
+            if (family.children && family.children.length > 0) {
+                family.children.forEach(child => {
+                    html += renderFamilyCard(child, 'extended');
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+    }
+
     // 대가족 그룹 정보
     if (data.family_group) {
         html += `
@@ -664,8 +754,19 @@ function renderFamilyCard(member, relationType) {
         'extended': 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)'
     }[relationType] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
+    // 상태에 따른 테두리 색상
+    let borderStyle = '';
+    let statusBadge = '';
+    if (member.status === 'deceased') {
+        borderStyle = 'border: 2px solid #6b7280;';  // 회색 테두리 - 별세
+        statusBadge = '<span style="background: #6b7280; color: white; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">별세</span>';
+    } else if (member.status === 'transferred' || member.status === 'inactive') {
+        borderStyle = 'border: 2px solid #3b82f6;';  // 파란색 테두리 - 타교인/비활동
+        statusBadge = '<span style="background: #3b82f6; color: white; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">타교인</span>';
+    }
+
     return `
-        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fafafa; border-radius: 12px; position: relative; transition: all 0.2s ease;"
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fafafa; border-radius: 12px; position: relative; transition: all 0.2s ease; ${borderStyle}"
              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fafafa'">
             <a href="/members/${member.id}" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; flex: 1;">
                 <div style="width: 44px; height: 44px; border-radius: 50%; background: ${avatarBg}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; flex-shrink: 0; overflow: hidden;">
@@ -675,6 +776,7 @@ function renderFamilyCard(member, relationType) {
                     <div style="font-weight: 600; color: var(--apple-text); font-size: 15px;">
                         ${member.name}
                         ${member.member_type ? `<span style="font-weight: 400; color: var(--apple-text-secondary);"> ${member.member_type}</span>` : ''}
+                        ${statusBadge}
                     </div>
                     <div style="font-size: 13px; color: var(--apple-text-secondary);">
                         ${member.relationship_detail || ''}
@@ -808,6 +910,31 @@ document.addEventListener('DOMContentLoaded', loadFamilyRelationships);
 // ===== 메모 편집 기능 =====
 let memoOriginalValue = '';
 
+// 메모 내용에 따라 박스 크기 조절
+function autoResizeMemoBox() {
+    const container = document.getElementById('memoContainer');
+    const displayEl = document.getElementById('memoDisplay');
+    const content = displayEl.textContent || '';
+
+    // 내용 길이에 따라 너비 조절 (280px ~ 500px)
+    const charCount = content.length;
+    const lineCount = content.split('\n').length;
+
+    let targetWidth = 280; // 기본 너비
+
+    if (charCount > 200 || lineCount > 5) {
+        targetWidth = 400; // 중간 크기
+    }
+    if (charCount > 400 || lineCount > 10) {
+        targetWidth = 500; // 최대 크기
+    }
+
+    container.style.minWidth = targetWidth + 'px';
+}
+
+// 페이지 로드 시 메모 박스 크기 조절
+document.addEventListener('DOMContentLoaded', autoResizeMemoBox);
+
 function toggleMemoEdit() {
     const displayEl = document.getElementById('memoDisplay');
     const editEl = document.getElementById('memoEdit');
@@ -821,10 +948,19 @@ function toggleMemoEdit() {
         editEl.style.display = 'block';
         textareaEl.focus();
         iconEl.className = 'bi bi-x-lg';
+        // 텍스트 영역 높이 자동 조절
+        autoResizeTextarea(textareaEl);
     } else {
         // 읽기 모드로 전환
         cancelMemoEdit();
     }
+}
+
+// textarea 높이 자동 조절
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 100), 250);
+    textarea.style.height = newHeight + 'px';
 }
 
 function cancelMemoEdit() {
@@ -861,6 +997,8 @@ async function saveMemo() {
             displayEl.style.display = 'block';
             editEl.style.display = 'none';
             iconEl.className = 'bi bi-pencil-square';
+            // 저장 후 메모 박스 크기 재조절
+            autoResizeMemoBox();
         } else {
             alert(data.error || '저장에 실패했습니다');
         }
@@ -925,6 +1063,7 @@ async function saveMemo() {
                     <option value="언니">언니</option>
                     <option value="남동생">남동생</option>
                     <option value="여동생">여동생</option>
+                    <option value="남매">남매 (이성 형제)</option>
                 </optgroup>
                 <optgroup label="조부모">
                     <option value="할아버지">할아버지</option>

@@ -659,11 +659,36 @@ class Group(db.Model):
 
     def get_member_count(self, include_children=True):
         """소속 인원 수 (하위 그룹 포함 옵션)"""
-        count = len(self.members)
+        # 기존 group_id 기반 멤버 + 새로운 member_groups 테이블 기반 멤버 합산
+        count = len(self.members)  # group_id 관계
+        # member_groups 테이블에서 추가 멤버 계산
+        additional = MemberGroup.query.filter_by(group_id=self.id).count()
+        count += additional
         if include_children:
             for child in self.get_all_children():
                 count += len(child.members)
+                additional_child = MemberGroup.query.filter_by(group_id=child.id).count()
+                count += additional_child
         return count
+
+
+# 회원-그룹 다대다 관계 테이블 (여러 그룹에 소속 가능)
+class MemberGroup(db.Model):
+    """회원-그룹 연결 모델 (다중 그룹 소속 지원)"""
+    __tablename__ = 'member_groups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
+    role = db.Column(db.String(50))  # 그룹 내 역할 (리더, 부리더, 멤버 등)
+    joined_at = db.Column(db.DateTime, default=get_seoul_now)
+
+    member = db.relationship('Member', backref='member_groups')
+    group = db.relationship('Group', backref='member_group_entries')
+
+    __table_args__ = (
+        db.UniqueConstraint('member_id', 'group_id', name='unique_member_group'),
+    )
 
 
 class Attendance(db.Model):
@@ -1019,11 +1044,22 @@ def member_new():
         db.session.add(member)
         db.session.commit()
 
+        # 다중 그룹 처리
+        group_ids_str = request.form.get('group_ids', '').strip()
+        if group_ids_str:
+            group_ids = [int(gid) for gid in group_ids_str.split(',') if gid.strip()]
+            for gid in group_ids:
+                mg = MemberGroup(member_id=member.id, group_id=gid)
+                db.session.add(mg)
+            db.session.commit()
+
         flash(f'{member.display_name}이(가) 등록되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
+    # 그룹 목록 (full_path 포함)
     groups = Group.query.all()
-    return render_template('members/form.html', groups=groups, member=None)
+    groups_data = [{'id': g.id, 'name': g.name, 'full_path': g.get_full_path()} for g in groups]
+    return render_template('members/form.html', groups=groups_data, member=None)
 
 
 @app.route('/members/<int:member_id>')
@@ -1048,8 +1084,8 @@ def member_edit(member_id):
         member.status = request.form.get('status', 'active')
         member.notes = request.form.get('notes', '').strip()
 
-        group_id = request.form.get('group_id')
-        member.group_id = int(group_id) if group_id else None
+        # 기존 단일 그룹은 None으로 설정 (다중 그룹 사용)
+        member.group_id = None
 
         # 성도 구분
         member_type = request.form.get('member_type', '')
@@ -1117,15 +1153,29 @@ def member_edit(member_id):
         # 유효성 검사
         if not member.name:
             flash('이름은 필수 입력 항목입니다.', 'danger')
-            return render_template('members/form.html', groups=Group.query.all(), member=member)
+            groups = Group.query.all()
+            groups_data = [{'id': g.id, 'name': g.name, 'full_path': g.get_full_path()} for g in groups]
+            return render_template('members/form.html', groups=groups_data, member=member)
+
+        # 다중 그룹 처리 - 기존 연결 삭제 후 새로 추가
+        MemberGroup.query.filter_by(member_id=member.id).delete()
+
+        group_ids_str = request.form.get('group_ids', '').strip()
+        if group_ids_str:
+            group_ids = [int(gid) for gid in group_ids_str.split(',') if gid.strip()]
+            for gid in group_ids:
+                mg = MemberGroup(member_id=member.id, group_id=gid)
+                db.session.add(mg)
 
         db.session.commit()
 
         flash(f'{member.display_name} 정보가 수정되었습니다.', 'success')
         return redirect(url_for('member_detail', member_id=member.id))
 
+    # 그룹 목록 (full_path 포함)
     groups = Group.query.all()
-    return render_template('members/form.html', groups=groups, member=member)
+    groups_data = [{'id': g.id, 'name': g.name, 'full_path': g.get_full_path()} for g in groups]
+    return render_template('members/form.html', groups=groups_data, member=member)
 
 
 @app.route('/members/<int:member_id>/delete', methods=['POST'])
@@ -1266,9 +1316,11 @@ def group_delete(group_id):
         # 하위 그룹 먼저 삭제
         for child in g.children:
             delete_group_recursive(child)
-        # 소속 교인들의 그룹 해제
+        # 소속 교인들의 그룹 해제 (기존 group_id)
         for member in g.members:
             member.group_id = None
+        # 다중 그룹 연결 삭제 (member_groups 테이블)
+        MemberGroup.query.filter_by(group_id=g.id).delete()
         db.session.delete(g)
 
     delete_group_recursive(group)
@@ -1276,6 +1328,134 @@ def group_delete(group_id):
 
     flash(f'{name} 그룹이 삭제되었습니다.', 'success')
     return redirect(url_for('group_list'))
+
+
+@app.route('/api/groups/<int:group_id>/duplicate', methods=['POST'])
+def api_group_duplicate(group_id):
+    """그룹 복제 API"""
+    group = Group.query.get_or_404(group_id)
+    data = request.get_json() or {}
+    new_name = data.get('new_name', f'{group.name} (복사)')
+
+    # 새 그룹 생성
+    new_group = Group(
+        name=new_name,
+        group_type=group.group_type,
+        parent_id=group.parent_id,
+        level=group.level,
+        description=group.description
+    )
+    db.session.add(new_group)
+    db.session.commit()
+
+    return jsonify({'ok': True, 'group_id': new_group.id, 'name': new_group.name})
+
+
+@app.route('/api/groups/generate-from-organization', methods=['POST'])
+def api_generate_groups_from_organization():
+    """기존 교회 조직 정보(교구, 속회, 선교회)에서 그룹 자동 생성"""
+    import re
+
+    created_groups = []
+    stats = {'districts': 0, 'cells': 0, 'missions': 0}
+
+    # 1. 교구 그룹 생성 (년도 제외하고 통합)
+    # 예: "3교구[2025]", "3교구[2020]" → "3교구"
+    districts = db.session.query(Member.district).filter(
+        Member.district.isnot(None),
+        Member.district != ''
+    ).distinct().all()
+
+    # 년도 제거하고 유니크한 교구명 추출
+    district_names = set()
+    for (d,) in districts:
+        # [2025] 같은 년도 패턴 제거
+        clean_name = re.sub(r'\s*\[\d{4}\]', '', d).strip()
+        if clean_name:
+            district_names.add(clean_name)
+
+    # 교구 상위 그룹 찾기 또는 생성
+    district_parent = Group.query.filter_by(name='교구', group_type='district', parent_id=None).first()
+    if not district_parent:
+        district_parent = Group(name='교구', group_type='district', level=0)
+        db.session.add(district_parent)
+        db.session.commit()
+
+    for name in sorted(district_names):
+        existing = Group.query.filter_by(name=name, parent_id=district_parent.id).first()
+        if not existing:
+            new_group = Group(
+                name=name,
+                group_type='district',
+                parent_id=district_parent.id,
+                level=1
+            )
+            db.session.add(new_group)
+            created_groups.append(name)
+            stats['districts'] += 1
+
+    # 2. 속회 그룹 생성
+    cells = db.session.query(Member.cell_group).filter(
+        Member.cell_group.isnot(None),
+        Member.cell_group != ''
+    ).distinct().all()
+
+    # 속회 상위 그룹 찾기 또는 생성
+    cell_parent = Group.query.filter_by(name='속회', group_type='mission', parent_id=None).first()
+    if not cell_parent:
+        cell_parent = Group(name='속회', group_type='mission', level=0)
+        db.session.add(cell_parent)
+        db.session.commit()
+
+    for (cell_name,) in cells:
+        if cell_name:
+            existing = Group.query.filter_by(name=cell_name, parent_id=cell_parent.id).first()
+            if not existing:
+                new_group = Group(
+                    name=cell_name,
+                    group_type='mission',
+                    parent_id=cell_parent.id,
+                    level=1
+                )
+                db.session.add(new_group)
+                created_groups.append(cell_name)
+                stats['cells'] += 1
+
+    # 3. 선교회 그룹 생성
+    missions = db.session.query(Member.mission_group).filter(
+        Member.mission_group.isnot(None),
+        Member.mission_group != ''
+    ).distinct().all()
+
+    # 선교회 상위 그룹 찾기 또는 생성
+    mission_parent = Group.query.filter_by(name='선교회', group_type='mission', parent_id=None).first()
+    if not mission_parent:
+        mission_parent = Group(name='선교회', group_type='mission', level=0)
+        db.session.add(mission_parent)
+        db.session.commit()
+
+    for (mission_name,) in missions:
+        if mission_name:
+            existing = Group.query.filter_by(name=mission_name, parent_id=mission_parent.id).first()
+            if not existing:
+                new_group = Group(
+                    name=mission_name,
+                    group_type='mission',
+                    parent_id=mission_parent.id,
+                    level=1
+                )
+                db.session.add(new_group)
+                created_groups.append(mission_name)
+                stats['missions'] += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'created': created_groups,
+        'stats': stats,
+        'message': f"교구 {stats['districts']}개, 속회 {stats['cells']}개, 선교회 {stats['missions']}개 그룹이 생성되었습니다."
+    })
 
 
 # =============================================================================
@@ -2524,104 +2704,499 @@ def execute_ai_function(function_name: str, arguments: dict) -> str:
     return json.dumps({"error": "알 수 없는 함수입니다."}, ensure_ascii=False)
 
 
+def _handle_simple_query(user_message: str) -> str:
+    """간단한 쿼리를 AI 모델 없이 직접 처리"""
+    import re
+
+    msg = user_message.strip()
+    msg_lower = msg.lower()
+
+    # 숫자만 입력한 경우 전화번호/차량번호 검색
+    # 예: "4133", "1234", "가1234"
+    number_pattern = r'^[\d\-]+$'  # 숫자와 하이픈만
+    car_number_pattern = r'^[가-힣]?\s*\d{2,4}$'  # 차량번호 패턴 (예: "가1234", "1234")
+
+    if re.match(number_pattern, msg) or re.match(car_number_pattern, msg):
+        search_num = msg.replace('-', '').replace(' ', '')
+
+        # 전화번호 검색
+        phone_members = Member.query.filter(
+            Member.phone.ilike(f'%{search_num}%')
+        ).all()
+
+        # 차량번호 검색 (vehicle_number 필드가 있는 경우)
+        vehicle_members = []
+        if hasattr(Member, 'vehicle_number'):
+            vehicle_members = Member.query.filter(
+                Member.vehicle_number.ilike(f'%{msg}%')
+            ).all()
+
+        # 결과 합치기 (중복 제거)
+        all_members = {m.id: m for m in phone_members}
+        for m in vehicle_members:
+            all_members[m.id] = m
+        members = list(all_members.values())
+
+        if not members:
+            return f"'{msg}' 번호를 가진 교인을 찾을 수 없습니다."
+        elif len(members) == 1:
+            m = members[0]
+            response = f"📌 {m.name} {m.member_type or ''}님 정보\n\n"
+            if m.phone: response += f"📞 전화번호: {m.phone}\n"
+            if hasattr(m, 'vehicle_number') and m.vehicle_number:
+                response += f"🚗 차량번호: {m.vehicle_number}\n"
+            if m.address: response += f"🏠 주소: {m.address}\n"
+            if m.birth_date: response += f"🎂 생년월일: {m.birth_date.strftime('%Y-%m-%d')}\n"
+            if m.district: response += f"🏢 교구: {m.district}\n"
+            if m.cell_group: response += f"🏠 속회: {m.cell_group}\n"
+            return response
+        else:
+            response = f"📋 '{msg}' 검색 결과: {len(members)}명\n\n"
+            for m in members[:10]:
+                info_parts = [m.name, m.member_type or '']
+                if m.phone: info_parts.append(f"📞{m.phone}")
+                if hasattr(m, 'vehicle_number') and m.vehicle_number:
+                    info_parts.append(f"🚗{m.vehicle_number}")
+                response += f"• {' '.join(filter(None, info_parts))}\n"
+            if len(members) > 10:
+                response += f"\n... 외 {len(members) - 10}명 더 있습니다."
+            return response
+
+    # 교인 이름 검색 (간단한 이름만 입력한 경우)
+    # 예: "김철수", "김철수 검색", "홍길동 찾기"
+    name_search_patterns = [
+        r'^([가-힣]{2,4})\s*(검색|찾기|조회)?$',  # "김철수" or "김철수 검색"
+        r'^([가-힣]{2,4})\s*(님|교인|집사|권사|장로|목사|성도|전도사)?$',  # "김철수님", "김철수 집사"
+    ]
+
+    for pattern in name_search_patterns:
+        match = re.match(pattern, msg)
+        if match:
+            name = match.group(1)
+            members = Member.query.filter(Member.name.ilike(f'%{name}%')).all()
+
+            if not members:
+                return f"'{name}' 이름의 교인을 찾을 수 없습니다."
+            elif len(members) == 1:
+                m = members[0]
+                response = f"📌 {m.name} {m.member_type or ''}님 정보\n\n"
+                if m.phone: response += f"📞 전화번호: {m.phone}\n"
+                if m.address: response += f"🏠 주소: {m.address}\n"
+                if m.birth_date: response += f"🎂 생년월일: {m.birth_date.strftime('%Y-%m-%d')}\n"
+                if m.gender: response += f"👤 성별: {m.gender}\n"
+                if m.district: response += f"🏢 교구: {m.district}\n"
+                if m.cell_group: response += f"🏠 속회: {m.cell_group}\n"
+                if m.mission_group: response += f"⛪ 선교회: {m.mission_group}\n"
+                return response
+            else:
+                response = f"📋 '{name}' 검색 결과: {len(members)}명\n\n"
+                for m in members[:10]:
+                    response += f"• {m.name} {m.member_type or ''} - {m.phone or '연락처 없음'}\n"
+                if len(members) > 10:
+                    response += f"\n... 외 {len(members) - 10}명 더 있습니다."
+                return response
+
+    # 직분별 목록 조회
+    # 예: "집사 목록", "권사님들", "장로 조회"
+    member_type_patterns = {
+        r'(집사)\s*(목록|명단|조회|분들|님들)?': '집사',
+        r'(권사)\s*(목록|명단|조회|분들|님들)?': '권사',
+        r'(장로)\s*(목록|명단|조회|분들|님들)?': '장로',
+        r'(안수집사)\s*(목록|명단|조회|분들|님들)?': '안수집사',
+        r'(시무장로)\s*(목록|명단|조회|분들|님들)?': '시무장로',
+        r'(전도사)\s*(목록|명단|조회|분들|님들)?': '전도사',
+        r'(목사)\s*(목록|명단|조회|분들|님들)?': '목사',
+        r'(성도)\s*(목록|명단|조회|분들|님들)?': '성도',
+    }
+
+    for pattern, member_type in member_type_patterns.items():
+        if re.search(pattern, msg):
+            members = Member.query.filter(Member.member_type == member_type).all()
+            count = len(members)
+            if count == 0:
+                return f"{member_type} 직분의 교인이 없습니다."
+            response = f"📋 {member_type} 목록: {count}명\n\n"
+            for m in members[:15]:
+                response += f"• {m.name} - {m.phone or '연락처 없음'}\n"
+            if count > 15:
+                response += f"\n... 외 {count - 15}명 더 있습니다."
+            return response
+
+    # 그룹 목록 조회
+    # 예: "그룹 목록", "그룹 조회", "그룹들"
+    if re.search(r'그룹\s*(목록|조회|현황)?$', msg) or msg in ['그룹', '그룹들']:
+        groups = Group.query.all()
+        if not groups:
+            return "등록된 그룹이 없습니다."
+        response = f"📁 그룹 목록: {len(groups)}개\n\n"
+        for g in groups[:15]:
+            member_count = len(g.members) + MemberGroup.query.filter_by(group_id=g.id).count()
+            response += f"• {g.name} ({g.group_type or ''}) - {member_count}명\n"
+        if len(groups) > 15:
+            response += f"\n... 외 {len(groups) - 15}개 더 있습니다."
+        return response
+
+    # 교구/속회/선교회 검색
+    # 예: "1교구", "청년선교회", "마리아속회"
+    org_patterns = [
+        (r'^(\d+교구)$', 'district'),
+        (r'^([가-힣]+선교회)$', 'mission_group'),
+        (r'^([가-힣]+속회)$', 'cell_group'),
+    ]
+
+    for pattern, field in org_patterns:
+        match = re.match(pattern, msg)
+        if match:
+            value = match.group(1)
+            if field == 'district':
+                members = Member.query.filter(Member.district.ilike(f'%{value}%')).all()
+            elif field == 'mission_group':
+                members = Member.query.filter(Member.mission_group.ilike(f'%{value}%')).all()
+            else:
+                members = Member.query.filter(Member.cell_group.ilike(f'%{value}%')).all()
+
+            if not members:
+                return f"'{value}'에 소속된 교인이 없습니다."
+            response = f"📋 {value} 소속: {len(members)}명\n\n"
+            for m in members[:15]:
+                response += f"• {m.name} {m.member_type or ''} - {m.phone or '연락처 없음'}\n"
+            if len(members) > 15:
+                response += f"\n... 외 {len(members) - 15}명 더 있습니다."
+            return response
+
+    # 통계/현황 조회
+    # 예: "통계", "현황", "전체 교인 수"
+    if msg in ['통계', '현황', '교인현황', '교인 현황', '전체 교인 수', '전체교인수', '전체 교인', '전체교인']:
+        total = Member.query.count()
+        active = Member.query.filter(Member.status == 'active').count()
+        inactive = Member.query.filter(Member.status == 'inactive').count()
+        newcomers = Member.query.filter(Member.status == 'newcomer').count()
+
+        return f"""📊 교인 현황
+
+• 전체 교인: {total}명
+• 활동 교인: {active}명
+• 비활동 교인: {inactive}명
+• 새신자: {newcomers}명"""
+
+    # 새신자 목록
+    if re.search(r'새신자\s*(목록|명단|조회)?$', msg) or msg == '새신자':
+        newcomers = Member.query.filter(Member.status == 'newcomer').order_by(Member.registration_date.desc()).all()
+        if not newcomers:
+            return "새신자가 없습니다."
+        response = f"👋 새신자 목록: {len(newcomers)}명\n\n"
+        for n in newcomers[:10]:
+            reg_date = n.registration_date.strftime('%Y-%m-%d') if n.registration_date else '등록일 없음'
+            response += f"• {n.name} - {reg_date}\n"
+        if len(newcomers) > 10:
+            response += f"\n... 외 {len(newcomers) - 10}명 더 있습니다."
+        return response
+
+    # 생일자 조회
+    # 예: "이번달 생일", "1월 생일", "생일자"
+    birthday_match = re.search(r'(\d+)월\s*생일', msg)
+    if birthday_match or re.search(r'(이번\s*달|이번달)\s*생일|생일자', msg):
+        if birthday_match:
+            month = int(birthday_match.group(1))
+        else:
+            month = get_seoul_today().month
+
+        from sqlalchemy import extract
+        birthdays = Member.query.filter(extract('month', Member.birth_date) == month).all()
+        if not birthdays:
+            return f"{month}월 생일자가 없습니다."
+        response = f"🎂 {month}월 생일자: {len(birthdays)}명\n\n"
+        for b in birthdays[:15]:
+            birth_str = b.birth_date.strftime('%m월 %d일') if b.birth_date else ''
+            response += f"• {b.name} {b.member_type or ''} - {birth_str}\n"
+        if len(birthdays) > 15:
+            response += f"\n... 외 {len(birthdays) - 15}명 더 있습니다."
+        return response
+
+    # 간단한 쿼리가 아니면 None 반환 (AI 처리로 넘김)
+    return None
+
+
 def process_ai_chat(user_message: str, image_data: str = None) -> str:
-    """AI 채팅 처리"""
+    """AI 채팅 처리 - GPT-5.1 Responses API 사용"""
 
     if not openai_client:
         return "OpenAI API 키가 설정되지 않았습니다. 환경변수 OPENAI_API_KEY를 설정해주세요."
 
+    # 이미지가 있으면 기존 Vision API 사용 (GPT-4o)
+    if image_data:
+        return _process_image_chat(user_message, image_data)
+
+    # 간단한 쿼리는 AI 없이 직접 처리
+    simple_result = _handle_simple_query(user_message)
+    if simple_result:
+        return simple_result
+
+    system_prompt = """당신은 교회 교적 관리 AI 어시스턴트입니다.
+사용자의 요청을 분석하여 다음 JSON 형식으로 응답하세요:
+
+{
+    "action": "액션타입",
+    "params": { 파라미터들 },
+    "response": "사용자에게 보여줄 자연스러운 응답 (액션이 없거나 conversation일 때만 사용)"
+}
+
+## 액션 타입
+1. register_member - 교인 등록
+   params: { name, phone, address, birth_date, gender, member_type, notes, district, cell_group, mission_group, baptism_year, faith_level, force_new, update_existing_id }
+
+2. search_members - 교인 검색
+   params: { query, status, member_type, group_name }
+
+3. get_member_detail - 교인 상세 정보
+   params: { name }
+
+4. update_member - 교인 정보 수정
+   params: { name, phone, address, birth_date, status, notes, ... }
+
+5. record_visit - 심방 기록
+   params: { member_name, visit_date, notes }
+
+6. get_newcomers - 새신자 목록
+   params: { days }
+
+7. recommend_visits - 심방 추천
+   params: { count }
+
+8. get_absent_members - 장기 결석자
+   params: { weeks }
+
+9. get_birthdays - 생일자 조회
+   params: { month }
+
+10. get_statistics - 통계
+    params: { stat_type }  (overview, attendance, group)
+
+11. manage_group - 그룹 관리
+    params: { action, group_name, group_type, member_name }
+
+12. conversation - 일반 대화 (액션 없음)
+    params: {}
+
+## 예시
+입력: "홍길동 집사님 등록해줘 전화번호 010-1234-5678"
+출력: {"action": "register_member", "params": {"name": "홍길동", "member_type": "집사", "phone": "010-1234-5678"}}
+
+입력: "새신자 목록 보여줘"
+출력: {"action": "get_newcomers", "params": {"days": 30}}
+
+입력: "안녕하세요"
+출력: {"action": "conversation", "params": {}, "response": "안녕하세요! 교적 관리와 관련하여 무엇을 도와드릴까요?"}
+
+입력: "오늘 날씨 어때?"
+출력: {"action": "conversation", "params": {}, "response": "죄송합니다, 저는 교회 교적 관리 어시스턴트입니다. 교인 등록, 검색, 심방 기록 등 교적 관련 업무를 도와드릴 수 있어요. 무엇을 도와드릴까요?"}
+
+반드시 JSON만 출력하세요. 다른 텍스트 없이 JSON만 출력합니다."""
+
+    try:
+        # GPT-5.1 Responses API 호출
+        response = openai_client.responses.create(
+            model="gpt-5.1",
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "input_text", "text": user_message}]}
+            ],
+            temperature=0.5
+        )
+
+        # 응답 텍스트 추출
+        if getattr(response, "output_text", None):
+            result_text = response.output_text.strip()
+        else:
+            text_chunks = []
+            for item in getattr(response, "output", []) or []:
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "text":
+                        text_chunks.append(getattr(content, "text", ""))
+            result_text = "\n".join(text_chunks).strip()
+
+        # JSON 파싱
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+
+        parsed = json.loads(result_text)
+        action = parsed.get("action", "conversation")
+        params = parsed.get("params", {})
+
+        # 일반 대화인 경우
+        if action == "conversation":
+            return parsed.get("response", "무엇을 도와드릴까요?")
+
+        # DB 세션 리프레시 (API 호출 중 SSL 연결이 끊어질 수 있음)
+        try:
+            db.session.remove()
+        except Exception:
+            pass
+
+        # 액션 실행
+        function_result = execute_ai_function(action, params)
+        result_data = json.loads(function_result)
+
+        # 결과를 자연스러운 응답으로 변환
+        return _format_action_result(action, params, result_data)
+
+    except json.JSONDecodeError as e:
+        app.logger.error(f"[AI채팅] JSON 파싱 실패: {result_text}")
+        # JSON 파싱 실패 시 원본 응답 반환
+        return result_text if result_text else "죄송합니다, 요청을 처리하는 중 오류가 발생했습니다."
+    except Exception as e:
+        app.logger.error(f"[AI채팅] 오류: {str(e)}")
+        return f"죄송합니다, 오류가 발생했습니다: {str(e)}"
+
+
+def _process_image_chat(user_message: str, image_data: str) -> str:
+    """이미지 첨부 채팅 처리 (GPT-4o Vision 사용)"""
     messages = [
         {
             "role": "system",
             "content": """당신은 교회 교적 관리 AI 어시스턴트입니다.
-
-교인 등록, 검색, 수정, 심방 기록, 출석 관리 등을 도와드립니다.
-
-사용자가 자연어로 요청하면 적절한 도구를 사용하여 작업을 수행하세요.
-
-예시:
-- "홍길동 집사님 등록해줘, 전화번호 010-1234-5678" → register_member 호출
-- "김영희 권사님 정보 알려줘" → get_member_detail 호출
-- "새신자 목록 보여줘" → get_newcomers 호출
-- "이번 주 심방 갈 분 추천해줘" → recommend_visits 호출
-- "지난 3주간 안 나온 분들" → get_absent_members 호출
-- "이번 달 생일자" → get_birthdays 호출
-- "전체 교인 수" → get_statistics 호출
-
-동명이인 처리:
-register_member 호출 시 동명이인이 있으면 duplicate_found: true 응답이 옵니다.
-이 경우 사용자에게 기존 교인 목록을 보여주고 다음을 물어보세요:
-1. 기존 교인 정보 업데이트: "홍길동 생년월일 추가해줘" → update_existing_id 사용
-2. 동명이인으로 새로 등록: "새 홍길동으로 등록해줘" → force_new=true 사용
-
-예시 응답:
-"'홍길동' 이름의 교인이 이미 등록되어 있습니다:
-1. 홍길동 집사 (010-1234-5678, 1985-03-15생)
-2. 홍길동 성도 (연락처 없음, 생년월일 없음)
-
-기존 교인 정보를 업데이트할까요, 아니면 동명이인으로 새로 등록할까요?"
-
-사진이 첨부되면:
-- 명함/등록카드 사진: 정보를 추출하여 등록 제안
-- 인물 사진: 어떤 교인의 프로필 사진으로 등록할지 확인
-
-응답은 친절하고 자연스럽게 해주세요. 한국어로 응답합니다."""
-        }
-    ]
-
-    # 이미지가 있으면 Vision API 사용
-    if image_data:
-        messages.append({
+사진을 분석하여 명함이나 등록카드면 정보를 추출하고, 인물 사진이면 알려주세요.
+응답은 친절하고 자연스럽게 해주세요."""
+        },
+        {
             "role": "user",
             "content": [
                 {"type": "text", "text": user_message if user_message else "이 사진을 분석해주세요. 명함이나 등록카드면 정보를 추출하고, 인물 사진이면 알려주세요."},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
             ]
-        })
-    else:
-        messages.append({"role": "user", "content": user_message})
+        }
+    ]
 
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
-            tools=AI_TOOLS,
-            tool_choice="auto",
             max_tokens=2000
         )
-
-        assistant_message = response.choices[0].message
-
-        # 도구 호출이 있는 경우
-        if assistant_message.tool_calls:
-            # 도구 실행 결과 수집
-            tool_results = []
-            for tool_call in assistant_message.tool_calls:
-                function_name = tool_call.function.name
-                arguments = json.loads(tool_call.function.arguments)
-                result = execute_ai_function(function_name, arguments)
-                tool_results.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "content": result
-                })
-
-            # 도구 결과를 포함하여 다시 요청
-            messages.append(assistant_message)
-            messages.extend(tool_results)
-
-            final_response = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                max_tokens=2000
-            )
-
-            return final_response.choices[0].message.content
-
-        return assistant_message.content
-
+        return response.choices[0].message.content
     except Exception as e:
-        return f"죄송합니다, 오류가 발생했습니다: {str(e)}"
+        return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
+
+
+def _format_action_result(action: str, params: dict, result: dict) -> str:
+    """액션 결과를 자연스러운 응답으로 변환"""
+
+    # 에러 처리
+    if result.get("error"):
+        return f"⚠️ {result['error']}"
+
+    # 액션별 응답 포맷
+    if action == "register_member":
+        if result.get("duplicate_found"):
+            existing = result.get("existing_members", [])
+            response = f"'{params.get('name', '')}' 이름의 교인이 이미 등록되어 있습니다:\n\n"
+            for i, m in enumerate(existing, 1):
+                response += f"{i}. {m.get('name', '')} {m.get('member_type', '')} ({m.get('phone', '연락처 없음')}, {m.get('birth_date', '생년월일 없음')})\n"
+            response += "\n기존 교인 정보를 업데이트할까요, 아니면 동명이인으로 새로 등록할까요?"
+            return response
+        elif result.get("success"):
+            name = result.get("name", params.get("name", ""))
+            member_type = result.get("member_type", "")
+            return f"✅ {name} {member_type}님이 등록되었습니다!"
+        elif result.get("updated"):
+            return f"✅ {result.get('name', '')}님 정보가 업데이트되었습니다."
+
+    elif action == "search_members":
+        members = result.get("members", [])
+        count = result.get("count", 0)
+        if count == 0:
+            return "검색 결과가 없습니다."
+        response = f"📋 검색 결과: {count}명\n\n"
+        for m in members[:10]:  # 최대 10명까지 표시
+            response += f"• {m.get('name', '')} {m.get('member_type', '')} - {m.get('phone', '연락처 없음')}\n"
+        if count > 10:
+            response += f"\n... 외 {count - 10}명 더 있습니다."
+        return response
+
+    elif action == "get_member_detail":
+        member = result.get("member")
+        if not member:
+            return f"'{params.get('name', '')}' 교인을 찾을 수 없습니다."
+        response = f"📌 {member.get('name', '')} {member.get('member_type', '')}님 정보\n\n"
+        if member.get('phone'): response += f"📞 전화번호: {member['phone']}\n"
+        if member.get('address'): response += f"🏠 주소: {member['address']}\n"
+        if member.get('birth_date'): response += f"🎂 생년월일: {member['birth_date']}\n"
+        if member.get('gender'): response += f"👤 성별: {member['gender']}\n"
+        if member.get('district'): response += f"🏢 교구: {member['district']}\n"
+        if member.get('cell_group'): response += f"🏠 속회: {member['cell_group']}\n"
+        if member.get('mission_group'): response += f"⛪ 선교회: {member['mission_group']}\n"
+        return response
+
+    elif action == "update_member":
+        if result.get("success"):
+            return f"✅ {result.get('name', '')}님 정보가 업데이트되었습니다."
+
+    elif action == "record_visit":
+        if result.get("success"):
+            return f"✅ {result.get('message', '심방 기록이 저장되었습니다.')}"
+
+    elif action == "get_newcomers":
+        newcomers = result.get("newcomers", [])
+        count = len(newcomers)
+        if count == 0:
+            return "최근 새신자가 없습니다."
+        response = f"👋 최근 새신자: {count}명\n\n"
+        for n in newcomers[:10]:
+            response += f"• {n.get('name', '')} - {n.get('registration_date', '')}\n"
+        return response
+
+    elif action == "recommend_visits":
+        recommendations = result.get("recommendations", [])
+        if not recommendations:
+            return "현재 심방 추천 대상이 없습니다."
+        response = "🏠 심방 추천 목록:\n\n"
+        for r in recommendations[:5]:
+            response += f"• {r.get('name', '')} {r.get('member_type', '')} - {r.get('reason', '')}\n"
+        return response
+
+    elif action == "get_absent_members":
+        absent = result.get("absent_members", [])
+        if not absent:
+            return "장기 결석자가 없습니다."
+        response = f"⚠️ 장기 결석자: {len(absent)}명\n\n"
+        for a in absent[:10]:
+            response += f"• {a.get('name', '')} - 마지막 출석: {a.get('last_attendance', '기록 없음')}\n"
+        return response
+
+    elif action == "get_birthdays":
+        birthdays = result.get("birthdays", [])
+        month = params.get("month", "이번 달")
+        if not birthdays:
+            return f"{month} 생일자가 없습니다."
+        response = f"🎂 {month} 생일자: {len(birthdays)}명\n\n"
+        for b in birthdays[:10]:
+            response += f"• {b.get('name', '')} {b.get('member_type', '')} - {b.get('birth_date', '')}\n"
+        return response
+
+    elif action == "get_statistics":
+        stat_type = result.get("type", "overview")
+        if stat_type == "overview":
+            return f"""📊 교인 현황
+
+• 전체 교인: {result.get('total', 0)}명
+• 활동 교인: {result.get('active', 0)}명
+• 비활동 교인: {result.get('inactive', 0)}명
+• 새신자: {result.get('newcomers', 0)}명"""
+
+    elif action == "manage_group":
+        if result.get("success"):
+            return f"✅ {result.get('message', '그룹 작업이 완료되었습니다.')}"
+        elif result.get("groups"):
+            groups = result["groups"]
+            response = f"📁 그룹 목록: {len(groups)}개\n\n"
+            for g in groups[:10]:
+                response += f"• {g.get('name', '')} ({g.get('type', '')}) - {g.get('member_count', 0)}명\n"
+            return response
+
+    # 기본 응답
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @app.route('/api/chat', methods=['POST'])
@@ -3221,6 +3796,43 @@ def api_create_member():
     }), 201
 
 
+def extract_text_from_pdf(file_content):
+    """PDF 파일에서 텍스트 추출"""
+    try:
+        from PyPDF2 import PdfReader
+        import io
+        reader = PdfReader(io.BytesIO(file_content))
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return "\n".join(text_parts)
+    except Exception as e:
+        app.logger.error(f"[PDF추출] 오류: {str(e)}")
+        return None
+
+
+def extract_text_from_image(file_content, filename):
+    """이미지 파일을 base64로 변환 (GPT-5.1 Vision용)"""
+    import base64
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'png'
+    mime_types = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+    }
+    mime = mime_types.get(ext, 'image/png')
+    b64 = base64.b64encode(file_content).decode('utf-8')
+    return {
+        "type": "image",
+        "mime": mime,
+        "base64": b64
+    }
+
+
 @app.route('/api/members/natural-search', methods=['POST'])
 def api_natural_search_members():
     """
@@ -3234,53 +3846,96 @@ def api_natural_search_members():
     - "의정부 거주하는 권사님"
     - "3교구 집사"
     - "010-1234로 시작하는 번호"
+
+    파일 첨부 지원:
+    - PDF: 텍스트 추출 후 검색 컨텍스트에 포함
+    - 이미지: GPT-5.1 Vision으로 분석
     """
-    data = request.get_json() or {}
-    query_text = data.get('query', '').strip()
+    # multipart form-data 또는 JSON 둘 다 지원
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        query_text = request.form.get('query', '').strip()
+        files = request.files.getlist('files')
+    else:
+        data = request.get_json() or {}
+        query_text = data.get('query', '').strip()
+        files = []
 
     if not query_text:
         return jsonify({"error": "검색어(query)가 필요합니다"}), 400
 
-    # === 빠른 검색 (GPT 없이 직접 처리) ===
-    # 1. 단순 이름 검색 (한글 2-4자, 공백 없음)
+    # === 파일 처리 ===
+    file_contents = []  # 추출된 텍스트 또는 이미지 데이터
+    image_contents = []  # GPT-5.1 Vision용 이미지
+
+    for file in files:
+        if file and file.filename:
+            filename = file.filename.lower()
+            content = file.read()
+
+            if filename.endswith('.pdf'):
+                # PDF 텍스트 추출
+                text = extract_text_from_pdf(content)
+                if text:
+                    file_contents.append(f"[첨부파일: {file.filename}]\n{text[:5000]}")  # 5000자 제한
+                    app.logger.info(f"[자연어검색] PDF 첨부: {file.filename}, 추출 길이: {len(text)}")
+            elif filename.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                # 이미지 처리
+                img_data = extract_text_from_image(content, filename)
+                image_contents.append(img_data)
+                app.logger.info(f"[자연어검색] 이미지 첨부: {file.filename}")
+            elif filename.endswith('.txt'):
+                # 텍스트 파일
+                try:
+                    text = content.decode('utf-8')
+                    file_contents.append(f"[첨부파일: {file.filename}]\n{text[:5000]}")
+                except:
+                    pass
+
+    # 파일이 있으면 GPT 검색으로 강제 (빠른 검색 스킵)
+    has_attachments = bool(file_contents or image_contents)
+
+    # === 빠른 검색 (GPT 없이 직접 처리) - 파일 첨부 시 스킵 ===
     import re
-    is_simple_name = re.match(r'^[가-힣]{2,4}$', query_text)
 
-    # 2. 숫자만 있는 경우 (차량번호 일부)
-    is_car_number_partial = re.match(r'^[0-9]{2,4}$', query_text)
+    if not has_attachments:
+        # 1. 단순 이름 검색 (한글 2-4자, 공백 없음)
+        is_simple_name = re.match(r'^[가-힣]{2,4}$', query_text)
 
-    # 3. 전화번호 일부 (숫자와 하이픈)
-    is_phone_partial = re.match(r'^[0-9-]{4,}$', query_text) and not is_car_number_partial
+        # 2. 숫자만 있는 경우 (차량번호 일부)
+        is_car_number_partial = re.match(r'^[0-9]{2,4}$', query_text)
 
-    if is_simple_name or is_car_number_partial or is_phone_partial:
-        # GPT 호출 없이 직접 검색 (토큰 절약)
-        try:
-            if is_simple_name:
-                members = Member.query.filter(
-                    Member.name.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"'{query_text}' 이름으로 직접 검색"
-            elif is_car_number_partial:
-                members = Member.query.filter(
-                    Member.car_number.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"차량번호 '{query_text}' 포함 검색"
-            else:  # is_phone_partial
-                members = Member.query.filter(
-                    Member.phone.ilike(f'%{query_text}%')
-                ).order_by(Member.name).limit(50).all()
-                explanation = f"전화번호 '{query_text}' 포함 검색"
+        # 3. 전화번호 일부 (숫자와 하이픈)
+        is_phone_partial = re.match(r'^[0-9-]{4,}$', query_text) and not is_car_number_partial
 
-            return jsonify({
-                "success": True,
-                "query": query_text,
-                "criteria": {"explanation": explanation, "gpt_used": False},
-                "count": len(members),
-                "members": [_member_to_dict(m) for m in members]
-            })
-        except Exception as e:
-            app.logger.error(f"[빠른검색] 오류: {str(e)}")
-            # 에러 발생 시 GPT 검색으로 fallback
+        if is_simple_name or is_car_number_partial or is_phone_partial:
+            # GPT 호출 없이 직접 검색 (토큰 절약)
+            try:
+                if is_simple_name:
+                    members = Member.query.filter(
+                        Member.name.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"'{query_text}' 이름으로 직접 검색"
+                elif is_car_number_partial:
+                    members = Member.query.filter(
+                        Member.car_number.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"차량번호 '{query_text}' 포함 검색"
+                else:  # is_phone_partial
+                    members = Member.query.filter(
+                        Member.phone.ilike(f'%{query_text}%')
+                    ).order_by(Member.name).limit(50).all()
+                    explanation = f"전화번호 '{query_text}' 포함 검색"
+
+                return jsonify({
+                    "success": True,
+                    "query": query_text,
+                    "criteria": {"explanation": explanation, "gpt_used": False},
+                    "count": len(members),
+                    "members": [_member_to_dict(m) for m in members]
+                })
+            except Exception as e:
+                app.logger.error(f"[빠른검색] 오류: {str(e)}")
+                # 에러 발생 시 GPT 검색으로 fallback
 
     if not openai_client:
         return jsonify({"error": "OpenAI API 키가 설정되지 않았습니다"}), 500
@@ -3369,12 +4024,33 @@ def api_natural_search_members():
 반드시 유효한 JSON만 출력하세요. 다른 텍스트 없이 JSON만 출력합니다."""
 
     try:
+        # 사용자 메시지 구성 (텍스트 + 파일 내용 + 이미지)
+        user_content = []
+
+        # 기본 쿼리 텍스트
+        full_query = query_text
+
+        # 파일 내용 추가 (PDF, TXT 등)
+        if file_contents:
+            full_query += "\n\n--- 첨부 파일 내용 ---\n" + "\n\n".join(file_contents)
+            app.logger.info(f"[자연어검색] 파일 내용 {len(file_contents)}개 추가됨")
+
+        user_content.append({"type": "input_text", "text": full_query})
+
+        # 이미지 추가 (GPT-5.1 Vision)
+        for img in image_contents:
+            user_content.append({
+                "type": "input_image",
+                "image_url": f"data:{img['mime']};base64,{img['base64']}"
+            })
+            app.logger.info(f"[자연어검색] 이미지 추가됨")
+
         # GPT-5.1 Responses API 호출
         response = openai_client.responses.create(
             model="gpt-5.1",
             input=[
                 {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
-                {"role": "user", "content": [{"type": "input_text", "text": query_text}]}
+                {"role": "user", "content": user_content}
             ],
             temperature=0.3
         )
@@ -3409,13 +4085,22 @@ def api_natural_search_members():
         # 검색 실행
         members = _execute_natural_search(search_criteria)
 
-        return jsonify({
+        response_data = {
             "success": True,
             "query": query_text,
             "criteria": search_criteria,
             "count": len(members),
             "members": [_member_to_dict(m) for m in members]
-        })
+        }
+
+        # 파일 첨부 정보 추가
+        if has_attachments:
+            response_data["attachments"] = {
+                "pdf_count": len([f for f in file_contents if '[첨부파일:' in f]),
+                "image_count": len(image_contents)
+            }
+
+        return jsonify(response_data)
 
     except json.JSONDecodeError as e:
         app.logger.error(f"[자연어검색] JSON 파싱 실패: {result_text}")
@@ -3870,6 +4555,7 @@ def api_get_member_family(member_id):
             "photo_url": m.photo_url,
             "gender": m.gender,
             "age": m.age,
+            "status": m.status,  # active, inactive, deceased, transferred 등
         }
 
     # 관계 유형 역방향 매핑
@@ -3911,6 +4597,7 @@ def api_get_member_family(member_id):
         "spouse": None,
         "parents": [],
         "children": [],
+        "separated_children": [],  # 분가한 자녀 (결혼하여 독립한 자녀)
         "siblings": [],
         "in_laws": [],       # 인척 (시댁/처가/형제자매 배우자)
         "grandparents": [],  # 조부모
@@ -4003,17 +4690,94 @@ def api_get_member_family(member_id):
                 "member_count": len(family.members),
             }
 
-    # 3. 형제자매 가족 정보 (형제의 배우자, 자녀)
+    # 2.5. 분가한 자녀 분류 (배우자가 있는 자녀)
+    children_to_keep = []
+    for child_info in family_data["children"]:
+        child_id = child_info["id"]
+        child_member = Member.query.get(child_id)
+
+        # 자녀의 배우자 확인
+        child_spouse_rel = FamilyRelationship.query.filter(
+            db.or_(
+                db.and_(FamilyRelationship.member_id == child_id,
+                       FamilyRelationship.relationship_type == 'spouse'),
+                db.and_(FamilyRelationship.related_member_id == child_id,
+                       FamilyRelationship.relationship_type == 'spouse')
+            )
+        ).first()
+
+        if child_spouse_rel:
+            # 분가한 자녀: 배우자가 있음
+            spouse_id = (child_spouse_rel.related_member_id
+                        if child_spouse_rel.member_id == child_id
+                        else child_spouse_rel.member_id)
+            spouse_member = Member.query.get(spouse_id)
+
+            # 손자녀 찾기
+            grandchildren = []
+            grandchild_rels = FamilyRelationship.query.filter(
+                db.or_(
+                    db.and_(FamilyRelationship.member_id == child_id,
+                           FamilyRelationship.relationship_type == 'parent'),
+                    db.and_(FamilyRelationship.related_member_id == child_id,
+                           FamilyRelationship.relationship_type == 'child')
+                )
+            ).all()
+
+            seen_gc_ids = set()
+            for gc_rel in grandchild_rels:
+                gc_id = (gc_rel.related_member_id
+                        if gc_rel.member_id == child_id
+                        else gc_rel.member_id)
+                if gc_id not in seen_gc_ids:
+                    seen_gc_ids.add(gc_id)
+                    gc_member = Member.query.get(gc_id)
+                    if gc_member:
+                        grandchildren.append({
+                            **member_summary(gc_member),
+                            "relationship_detail": "손자" if gc_member.gender in ['M', '남', '남성', '남자'] else "손녀"
+                        })
+
+            separated_child = {
+                **child_info,
+                "spouse": {
+                    **member_summary(spouse_member),
+                    "relationship_detail": "며느리" if spouse_member.gender not in ['M', '남', '남성', '남자'] else "사위"
+                } if spouse_member else None,
+                "grandchildren": grandchildren
+            }
+            family_data["separated_children"].append(separated_child)
+        else:
+            # 미혼 자녀: 그대로 유지
+            children_to_keep.append(child_info)
+
+    family_data["children"] = children_to_keep
+
+    # 3. 형제자매 가족 정보 (형제의 배우자, 자녀) + 배우자의 형제 가족
     sibling_families = []
-    for sibling_info in family_data["siblings"]:
+
+    # 내 자녀 ID 집합 (조카 중복 방지용)
+    my_children_ids = {c["id"] for c in family_data["children"]}
+    my_children_ids.update(c["id"] for c in family_data["separated_children"])
+
+    # 형제 ID 집합
+    sibling_ids = {s["id"] for s in family_data["siblings"]}
+
+    # 배우자의 형제 ID (인척과 구분용)
+    spouse_sibling_ids = set()
+
+    # 헬퍼 함수: 특정 형제의 가족 정보 수집
+    def build_sibling_family(sibling_info, is_spouse_sibling=False):
         sibling_id = sibling_info["id"]
+        sibling_member = Member.query.get(sibling_id)
         sibling_family = {
             "sibling": sibling_info,
             "spouse": None,
-            "children": []
+            "children": [],
+            "is_spouse_sibling": is_spouse_sibling  # 배우자의 형제인지 표시
         }
 
-        # 형제의 배우자 찾기 (인척 섹션에 있어도 여기에 표시)
+        # 형제의 배우자 찾기
         sibling_spouse_rel = FamilyRelationship.query.filter_by(
             member_id=sibling_id, relationship_type='spouse'
         ).first()
@@ -4026,19 +4790,48 @@ def api_get_member_family(member_id):
             spouse_member = (sibling_spouse_rel.related_member
                            if sibling_spouse_rel.member_id == sibling_id
                            else sibling_spouse_rel.member)
-            if spouse_member:
+            if spouse_member and spouse_member.id != member_id:
+                # 나이 기반으로 관계명 결정
+                if is_spouse_sibling:
+                    # 배우자의 형제의 배우자
+                    if spouse_member.gender not in ['M', '남', '남성', '남자']:
+                        # 여성: 형수/제수/올케
+                        if sibling_member and member.age and sibling_member.age:
+                            rel_name = "형수" if sibling_member.age > member.age else "제수댁"
+                        else:
+                            rel_name = "올케"
+                    else:
+                        # 남성: 매형/매제
+                        if sibling_member and member.age and sibling_member.age:
+                            rel_name = "매형" if sibling_member.age > member.age else "매제"
+                        else:
+                            rel_name = "매형/매제"
+                else:
+                    # 내 형제의 배우자
+                    if spouse_member.gender not in ['M', '남', '남성', '남자']:
+                        # 여성: 형수/제수/올케
+                        if sibling_member and member.age and sibling_member.age:
+                            rel_name = "형수" if sibling_member.age > member.age else "제수댁"
+                        else:
+                            rel_name = "올케"
+                    else:
+                        # 남성: 매형/매제/형부/제부
+                        if sibling_member and member.age and sibling_member.age:
+                            rel_name = "형부" if sibling_member.age > member.age else "제부"
+                        else:
+                            rel_name = "매형"
+
                 sibling_family["spouse"] = {
                     **member_summary(spouse_member),
                     "relationship_id": sibling_spouse_rel.id,
-                    "relationship_detail": "형제 배우자",
+                    "relationship_detail": rel_name,
                 }
 
-        # 형제의 자녀 찾기 (중복 제거용 set)
+        # 형제의 자녀 찾기 (내 자녀는 제외 - 조카 중복 방지)
         seen_children_ids = set()
         sibling_children_rels = FamilyRelationship.query.filter_by(
             member_id=sibling_id, relationship_type='parent'
         ).all()
-        # 역방향도 확인
         sibling_children_rels += FamilyRelationship.query.filter_by(
             related_member_id=sibling_id, relationship_type='child'
         ).all()
@@ -4047,7 +4840,8 @@ def api_get_member_family(member_id):
             child_member = (rel.related_member
                           if rel.member_id == sibling_id
                           else rel.member)
-            if child_member and child_member.id not in seen_children_ids:
+            # 내 자녀는 조카로 표시하지 않음
+            if child_member and child_member.id not in seen_children_ids and child_member.id not in my_children_ids:
                 seen_children_ids.add(child_member.id)
                 sibling_family["children"].append({
                     **member_summary(child_member),
@@ -4055,11 +4849,159 @@ def api_get_member_family(member_id):
                     "relationship_detail": "조카",
                 })
 
-        # 배우자나 자녀가 있으면 추가
-        if sibling_family["spouse"] or sibling_family["children"]:
+        return sibling_family
+
+    # 내 형제 가족
+    for sibling_info in family_data["siblings"]:
+        sibling_family = build_sibling_family(sibling_info, is_spouse_sibling=False)
+        if sibling_family and (sibling_family["spouse"] or sibling_family["children"]):
             sibling_families.append(sibling_family)
 
+    # 배우자의 형제 가족 (인척 중 형제 관계인 사람들)
+    if family_data["spouse"]:
+        spouse_id = family_data["spouse"]["id"]
+        spouse_member = Member.query.get(spouse_id)
+        spouse_gender = family_data["spouse"].get("gender")
+
+        # 배우자의 형제 찾기
+        spouse_sibling_rels = FamilyRelationship.query.filter(
+            db.or_(
+                db.and_(FamilyRelationship.member_id == spouse_id,
+                       FamilyRelationship.relationship_type == 'sibling'),
+                db.and_(FamilyRelationship.related_member_id == spouse_id,
+                       FamilyRelationship.relationship_type == 'sibling')
+            )
+        ).all()
+
+        for rel in spouse_sibling_rels:
+            spouse_sibling_id = rel.related_member_id if rel.member_id == spouse_id else rel.member_id
+            if spouse_sibling_id in spouse_sibling_ids or spouse_sibling_id == member_id:
+                continue
+            spouse_sibling_ids.add(spouse_sibling_id)
+
+            spouse_sibling = Member.query.get(spouse_sibling_id)
+            if spouse_sibling:
+                # 나이 기반 관계명 결정
+                # 내 배우자가 남성(남편)이면 배우자의 형제는 시누이/시동생/시형/시제
+                # 내 배우자가 여성(아내)이면 배우자의 형제는 처남/처제/처형
+                if spouse_gender in ['M', '남', '남성', '남자']:
+                    # 남편의 형제 = 시댁
+                    if spouse_sibling.gender in ['M', '남', '남성', '남자']:
+                        # 남편의 남자 형제
+                        if spouse_sibling.age and spouse_member and spouse_member.age:
+                            rel_name = "시형" if spouse_sibling.age > spouse_member.age else "시제"
+                        else:
+                            rel_name = "시동생"
+                    else:
+                        # 남편의 여자 형제
+                        if spouse_sibling.age and spouse_member and spouse_member.age:
+                            rel_name = "시누이" if spouse_sibling.age > spouse_member.age else "시누이"
+                        else:
+                            rel_name = "시누이"
+                else:
+                    # 아내의 형제 = 처가
+                    if spouse_sibling.gender in ['M', '남', '남성', '남자']:
+                        # 아내의 남자 형제
+                        if spouse_sibling.age and spouse_member and spouse_member.age:
+                            rel_name = "처남" if spouse_sibling.age > spouse_member.age else "처남"
+                        else:
+                            rel_name = "처남"
+                    else:
+                        # 아내의 여자 형제
+                        if spouse_sibling.age and spouse_member and spouse_member.age:
+                            rel_name = "처형" if spouse_sibling.age > spouse_member.age else "처제"
+                        else:
+                            rel_name = "처제"
+
+                spouse_sibling_info = {
+                    **member_summary(spouse_sibling),
+                    "relationship_detail": rel_name
+                }
+                sibling_family = build_sibling_family(spouse_sibling_info, is_spouse_sibling=True)
+                if sibling_family and (sibling_family["spouse"] or sibling_family["children"]):
+                    sibling_families.append(sibling_family)
+
     family_data["sibling_families"] = sibling_families
+
+    # 4. 인척 가족 정보 (인척의 배우자, 자녀)
+    # 이미 형제 가족에 포함된 사람들 ID 수집
+    already_shown_ids = set()
+    for sf in sibling_families:
+        already_shown_ids.add(sf["sibling"]["id"])
+        if sf.get("spouse"):
+            already_shown_ids.add(sf["spouse"]["id"])
+    already_shown_ids.update(spouse_sibling_ids)
+
+    in_law_families = []
+    for in_law_info in family_data["in_laws"]:
+        in_law_id = in_law_info["id"]
+
+        # 이미 형제 가족에 포함된 경우 스킵
+        if in_law_id in already_shown_ids:
+            continue
+
+        in_law_family = {
+            "in_law": in_law_info,
+            "spouse": None,
+            "children": []
+        }
+
+        # 인척의 배우자 찾기
+        in_law_spouse_rel = FamilyRelationship.query.filter_by(
+            member_id=in_law_id, relationship_type='spouse'
+        ).first()
+        if not in_law_spouse_rel:
+            in_law_spouse_rel = FamilyRelationship.query.filter_by(
+                related_member_id=in_law_id, relationship_type='spouse'
+            ).first()
+
+        if in_law_spouse_rel:
+            spouse_member = (in_law_spouse_rel.related_member
+                           if in_law_spouse_rel.member_id == in_law_id
+                           else in_law_spouse_rel.member)
+            # 배우자가 나 자신이거나 이미 표시된 경우 스킵
+            if spouse_member and spouse_member.id != member_id and spouse_member.id not in already_shown_ids:
+                # 관계명을 원래 인척의 관계명에 맞춰서 설정
+                in_law_detail = in_law_info.get("relationship_detail", "")
+                if "올케" in in_law_detail or "형수" in in_law_detail or "제수" in in_law_detail:
+                    spouse_rel_name = in_law_detail  # 올케의 배우자 = 형제
+                elif "동서" in in_law_detail:
+                    spouse_rel_name = "동서 배우자"
+                else:
+                    spouse_rel_name = "인척 배우자"
+
+                in_law_family["spouse"] = {
+                    **member_summary(spouse_member),
+                    "relationship_id": in_law_spouse_rel.id,
+                    "relationship_detail": spouse_rel_name,
+                }
+
+        # 인척의 자녀 찾기
+        seen_children_ids = set()
+        in_law_children_rels = FamilyRelationship.query.filter_by(
+            member_id=in_law_id, relationship_type='parent'
+        ).all()
+        in_law_children_rels += FamilyRelationship.query.filter_by(
+            related_member_id=in_law_id, relationship_type='child'
+        ).all()
+
+        for rel in in_law_children_rels:
+            child_member = (rel.related_member
+                          if rel.member_id == in_law_id
+                          else rel.member)
+            if child_member and child_member.id not in seen_children_ids:
+                seen_children_ids.add(child_member.id)
+                in_law_family["children"].append({
+                    **member_summary(child_member),
+                    "relationship_id": rel.id,
+                    "relationship_detail": "조카",
+                })
+
+        # 배우자나 자녀가 있으면 추가
+        if in_law_family["spouse"] or in_law_family["children"]:
+            in_law_families.append(in_law_family)
+
+    family_data["in_law_families"] = in_law_families
 
     return jsonify(family_data)
 
@@ -4222,6 +5164,20 @@ def api_add_family_relationship(member_id):
     if not related_member:
         return jsonify({"error": "관계 대상 교인을 찾을 수 없습니다"}), 404
 
+    # 배우자 관계 검증: 동성끼리는 배우자 관계 불가
+    if relationship_type == 'spouse':
+        male_genders = ['M', '남', '남성', '남자']
+        female_genders = ['F', '여', '여성', '여자']
+        member_is_male = member.gender in male_genders
+        member_is_female = member.gender in female_genders
+        related_is_male = related_member.gender in male_genders
+        related_is_female = related_member.gender in female_genders
+
+        if (member_is_male and related_is_male) or (member_is_female and related_is_female):
+            return jsonify({
+                "error": f"배우자 관계 오류: {member.name}({member.gender})님과 {related_member.name}({related_member.gender})님은 같은 성별입니다. 형제자매 관계를 확인해주세요."
+            }), 400
+
     # 이미 존재하는 관계 확인
     existing = FamilyRelationship.query.filter_by(
         member_id=member_id,
@@ -4281,6 +5237,447 @@ def api_add_family_relationship(member_id):
 def api_get_relationship_options():
     """한국 가족 관계 옵션 목록 반환 (UI용)"""
     return jsonify(FamilyRelationship.get_all_relationship_options())
+
+
+@app.route('/api/family/audit', methods=['GET'])
+def api_audit_family_relationships():
+    """잘못된 가족 관계 자동 감지
+
+    감지 항목:
+    1. 동성 배우자 (같은 성별인데 spouse로 등록)
+    2. 비정상 나이차 배우자 (20살 이상 차이나는데 spouse)
+    3. 같은 성씨 + 비슷한 나이인데 spouse (형제일 가능성)
+    """
+    try:
+        issues = []
+
+        # 모든 배우자 관계 조회
+        spouse_rels = FamilyRelationship.query.filter_by(relationship_type='spouse').all()
+
+        processed_pairs = set()
+        male_genders = ['M', '남', '남성', '남자']
+        female_genders = ['F', '여', '여성', '여자']
+
+        for rel in spouse_rels:
+            try:
+                # 중복 체크 (양방향 관계이므로)
+                pair_key = tuple(sorted([rel.member_id, rel.related_member_id]))
+                if pair_key in processed_pairs:
+                    continue
+                processed_pairs.add(pair_key)
+
+                member = rel.member
+                related = rel.related_member
+
+                if not member or not related:
+                    continue
+
+                issue = None
+
+                # 1. 동성 배우자 체크
+                member_is_male = member.gender in male_genders
+                member_is_female = member.gender in female_genders
+                related_is_male = related.gender in male_genders
+                related_is_female = related.gender in female_genders
+
+                if (member_is_male and related_is_male) or (member_is_female and related_is_female):
+                    # 같은 성씨인지 확인
+                    member_surname = member.name[0] if member.name else ''
+                    related_surname = related.name[0] if related.name else ''
+
+                    suggested_type = 'sibling'
+                    suggested_detail = '형제자매'
+
+                    # 나이 차이로 형/동생 결정
+                    if member.age and related.age:
+                        age_diff = abs(member.age - related.age)
+                        if age_diff <= 15:  # 15살 이하 차이면 형제
+                            if member_is_male:
+                                if member.age > related.age:
+                                    suggested_detail = '형' if related_is_male else '오빠'
+                                else:
+                                    suggested_detail = '남동생'
+                            else:
+                                if member.age > related.age:
+                                    suggested_detail = '언니' if related_is_female else '누나'
+                                else:
+                                    suggested_detail = '여동생'
+
+                    issue = {
+                        'type': 'same_gender_spouse',
+                        'severity': 'high',
+                        'relationship_id': rel.id,
+                        'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
+                        'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
+                        'current': {'type': 'spouse', 'detail': rel.relationship_detail},
+                        'suggested': {'type': suggested_type, 'detail': suggested_detail},
+                        'reason': f"동성({member.gender})끼리 배우자로 등록됨"
+                    }
+
+                # 2. 같은 성씨 + 비슷한 나이 (7살 이내) = 형제일 가능성
+                elif member.name and related.name and member.name[0] == related.name[0]:
+                    if member.age and related.age:
+                        age_diff = abs(member.age - related.age)
+                        if age_diff <= 7:  # 7살 이내 차이
+                            suggested_detail = '형제자매'
+                            if member_is_male and related_is_male:
+                                suggested_detail = '형' if related.age > member.age else '남동생'
+                            elif member_is_female and related_is_female:
+                                suggested_detail = '언니' if related.age > member.age else '여동생'
+                            else:
+                                suggested_detail = '남매'
+
+                            issue = {
+                                'type': 'likely_sibling',
+                                'severity': 'medium',
+                                'relationship_id': rel.id,
+                                'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
+                                'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
+                                'current': {'type': 'spouse', 'detail': rel.relationship_detail},
+                                'suggested': {'type': 'sibling', 'detail': suggested_detail},
+                                'reason': f"같은 성씨({member.name[0]}) + 나이차 {age_diff}살 → 형제일 가능성"
+                            }
+
+                # 3. 나이차가 20살 이상이면 부모-자녀일 가능성
+                if not issue and member.age and related.age:
+                    age_diff = abs(member.age - related.age)
+                    if age_diff >= 20:
+                        older = member if member.age > related.age else related
+                        younger = related if member.age > related.age else member
+
+                        suggested_detail = '아들' if younger.gender in male_genders else '딸'
+
+                        issue = {
+                            'type': 'likely_parent_child',
+                            'severity': 'medium',
+                            'relationship_id': rel.id,
+                            'member': {'id': member.id, 'name': member.name, 'gender': member.gender, 'age': member.age},
+                            'related': {'id': related.id, 'name': related.name, 'gender': related.gender, 'age': related.age},
+                            'current': {'type': 'spouse', 'detail': rel.relationship_detail},
+                            'suggested': {
+                                'type': 'parent',
+                                'detail': suggested_detail,
+                                'note': f"{older.name}이(가) 부모, {younger.name}이(가) 자녀"
+                            },
+                            'reason': f"나이차 {age_diff}살 → 부모-자녀일 가능성"
+                        }
+
+                if issue:
+                    issues.append(issue)
+
+            except Exception as e:
+                # 개별 관계 처리 중 에러는 무시하고 계속 진행
+                print(f"[AUDIT] 관계 처리 중 에러 (rel_id={rel.id}): {e}")
+                continue
+
+        # 심각도순 정렬 (high > medium > low)
+        severity_order = {'high': 0, 'medium': 1, 'low': 2}
+        issues.sort(key=lambda x: severity_order.get(x['severity'], 3))
+
+        return jsonify({
+            'total_spouse_relationships': len(processed_pairs),
+            'issues_found': len(issues),
+            'issues': issues
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': f'감지 중 오류 발생: {str(e)}',
+            'issues': [],
+            'issues_found': 0
+        }), 500
+
+
+@app.route('/api/family/fix', methods=['POST'])
+def api_fix_family_relationship():
+    """잘못된 가족 관계 수정
+
+    Request body:
+    {
+        "relationship_id": 123,
+        "new_type": "sibling",
+        "new_detail": "형"
+    }
+    """
+    data = request.get_json() or {}
+
+    rel_id = data.get('relationship_id')
+    new_type = data.get('new_type')
+    new_detail = data.get('new_detail')
+
+    if not rel_id or not new_type:
+        return jsonify({"error": "relationship_id와 new_type이 필요합니다"}), 400
+
+    rel = FamilyRelationship.query.get(rel_id)
+    if not rel:
+        return jsonify({"error": "관계를 찾을 수 없습니다"}), 404
+
+    member = rel.member
+    related = rel.related_member
+
+    try:
+        # 역방향 관계도 찾기
+        reverse_rel = FamilyRelationship.query.filter_by(
+            member_id=rel.related_member_id,
+            related_member_id=rel.member_id,
+            relationship_type=rel.relationship_type
+        ).first()
+
+        # 기존 관계 삭제
+        old_type = rel.relationship_type
+        old_detail = rel.relationship_detail
+
+        db.session.delete(rel)
+        if reverse_rel:
+            db.session.delete(reverse_rel)
+
+        db.session.flush()
+
+        # 새 관계 생성
+        new_relationships = FamilyRelationship.create_bidirectional(
+            member_id=member.id,
+            related_member_id=related.id,
+            relationship_type=new_type,
+            detail=new_detail
+        )
+
+        for new_rel in new_relationships:
+            db.session.add(new_rel)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"{member.name}님과 {related.name}님의 관계가 {old_type}({old_detail}) → {new_type}({new_detail})로 수정되었습니다",
+            "old": {"type": old_type, "detail": old_detail},
+            "new": {"type": new_type, "detail": new_detail}
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"관계 수정 실패: {str(e)}"}), 500
+
+
+@app.route('/admin/fix-family')
+def admin_fix_family_page():
+    """가족관계 수정 관리자 페이지"""
+    return '''
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가족관계 자동 수정</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f5f5f7; }
+        .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        p { color: #666; margin-bottom: 20px; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 16px; cursor: pointer; margin-right: 10px; }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        #result { margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 12px; white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 400px; overflow-y: auto; }
+        .issue { padding: 12px; margin: 8px 0; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107; }
+        .issue.high { background: #f8d7da; border-color: #dc3545; }
+        .fixed { background: #d4edda; border-color: #28a745; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat { flex: 1; padding: 16px; background: #f0f0f0; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 13px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔧 가족관계 자동 수정</h1>
+        <p>잘못 등록된 가족관계(동성 배우자 등)를 자동으로 감지하고 수정합니다.</p>
+
+        <div class="stats" id="stats" style="display:none;">
+            <div class="stat">
+                <div class="stat-value" id="total">-</div>
+                <div class="stat-label">전체 배우자 관계</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="issues">-</div>
+                <div class="stat-label">문제 발견</div>
+            </div>
+        </div>
+
+        <button onclick="audit()">1. 문제 감지</button>
+        <button onclick="fixAll()" class="btn-danger" id="fixBtn" disabled>2. 자동 수정</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let auditData = null;
+
+        async function audit() {
+            document.getElementById('result').textContent = '검사 중...';
+            try {
+                const res = await fetch('/api/family/audit');
+                auditData = await res.json();
+
+                document.getElementById('stats').style.display = 'flex';
+                document.getElementById('total').textContent = auditData.total_spouse_relationships;
+                document.getElementById('issues').textContent = auditData.issues_found;
+
+                if (auditData.issues_found > 0) {
+                    document.getElementById('fixBtn').disabled = false;
+                    let html = `<strong>${auditData.issues_found}건의 문제 발견:</strong>\\n\\n`;
+                    auditData.issues.forEach((issue, i) => {
+                        html += `<div class="issue ${issue.severity}">${i+1}. ${issue.member.name}(${issue.member.gender}, ${issue.member.age}세) ↔ ${issue.related.name}(${issue.related.gender}, ${issue.related.age}세)\\n`;
+                        html += `   현재: ${issue.current.type} → 제안: ${issue.suggested.type}(${issue.suggested.detail})\\n`;
+                        html += `   사유: ${issue.reason}</div>`;
+                    });
+                    document.getElementById('result').innerHTML = html;
+                } else {
+                    document.getElementById('result').textContent = '✅ 문제 없음! 모든 가족관계가 정상입니다.';
+                }
+            } catch (e) {
+                document.getElementById('result').textContent = '오류: ' + e.message;
+            }
+        }
+
+        async function fixAll() {
+            if (!confirm(`${auditData.issues_found}건의 문제를 자동 수정하시겠습니까?`)) return;
+
+            document.getElementById('result').textContent = '수정 중...';
+            document.getElementById('fixBtn').disabled = true;
+
+            try {
+                const res = await fetch('/api/family/fix-all', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({severity: 'high', dry_run: false})
+                });
+                const data = await res.json();
+
+                let html = `<strong>✅ 수정 완료!</strong>\\n\\n`;
+                html += `수정됨: ${data.fixed}건, 실패: ${data.failed}건\\n\\n`;
+                data.details.forEach((d, i) => {
+                    html += `<div class="issue fixed">${i+1}. ${d.member} ↔ ${d.related}: ${d.action}</div>`;
+                });
+                document.getElementById('result').innerHTML = html;
+                document.getElementById('issues').textContent = '0';
+            } catch (e) {
+                document.getElementById('result').textContent = '오류: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
+    '''
+
+
+@app.route('/api/family/fix-all', methods=['POST'])
+def api_fix_all_family_relationships():
+    """감지된 모든 문제 자동 수정 (high severity만)
+
+    Request body:
+    {
+        "severity": "high",  // high, medium, all
+        "dry_run": false     // true면 실제 수정 없이 결과만 반환
+    }
+    """
+    data = request.get_json() or {}
+    target_severity = data.get('severity', 'high')
+    dry_run = data.get('dry_run', True)
+
+    # 먼저 문제 감지
+    audit_response = api_audit_family_relationships()
+    audit_data = audit_response.get_json()
+
+    issues = audit_data.get('issues', [])
+
+    # 심각도 필터링
+    if target_severity != 'all':
+        if target_severity == 'high':
+            issues = [i for i in issues if i['severity'] == 'high']
+        elif target_severity == 'medium':
+            issues = [i for i in issues if i['severity'] in ['high', 'medium']]
+
+    results = {
+        'total_issues': len(issues),
+        'fixed': 0,
+        'failed': 0,
+        'details': [],
+        'dry_run': dry_run
+    }
+
+    for issue in issues:
+        rel_id = issue['relationship_id']
+        suggested = issue['suggested']
+
+        if dry_run:
+            results['details'].append({
+                'relationship_id': rel_id,
+                'member': issue['member']['name'],
+                'related': issue['related']['name'],
+                'action': f"{issue['current']['type']} → {suggested['type']}({suggested['detail']})",
+                'status': 'would_fix'
+            })
+            results['fixed'] += 1
+        else:
+            try:
+                rel = FamilyRelationship.query.get(rel_id)
+                if not rel:
+                    results['failed'] += 1
+                    results['details'].append({
+                        'relationship_id': rel_id,
+                        'status': 'not_found'
+                    })
+                    continue
+
+                member = rel.member
+                related = rel.related_member
+
+                # 역방향 관계 찾기
+                reverse_rel = FamilyRelationship.query.filter_by(
+                    member_id=rel.related_member_id,
+                    related_member_id=rel.member_id,
+                    relationship_type=rel.relationship_type
+                ).first()
+
+                # 삭제
+                db.session.delete(rel)
+                if reverse_rel:
+                    db.session.delete(reverse_rel)
+                db.session.flush()
+
+                # 새 관계 생성
+                new_rels = FamilyRelationship.create_bidirectional(
+                    member_id=member.id,
+                    related_member_id=related.id,
+                    relationship_type=suggested['type'],
+                    detail=suggested['detail']
+                )
+                for new_rel in new_rels:
+                    db.session.add(new_rel)
+
+                results['fixed'] += 1
+                results['details'].append({
+                    'relationship_id': rel_id,
+                    'member': member.name,
+                    'related': related.name,
+                    'action': f"{issue['current']['type']} → {suggested['type']}({suggested['detail']})",
+                    'status': 'fixed'
+                })
+
+            except Exception as e:
+                results['failed'] += 1
+                results['details'].append({
+                    'relationship_id': rel_id,
+                    'status': 'error',
+                    'error': str(e)
+                })
+
+    if not dry_run:
+        db.session.commit()
+
+    return jsonify(results)
 
 
 @app.route('/api/members/<int:member_id>/notes', methods=['PUT'])
@@ -5691,6 +7088,82 @@ def run_migrations():
             print('[Migration] Added description column to groups table')
 
         db.session.commit()
+
+def auto_fix_family_relationships():
+    """서버 시작 시 잘못된 가족관계 자동 수정 (동성 배우자만)"""
+    print('[AutoFix] 가족관계 검사 시작...')
+
+    male_genders = ['M', '남', '남성', '남자']
+    female_genders = ['F', '여', '여성', '여자']
+
+    # 모든 배우자 관계 조회
+    spouse_rels = FamilyRelationship.query.filter_by(relationship_type='spouse').all()
+    processed_pairs = set()
+    fixed_count = 0
+
+    for rel in spouse_rels:
+        pair_key = tuple(sorted([rel.member_id, rel.related_member_id]))
+        if pair_key in processed_pairs:
+            continue
+        processed_pairs.add(pair_key)
+
+        member = rel.member
+        related = rel.related_member
+
+        if not member or not related:
+            continue
+
+        member_is_male = member.gender in male_genders
+        member_is_female = member.gender in female_genders
+        related_is_male = related.gender in male_genders
+        related_is_female = related.gender in female_genders
+
+        # 동성 배우자만 자동 수정
+        if (member_is_male and related_is_male) or (member_is_female and related_is_female):
+            # 나이 차이로 형/동생 결정
+            suggested_detail = '형제자매'
+            if member.age and related.age:
+                if member_is_male:
+                    suggested_detail = '형' if related.age > member.age else '남동생'
+                else:
+                    suggested_detail = '언니' if related.age > member.age else '여동생'
+
+            try:
+                # 역방향 관계 찾기
+                reverse_rel = FamilyRelationship.query.filter_by(
+                    member_id=rel.related_member_id,
+                    related_member_id=rel.member_id,
+                    relationship_type='spouse'
+                ).first()
+
+                # 삭제
+                db.session.delete(rel)
+                if reverse_rel:
+                    db.session.delete(reverse_rel)
+                db.session.flush()
+
+                # 새 관계 생성
+                new_rels = FamilyRelationship.create_bidirectional(
+                    member_id=member.id,
+                    related_member_id=related.id,
+                    relationship_type='sibling',
+                    detail=suggested_detail
+                )
+                for new_rel in new_rels:
+                    db.session.add(new_rel)
+
+                fixed_count += 1
+                print(f'[AutoFix] {member.name} ↔ {related.name}: 배우자 → 형제({suggested_detail})')
+
+            except Exception as e:
+                print(f'[AutoFix] 오류: {member.name} ↔ {related.name}: {e}')
+
+    if fixed_count > 0:
+        db.session.commit()
+        print(f'[AutoFix] 완료: {fixed_count}건의 동성 배우자 관계를 형제로 수정')
+    else:
+        print('[AutoFix] 수정할 동성 배우자 관계 없음')
+
 
 with app.app_context():
     db.create_all()
