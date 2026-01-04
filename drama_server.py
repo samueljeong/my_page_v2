@@ -21776,10 +21776,25 @@ def api_news_run_pipeline():
             print(f"[NEWS] 히스토리 파이프라인 오류 (무시): {hist_err}")
             history_result = {"error": str(hist_err)}
 
+        # ===== 무협 파이프라인도 함께 실행 (매일 1회) =====
+        wuxia_result = None
+        try:
+            from scripts.wuxia_pipeline import run_auto_script_pipeline
+            print("[NEWS] ===== 무협(혈영) 파이프라인 시작 =====")
+            wuxia_result = run_auto_script_pipeline(max_scripts=1)
+            if wuxia_result.get("success"):
+                print(f"[NEWS] 무협 파이프라인 완료: {wuxia_result.get('scripts_generated', 0)}개 대본 생성")
+            else:
+                print(f"[NEWS] 무협 파이프라인: {wuxia_result.get('message', '처리할 에피소드 없음')}")
+        except Exception as wuxia_err:
+            print(f"[NEWS] 무협 파이프라인 오류 (무시): {wuxia_err}")
+            wuxia_result = {"error": str(wuxia_err)}
+
         return jsonify({
             "ok": result["success"],
             "result": result,
             "history": history_result,
+            "wuxia": wuxia_result,
             "sheets_setup": sheets_result
         })
 
