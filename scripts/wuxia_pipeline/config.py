@@ -38,8 +38,8 @@ VOICE_MAP: Dict[str, str] = {
 
     # 주인공들
     "무영": "gemini:Puck",           # 젊은 남성, 활기차고 친근한 톤
-    "설하": "gemini:pro:Kore",       # ★ 절세미녀 여주인공, 부드럽고 우아한 톤 (Pro 고품질)
-    "노인": "gemini:pro:Charon",     # 노인, 깊고 지혜로운 톤 (Pro 모델로 차별화)
+    "설하": "gemini:Kore",           # 절세미녀 여주인공, 부드럽고 우아한 톤 (Flash)
+    "노인": "gemini:Charon",         # 노인, 깊고 지혜로운 톤 (Flash)
     "각주": "chirp3:Fenrir",         # 남성 조연, 힘있고 웅장한 톤
 
     # 엑스트라 (성별 구분)
