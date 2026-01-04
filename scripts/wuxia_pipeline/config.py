@@ -33,19 +33,22 @@ SERIES_INFO = {
 #   - gemini:pro:* : Gemini Pro 모델 (고품질)
 
 VOICE_MAP: Dict[str, str] = {
-    # ★ 주인공 → Chirp3 (상위 모델)
+    # ★ 비중 높음 → Chirp3 (상위 모델)
+    "나레이션": "chirp3:Charon",     # 가장 많이 등장
     "무영": "chirp3:Puck",           # 주인공
     "설하": "chirp3:Kore",           # 여주인공
 
-    # 조연 → Flash
-    "노인": "gemini:Charon",         # 조연 (스승)
+    # 비중 낮음 → Flash
+    "노인": "gemini:Charon",         # 조연 (스승) - 속도 느리게
     "각주": "gemini:Fenrir",         # 조연
-    "악역": "gemini:Fenrir",         # 조연 (악역)
-
-    # 엑스트라 → Flash
-    "나레이션": "gemini:Charon",     # 나레이션
+    "악역": "gemini:Fenrir",         # 악역
     "남자": "gemini:Charon",         # 엑스트라
     "여자": "gemini:Kore",           # 엑스트라
+}
+
+# 캐릭터별 음성 속도 (기본값: 0.9)
+CHARACTER_SPEAKING_RATE: Dict[str, float] = {
+    "노인": 0.8,  # 느리게 (지혜로운 노인 느낌)
 }
 
 # 기본 음성 (태그가 없거나 매칭 안될 때)
