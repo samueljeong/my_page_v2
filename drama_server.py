@@ -23241,13 +23241,10 @@ def render_video_with_bgm(
         else:
             ffmpeg_cmd.extend(["-map", "0:v", "-map", "1:a"])
 
-        # 자막 burn-in (있으면)
-        if srt_path and os.path.exists(srt_path):
-            # 자막 스타일: 무협풍 (검은 테두리, 흰 글씨)
-            subtitle_style = "FontName=NanumGothic,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1"
-            ffmpeg_cmd.extend([
-                "-vf", f"subtitles={srt_path}:force_style='{subtitle_style}'"
-            ])
+        # ★ 자막 비활성화 (싱크 문제로 제거)
+        # if srt_path and os.path.exists(srt_path):
+        #     subtitle_style = "..."
+        #     ffmpeg_cmd.extend(["-vf", f"subtitles={srt_path}:..."])
 
         # 출력 설정
         ffmpeg_cmd.extend([
