@@ -461,13 +461,10 @@ SHEET_HEADERS = [
 ]
 
 # =====================================================
-# API 설정
+# API 설정 (Workers용)
 # =====================================================
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-CLAUDE_MODEL = "anthropic/claude-opus-4.5"
-
+# TTS, 이미지 생성에 사용
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 # =====================================================

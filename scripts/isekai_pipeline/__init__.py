@@ -1,17 +1,30 @@
 """
 혈영 이세계편 파이프라인 (시즌2)
 
-8개 Opus 에이전트 구조:
-1. PLANNER: 에피소드 기획
-2. WRITER: 대본 작성 (25,000자)
-3. ARTIST: 이미지 프롬프트
-4. NARRATOR: TTS 설정
-5. SUBTITLE: 자막 스타일
-6. EDITOR: BGM/SFX
-7. METADATA: YouTube 메타데이터
-8. REVIEWER: 품질 검수
+## 역할 분리
+
+창작 작업 (Claude가 대화에서 직접 수행):
+- 기획 (씬 구조, 클리프행어)
+- 대본 작성 (25,000자)
+- 이미지 프롬프트 생성
+- TTS 연출 지시
+- 자막 스타일 설계
+- BGM/SFX 설정
+- YouTube 메타데이터
+- 품질 검수
+
+실행 작업 (workers.py에서 API 호출):
+- TTS 생성 → Gemini/Google TTS
+- 이미지 생성 → Gemini Imagen
+- 영상 렌더링 → FFmpeg
+- YouTube 업로드 → YouTube API
+
+## 참조 문서 (Claude 창작 시 활용)
+- docs/series_bible.md: 세계관, 캐릭터, 스토리 구조
+- docs/agent_prompts.md: 역할별 가이드라인
 """
 
+# 설정
 from .config import (
     SERIES_INFO,
     PART_STRUCTURE,
@@ -27,23 +40,21 @@ from .config import (
     SHEET_NAME,
     SHEET_HEADERS,
     OUTPUT_BASE,
-    OPENROUTER_API_KEY,
-    CLAUDE_MODEL,
 )
 
-from .agents import (
-    run_planner,
-    run_writer,
-    run_artist,
-    run_narrator,
-    run_subtitle,
-    run_editor,
-    run_metadata,
-    run_reviewer,
-    load_series_bible,
-    get_part_info,
+# Workers (실행 API)
+from .workers import (
+    generate_tts,
+    generate_image,
+    render_video,
+    upload_youtube,
+    save_script,
+    save_brief,
+    save_metadata,
+    ensure_directories,
 )
 
+# Sheets (Google Sheets 연동)
 from .sheets import (
     create_isekai_sheet,
     add_episode,
@@ -56,10 +67,11 @@ from .sheets import (
     get_prev_episode_summary,
 )
 
+# Run (실행 오케스트레이션)
 from .run import (
-    run_pipeline,
-    run_auto_pipeline,
-    run_single_agent,
+    execute_episode,
+    execute_from_json,
+    get_part_for_episode,
 )
 
 __all__ = [
@@ -78,19 +90,15 @@ __all__ = [
     "SHEET_NAME",
     "SHEET_HEADERS",
     "OUTPUT_BASE",
-    "OPENROUTER_API_KEY",
-    "CLAUDE_MODEL",
-    # Agents
-    "run_planner",
-    "run_writer",
-    "run_artist",
-    "run_narrator",
-    "run_subtitle",
-    "run_editor",
-    "run_metadata",
-    "run_reviewer",
-    "load_series_bible",
-    "get_part_info",
+    # Workers
+    "generate_tts",
+    "generate_image",
+    "render_video",
+    "upload_youtube",
+    "save_script",
+    "save_brief",
+    "save_metadata",
+    "ensure_directories",
     # Sheets
     "create_isekai_sheet",
     "add_episode",
@@ -102,7 +110,7 @@ __all__ = [
     "initialize_sheet_with_episodes",
     "get_prev_episode_summary",
     # Run
-    "run_pipeline",
-    "run_auto_pipeline",
-    "run_single_agent",
+    "execute_episode",
+    "execute_from_json",
+    "get_part_for_episode",
 ]
