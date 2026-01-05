@@ -4790,13 +4790,56 @@ def generate_chirp3_tts(text, voice_name="ko-KR-Chirp3-HD-Charon", language_code
                 "audio_data": final_audio
             }
         except ImportError:
-            # pydub 없으면 단순 연결 (MP3는 단순 연결해도 재생 가능)
-            print("[CHIRP3-TTS] pydub 없음 - 단순 연결", flush=True)
-            final_audio = b''.join(all_audio)
-            return {
-                "ok": True,
-                "audio_data": final_audio
-            }
+            # pydub 없으면 FFmpeg로 연결 (단순 byte 연결은 글리치 발생!)
+            print("[CHIRP3-TTS] pydub 없음 - FFmpeg로 연결", flush=True)
+            import tempfile
+            import subprocess
+
+            # 임시 파일로 각 청크 저장
+            temp_files = []
+            temp_dir = tempfile.mkdtemp()
+            try:
+                for i, audio_data in enumerate(all_audio):
+                    temp_path = os.path.join(temp_dir, f"chunk_{i:03d}.mp3")
+                    with open(temp_path, "wb") as f:
+                        f.write(audio_data)
+                    temp_files.append(temp_path)
+
+                # FFmpeg concat 리스트 파일 생성
+                list_path = os.path.join(temp_dir, "concat_list.txt")
+                with open(list_path, "w") as f:
+                    for temp_path in temp_files:
+                        f.write(f"file '{temp_path}'\n")
+
+                # FFmpeg로 연결
+                output_path = os.path.join(temp_dir, "merged.mp3")
+                cmd = [
+                    "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                    "-i", list_path,
+                    "-c", "copy",  # 재인코딩 없이 연결
+                    output_path
+                ]
+                result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+                if result.returncode == 0 and os.path.exists(output_path):
+                    with open(output_path, "rb") as f:
+                        final_audio = f.read()
+                    print(f"[CHIRP3-TTS] 성공 - FFmpeg로 {len(chunks)}개 청크 연결", flush=True)
+                    return {
+                        "ok": True,
+                        "audio_data": final_audio
+                    }
+                else:
+                    # FFmpeg 실패 시 첫 번째 청크만 반환
+                    print(f"[CHIRP3-TTS] FFmpeg 실패 - 첫 청크만 반환", flush=True)
+                    return {
+                        "ok": True,
+                        "audio_data": all_audio[0]
+                    }
+            finally:
+                # 임시 파일 정리
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     except Exception as e:
         print(f"[CHIRP3-TTS] 오류: {e}", flush=True)
