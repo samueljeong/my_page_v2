@@ -22656,11 +22656,42 @@ def run_wuxia_video_pipeline(
                     print(f"[WUXIA-VIDEO] ✅ 시리즈 이미지 생성 완료: {series_image_path}")
                     print(f"[WUXIA-VIDEO] ⚠️ Git 커밋 필요: git add {series_image_path}")
                 else:
-                    print(f"[WUXIA-VIDEO] ⚠️ 이미지 생성 실패, 기본 이미지 사용")
+                    print(f"[WUXIA-VIDEO] ⚠️ Gemini 이미지 생성 실패")
                     main_image_path = None
             except Exception as img_err:
                 print(f"[WUXIA-VIDEO] ⚠️ 이미지 예외: {img_err}")
                 main_image_path = None
+
+        # ★ 폴백: Gemini 실패 시 PIL로 그라데이션 배경 이미지 생성
+        if not main_image_path:
+            print(f"[WUXIA-VIDEO] 폴백: PIL 그라데이션 배경 생성...")
+            try:
+                from PIL import Image, ImageDraw
+
+                # 1920x1080 (16:9) 무협 분위기 그라데이션
+                width, height = 1920, 1080
+                img = Image.new('RGB', (width, height))
+                draw = ImageDraw.Draw(img)
+
+                # 상단: 진한 남색 → 하단: 검은색 (무협 분위기)
+                top_color = (15, 25, 45)      # 진한 남색
+                bottom_color = (5, 5, 15)     # 거의 검은색
+
+                for y in range(height):
+                    ratio = y / height
+                    r = int(top_color[0] + (bottom_color[0] - top_color[0]) * ratio)
+                    g = int(top_color[1] + (bottom_color[1] - top_color[1]) * ratio)
+                    b = int(top_color[2] + (bottom_color[2] - top_color[2]) * ratio)
+                    draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+                # 저장
+                fallback_path = series_image_path.replace('.png', '_fallback.png')
+                os.makedirs(os.path.dirname(fallback_path), exist_ok=True)
+                img.save(fallback_path)
+                main_image_path = fallback_path
+                print(f"[WUXIA-VIDEO] ✅ 폴백 이미지 생성: {fallback_path}")
+            except Exception as fallback_err:
+                print(f"[WUXIA-VIDEO] ❌ 폴백 이미지 생성 실패: {fallback_err}")
 
         # 이미지 리스트 (A안: 1개만)
         image_paths = [main_image_path] if main_image_path else []
