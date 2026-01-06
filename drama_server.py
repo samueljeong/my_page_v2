@@ -25651,7 +25651,7 @@ def api_isekai_push_episode():
         # 헤더 조회
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{SHEET_NAME}!A2:Z2"
+            range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
         headers = result.get('values', [[]])[0]
         col_map = {h: i for i, h in enumerate(headers)}
@@ -25887,7 +25887,7 @@ def api_isekai_push_ep001():
         # 헤더 조회
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{SHEET_NAME}!A2:Z2"
+            range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
         headers = result.get('values', [[]])[0]
         col_map = {h: i for i, h in enumerate(headers)}
