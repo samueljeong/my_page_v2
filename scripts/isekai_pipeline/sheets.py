@@ -59,10 +59,25 @@ def create_isekai_sheet(channel_id: str = "") -> Dict[str, Any]:
         ]
 
         if SHEET_NAME in existing_sheets:
+            # 시트 존재 → 헤더만 업데이트
+            row1 = ["채널ID", channel_id or SERIES_INFO.get("youtube_channel_id", "")]
+            row2 = SHEET_HEADERS
+
+            service.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"{SHEET_NAME}!A1",
+                valueInputOption="RAW",
+                body={"values": [row1, row2]}
+            ).execute()
+
+            print(f"[ISEKAI-SHEETS] 시트 '{SHEET_NAME}' 헤더 업데이트 완료")
+
             return {
                 "ok": True,
-                "status": "already_exists",
-                "message": f"시트 '{SHEET_NAME}'이(가) 이미 존재합니다"
+                "status": "header_updated",
+                "sheet_name": SHEET_NAME,
+                "columns": len(SHEET_HEADERS),
+                "message": f"시트 '{SHEET_NAME}' 헤더 업데이트 완료 ({len(SHEET_HEADERS)}개 열)"
             }
 
         # 1) 시트 생성

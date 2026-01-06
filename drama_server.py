@@ -25796,8 +25796,8 @@ def api_isekai_push_ep001():
     except Exception as e:
         return jsonify({"ok": False, "error": f"대본 파일 읽기 실패: {e}"}), 400
 
-    # 이미지 프롬프트 파일 읽기
-    image_prompt_path = os.path.join(base_dir, 'outputs', 'isekai', 'EP001', 'EP001_image_prompts.json')
+    # 이미지 프롬프트 파일 읽기 (static 폴더에서)
+    image_prompt_path = os.path.join(base_dir, 'static', 'isekai', 'EP001_image_prompts.json')
     image_prompt = ""
     try:
         with open(image_prompt_path, 'r', encoding='utf-8') as f:
