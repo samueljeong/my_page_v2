@@ -764,16 +764,12 @@ def sync_episode_from_files(episode: int) -> Dict[str, Any]:
 def sync_all_episodes() -> Dict[str, Any]:
     """
     outputs/isekai/ 디렉토리의 모든 에피소드를 시트에 동기화
+    (시트가 이미 존재한다고 가정 - 채널ID 덮어쓰기 방지)
     """
     from .config import OUTPUT_BASE
 
     if not os.path.exists(OUTPUT_BASE):
         return {"ok": False, "error": f"출력 디렉토리 없음: {OUTPUT_BASE}"}
-
-    # 시트 생성 확인
-    create_result = create_isekai_sheet()
-    if not create_result.get("ok") and create_result.get("status") != "already_exists":
-        return create_result
 
     # EP로 시작하는 디렉토리 찾기
     synced = []
