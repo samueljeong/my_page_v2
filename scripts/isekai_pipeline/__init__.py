@@ -91,6 +91,17 @@ from .script_writer import (
     SCENE_CONFIG,
 )
 
+# Reviewers (대본 자동 리뷰)
+from .reviewers import (
+    auto_review_script,
+    review_script_file,
+    run_form_checker,
+    run_voice_checker,
+    run_feel_checker,
+    get_review_checklists,
+    print_checklists,
+)
+
 __all__ = [
     # Config
     "SERIES_INFO",
@@ -143,4 +154,12 @@ __all__ = [
     "get_scene_prompt",
     "SCENE_STRUCTURE",
     "SCENE_CONFIG",
+    # Reviewers
+    "auto_review_script",
+    "review_script_file",
+    "run_form_checker",
+    "run_voice_checker",
+    "run_feel_checker",
+    "get_review_checklists",
+    "print_checklists",
 ]
