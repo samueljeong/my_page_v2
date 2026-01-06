@@ -25859,6 +25859,9 @@ def api_isekai_push_ep001():
         "thumbnail_hook": thumbnail_hook,
         "cliffhanger": cliffhanger,
         "next_preview": next_preview,
+        # 자동화 기본값
+        "음성": "chirp3:Charon",
+        "공개설정": "private",
     }
 
     service = get_sheets_service()
@@ -25916,6 +25919,10 @@ def api_isekai_push_ep001():
         add_update("thumbnail_hook", ep001_data["thumbnail_hook"])
         add_update("cliffhanger", ep001_data["cliffhanger"])
         add_update("next_preview", ep001_data["next_preview"])
+
+        # 자동화 기본값
+        add_update("음성", ep001_data["음성"])
+        add_update("공개설정", ep001_data["공개설정"])
 
         if updates:
             service.spreadsheets().values().batchUpdate(
