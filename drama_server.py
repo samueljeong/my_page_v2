@@ -18096,6 +18096,10 @@ def sheets_read_rows(service, sheet_id, range_name='Sheet1!A:H', max_retries=3):
     반환: [[row1_values], [row2_values], ...] 또는 None (API 실패 시)
 
     Note: 빈 시트는 [] 반환, API 실패는 None 반환 (구분 필요)
+
+    2026-01: 429 Rate Limit 에러 처리 추가
+    - Google Sheets API 한도: 60 읽기/분/사용자
+    - 429 에러 시 60초 대기 후 재시도
     """
     import time as time_module
 
@@ -18110,6 +18114,9 @@ def sheets_read_rows(service, sheet_id, range_name='Sheet1!A:H', max_retries=3):
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
+
+            # 429 Rate Limit 에러 체크 (별도 처리)
+            is_rate_limit = '429' in error_str or 'rate_limit' in error_str or 'quota exceeded' in error_str
 
             # 재시도 가능한 일시적 오류 패턴
             transient_errors = [
@@ -18129,13 +18136,18 @@ def sheets_read_rows(service, sheet_id, range_name='Sheet1!A:H', max_retries=3):
 
             is_transient = any(pattern in error_str for pattern in transient_errors)
 
-            if is_transient and attempt < max_retries - 1:
+            if is_rate_limit and attempt < max_retries - 1:
+                # 429 에러: 60초 대기 (분당 쿼터 리셋 대기)
+                wait_time = 65  # 60초 + 여유 5초
+                print(f"[SHEETS] Rate Limit 초과 (시도 {attempt + 1}/{max_retries}), {wait_time}초 후 재시도")
+                time_module.sleep(wait_time)
+            elif is_transient and attempt < max_retries - 1:
                 wait_time = (2 ** attempt) * 2  # 2초, 4초, 8초
                 print(f"[SHEETS] 일시적 오류 발생 (시도 {attempt + 1}/{max_retries}), {wait_time}초 후 재시도: {e}")
                 time_module.sleep(wait_time)
             else:
                 print(f"[SHEETS] 읽기 실패 (시도 {attempt + 1}/{max_retries}): {e}")
-                if not is_transient:
+                if not is_transient and not is_rate_limit:
                     break  # 재시도 불가능한 오류는 바로 종료
 
     print(f"[SHEETS] 최종 읽기 실패 (모든 재시도 소진): {last_error}")
@@ -18146,6 +18158,8 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
     """
     Google Sheets 특정 셀 업데이트 (재시도 로직 포함)
     cell_range 예시: 'Sheet1!A2' 또는 'Sheet1!G2:H2'
+
+    2026-01: 429 Rate Limit 에러 처리 추가
     """
     import time as time_module
 
@@ -18167,6 +18181,9 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
             last_error = e
             error_str = str(e).lower()
 
+            # 429 Rate Limit 에러 체크 (별도 처리)
+            is_rate_limit = '429' in error_str or 'rate_limit' in error_str or 'quota exceeded' in error_str
+
             # 재시도 가능한 일시적 오류 패턴
             transient_errors = [
                 'authentication backend unknown error',
@@ -18185,13 +18202,18 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
 
             is_transient = any(pattern in error_str for pattern in transient_errors)
 
-            if is_transient and attempt < max_retries - 1:
+            if is_rate_limit and attempt < max_retries - 1:
+                # 429 에러: 60초 대기 (분당 쿼터 리셋 대기)
+                wait_time = 65  # 60초 + 여유 5초
+                print(f"[SHEETS] 셀 업데이트 Rate Limit 초과 (시도 {attempt + 1}/{max_retries}), {wait_time}초 후 재시도")
+                time_module.sleep(wait_time)
+            elif is_transient and attempt < max_retries - 1:
                 wait_time = (2 ** attempt) * 2  # 2초, 4초, 8초
                 print(f"[SHEETS] 셀 업데이트 일시적 오류 (시도 {attempt + 1}/{max_retries}), {wait_time}초 후 재시도: {e}")
                 time_module.sleep(wait_time)
             else:
                 print(f"[SHEETS] 셀 업데이트 실패 (시도 {attempt + 1}/{max_retries}): {e}")
-                if not is_transient:
+                if not is_transient and not is_rate_limit:
                     break
 
     print(f"[SHEETS] 셀 업데이트 최종 실패: {cell_range} - {last_error}")
@@ -20602,7 +20624,15 @@ def api_sheets_check_and_process():
 
         # ========== 2. 모든 시트에서 처리중 상태 확인 ==========
         # 어떤 시트에서든 처리중이면 새 작업 시작 안함
-        for sheet_name in sheet_names:
+        # 2026-01: Rate Limit 방지를 위해 시트 읽기 간 딜레이 추가
+        import time as time_module
+        SHEET_READ_DELAY = 1.2  # 60 reads/min = 1 read/sec, 여유 0.2초 추가
+
+        for idx, sheet_name in enumerate(sheet_names):
+            # Rate Limit 방지: 첫 번째 시트 제외하고 딜레이 적용
+            if idx > 0:
+                time_module.sleep(SHEET_READ_DELAY)
+
             rows = sheets_read_rows(service, sheet_id, f"'{sheet_name}'!A:AZ")
             if rows is None or len(rows) < 3:  # 행1: 채널설정, 행2: 헤더, 행3~: 데이터
                 continue
@@ -20778,6 +20808,10 @@ def api_sheets_check_and_process():
         pending_tasks = []  # [(예약시간, 시트순서, 시트이름, 행번호, 행데이터, 채널ID, col_map)]
 
         for sheet_order, sheet_name in enumerate(sheet_names):
+            # 2026-01: Rate Limit 방지 딜레이
+            if sheet_order > 0:
+                time_module.sleep(SHEET_READ_DELAY)
+
             rows = sheets_read_rows(service, sheet_id, f"'{sheet_name}'!A:AZ")
             if rows is None or len(rows) < 3:
                 continue
