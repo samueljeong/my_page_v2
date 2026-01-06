@@ -354,7 +354,7 @@ def update_episode_with_result(
         # 헤더 조회
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{SHEET_NAME}!A2:Z2"
+            range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
         headers = result.get('values', [[]])[0]
 
@@ -443,7 +443,7 @@ def update_episode_status(
         # 헤더 조회
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{SHEET_NAME}!A2:Z2"
+            range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
         headers = result.get('values', [[]])[0]
 
@@ -687,7 +687,7 @@ def sync_episode_from_files(episode: int) -> Dict[str, Any]:
         # 헤더 조회
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{SHEET_NAME}!A2:Z2"
+            range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
         headers = result.get('values', [[]])[0]
         col_map = {h: i for i, h in enumerate(headers)}
