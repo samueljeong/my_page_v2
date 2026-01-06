@@ -25807,6 +25807,18 @@ def api_isekai_push_ep001():
     except Exception as e:
         print(f"[ISEKAI] 이미지 프롬프트 파일 읽기 실패 (무시): {e}")
 
+    # 씬 데이터 읽기 (BGM 전환, 챕터용)
+    brief_path = os.path.join(base_dir, 'static', 'isekai', 'EP001_brief.json')
+    scenes_json = ""
+    try:
+        with open(brief_path, 'r', encoding='utf-8') as f:
+            brief_data = json.load(f)
+            scenes = brief_data.get("scenes", [])
+            if scenes:
+                scenes_json = json.dumps(scenes, ensure_ascii=False)
+    except Exception as e:
+        print(f"[ISEKAI] 씬 데이터 파일 읽기 실패 (무시): {e}")
+
     # EP001 데이터
     ep001_data = {
         "episode": 1,
@@ -25816,7 +25828,8 @@ def api_isekai_push_ep001():
         "thumbnail_text": "혈영 이세계편\n제1화\n이방인",
         "status": "대기",
         "script": script_content,
-        "image_prompt": image_prompt
+        "image_prompt": image_prompt,
+        "scenes": scenes_json
     }
 
     service = get_sheets_service()
@@ -25861,6 +25874,7 @@ def api_isekai_push_ep001():
 
         add_update("title", ep001_data["title"])
         add_update("summary", ep001_data["summary"])
+        add_update("scenes", ep001_data["scenes"])
         add_update("대본", ep001_data["script"])
         add_update("image_prompt", ep001_data["image_prompt"])
         add_update("제목(GPT생성)", ep001_data["youtube_title"])
