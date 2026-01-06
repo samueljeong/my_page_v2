@@ -23319,22 +23319,18 @@ def _generate_isekai_tts(
             print(f"[ISEKAI-TTS] 잘못된 음성: {voice_name}, 기본값 Charon 사용", flush=True)
             voice_name = "Charon"
 
-        audio_files = []
-        timeline = []
-        current_time = 0.0
-        total_cost = 0.0
-
         # REST API 엔드포인트
         model = "gemini-2.5-flash-preview-tts"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
-        for i, chunk in enumerate(chunks):
-            print(f"[ISEKAI-TTS] 청크 {i+1}/{len(chunks)} 처리 중... ({len(chunk)}자)", flush=True)
+        # ★ 병렬 처리용 청크 처리 함수
+        def process_single_chunk(chunk_idx, chunk_text):
+            """단일 청크를 처리하고 (인덱스, 파일경로, 길이, 텍스트) 반환"""
+            print(f"[ISEKAI-TTS] 청크 {chunk_idx+1}/{len(chunks)} 처리 중... ({len(chunk_text)}자)", flush=True)
 
             try:
-                # REST API 요청
                 payload = {
-                    "contents": [{"parts": [{"text": chunk}]}],
+                    "contents": [{"parts": [{"text": chunk_text}]}],
                     "generationConfig": {
                         "responseModalities": ["AUDIO"],
                         "speechConfig": {
@@ -23350,41 +23346,40 @@ def _generate_isekai_tts(
                 # Rate Limit + Timeout 재시도 로직
                 max_retries = 3
                 audio_data = None
-                request_timeout = 180  # 120초 → 180초로 증가
+                audio_b64 = None
+                request_timeout = 180
 
                 for attempt in range(max_retries):
                     try:
                         response = requests.post(url, json=payload, timeout=request_timeout)
                     except requests.exceptions.Timeout:
                         if attempt < max_retries - 1:
-                            print(f"[ISEKAI-TTS] 타임아웃 ({request_timeout}초), 재시도 ({attempt + 1}/{max_retries})...", flush=True)
+                            print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 타임아웃, 재시도 ({attempt + 1}/{max_retries})...", flush=True)
                             time_module.sleep(5)
                             continue
                         else:
-                            print(f"[ISEKAI-TTS] 타임아웃 재시도 초과", flush=True)
-                            break
+                            print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 타임아웃 재시도 초과", flush=True)
+                            return None
                     except requests.exceptions.RequestException as req_err:
-                        print(f"[ISEKAI-TTS] 요청 오류: {req_err}", flush=True)
-                        break
+                        print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 요청 오류: {req_err}", flush=True)
+                        return None
 
                     if response.status_code == 429:
-                        # Rate limit - 대기 후 재시도
-                        import re
                         retry_match = re.search(r'retry in (\d+\.?\d*)', response.text)
                         wait_time = float(retry_match.group(1)) if retry_match else 45.0
                         wait_time = min(wait_time + 5, 60)
 
                         if attempt < max_retries - 1:
-                            print(f"[ISEKAI-TTS] Rate limit (429), {wait_time:.0f}초 대기 후 재시도 ({attempt + 1}/{max_retries})...", flush=True)
+                            print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} Rate limit, {wait_time:.0f}초 대기...", flush=True)
                             time_module.sleep(wait_time)
                             continue
                         else:
-                            print(f"[ISEKAI-TTS] Rate limit 재시도 초과", flush=True)
-                            break
+                            print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} Rate limit 재시도 초과", flush=True)
+                            return None
 
                     elif response.status_code != 200:
-                        print(f"[ISEKAI-TTS] API 오류: {response.status_code} - {response.text[:200]}", flush=True)
-                        break
+                        print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} API 오류: {response.status_code}", flush=True)
+                        return None
 
                     # 성공 - 오디오 데이터 추출
                     result = response.json()
@@ -23398,68 +23393,96 @@ def _generate_isekai_tts(
                     break
 
                 if not audio_data:
-                    print(f"[ISEKAI-TTS] 청크 {i+1} 오디오 데이터 없음", flush=True)
-                    continue
+                    print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 오디오 데이터 없음", flush=True)
+                    return None
 
                 # WAV 파일로 저장
-                chunk_path = os.path.join(output_dir, f"chunk_{i:03d}.wav")
+                chunk_path = os.path.join(output_dir, f"chunk_{chunk_idx:03d}.wav")
                 audio_size = len(audio_data)
-                print(f"[ISEKAI-TTS] 청크 {i+1} 저장 시작: {audio_size:,} bytes", flush=True)
+                print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 저장 시작: {audio_size:,} bytes", flush=True)
 
                 with open(chunk_path, 'wb') as f:
                     f.write(audio_data)
                     f.flush()
-                    os.fsync(f.fileno())  # 디스크에 확실히 쓰기
+                    os.fsync(f.fileno())
 
-                # ★ 파일 저장 확인
+                # 파일 저장 확인
                 if not os.path.exists(chunk_path):
-                    print(f"[ISEKAI-TTS] 청크 {i+1} 파일 저장 실패: 파일 없음", flush=True)
-                    continue
+                    print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 파일 저장 실패", flush=True)
+                    return None
 
                 saved_size = os.path.getsize(chunk_path)
                 if saved_size != audio_size:
-                    print(f"[ISEKAI-TTS] 청크 {i+1} 크기 불일치: {saved_size} vs {audio_size}", flush=True)
-                    continue
+                    print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 크기 불일치", flush=True)
+                    return None
 
-                print(f"[ISEKAI-TTS] 청크 {i+1} 저장 완료: {chunk_path} ({saved_size:,} bytes)", flush=True)
+                print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 저장 완료 ({saved_size:,} bytes)", flush=True)
 
-                # ★ 메모리 정리 (Standard 2GB 대응)
+                # 메모리 정리
                 del audio_data
-                del audio_b64
+                if audio_b64:
+                    del audio_b64
                 gc.collect()
 
                 # 길이 계산 (WAV 헤더 파싱)
+                duration = len(chunk_text) / 15  # fallback 기본값
                 try:
                     with open(chunk_path, 'rb') as f:
                         f.seek(24)
                         sample_rate = struct.unpack('<I', f.read(4))[0]
                         f.seek(40)
                         data_size = struct.unpack('<I', f.read(4))[0]
-                        duration = data_size / (sample_rate * 2)  # 16-bit mono
+                        duration = data_size / (sample_rate * 2)
                 except Exception as wav_err:
-                    print(f"[ISEKAI-TTS] 청크 {i+1} WAV 파싱 오류: {wav_err}", flush=True)
-                    duration = len(chunk) / 15  # fallback: 15자/초
+                    print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} WAV 파싱 오류: {wav_err}", flush=True)
 
-                audio_files.append(chunk_path)
-
-                # 타임라인 (문장 단위)
-                sentences = [s.strip() for s in chunk.replace('\n', ' ').split('.') if s.strip()]
-                sent_duration = duration / max(len(sentences), 1)
-
-                for sent in sentences:
-                    if sent:
-                        timeline.append({
-                            "start": current_time,
-                            "end": current_time + sent_duration,
-                            "text": sent + "." if not sent.endswith(('.', '?', '!')) else sent
-                        })
-                        current_time += sent_duration
-
-                total_cost += 0.001 * len(chunk) / 1000  # 대략적 비용
+                return (chunk_idx, chunk_path, duration, chunk_text)
 
             except Exception as chunk_err:
-                print(f"[ISEKAI-TTS] 청크 {i+1} 오류: {chunk_err}", flush=True)
-                continue
+                print(f"[ISEKAI-TTS] 청크 {chunk_idx+1} 오류: {chunk_err}", flush=True)
+                return None
+
+        # ★ 병렬 처리 (2워커 - Rate Limit 고려)
+        TTS_PARALLEL_WORKERS = 2
+        print(f"[ISEKAI-TTS] 병렬 처리 시작 ({TTS_PARALLEL_WORKERS}워커)", flush=True)
+
+        chunk_results = []
+        with ThreadPoolExecutor(max_workers=TTS_PARALLEL_WORKERS) as executor:
+            futures = {executor.submit(process_single_chunk, i, chunk): i
+                       for i, chunk in enumerate(chunks)}
+
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    chunk_results.append(result)
+
+        # 인덱스 순서로 정렬
+        chunk_results.sort(key=lambda x: x[0])
+        print(f"[ISEKAI-TTS] 병렬 처리 완료: {len(chunk_results)}/{len(chunks)}개 성공", flush=True)
+
+        # 결과 집계
+        audio_files = []
+        timeline = []
+        current_time = 0.0
+        total_cost = 0.0
+
+        for chunk_idx, chunk_path, duration, chunk_text in chunk_results:
+            audio_files.append(chunk_path)
+
+            # 타임라인 (문장 단위)
+            sentences = [s.strip() for s in chunk_text.replace('\n', ' ').split('.') if s.strip()]
+            sent_duration = duration / max(len(sentences), 1)
+
+            for sent in sentences:
+                if sent:
+                    timeline.append({
+                        "start": current_time,
+                        "end": current_time + sent_duration,
+                        "text": sent + "." if not sent.endswith(('.', '?', '!')) else sent
+                    })
+                    current_time += sent_duration
+
+            total_cost += 0.001 * len(chunk_text) / 1000
 
         if not audio_files:
             return {"ok": False, "error": "오디오 파일 생성 실패"}
