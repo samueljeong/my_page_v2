@@ -118,6 +118,6 @@
     "dramatic_pause": 1.0
   },
   "estimated_duration": "50분",
-  "total_characters": 26079,
+  "total_characters": 25000,
   "notes": "대본 파싱 시 문장 단위로 세그먼트 자동 생성. 대사는 따옴표로 감지하여 dialogue_settings 적용."
 }

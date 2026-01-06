@@ -43,6 +43,7 @@ from .workers import (
     VIDEO_DIR,
     IMAGE_DIR,
 )
+from .sheets import sync_episode_from_files
 
 
 def get_part_for_episode(episode: int) -> Dict[str, Any]:
@@ -212,6 +213,25 @@ def execute_episode(
         print("\n[STEP 5] YouTube 업로드 스킵 (영상 없음)")
 
     # ========================================
+    # Step 6: Google Sheets 자동 동기화
+    # ========================================
+    print("\n[STEP 6] Google Sheets 동기화...")
+
+    try:
+        sync_result = sync_episode_from_files(episode)
+        if sync_result.get("ok"):
+            result["sheet_status"] = sync_result.get("status")
+            result["sheet_row"] = sync_result.get("row_index")
+            print(f"  - 시트 상태: {sync_result.get('status')}")
+            print(f"  - 시트 행: {sync_result.get('row_index')}")
+        else:
+            print(f"  - 동기화 실패: {sync_result.get('error')}")
+            result["sheet_error"] = sync_result.get("error")
+    except Exception as e:
+        print(f"  - 동기화 예외: {e}")
+        result["sheet_error"] = str(e)
+
+    # ========================================
     # 결과 정리
     # ========================================
     print(f"\n{'='*60}")
@@ -224,6 +244,8 @@ def execute_episode(
         print(f"  영상: {result['video_path']}")
     if result.get("youtube_url"):
         print(f"  YouTube: {result['youtube_url']}")
+    if result.get("sheet_status"):
+        print(f"  시트 상태: {result['sheet_status']} (행 {result.get('sheet_row', '?')})")
     print(f"{'='*60}\n")
 
     return result
