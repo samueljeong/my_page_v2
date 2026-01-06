@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import gc
 import sqlite3
 import subprocess
 import threading
@@ -23402,8 +23403,30 @@ def _generate_isekai_tts(
 
                 # WAV 파일로 저장
                 chunk_path = os.path.join(output_dir, f"chunk_{i:03d}.wav")
+                audio_size = len(audio_data)
+                print(f"[ISEKAI-TTS] 청크 {i+1} 저장 시작: {audio_size:,} bytes", flush=True)
+
                 with open(chunk_path, 'wb') as f:
                     f.write(audio_data)
+                    f.flush()
+                    os.fsync(f.fileno())  # 디스크에 확실히 쓰기
+
+                # ★ 파일 저장 확인
+                if not os.path.exists(chunk_path):
+                    print(f"[ISEKAI-TTS] 청크 {i+1} 파일 저장 실패: 파일 없음", flush=True)
+                    continue
+
+                saved_size = os.path.getsize(chunk_path)
+                if saved_size != audio_size:
+                    print(f"[ISEKAI-TTS] 청크 {i+1} 크기 불일치: {saved_size} vs {audio_size}", flush=True)
+                    continue
+
+                print(f"[ISEKAI-TTS] 청크 {i+1} 저장 완료: {chunk_path} ({saved_size:,} bytes)", flush=True)
+
+                # ★ 메모리 정리 (Standard 2GB 대응)
+                del audio_data
+                del audio_b64
+                gc.collect()
 
                 # 길이 계산 (WAV 헤더 파싱)
                 try:
@@ -23413,7 +23436,8 @@ def _generate_isekai_tts(
                         f.seek(40)
                         data_size = struct.unpack('<I', f.read(4))[0]
                         duration = data_size / (sample_rate * 2)  # 16-bit mono
-                except:
+                except Exception as wav_err:
+                    print(f"[ISEKAI-TTS] 청크 {i+1} WAV 파싱 오류: {wav_err}", flush=True)
                     duration = len(chunk) / 15  # fallback: 15자/초
 
                 audio_files.append(chunk_path)
