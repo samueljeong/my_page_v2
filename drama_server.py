@@ -18225,15 +18225,17 @@ def sheets_update_cell(service, sheet_id, cell_range, value, max_retries=3):
 def get_all_sheet_names(service, sheet_id):
     """
     Google Sheets 파일의 모든 시트(탭) 이름 가져오기
-    제외 대상:
-    - _설정, _템플릿 등 언더스코어로 시작하는 시트
-    - SHORTS (별도 파이프라인 사용)
-    - BIBLE (별도 파이프라인 사용)
 
-    반환: ['채널A', '채널B', ...] 또는 None (실패 시)
+    화이트리스트 방식:
+    - HISTORY: 히스토리 채널
+    - 혈영이세계: 이세계 드라마 채널
+
+    위 두 시트만 허용, 나머지는 모두 제외
+
+    반환: ['HISTORY', '혈영이세계'] 또는 None (실패 시)
     """
-    # 메인 파이프라인에서 제외할 시트 목록 (별도 파이프라인 사용)
-    EXCLUDED_SHEETS = {'SHORTS', 'BIBLE'}
+    # 메인 파이프라인에서 허용할 시트 목록 (화이트리스트)
+    ALLOWED_SHEETS = {'HISTORY', '혈영이세계'}
 
     try:
         spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
@@ -18242,12 +18244,11 @@ def get_all_sheet_names(service, sheet_id):
         sheet_names = []
         for sheet in sheets:
             name = sheet.get('properties', {}).get('title', '')
-            # 언더스코어로 시작하는 시트는 설정/템플릿용으로 제외
-            # SHORTS, BIBLE은 별도 파이프라인 사용
-            if name and not name.startswith('_') and name not in EXCLUDED_SHEETS:
+            # 화이트리스트에 있는 시트만 허용
+            if name and name in ALLOWED_SHEETS:
                 sheet_names.append(name)
 
-        print(f"[SHEETS] 발견된 채널 시트: {sheet_names}")
+        print(f"[SHEETS] 허용된 시트: {sheet_names} (화이트리스트: {ALLOWED_SHEETS})")
         return sheet_names
     except Exception as e:
         print(f"[SHEETS] 시트 목록 가져오기 실패: {e}")
@@ -20258,7 +20259,8 @@ NO photorealistic."""
                 except Exception as parse_err:
                     print(f"[AUTOMATION] 예약시간 처리 오류: {parse_err}")
 
-            upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=600)
+            # 긴 영상(이세계 드라마 등)은 업로드에 10분 이상 걸릴 수 있음
+            upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=1800)  # 30분
 
             print(f"[AUTOMATION] YouTube 업로드 응답 상태: {upload_resp.status_code}")
             upload_data = upload_resp.json()
@@ -25457,7 +25459,8 @@ def run_bible_episode_pipeline(
         if channel_id:
             upload_payload["channelId"] = channel_id
 
-        upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=600)
+        # 긴 영상은 업로드에 10분 이상 걸릴 수 있음
+        upload_resp = req.post(f"{base_url}/api/youtube/upload", json=upload_payload, timeout=1800)  # 30분
         upload_result = upload_resp.json()
 
         if not upload_result.get("ok"):
