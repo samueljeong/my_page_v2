@@ -78,6 +78,7 @@ from .run import (
 
 # Script Writer (대본 분할 작성)
 from .script_writer import (
+    get_episode_brief,
     save_scene,
     load_scene,
     get_scene_status,
