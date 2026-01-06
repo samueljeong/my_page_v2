@@ -793,17 +793,84 @@ def sync_all_episodes() -> Dict[str, Any]:
 
 
 # =====================================================
-# 테스트
+# CLI 인터페이스
 # =====================================================
 
+def main():
+    """
+    CLI 명령어 처리
+
+    사용법:
+        python -m scripts.isekai_pipeline.sheets sync 1       # EP001 동기화
+        python -m scripts.isekai_pipeline.sheets sync-all     # 모든 에피소드 동기화
+        python -m scripts.isekai_pipeline.sheets create       # 시트 생성
+        python -m scripts.isekai_pipeline.sheets init 1 60    # 시트 생성 + 60개 에피소드 등록
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="혈영 이세계편 Google Sheets 관리"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="명령어")
+
+    # sync: 단일 에피소드 동기화
+    sync_parser = subparsers.add_parser("sync", help="에피소드를 시트에 동기화")
+    sync_parser.add_argument("episode", type=int, help="에피소드 번호 (예: 1)")
+
+    # sync-all: 모든 에피소드 동기화
+    subparsers.add_parser("sync-all", help="모든 에피소드를 시트에 동기화")
+
+    # create: 시트 생성
+    create_parser = subparsers.add_parser("create", help="시트 생성")
+    create_parser.add_argument("--channel-id", type=str, default="", help="YouTube 채널 ID")
+
+    # init: 시트 생성 + 에피소드 등록
+    init_parser = subparsers.add_parser("init", help="시트 생성 + 에피소드 일괄 등록")
+    init_parser.add_argument("start", type=int, nargs="?", default=1, help="시작 에피소드 (기본: 1)")
+    init_parser.add_argument("end", type=int, nargs="?", default=60, help="끝 에피소드 (기본: 60)")
+    init_parser.add_argument("--channel-id", type=str, default="", help="YouTube 채널 ID")
+
+    args = parser.parse_args()
+
+    if args.command == "sync":
+        print(f"[ISEKAI] EP{args.episode:03d} 동기화 시작...")
+        result = sync_episode_from_files(args.episode)
+        if result.get("ok"):
+            print(f"✓ 동기화 완료: {result.get('title')} ({result.get('script_chars', 0):,}자)")
+            print(f"  상태: {result.get('status')}")
+        else:
+            print(f"✗ 동기화 실패: {result.get('error')}")
+
+    elif args.command == "sync-all":
+        print("[ISEKAI] 모든 에피소드 동기화 시작...")
+        result = sync_all_episodes()
+        if result.get("ok"):
+            print(f"✓ 동기화 완료: {result.get('synced')}개 성공, {result.get('failed')}개 실패")
+            for ep in result.get("episodes", []):
+                print(f"  - EP{ep['episode']:03d}: {ep.get('title')} ({ep.get('script_chars', 0):,}자)")
+        else:
+            print(f"✗ 동기화 실패: {result.get('error')}")
+
+    elif args.command == "create":
+        print("[ISEKAI] 시트 생성 중...")
+        result = create_isekai_sheet(args.channel_id)
+        print(f"결과: {result.get('message', result)}")
+
+    elif args.command == "init":
+        print(f"[ISEKAI] 시트 초기화 중 (EP{args.start:03d} ~ EP{args.end:03d})...")
+        result = initialize_sheet_with_episodes(
+            channel_id=args.channel_id,
+            start_episode=args.start,
+            end_episode=args.end,
+        )
+        print(f"결과: {result.get('message', result)}")
+
+    else:
+        parser.print_help()
+        print("\n예시:")
+        print("  python -m scripts.isekai_pipeline.sheets sync 1")
+        print("  python -m scripts.isekai_pipeline.sheets sync-all")
+
+
 if __name__ == "__main__":
-    print("=== 이세계 시트 테스트 ===")
-
-    # 시트 생성 테스트
-    result = create_isekai_sheet()
-    print(f"시트 생성: {result}")
-
-    # 에피소드 추가 테스트
-    if result.get("ok") or result.get("status") == "already_exists":
-        ep_result = add_episode(1, "이방인의 눈", "무영이 이세계에 깨어나다")
-        print(f"에피소드 1 추가: {ep_result}")
+    main()
