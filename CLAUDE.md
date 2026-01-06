@@ -1033,31 +1033,46 @@ curl -X POST "https://drama-s2ns.onrender.com/api/news/run-pipeline?channel=ECON
 ```
 
 **히스토리 파이프라인 참고 파일:**
+- `scripts/history_pipeline/workers.py` - ★ 실행 담당 (TTS, 이미지, 영상, 업로드)
 - `scripts/history_pipeline/run.py` - 메인 오케스트레이션
-- `scripts/history_pipeline/config.py` - 시대/주제 설정 (11개 시대), 대본 분량 설정
+- `scripts/history_pipeline/config.py` - 시대/주제 설정 (11개 시대)
 - `scripts/history_pipeline/collector.py` - 자료 수집 (4개 공신력 소스)
-- `scripts/history_pipeline/script_generator.py` - **Claude Opus 4.5 대본 자동 생성 (OpenRouter, 12,000~15,000자)**
 - `scripts/history_pipeline/sheets.py` - HISTORY 시트 CRUD
 
-**히스토리 파이프라인 워크플로우 (완전 자동화):**
-```
-1. HISTORY 시트에서 '준비' 상태 에피소드 확인
-2. PENDING_TARGET_COUNT (1개) 미만이면:
-   - 다음 에피소드 자료 수집 (Gemini, 한국민족문화대백과, e뮤지엄, 한국사DB)
-   - Opus 프롬프트 생성 → 시트 저장 (상태: '준비')
-3. /api/history/auto-generate 호출 시:
-   - Claude Opus 4.5로 대본 자동 생성 (OpenRouter 경유, 12,000~15,000자, 약 15분 영상)
-   - 시트 업데이트 (상태: '대기') ★ 자동으로 영상 생성 대기열에 추가
-4. /api/sheets/check-and-process가 자동 감지 → 영상 생성 시작
+**★ 2026-01 개편: 창작/실행 분리 (이세계 파이프라인과 동일)**
 
-★ 2026-01 업데이트: 대본 생성 후 수동 검토 단계 제거 → 완전 자동화
+```
+┌────────────────────────────────┐    ┌────────────────────────────┐
+│  창작 (Claude가 대화에서 직접)   │───▶│  실행 (workers.py)         │
+├────────────────────────────────┤    ├────────────────────────────┤
+│ • 자료 조사 및 검증             │    │ • TTS 생성                 │
+│ • 에피소드 기획 (구조, 흐름)    │    │ • 이미지 생성              │
+│ • 대본 작성 (12,000~15,000자)   │    │ • 영상 렌더링              │
+│ • 이미지 프롬프트              │    │ • YouTube 업로드           │
+│ • YouTube 메타데이터           │    │                            │
+│ • 썸네일 문구 설계             │    │                            │
+│ • 품질 검수                    │    │                            │
+└────────────────────────────────┘    └────────────────────────────┘
 ```
 
-**대본 생성 모델 (2026-01 업데이트):**
-- 모델: Claude Opus 4.5 (`anthropic/claude-opus-4.5`)
-- API: OpenRouter (https://openrouter.ai/api/v1)
-- 환경변수: `OPENROUTER_API_KEY`
-- 비용: $15/1M input, $75/1M output (Prompt Caching 시 System Prompt 90% 할인)
+**사용법 (Claude가 대본 작성 후):**
+```python
+from scripts.history_pipeline import execute_episode
+
+result = execute_episode(
+    episode_id="ep001",
+    title="광개토왕의 정복전쟁",
+    script="대본 내용...",
+    image_prompts=[{"prompt": "...", "scene_index": 1}],
+    metadata={"title": "...", "description": "...", "tags": [...]},
+    generate_video=True,
+    upload=True,
+)
+```
+
+**DEPRECATED: 자동 대본 생성**
+- `script_generator.py`의 자동 대본 생성 기능은 더 이상 사용하지 않음
+- Claude가 대화에서 직접 대본을 작성 (품질 향상)
 
 **HISTORY 시트 열 구조 (VIDEO_AUTOMATION_HEADERS 포함):**
 ```
