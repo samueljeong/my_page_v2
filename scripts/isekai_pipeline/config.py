@@ -33,7 +33,7 @@ SERIES_INFO = {
         "모든 내공을 잃었지만, 그의 검술과 심법 지식은 남아있다. "
         "마나라는 새로운 힘을 만난 그는, 다시 최강을 향해 나아간다."
     ),
-    "youtube_channel_id": os.getenv("ISEKAI_CHANNEL_ID", ""),
+    "youtube_channel_id": os.getenv("ISEKAI_CHANNEL_ID", "UCRvuRalIZ5S40Ccd3vhiFxQ"),
     "playlist_id": os.getenv("ISEKAI_PLAYLIST_ID", ""),
 }
 
