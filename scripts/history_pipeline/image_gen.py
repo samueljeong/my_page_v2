@@ -1,9 +1,9 @@
 """
-한국사 파이프라인 - 이미지 생성 모듈 (Gemini Imagen)
+한국사 파이프라인 - 이미지 생성 모듈
 
+- 로컬 Gemini API 시도 → 실패 시 Render API fallback
 - 씬 배경 이미지 생성
 - 썸네일 이미지 생성
-- 독립 실행 가능 (외부 의존성 없음)
 """
 
 import os
@@ -12,37 +12,76 @@ import requests
 from typing import Dict, Any, List
 
 
+# Render 서버 URL
+RENDER_API_URL = os.environ.get(
+    "RENDER_API_URL",
+    "https://drama-s2ns.onrender.com"
+)
+
 # Gemini 모델
-GEMINI_FLASH = "gemini-2.0-flash-exp"  # 빠르고 저렴
-GEMINI_PRO = "imagen-3.0-generate-002"  # 고품질 이미지
+GEMINI_PRO = "imagen-3.0-generate-002"
 
 
-def generate_image(
+def _generate_image_via_render(
     prompt: str,
     output_path: str = None,
     style: str = "realistic",
     aspect_ratio: str = "16:9",
-    model: str = GEMINI_PRO,
 ) -> Dict[str, Any]:
-    """
-    Gemini Imagen으로 이미지 생성
+    """Render 서버 API로 이미지 생성"""
+    try:
+        url = f"{RENDER_API_URL}/api/drama/generate-image"
 
-    Args:
-        prompt: 이미지 프롬프트 (영문 권장)
-        output_path: 저장 경로 (없으면 base64 반환)
-        style: 스타일 힌트
-        aspect_ratio: 비율 (16:9, 1:1, 9:16)
-        model: 모델 ID
+        payload = {
+            "prompt": prompt,
+            "style": style,
+            "ratio": aspect_ratio,
+        }
 
-    Returns:
-        {"ok": True, "image_path": "...", "image_data": bytes}
-    """
+        print(f"[HISTORY-IMAGE] Render API 호출 중...")
+        response = requests.post(url, json=payload, timeout=180)
+
+        if response.status_code == 200:
+            result = response.json()
+
+            if result.get("success") or result.get("ok"):
+                image_url = result.get("image_url") or result.get("url")
+
+                if image_url:
+                    # 이미지 다운로드
+                    img_response = requests.get(image_url, timeout=60)
+                    if img_response.status_code == 200:
+                        image_data = img_response.content
+
+                        if output_path:
+                            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                            with open(output_path, "wb") as f:
+                                f.write(image_data)
+                            print(f"[HISTORY-IMAGE] 저장: {output_path}")
+                            return {"ok": True, "image_path": output_path, "image_data": image_data}
+                        else:
+                            return {"ok": True, "image_data": image_data}
+
+            return {"ok": False, "error": f"Render API 응답 오류: {result}"}
+        else:
+            return {"ok": False, "error": f"Render API 오류: {response.status_code}"}
+
+    except Exception as e:
+        return {"ok": False, "error": f"Render API 예외: {str(e)}"}
+
+
+def _generate_image_via_gemini(
+    prompt: str,
+    output_path: str = None,
+    style: str = "realistic",
+    aspect_ratio: str = "16:9",
+) -> Dict[str, Any]:
+    """로컬 Gemini API로 이미지 생성"""
     api_key = os.environ.get("GOOGLE_API_KEY", "")
     if not api_key:
-        return {"ok": False, "error": "GOOGLE_API_KEY 환경변수가 설정되지 않았습니다."}
+        return {"ok": False, "error": "GOOGLE_API_KEY 없음"}
 
-    # Imagen API URL
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateImages?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_PRO}:generateImages?key={api_key}"
 
     # 스타일 힌트 추가
     style_hints = {
@@ -67,14 +106,12 @@ def generate_image(
 
         if response.status_code == 200:
             result = response.json()
-
-            # 이미지 데이터 추출
             images = result.get("generatedImages", [])
             if images:
                 image_data = base64.b64decode(images[0].get("image", {}).get("imageBytes", ""))
 
                 if output_path:
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
                     with open(output_path, "wb") as f:
                         f.write(image_data)
                     print(f"[HISTORY-IMAGE] 저장: {output_path}")
@@ -84,12 +121,46 @@ def generate_image(
             else:
                 return {"ok": False, "error": "이미지 생성 결과 없음"}
         else:
-            error_text = response.text[:300]
-            print(f"[HISTORY-IMAGE] API 오류: {response.status_code} - {error_text}")
-            return {"ok": False, "error": f"API 오류: {response.status_code}"}
+            return {"ok": False, "error": f"Gemini API 오류: {response.status_code}"}
 
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": f"Gemini API 예외: {str(e)}"}
+
+
+def generate_image(
+    prompt: str,
+    output_path: str = None,
+    style: str = "realistic",
+    aspect_ratio: str = "16:9",
+    use_render: bool = True,  # 기본: Render API 사용
+) -> Dict[str, Any]:
+    """
+    이미지 생성 (Render API 우선, 실패 시 Gemini 직접 호출)
+
+    Args:
+        prompt: 이미지 프롬프트 (영문 권장)
+        output_path: 저장 경로 (없으면 base64 반환)
+        style: 스타일 힌트 (realistic, illustration, cinematic, historical)
+        aspect_ratio: 비율 (16:9, 1:1, 9:16)
+        use_render: Render API 사용 여부 (기본: True)
+
+    Returns:
+        {"ok": True, "image_path": "...", "image_data": bytes}
+    """
+    # 1. Render API 시도 (기본)
+    if use_render:
+        result = _generate_image_via_render(prompt, output_path, style, aspect_ratio)
+        if result.get("ok"):
+            return result
+        print(f"[HISTORY-IMAGE] Render API 실패, Gemini 직접 호출 시도...")
+
+    # 2. Gemini API 직접 호출 (fallback)
+    result = _generate_image_via_gemini(prompt, output_path, style, aspect_ratio)
+    if result.get("ok"):
+        return result
+
+    # 3. 둘 다 실패
+    return {"ok": False, "error": "이미지 생성 실패 (Render/Gemini 모두 실패)"}
 
 
 def generate_scene_images(
@@ -183,3 +254,4 @@ def generate_thumbnail(
 
 if __name__ == "__main__":
     print("history_pipeline/image_gen.py 로드 완료")
+    print(f"Render API URL: {RENDER_API_URL}")
