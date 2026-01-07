@@ -1,22 +1,25 @@
 """
-한국사 파이프라인 - TTS 모듈 (Chirp 3 HD)
+한국사 파이프라인 - TTS 모듈 (Gemini TTS)
 
-- Chirp 3 HD: 고품질 한국어 음성 (기본)
+- Gemini TTS: 고품질 한국어 음성
 - 문장 단위 자막 생성
 - 독립 실행 가능
+- GOOGLE_API_KEY만 필요 (서비스 계정 불필요)
 """
 
 import os
 import re
 import json
+import base64
 import tempfile
 import subprocess
+import requests
 from typing import Dict, Any, List, Tuple
 
 
 # TTS 설정
-DEFAULT_VOICE = "chirp3:Charon"  # Chirp 3 HD 남성 (깊고 신뢰감)
-DEFAULT_SPEED = 1.0
+DEFAULT_VOICE = "Charon"  # 남성, 깊고 신뢰감
+DEFAULT_MODEL = "gemini-2.5-flash-preview-tts"
 
 
 def split_into_sentences(text: str) -> List[str]:
@@ -81,66 +84,70 @@ def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
             f.write(f"{text}\n\n")
 
 
-def generate_chirp3_chunk(
+def generate_gemini_chunk(
     text: str,
-    voice_name: str = "ko-KR-Chirp3-HD-Charon",
-    language_code: str = "ko-KR",
+    voice_name: str = "Charon",
+    model: str = DEFAULT_MODEL,
 ) -> Dict[str, Any]:
-    """Chirp 3 HD TTS로 단일 청크 생성"""
+    """Gemini TTS로 단일 청크 생성"""
+    api_key = os.environ.get('GOOGLE_API_KEY')
+    if not api_key:
+        return {"ok": False, "error": "GOOGLE_API_KEY 환경변수가 필요합니다"}
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{
+            "parts": [{"text": text}]
+        }],
+        "generationConfig": {
+            "response_modalities": ["AUDIO"],
+            "speech_config": {
+                "voice_config": {
+                    "prebuilt_voice_config": {
+                        "voice_name": voice_name
+                    }
+                }
+            }
+        }
+    }
+
     try:
-        from google.cloud import texttospeech
-        from google.oauth2 import service_account
+        response = requests.post(url, json=payload, timeout=120)
 
-        # 서비스 계정 인증
-        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-        if not service_account_json:
-            return {"ok": False, "error": "GOOGLE_SERVICE_ACCOUNT_JSON 환경변수가 필요합니다"}
+        if response.status_code == 200:
+            result = response.json()
 
-        try:
-            service_account_info = json.loads(service_account_json)
-        except json.JSONDecodeError as e:
-            return {"ok": False, "error": f"서비스 계정 JSON 파싱 실패: {e}"}
+            # 오디오 데이터 추출
+            candidates = result.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                for part in parts:
+                    if "inlineData" in part:
+                        audio_b64 = part["inlineData"].get("data", "")
+                        if audio_b64:
+                            audio_data = base64.b64decode(audio_b64)
+                            return {"ok": True, "audio_data": audio_data}
 
-        credentials = service_account.Credentials.from_service_account_info(
-            service_account_info,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-
-        client = texttospeech.TextToSpeechClient(credentials=credentials)
-
-        voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code,
-            name=voice_name,
-        )
-
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
-        )
-
-        input_text = texttospeech.SynthesisInput(text=text)
-        response = client.synthesize_speech(
-            input=input_text,
-            voice=voice,
-            audio_config=audio_config,
-        )
-
-        return {"ok": True, "audio_data": response.audio_content}
+            return {"ok": False, "error": "오디오 데이터 없음"}
+        else:
+            error_msg = response.text[:200] if response.text else f"HTTP {response.status_code}"
+            return {"ok": False, "error": f"Gemini API 오류: {error_msg}"}
 
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def parse_voice(voice: str) -> tuple:
-    """음성 설정 파싱 → (voice_name, language_code)"""
-    if voice.startswith("chirp3:"):
-        # chirp3:Charon → ko-KR-Chirp3-HD-Charon
-        voice_short = voice.split(":")[1]
-        return f"ko-KR-Chirp3-HD-{voice_short}", "ko-KR"
-    elif voice.startswith("ko-KR-"):
-        return voice, "ko-KR"
-    else:
-        # 기본값
-        return "ko-KR-Chirp3-HD-Charon", "ko-KR"
+def convert_to_mp3(input_path: str, output_path: str) -> bool:
+    """오디오를 MP3로 변환"""
+    try:
+        subprocess.run(
+            ['ffmpeg', '-y', '-i', input_path, '-c:a', 'libmp3lame', '-b:a', '128k', output_path],
+            capture_output=True, timeout=60
+        )
+        return os.path.exists(output_path)
+    except Exception:
+        return False
 
 
 def generate_tts(
@@ -148,16 +155,16 @@ def generate_tts(
     script: str,
     output_dir: str,
     voice: str = DEFAULT_VOICE,
-    speed: float = DEFAULT_SPEED,
+    speed: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    대본에 대해 TTS 생성 (Chirp 3 HD 사용)
+    대본에 대해 TTS 생성 (Gemini TTS 사용)
 
     Args:
         episode_id: 에피소드 ID (예: "ep019")
         script: 대본 텍스트
         output_dir: 출력 디렉토리
-        voice: 음성 (기본: chirp3:Charon)
+        voice: 음성 (Charon, Kore, Puck, Fenrir, Aoede)
         speed: 속도 (현재 미사용)
 
     Returns:
@@ -165,16 +172,16 @@ def generate_tts(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # 음성 설정 파싱
-    voice_name, language_code = parse_voice(voice)
-    print(f"[HISTORY-TTS] 음성: {voice_name}")
+    # 음성 이름 파싱 (gemini:Charon → Charon, chirp3:Charon → Charon)
+    voice_name = voice.split(":")[-1] if ":" in voice else voice
+    print(f"[HISTORY-TTS] 음성: Gemini TTS - {voice_name}")
 
     # 문장 분할
     sentences = split_into_sentences(script)
     print(f"[HISTORY-TTS] {len(sentences)}개 문장 처리 중...")
 
-    # 청크 병합 (5000바이트 제한 대응)
-    MAX_CHARS = 1400
+    # 청크 병합 (API 제한 대응)
+    MAX_CHARS = 2000
     chunks = []
     current_chunk = ""
 
@@ -202,7 +209,7 @@ def generate_tts(
                 continue
 
             # TTS 생성
-            result = generate_chirp3_chunk(chunk, voice_name, language_code)
+            result = generate_gemini_chunk(chunk, voice_name)
             if not result.get("ok"):
                 print(f"[HISTORY-TTS] 청크 {i+1} 실패: {result.get('error')}")
                 failed_count += 1
@@ -210,21 +217,28 @@ def generate_tts(
                     return {"ok": False, "error": f"TTS 생성 연속 실패: {result.get('error')}"}
                 continue
 
-            # 임시 파일 저장
-            chunk_path = os.path.join(temp_dir, f"chunk_{i:04d}.mp3")
-            with open(chunk_path, 'wb') as f:
+            # 임시 파일 저장 (Gemini는 wav/pcm 반환)
+            raw_path = os.path.join(temp_dir, f"chunk_{i:04d}.raw")
+            mp3_path = os.path.join(temp_dir, f"chunk_{i:04d}.mp3")
+
+            with open(raw_path, 'wb') as f:
                 f.write(result["audio_data"])
 
+            # MP3로 변환
+            if not convert_to_mp3(raw_path, mp3_path):
+                print(f"[HISTORY-TTS] 청크 {i+1} 변환 실패")
+                continue
+
             # 길이 확인
-            duration = get_audio_duration(chunk_path)
+            duration = get_audio_duration(mp3_path)
             if duration > 0:
-                audio_paths.append(chunk_path)
+                audio_paths.append(mp3_path)
                 timeline.append((current_time, current_time + duration, chunk))
                 current_time += duration
-                failed_count = 0  # 성공하면 실패 카운트 리셋
+                failed_count = 0
 
             # 진행률 표시
-            if (i + 1) % 5 == 0 or i == len(chunks) - 1:
+            if (i + 1) % 3 == 0 or i == len(chunks) - 1:
                 print(f"[HISTORY-TTS] {i+1}/{len(chunks)} 완료 ({current_time:.1f}초)")
 
         if not audio_paths:
@@ -255,4 +269,4 @@ def generate_tts(
 
 if __name__ == "__main__":
     print("history_pipeline/tts.py 로드 완료")
-    print(f"기본 음성: {DEFAULT_VOICE}")
+    print(f"기본 음성: Gemini TTS - {DEFAULT_VOICE}")
