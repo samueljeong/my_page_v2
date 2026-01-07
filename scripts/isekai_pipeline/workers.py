@@ -108,67 +108,56 @@ def generate_tts(
 # Image Worker
 # =====================================================
 
-def _generate_image_gemini(prompt: str, ratio: str = "16:9") -> Dict[str, Any]:
-    """Gemini Imagen API로 이미지 생성 (직접 호출)"""
+def _generate_image_via_image_module(prompt: str, ratio: str = "16:9") -> Dict[str, Any]:
+    """image 패키지를 통한 이미지 생성 (OpenRouter → Gemini)"""
     import base64
 
-    api_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GOOGLE_CLOUD_API_KEY')
-    if not api_key:
-        return {"ok": False, "error": "GOOGLE_API_KEY 환경변수가 필요합니다"}
-
-    # Gemini Imagen API 엔드포인트
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={api_key}"
-
-    # 비율 설정
-    ratio_map = {
-        '16:9': {"width": 1280, "height": 720},
-        '9:16': {"width": 720, "height": 1280},
-        '1:1': {"width": 1024, "height": 1024},
-        '4:3': {"width": 1024, "height": 768}
+    # 비율 → size 문자열 변환
+    size_map = {
+        '16:9': "1280x720",
+        '9:16': "720x1280",
+        '1:1': "1024x1024",
+        '4:3': "1024x768"
     }
-    dimensions = ratio_map.get(ratio, {"width": 1280, "height": 720})
-
-    payload = {
-        "instances": [{"prompt": prompt}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": ratio.replace(":", "x") if ":" in ratio else "16x9",
-        }
-    }
+    size = size_map.get(ratio, "1280x720")
 
     try:
-        response = requests.post(url, json=payload, timeout=120)
+        # image 패키지 사용 (OpenRouter 경유 Gemini)
+        from image import generate_image as image_generate, generate_image_base64, GEMINI_FLASH
 
-        if response.status_code == 200:
-            result = response.json()
-            predictions = result.get("predictions", [])
-            if predictions and predictions[0].get("bytesBase64Encoded"):
-                image_data = base64.b64decode(predictions[0]["bytesBase64Encoded"])
-                return {"ok": True, "image_data": image_data}
+        # 먼저 generate_image 시도 (URL 반환)
+        result = image_generate(prompt=prompt, size=size, model=GEMINI_FLASH)
 
-        # Gemini Pro Vision fallback (이미지 생성 지원 모델)
-        url2 = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
-        payload2 = {
-            "contents": [{"parts": [{"text": f"Generate an image: {prompt}"}]}],
-            "generationConfig": {"responseModalities": ["IMAGE"]}
-        }
+        if result.get("ok") and result.get("image_url"):
+            # URL에서 이미지 다운로드
+            image_url = result["image_url"]
+            if image_url.startswith("/"):
+                # 로컬 파일 경로
+                local_path = f"/home/user/my_page_v2{image_url}"
+                if os.path.exists(local_path):
+                    with open(local_path, "rb") as f:
+                        image_data = f.read()
+                    return {"ok": True, "image_data": image_data}
+            else:
+                # HTTP URL
+                resp = requests.get(image_url, timeout=30)
+                if resp.status_code == 200:
+                    return {"ok": True, "image_data": resp.content}
 
-        response2 = requests.post(url2, json=payload2, timeout=120)
-        if response2.status_code == 200:
-            result2 = response2.json()
-            candidates = result2.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                for part in parts:
-                    if "inlineData" in part:
-                        image_b64 = part["inlineData"].get("data", "")
-                        if image_b64:
-                            image_data = base64.b64decode(image_b64)
-                            return {"ok": True, "image_data": image_data}
+            return {"ok": False, "error": f"이미지 다운로드 실패: {image_url}"}
 
-        error_msg = response.text[:300] if response.text else f"HTTP {response.status_code}"
-        return {"ok": False, "error": f"이미지 생성 실패: {error_msg}"}
+        # fallback: generate_image_base64
+        width, height = map(int, size.split("x"))
+        image_b64 = generate_image_base64(prompt=prompt, width=width, height=height, model=GEMINI_FLASH)
 
+        if image_b64:
+            image_data = base64.b64decode(image_b64)
+            return {"ok": True, "image_data": image_data}
+
+        return {"ok": False, "error": result.get("error", "이미지 생성 실패")}
+
+    except ImportError as e:
+        return {"ok": False, "error": f"image 모듈 import 실패: {e}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -226,7 +215,7 @@ def generate_image(
 
     print(f"[ISEKAI-IMAGE] 생성 중: scene_{scene_index}")
 
-    result = _generate_image_gemini(full_prompt, ratio)
+    result = _generate_image_via_image_module(full_prompt, ratio)
 
     if not result.get("ok"):
         return result
