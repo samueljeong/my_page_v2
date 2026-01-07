@@ -99,7 +99,6 @@ Task(
 ### 파이프라인별 문서
 | 문서 | 설명 |
 |------|------|
-| [docs/pipelines/NEWS.md](docs/pipelines/NEWS.md) | 뉴스 자동화 파이프라인 |
 | [docs/pipelines/BIBLE.md](docs/pipelines/BIBLE.md) | 성경통독 파이프라인 |
 
 ### 변경 이력
@@ -115,13 +114,9 @@ Task(
 ```
 drama_server.py          # 메인 서버 (모든 API)
 scripts/
-├── common/              # 공통 모듈 (에이전트 기본 클래스)
+├── common/              # 공통 모듈 (에이전트 기본 클래스, SRT 유틸리티)
 ├── history_pipeline/    # 한국사 파이프라인
-├── isekai_pipeline/     # 이세계 파이프라인
+├── isekai_pipeline/     # 이세계 파이프라인 (혈영 이세계편)
 ├── bible_pipeline/      # 성경통독 파이프라인
-├── news_pipeline/       # 뉴스 파이프라인
-├── mystery_pipeline/    # 미스터리 파이프라인
-├── wuxia_pipeline/      # 무협지 파이프라인
-├── video_pipeline/      # 영상 생성 파이프라인
 └── migrations/          # DB 마이그레이션 스크립트
 ```
