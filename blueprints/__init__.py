@@ -9,6 +9,7 @@ Flask Blueprint를 사용한 drama_server.py 모듈화
 - isekai.py: Isekai Pipeline Blueprint (/api/isekai/*)
 - bible.py: Bible Pipeline Blueprint (/api/bible/*, /api/sheets/create-bible)
 - history.py: History Pipeline Blueprint (/api/history/*)
+- tts.py: TTS API Blueprint (/api/drama/generate-tts, /api/drama/step3/tts, /api/drama/generate-subtitle)
 
 사용법:
     from blueprints.gpt import gpt_bp
