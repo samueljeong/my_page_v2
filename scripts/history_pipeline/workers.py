@@ -94,7 +94,7 @@ def generate_tts(
     speed: float = None,
 ) -> Dict[str, Any]:
     """
-    TTS 생성 (Gemini/Google TTS)
+    TTS 생성 (Gemini TTS API 직접 호출)
 
     Args:
         episode_id: 에피소드 ID (예: "ep001_광개토왕")
@@ -110,41 +110,179 @@ def generate_tts(
             "duration": 900.5  # 약 15분
         }
     """
+    import re
+    import subprocess
+    import base64
+
     ensure_directories()
 
     voice = voice or TTS_CONFIG.get("voice", "chirp3:Charon")
     speed = speed or TTS_CONFIG.get("speed", 0.95)
 
+    # 대본 정리 (구분선 제거)
+    clean_script = re.sub(r'\n---+\n', '\n\n', script)
+    clean_script = clean_script.strip()
+
+    print(f"[HISTORY TTS] 시작: {len(clean_script):,}자, 음성: {voice}", flush=True)
+
     try:
-        # wuxia_pipeline의 TTS 모듈 재사용
-        from scripts.wuxia_pipeline.multi_voice_tts import (
-            generate_multi_voice_tts_simple,
-            generate_srt_from_timeline,
-        )
+        # Gemini TTS API 직접 호출
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if not api_key:
+            return {"ok": False, "error": "GOOGLE_API_KEY 환경변수 없음"}
 
-        tts_result = generate_multi_voice_tts_simple(
-            text=script,
-            output_dir=AUDIO_DIR,
-            episode_id=episode_id,
-            voice=voice,
-            speed=speed,
-        )
+        # Chirp3 음성 파싱 (chirp3:Charon -> Charon)
+        voice_name = voice
+        if voice.startswith("chirp3:"):
+            voice_name = voice.split(":")[1]
 
-        if tts_result.get("ok"):
-            # SRT 생성
-            srt_path = os.path.join(SUBTITLE_DIR, f"{episode_id}.srt")
-            if tts_result.get("timeline"):
-                generate_srt_from_timeline(tts_result["timeline"], srt_path)
-                tts_result["srt_path"] = srt_path
+        # Gemini TTS API 호출
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
 
-            tts_result["audio_path"] = tts_result.get("merged_audio")
+        payload = {
+            "contents": [{
+                "parts": [{"text": clean_script}]
+            }],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": voice_name
+                        }
+                    }
+                }
+            }
+        }
 
-        return tts_result
+        response = requests.post(url, json=payload, timeout=300)
 
-    except ImportError:
-        return {"ok": False, "error": "TTS 모듈 없음 (wuxia_pipeline 필요)"}
+        if response.status_code != 200:
+            return {"ok": False, "error": f"TTS API 오류: {response.status_code} - {response.text[:200]}"}
+
+        data = response.json()
+
+        # 오디오 데이터 추출
+        audio_data = None
+        candidates = data.get("candidates", [])
+        if candidates:
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+            for part in parts:
+                if "inlineData" in part:
+                    audio_b64 = part["inlineData"].get("data", "")
+                    audio_data = base64.b64decode(audio_b64)
+                    break
+
+        if not audio_data:
+            return {"ok": False, "error": "TTS 응답에서 오디오 데이터 없음"}
+
+        # 오디오 파일 저장
+        audio_path = os.path.join(AUDIO_DIR, f"{episode_id}.mp3")
+        with open(audio_path, "wb") as f:
+            f.write(audio_data)
+
+        # Duration 측정
+        duration = _get_audio_duration(audio_path)
+        print(f"[HISTORY TTS] TTS 완료: {duration:.1f}초 ({duration/60:.1f}분)", flush=True)
+
+        # SRT 생성 (문장 단위)
+        srt_path = os.path.join(SUBTITLE_DIR, f"{episode_id}.srt")
+        timeline = _generate_sentence_timeline(clean_script, duration)
+        _write_srt_file(timeline, srt_path)
+        print(f"[HISTORY TTS] SRT 생성: {len(timeline)}개 자막", flush=True)
+
+        return {
+            "ok": True,
+            "audio_path": audio_path,
+            "merged_audio": audio_path,
+            "srt_path": srt_path,
+            "duration": duration,
+            "timeline": timeline,
+        }
+
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def _get_audio_duration(audio_path: str) -> float:
+    """ffprobe로 오디오 길이 측정"""
+    import subprocess
+
+    if not os.path.exists(audio_path):
+        return 0.0
+
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            audio_path
+        ]
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
+        return float(out)
+    except Exception:
+        # 파일 크기 기반 추정 (MP3 128kbps 기준)
+        try:
+            return os.path.getsize(audio_path) / 16000
+        except:
+            return 0.0
+
+
+def _generate_sentence_timeline(script: str, total_duration: float) -> List[Dict]:
+    """문장 단위로 타임라인 생성 (글자 수 비례)"""
+    import re
+
+    # 문장 분리 (마침표, 물음표, 느낌표 기준)
+    sentences = re.split(r'(?<=[.?!])\s+', script)
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    if not sentences:
+        return []
+
+    total_chars = sum(len(s) for s in sentences)
+    timeline = []
+    current_time = 0.0
+
+    for i, sentence in enumerate(sentences):
+        # 글자 수 비례로 duration 계산
+        ratio = len(sentence) / total_chars
+        duration = total_duration * ratio
+
+        timeline.append({
+            "index": i,
+            "text": sentence,
+            "start_sec": current_time,
+            "end_sec": current_time + duration,
+        })
+
+        current_time += duration
+
+    return timeline
+
+
+def _write_srt_file(timeline: List[Dict], srt_path: str) -> bool:
+    """타임라인에서 SRT 파일 생성"""
+    os.makedirs(os.path.dirname(srt_path), exist_ok=True)
+
+    def sec_to_srt(sec: float) -> str:
+        h = int(sec // 3600)
+        m = int((sec % 3600) // 60)
+        s = int(sec % 60)
+        ms = int((sec - int(sec)) * 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for i, entry in enumerate(timeline, 1):
+            start = sec_to_srt(entry['start_sec'])
+            end = sec_to_srt(entry['end_sec'])
+            text = entry['text']
+
+            f.write(f"{i}\n")
+            f.write(f"{start} --> {end}\n")
+            f.write(f"{text}\n\n")
+
+    return True
 
 
 # =====================================================
