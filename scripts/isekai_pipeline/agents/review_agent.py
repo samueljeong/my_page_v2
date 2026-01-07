@@ -1,29 +1,39 @@
 """
-한국사 파이프라인 - Review Agent (검수 에이전트)
+혈영 이세계편 - Review Agent (검수 에이전트)
 
 ## 성격 및 역할
-깐깐하고 철저한 스타일.
-대충 넘어가지 않고 문제를 파악해서 개선할 수 있는 능력 보유.
+40년간 출판사에서 편집장으로 근무한 베테랑 편집자.
+"타협 없는 품질"을 추구하는 깐깐한 전문가.
+
+## 전문 분야
+- 웹소설/라이트노벨 편집 경험
+- 무협/판타지 장르 전문
+- 시리즈물 일관성 검증
+- TTS 최적화 문장 검토
 
 ## 철학
-- "타협 없는 품질" - 한 번 통과한 대본은 완벽해야 한다
-- 작은 문제라도 놓치지 않음
-- 비판이 아닌 개선을 위한 피드백
+- "한 번 통과한 대본은 완벽해야 한다"
+- "작은 오류가 전체 몰입을 깬다"
+- "비판이 아닌 개선을 위한 피드백"
+- "Series Bible은 절대 법칙이다"
 
 ## 책임
-- 대본 품질 검수 (길이, 문체, 역사적 정확성)
+- 대본 품질 검수 (길이, 문체, 구조)
+- Series Bible 준수 여부 검증
+- 캐릭터 일관성 확인
+- 스토리 연결성 검토
 - 구체적이고 실행 가능한 피드백 생성
 - 최종 승인/반려 결정 (S/A/B/C/D 등급)
 
 ## 검수 기준
 - 길이: 12,000~15,000자 (30점)
-- 구조: 5단계 구조 준수 (20점)
-- 문체: 대화체, 질문 활용 (20점)
-- 정확성: 연도, 숫자, 사례 (20점)
-- 스토리텔링: 훅, 몰입도, 마무리 (10점)
+- 구조: 5막 구조 준수 (20점)
+- 문체: 무협 소설체, 대화 비율 (20점)
+- 일관성: Series Bible 준수, 캐릭터 (20점)
+- 몰입도: 훅, 클라이맥스, 클리프행어 (10점)
 
 ## 통과 기준
-- S등급 (90점+): 즉시 통과
+- S등급 (90점+): 즉시 통과, 수정 불필요
 - A등급 (80-89점): 사소한 수정 후 통과
 - B등급 (70-79점): 수정 필요
 - C/D등급: 재작성 필요
@@ -36,45 +46,116 @@ from typing import Any, Dict, List, Optional, Tuple
 from .base import BaseAgent, AgentResult, AgentStatus, EpisodeContext
 
 
-# 검수 기준
+# =============================================================================
+# 검수 기준 상세
+# =============================================================================
 REVIEW_CRITERIA = """
-## 대본 검수 기준 (한국사 다큐멘터리)
+## 대본 검수 기준 (혈영 이세계편)
 
-### 1. 길이 (30점)
-- 12,000~15,000자: 30점
-- 11,000~12,000자 또는 15,000~16,000자: 20점
-- 그 외: 10점
+### 1. 길이 검수 (30점)
+| 글자수 | 점수 | 판정 |
+|--------|------|------|
+| 12,000~15,000자 | 30점 | PASS |
+| 11,000~12,000 또는 15,000~16,000 | 20점 | WARNING |
+| 그 외 | 10점 | FAIL |
 
-### 2. 구조 (20점)
-- 인트로/배경/본론1/본론2/마무리 구조: 20점
-- 일부 누락: 10점
-- 구조 불분명: 5점
+### 2. 구조 검수 (20점)
+- 5막 구조 준수 (오프닝/전개/클라이맥스/해결/엔딩)
+- 각 막의 글자수 비율 적절 (±20%)
+- 씬 전환의 자연스러움
 
-### 3. 문체 (20점)
-- 대화체 종결어미 사용 (~거든요, ~었어요): 10점
-- 가정법/질문 활용: 5점
-- 학술적 유보 표현 최소화: 5점
+### 3. 문체 검수 (20점)
+- 무협 소설체 사용 (의성어/의태어)
+- 대화 비율 30-40%
+- TTS 최적화 (문장 길이 15-50자)
+- 금지 표현 미사용 (외래어, 현대 용어)
 
-### 4. 역사적 정확성 (20점)
-- 구체적 연도/숫자 사용: 10점
-- 역사적 인물/사건 명시: 10점
+### 4. 일관성 검수 (20점)
+- Series Bible 캐릭터 설정 준수
+- 파워 스케일 일관성
+- 이전 에피소드와의 연결
+- 등장 타이밍 준수 (카이든 5화~, 에이라 12화~)
 
-### 5. 스토리텔링 (10점)
-- 훅이 명확한가: 3점
-- 몰입도 있는 전개: 4점
-- 다음 화 예고가 자연스러운가: 3점
+### 5. 몰입도 검수 (10점)
+- 오프닝 훅의 강도
+- 클라이맥스 긴장감
+- 엔딩 클리프행어
+- 감정선 흐름
 
-### 등급
-- S (90-100): 즉시 통과
-- A (80-89): 사소한 수정 후 통과
-- B (70-79): 수정 필요
-- C (60-69): 대폭 수정 필요
-- D (60 미만): 재작성 필요
+### 등급 기준
+| 등급 | 점수 | 조치 |
+|------|------|------|
+| S | 90-100 | 즉시 통과 |
+| A | 80-89 | 사소한 수정 후 통과 |
+| B | 70-79 | 수정 필요 |
+| C | 60-69 | 대폭 수정 필요 |
+| D | 60 미만 | 재작성 필요 |
 """
 
 
+# =============================================================================
+# 금지 표현 목록
+# =============================================================================
+FORBIDDEN_EXPRESSIONS = {
+    "foreign_words": [
+        "어택", "디펜스", "스킬", "버프", "너프", "대미지",
+        "HP", "MP", "레벨업", "스테이터스", "인벤토리",
+        "퀘스트", "미션", "보스", "몹", "NPC",
+    ],
+    "modern_slang": [
+        "미쳤다", "대박", "존잼", "갓", "레전드", "역대급",
+        "쩐다", "개쩔어", "존버", "핵노잼",
+    ],
+    "academic_hedging": [
+        "단정하기 어렵습니다",
+        "해석이 갈립니다",
+        "알 수 없습니다",
+        "추측입니다",
+        "아마도",
+    ],
+}
+
+
+# =============================================================================
+# 캐릭터 등장 타이밍 (Series Bible)
+# =============================================================================
+CHARACTER_TIMELINE = {
+    "무영": 1,
+    "라이트닝": 2,
+    "카이든": 5,
+    "에이라": 12,
+    "이그니스 공주": 21,
+    "공주": 21,
+    "기사단장": 22,
+    "혈마": 35,  # 본격 등장, 암시는 20화부터
+}
+
+
+# =============================================================================
+# 파워 스케일 (Series Bible)
+# =============================================================================
+POWER_SCALE = {
+    (1, 5): {"무영": "F급", "enemies": "일반 몬스터"},
+    (6, 10): {"무영": "D급", "enemies": "중급 몬스터"},
+    (11, 15): {"무영": "C급", "enemies": "상급 몬스터"},
+    (16, 20): {"무영": "B급 진입", "enemies": "A급 이하 적"},
+    (21, 30): {"무영": "B~A급", "enemies": "A급 적"},
+    (31, 40): {"무영": "A~A+급", "enemies": "A+급 + 혈마 암시"},
+    (41, 50): {"무영": "A+~S급 진입", "enemies": "S급 + 혈마군"},
+    (51, 60): {"무영": "S~SS급", "enemies": "혈마"},
+}
+
+
 class ReviewAgent(BaseAgent):
-    """검수 에이전트"""
+    """
+    검수 에이전트 - 40년 경력의 베테랑 편집자
+
+    핵심 역량:
+    - 무협/판타지 장르 전문 편집
+    - Series Bible 일관성 검증
+    - 깐깐하고 구체적인 피드백
+    - 품질 타협 없음
+    """
 
     def __init__(self):
         super().__init__("ReviewAgent")
@@ -82,24 +163,19 @@ class ReviewAgent(BaseAgent):
         # 검수 설정
         self.min_length = 12000
         self.max_length = 15000
-        self.target_length = 13500
+        self.target_length = 14000
+
+        # 구조 설정 (5막 비율)
+        self.structure_ratios = {
+            "오프닝": 0.15,   # 2,100 / 14,000
+            "전개": 0.22,     # 3,100 / 14,000
+            "클라이맥스": 0.28,  # 3,900 / 14,000
+            "해결": 0.20,     # 2,800 / 14,000
+            "엔딩": 0.15,     # 2,100 / 14,000
+        }
 
         # 금지 표현
-        self.forbidden_phrases = [
-            "단정하기 어렵습니다",
-            "해석이 갈립니다",
-            "알 수 없습니다",
-            "정확하지 않습니다",
-            "추측입니다",
-        ]
-
-        # 권장 표현 패턴
-        self.recommended_patterns = [
-            r"거든요",
-            r"었어요",
-            r"죠[\.?]",
-            r"\?",  # 질문
-        ]
+        self.forbidden = FORBIDDEN_EXPRESSIONS
 
     async def execute(self, context: EpisodeContext, **kwargs) -> AgentResult:
         """
@@ -122,7 +198,7 @@ class ReviewAgent(BaseAgent):
             self.name,
             "대본 검수 시작",
             "running",
-            f"엄격 모드: {strict}"
+            f"EP{context.episode_number:03d}, 엄격 모드: {strict}"
         )
 
         try:
@@ -132,8 +208,8 @@ class ReviewAgent(BaseAgent):
 
             script = context.script
 
-            # 검수 항목별 점수 계산
-            scores = self._evaluate_script(script, context)
+            # 5개 영역 검수
+            scores = self._evaluate_all(script, context)
 
             # 총점 및 등급 계산
             total_score = sum(scores.values())
@@ -150,7 +226,7 @@ class ReviewAgent(BaseAgent):
             result_status = "success" if passed else "warning"
             context.add_log(
                 self.name,
-                f"검수 완료: {grade} ({total_score}점)",
+                f"검수 완료: {grade}등급 ({total_score}점)",
                 result_status,
                 f"통과: {passed}"
             )
@@ -171,6 +247,8 @@ class ReviewAgent(BaseAgent):
                     "review_criteria": REVIEW_CRITERIA,
                 },
                 duration=duration,
+                needs_improvement=not passed,
+                feedback=feedback.get("summary", ""),
             )
 
         except Exception as e:
@@ -186,34 +264,33 @@ class ReviewAgent(BaseAgent):
                 duration=duration,
             )
 
-    def _evaluate_script(
+    def _evaluate_all(
         self,
         script: str,
         context: EpisodeContext
     ) -> Dict[str, int]:
-        """대본 평가"""
-
+        """전체 검수 실행"""
         scores = {}
 
-        # 1. 길이 평가 (30점)
+        # 1. 길이 검수 (30점)
         scores["length"] = self._evaluate_length(script)
 
-        # 2. 구조 평가 (20점)
+        # 2. 구조 검수 (20점)
         scores["structure"] = self._evaluate_structure(script, context)
 
-        # 3. 문체 평가 (20점)
+        # 3. 문체 검수 (20점)
         scores["style"] = self._evaluate_style(script)
 
-        # 4. 역사적 정확성 (20점)
-        scores["accuracy"] = self._evaluate_accuracy(script, context)
+        # 4. 일관성 검수 (20점)
+        scores["consistency"] = self._evaluate_consistency(script, context)
 
-        # 5. 스토리텔링 (10점)
-        scores["storytelling"] = self._evaluate_storytelling(script, context)
+        # 5. 몰입도 검수 (10점)
+        scores["immersion"] = self._evaluate_immersion(script, context)
 
         return scores
 
     def _evaluate_length(self, script: str) -> int:
-        """길이 평가 (30점 만점)"""
+        """길이 검수 (30점 만점)"""
         length = len(script)
 
         if self.min_length <= length <= self.max_length:
@@ -223,164 +300,216 @@ class ReviewAgent(BaseAgent):
         else:
             return 10
 
-    def _evaluate_structure(self, script: str, context: EpisodeContext) -> int:
-        """구조 평가 (20점 만점)"""
+    def _evaluate_structure(
+        self,
+        script: str,
+        context: EpisodeContext
+    ) -> int:
+        """구조 검수 (20점 만점)"""
         score = 0
 
-        # 기획서의 구조와 대본 비교
-        if context.brief:
-            structure = context.brief.get("structure", [])
-            structure_count = len(structure)
-            matched = 0
+        # 씬 분할이 있으면 확인
+        scenes = context.scenes
+        if scenes and len(scenes) == 5:
+            # 5막 구조 확인
+            scene_names = ["오프닝", "전개", "클라이맥스", "해결", "엔딩"]
+            total_length = sum(len(s) for s in scenes)
 
-            for section in structure:
-                section_title = section.get("part", "")
-                # 대본에서 해당 섹션 키워드가 있는지 확인
-                if section_title and any(keyword in script for keyword in section_title.split()):
-                    matched += 1
+            for i, (name, scene) in enumerate(zip(scene_names, scenes)):
+                expected_ratio = self.structure_ratios.get(name, 0.2)
+                actual_ratio = len(scene) / total_length if total_length > 0 else 0
 
-            if structure_count > 0:
-                match_ratio = matched / structure_count
-                if match_ratio >= 0.8:
-                    score = 20
-                elif match_ratio >= 0.5:
-                    score = 15
-                else:
-                    score = 10
-            else:
-                score = 15  # 기획서에 구조 없으면 기본점
+                # ±20% 이내면 OK
+                if abs(actual_ratio - expected_ratio) <= 0.2 * expected_ratio:
+                    score += 4
+
+            return min(score, 20)
+
+        # 씬 분할이 없으면 대본 자체 분석
+        paragraphs = [p for p in script.split("\n\n") if len(p.strip()) > 100]
+
+        if len(paragraphs) >= 5:
+            score = 15
+        elif len(paragraphs) >= 3:
+            score = 10
         else:
-            # 기획서 없으면 대본 자체 구조 평가
-            # 최소 5개 단락 이상이면 구조 있다고 판단
-            paragraphs = [p for p in script.split("\n\n") if len(p.strip()) > 100]
-            if len(paragraphs) >= 5:
-                score = 20
-            elif len(paragraphs) >= 3:
-                score = 15
-            else:
-                score = 10
+            score = 5
+
+        # 씬 전환 표현 확인
+        transition_keywords = ["그때", "얼마나 지났을까", "다음 순간", "시간이 흘렀"]
+        transition_count = sum(1 for kw in transition_keywords if kw in script)
+        if transition_count >= 3:
+            score = min(score + 5, 20)
 
         return score
 
     def _evaluate_style(self, script: str) -> int:
-        """문체 평가 (20점 만점)"""
+        """문체 검수 (20점 만점)"""
         score = 0
 
-        # 대화체 종결어미 (10점)
-        conversational_count = 0
-        for pattern in [r"거든요", r"었어요", r"죠[\.?]", r"네요"]:
-            conversational_count += len(re.findall(pattern, script))
-
-        if conversational_count >= 20:
-            score += 10
-        elif conversational_count >= 10:
-            score += 7
-        elif conversational_count >= 5:
-            score += 5
-        else:
-            score += 2
-
-        # 질문 활용 (5점)
-        question_count = script.count("?")
-        if question_count >= 10:
-            score += 5
-        elif question_count >= 5:
-            score += 3
-        elif question_count >= 2:
-            score += 2
-        else:
-            score += 1
-
-        # 학술적 유보 표현 감점 (5점에서 차감)
-        forbidden_count = 0
-        for phrase in self.forbidden_phrases:
-            forbidden_count += script.count(phrase)
-
-        if forbidden_count == 0:
-            score += 5
-        elif forbidden_count <= 2:
-            score += 3
-        else:
-            score += 1
-
-        return score
-
-    def _evaluate_accuracy(self, script: str, context: EpisodeContext) -> int:
-        """역사적 정확성 평가 (20점 만점)"""
-        score = 0
-
-        # 연도 언급 (10점)
-        year_pattern = r"(서기\s*)?\d{1,4}년"
-        years = re.findall(year_pattern, script)
-        if len(years) >= 10:
-            score += 10
-        elif len(years) >= 5:
-            score += 7
-        elif len(years) >= 2:
-            score += 5
-        else:
-            score += 2
-
-        # 숫자/구체적 사례 (10점)
-        number_patterns = [
-            r"\d+만\s*명",  # 인구수
-            r"\d+개",  # 개수
-            r"\d+세기",  # 세기
-            r"\d+km",  # 거리
-            r"제?\d+대",  # 왕/대통령
+        # 1. 의성어/의태어 사용 (5점)
+        onomatopoeia = [
+            "쩌렁", "휘이잉", "우지직", "쾅", "파직", "스르륵",
+            "두근", "쿵쾅", "치직", "펄럭", "휙"
         ]
-        number_count = 0
-        for pattern in number_patterns:
-            number_count += len(re.findall(pattern, script))
-
-        if number_count >= 10:
-            score += 10
-        elif number_count >= 5:
-            score += 7
-        elif number_count >= 2:
+        found_onomatopoeia = sum(1 for w in onomatopoeia if w in script)
+        if found_onomatopoeia >= 5:
             score += 5
+        elif found_onomatopoeia >= 3:
+            score += 3
+        elif found_onomatopoeia >= 1:
+            score += 1
+
+        # 2. 대화 비율 (5점)
+        dialogue_count = script.count('"') // 2
+        script_length = len(script)
+        # 대략 150자당 1회 대화 = 30-40% 비율
+        expected_dialogues = script_length // 200  # 200자당 1회가 30% 정도
+        if dialogue_count >= expected_dialogues * 0.8:
+            score += 5
+        elif dialogue_count >= expected_dialogues * 0.5:
+            score += 3
         else:
-            score += 2
+            score += 1
 
-        return score
+        # 3. 금지 표현 미사용 (5점)
+        penalty = 0
 
-    def _evaluate_storytelling(self, script: str, context: EpisodeContext) -> int:
-        """스토리텔링 평가 (10점 만점)"""
+        # 외래어
+        for word in self.forbidden["foreign_words"]:
+            if word in script:
+                penalty += 2
+
+        # 현대 용어
+        for word in self.forbidden["modern_slang"]:
+            if word in script:
+                penalty += 1
+
+        style_score = max(0, 5 - penalty)
+        score += style_score
+
+        # 4. TTS 최적화 (5점)
+        sentences = re.split(r'[.!?]', script)
+        long_sentences = [s for s in sentences if len(s.strip()) > 60]
+        short_sentences = [s for s in sentences if 15 <= len(s.strip()) <= 50]
+
+        if len(long_sentences) < 10 and len(short_sentences) > len(sentences) * 0.5:
+            score += 5
+        elif len(long_sentences) < 20:
+            score += 3
+        else:
+            score += 1
+
+        return min(score, 20)
+
+    def _evaluate_consistency(
+        self,
+        script: str,
+        context: EpisodeContext
+    ) -> int:
+        """일관성 검수 (20점 만점)"""
+        score = 20  # 감점제
+        issues = []
+
+        episode_num = context.episode_number
+
+        # 1. 캐릭터 등장 타이밍 검증 (10점)
+        for char_name, first_episode in CHARACTER_TIMELINE.items():
+            if char_name in script and episode_num < first_episode:
+                issues.append(f"{char_name}이(가) {first_episode}화 이전에 등장")
+                score -= 5
+
+        # 2. 파워 스케일 검증 (5점)
+        for (start, end), power_info in POWER_SCALE.items():
+            if start <= episode_num <= end:
+                muying_power = power_info["무영"]
+                # S급, SS급 같은 표현이 너무 일찍 나오면 감점
+                if episode_num < 40:
+                    if "SS급" in script or "SS급" in script:
+                        issues.append("SS급 표현이 너무 일찍 등장")
+                        score -= 3
+                    if episode_num < 20 and "S급" in script:
+                        issues.append("S급 표현이 너무 일찍 등장")
+                        score -= 2
+                break
+
+        # 3. 이전 에피소드 연결 (5점)
+        if context.prev_episode and episode_num > 1:
+            # 이전화 제목이나 내용 언급 확인
+            prev_title = context.prev_episode.get("title", "")
+            # 연결 키워드
+            connection_keywords = ["저번", "지난", "이전", "그때", "그 일"]
+            has_connection = any(kw in script for kw in connection_keywords)
+
+            if not has_connection and episode_num > 3:
+                issues.append("이전 에피소드와의 연결 부족")
+                score -= 3
+
+        return max(0, score)
+
+    def _evaluate_immersion(
+        self,
+        script: str,
+        context: EpisodeContext
+    ) -> int:
+        """몰입도 검수 (10점 만점)"""
         score = 0
 
-        # 훅 (인트로 첫 500자) (3점)
+        # 1. 오프닝 훅 (3점)
         intro = script[:500]
-        hook_indicators = ["상상해", "생각해", "어떤", "만약", "왜"]
-        if any(indicator in intro for indicator in hook_indicators):
+        hook_indicators = [
+            "검기", "검이", "눈앞", "순간", "그때",
+            "상상", "생각해", "만약", "이상했다"
+        ]
+        has_hook = any(indicator in intro for indicator in hook_indicators)
+        if has_hook and "?" in intro:
             score += 3
-        elif "?" in intro:
+        elif has_hook or "?" in intro:
             score += 2
         else:
             score += 1
 
-        # 몰입도 있는 전개 (4점)
-        # 대화/인용문 사용
-        quote_count = script.count('"') // 2  # 쌍따옴표 쌍
-        if quote_count >= 5:
+        # 2. 클라이맥스 긴장감 (4점)
+        # 중간 40% 영역에서 긴장감 키워드 확인
+        middle_start = int(len(script) * 0.35)
+        middle_end = int(len(script) * 0.65)
+        middle = script[middle_start:middle_end]
+
+        tension_keywords = [
+            "긴장", "위험", "목숨", "죽", "피", "검기",
+            "공격", "방어", "회피", "전투"
+        ]
+        tension_count = sum(1 for kw in tension_keywords if kw in middle)
+
+        if tension_count >= 10:
             score += 4
-        elif quote_count >= 2:
+        elif tension_count >= 5:
             score += 3
-        else:
+        elif tension_count >= 2:
             score += 2
-
-        # 다음 화 예고 (마지막 500자) (3점)
-        outro = script[-500:]
-        next_indicators = ["다음", "예고", "이어서", "계속", "다음 화"]
-        if context.next_episode:
-            if any(indicator in outro for indicator in next_indicators):
-                score += 3
-            else:
-                score += 1
         else:
-            # 마지막 화면 마무리 점수
-            score += 3
+            score += 1
 
-        return score
+        # 3. 엔딩 클리프행어 (3점)
+        outro = script[-500:]
+        cliffhanger_patterns = [
+            r"하지만.+않았다",
+            r"그때.+나타났다",
+            r"과연.+\?",
+            r"깨달았다",
+            r"시작.+불과",
+            r"끝이 아니",
+        ]
+        has_cliffhanger = any(re.search(p, outro) for p in cliffhanger_patterns)
+
+        if has_cliffhanger:
+            score += 3
+        elif "?" in outro or "..." in outro:
+            score += 2
+        else:
+            score += 1
+
+        return min(score, 10)
 
     def _calculate_grade(self, total_score: int) -> str:
         """등급 계산"""
@@ -409,77 +538,127 @@ class ReviewAgent(BaseAgent):
         context: EpisodeContext
     ) -> Dict[str, Any]:
         """피드백 생성"""
-
         feedback = {
             "summary": "",
             "strengths": [],
             "improvements": [],
             "critical_issues": [],
+            "details": {},
         }
 
         length = len(script)
 
-        # 길이 피드백
+        # 1. 길이 피드백
         if scores["length"] == 30:
             feedback["strengths"].append(f"길이 적절 ({length:,}자)")
-        elif length < self.min_length:
-            diff = self.min_length - length
-            feedback["improvements"].append(f"대본이 {diff:,}자 부족합니다 (현재 {length:,}자)")
+        elif scores["length"] == 20:
+            if length < self.min_length:
+                diff = self.min_length - length
+                feedback["improvements"].append(
+                    f"대본이 {diff:,}자 부족합니다 (현재 {length:,}자, 최소 {self.min_length:,}자)"
+                )
+            else:
+                diff = length - self.max_length
+                feedback["improvements"].append(
+                    f"대본이 {diff:,}자 초과입니다 (현재 {length:,}자, 최대 {self.max_length:,}자)"
+                )
         else:
-            diff = length - self.max_length
-            feedback["improvements"].append(f"대본이 {diff:,}자 초과입니다 (현재 {length:,}자)")
+            feedback["critical_issues"].append(
+                f"대본 길이가 기준 범위를 크게 벗어남 ({length:,}자)"
+            )
 
-        # 구조 피드백
+        # 2. 구조 피드백
         if scores["structure"] >= 18:
-            feedback["strengths"].append("구조가 잘 잡혀 있습니다")
-        elif scores["structure"] < 15:
-            feedback["improvements"].append("인트로/배경/본론/마무리 구조를 명확히 해주세요")
+            feedback["strengths"].append("5막 구조가 잘 구성됨")
+        elif scores["structure"] < 12:
+            feedback["improvements"].append(
+                "5막 구조 (오프닝/전개/클라이맥스/해결/엔딩) 명확히 구분 필요"
+            )
 
-        # 문체 피드백
+        # 3. 문체 피드백
         if scores["style"] >= 17:
-            feedback["strengths"].append("대화체 문체가 자연스럽습니다")
+            feedback["strengths"].append("무협 소설체 문체가 잘 살아있음")
         else:
-            if scores["style"] < 10:
-                feedback["improvements"].append("대화체 종결어미(~거든요, ~었어요)를 더 사용해주세요")
-
             # 금지 표현 체크
-            for phrase in self.forbidden_phrases:
-                if phrase in script:
-                    feedback["critical_issues"].append(f"학술적 유보 표현 발견: '{phrase}'")
+            found_forbidden = []
+            for category, words in self.forbidden.items():
+                for word in words:
+                    if word in script:
+                        found_forbidden.append(word)
 
-        # 정확성 피드백
-        if scores["accuracy"] >= 17:
-            feedback["strengths"].append("구체적인 숫자와 연도가 잘 활용되었습니다")
-        else:
-            feedback["improvements"].append("구체적인 연도, 숫자, 사례를 더 추가해주세요")
+            if found_forbidden:
+                feedback["critical_issues"].append(
+                    f"금지 표현 발견: {', '.join(found_forbidden[:5])}"
+                )
 
-        # 스토리텔링 피드백
-        if scores["storytelling"] >= 8:
-            feedback["strengths"].append("스토리텔링이 흥미롭습니다")
+            # 의성어/의태어 부족
+            onomatopoeia = ["쩌렁", "휘이잉", "우지직", "쾅", "파직"]
+            found = [w for w in onomatopoeia if w in script]
+            if len(found) < 3:
+                feedback["improvements"].append(
+                    "의성어/의태어 추가 권장 (무협 분위기 강화)"
+                )
+
+        # 4. 일관성 피드백
+        if scores["consistency"] >= 18:
+            feedback["strengths"].append("Series Bible 설정을 잘 준수함")
         else:
-            if "?" not in script[:500]:
-                feedback["improvements"].append("인트로에 시청자를 끌어들이는 질문을 넣어주세요")
+            # 캐릭터 등장 타이밍
+            episode_num = context.episode_number
+            for char_name, first_episode in CHARACTER_TIMELINE.items():
+                if char_name in script and episode_num < first_episode:
+                    feedback["critical_issues"].append(
+                        f"⚠️ {char_name}은 {first_episode}화부터 등장 가능 (현재 {episode_num}화)"
+                    )
+
+        # 5. 몰입도 피드백
+        if scores["immersion"] >= 8:
+            feedback["strengths"].append("훅과 클리프행어가 효과적임")
+        else:
+            intro = script[:500]
+            outro = script[-500:]
+
+            if "?" not in intro:
+                feedback["improvements"].append(
+                    "오프닝에 질문이나 미스터리 요소 추가 권장"
+                )
+            if "..." not in outro and "?" not in outro:
+                feedback["improvements"].append(
+                    "엔딩에 클리프행어 강화 필요"
+                )
 
         # 요약 생성
         total = sum(scores.values())
         grade = self._calculate_grade(total)
 
-        if grade == "S":
-            feedback["summary"] = "훌륭한 대본입니다. 바로 제작 진행하세요."
-        elif grade == "A":
-            feedback["summary"] = "좋은 대본입니다. 사소한 부분만 다듬으면 됩니다."
-        elif grade == "B":
-            feedback["summary"] = "괜찮은 대본이지만, 개선 사항을 반영해주세요."
-        elif grade == "C":
-            feedback["summary"] = "수정이 필요합니다. 피드백을 참고하여 다시 작성해주세요."
-        else:
-            feedback["summary"] = "대폭 수정이 필요합니다. 구조와 문체를 다시 검토해주세요."
+        grade_messages = {
+            "S": "훌륭한 대본입니다! 바로 제작을 진행하세요.",
+            "A": "좋은 대본입니다. 사소한 부분만 다듬으면 됩니다.",
+            "B": "괜찮은 대본이지만 개선 사항을 반영해주세요.",
+            "C": "수정이 필요합니다. 피드백을 참고하여 다시 작성해주세요.",
+            "D": "대폭 수정이 필요합니다. 구조부터 다시 검토해주세요.",
+        }
+        feedback["summary"] = grade_messages.get(grade, "검토가 필요합니다.")
+
+        # 점수 상세
+        feedback["details"] = {
+            "length": {"score": scores["length"], "max": 30},
+            "structure": {"score": scores["structure"], "max": 20},
+            "style": {"score": scores["style"], "max": 20},
+            "consistency": {"score": scores["consistency"], "max": 20},
+            "immersion": {"score": scores["immersion"], "max": 10},
+        }
 
         return feedback
 
 
+# =============================================================================
 # 동기 실행 래퍼
-def review_script(context: EpisodeContext, strict: bool = False) -> Dict[str, Any]:
+# =============================================================================
+def review_script(
+    context: EpisodeContext,
+    strict: bool = False
+) -> Dict[str, Any]:
     """
     대본 검수 (동기 버전)
 
@@ -510,28 +689,22 @@ def review_script(context: EpisodeContext, strict: bool = False) -> Dict[str, An
         raise Exception(result.error)
 
 
-def quick_review(script: str) -> Tuple[str, int, List[str]]:
+def quick_review(script: str, episode_number: int = 1) -> Tuple[str, int, List[str]]:
     """
     간단 검수 (컨텍스트 없이)
 
     Args:
         script: 대본 텍스트
+        episode_number: 에피소드 번호
 
     Returns:
         (등급, 점수, 이슈 목록)
     """
-    agent = ReviewAgent()
-
     # 임시 컨텍스트 생성
-    context = EpisodeContext(
-        episode_id="temp",
-        episode_number=0,
-        era_name="",
-        era_episode=0,
-        title="",
-        topic="",
-    )
+    context = EpisodeContext.from_episode(episode_number)
     context.script = script
+
+    agent = ReviewAgent()
 
     import asyncio
 
@@ -552,15 +725,20 @@ def quick_review(script: str) -> Tuple[str, int, List[str]]:
         return "F", 0, [result.error]
 
 
-def review_script_strict(script: str, min_length: int = 12000) -> Dict[str, Any]:
+def review_script_strict(
+    script: str,
+    episode_number: int = 1,
+    min_length: int = 12000
+) -> Dict[str, Any]:
     """
     대본 엄격 검수 (블로킹)
 
-    C/D 등급 또는 글자수 미달 시 ValueError 발생 - 파이프라인 진행 차단
+    C/D 등급 또는 글자수 미달 시 ValueError 발생
 
     Args:
         script: 대본 텍스트
-        min_length: 최소 글자수 (기본 12,000자)
+        episode_number: 에피소드 번호
+        min_length: 최소 글자수
 
     Returns:
         검수 결과 (통과 시)
@@ -568,10 +746,9 @@ def review_script_strict(script: str, min_length: int = 12000) -> Dict[str, Any]
     Raises:
         ValueError: C/D 등급 또는 필수 기준 미충족 시
     """
-    grade, score, issues = quick_review(script)
     length = len(script)
 
-    # 1. 글자수 필수 검증 (절대 통과 불가)
+    # 1. 글자수 필수 검증
     if length < min_length:
         raise ValueError(
             f"대본 검수 실패 - 글자수 미달 (진행 불가)\n"
@@ -580,23 +757,26 @@ def review_script_strict(script: str, min_length: int = 12000) -> Dict[str, Any]
             f"  부족: {min_length - length:,}자"
         )
 
-    # 2. C/D 등급 차단
+    # 2. 상세 검수
+    grade, score, issues = quick_review(script, episode_number)
+
+    # 3. C/D 등급 차단
     if grade in ["C", "D"]:
-        blocking_issues = [f"  - {issue}" for issue in issues if issue]
-        issues_str = "\n".join(blocking_issues) if blocking_issues else "  - 전체적인 품질 미달"
+        issues_str = "\n".join(f"  - {issue}" for issue in issues if issue)
         raise ValueError(
             f"대본 검수 실패 - {grade}등급 (진행 불가)\n"
             f"  점수: {score}/100\n"
             f"  등급: {grade} (최소 B등급 필요)\n"
-            f"  문제점:\n{issues_str}"
+            f"  문제점:\n{issues_str if issues_str else '  - 전체적인 품질 미달'}"
         )
 
-    # 3. B등급 경고 (통과하지만 로깅)
+    # 4. B등급 경고
     if grade == "B":
         warnings_str = "\n".join(f"  ⚠️ {issue}" for issue in issues if issue)
-        print(f"[ReviewAgent] 경고 - B등급 (통과하지만 개선 권장):\n{warnings_str}")
+        if warnings_str:
+            print(f"[ReviewAgent] 경고 - B등급 (통과하지만 개선 권장):\n{warnings_str}")
 
-    # 4. 통과
+    # 5. 통과
     print(f"[ReviewAgent] ✓ 대본 검수 통과: {length:,}자, {grade}등급 ({score}/100점)")
 
     return {
@@ -608,97 +788,25 @@ def review_script_strict(script: str, min_length: int = 12000) -> Dict[str, Any]
     }
 
 
-def review_image_prompts_strict(
-    prompts: List[Dict[str, Any]],
-    era_name: str,
-    script_length: int = 13000
-) -> Dict[str, Any]:
-    """
-    이미지 프롬프트 엄격 검수 (블로킹)
+def get_power_scale(episode_number: int) -> Dict[str, str]:
+    """에피소드별 파워 스케일 조회"""
+    for (start, end), power_info in POWER_SCALE.items():
+        if start <= episode_number <= end:
+            return power_info
+    return POWER_SCALE[(1, 5)]
 
-    시대 스타일 미적용, 개수 부족 시 ValueError 발생
 
-    Args:
-        prompts: 이미지 프롬프트 목록
-        era_name: 시대명 (발해, 고려, 조선 등)
-        script_length: 대본 길이 (이미지 개수 계산용)
+def get_character_timeline() -> Dict[str, int]:
+    """캐릭터 등장 타임라인 조회"""
+    return CHARACTER_TIMELINE.copy()
 
-    Returns:
-        검수 결과 (통과 시)
 
-    Raises:
-        ValueError: 검수 실패 시
-    """
-    issues = []
-    warnings = []
-
-    # 1. 최소 개수 검증
-    # 한국어 TTS 기준: 910자 ≈ 1분
-    estimated_minutes = script_length / 910
-    if estimated_minutes < 8:
-        min_count = 5
-    elif estimated_minutes < 10:
-        min_count = 8
-    elif estimated_minutes < 15:
-        min_count = 11
-    else:
-        min_count = 12
-
-    if len(prompts) < min_count:
-        issues.append(
-            f"이미지 개수 부족: {len(prompts)}개 (대본 {estimated_minutes:.1f}분 기준 최소 {min_count}개 필요)"
-        )
-
-    # 2. 시대 스타일 키워드 검증
-    era_keywords = {
-        "고조선": ["ancient", "bronze age", "korean"],
-        "삼국시대": ["three kingdoms", "goguryeo", "baekje", "silla"],
-        "발해": ["balhae", "northern", "manchuria", "tang"],
-        "통일신라": ["unified silla", "buddhist", "gyeongju"],
-        "고려": ["goryeo", "buddhist", "celadon"],
-        "조선": ["joseon", "confucian", "hanbok"],
-        "일제강점기": ["japanese occupation", "colonial", "1910"],
-        "대한민국": ["korean war", "modern korea", "republic"],
-    }
-
-    keywords = era_keywords.get(era_name, [era_name.lower()])
-
-    for i, prompt_item in enumerate(prompts):
-        prompt_text = prompt_item.get("prompt", "").lower()
-
-        # 시대 키워드 포함 여부
-        has_era_keyword = any(kw in prompt_text for kw in keywords)
-        if not has_era_keyword:
-            warnings.append(f"씬 {i+1}: 시대 키워드 미포함 (권장: {', '.join(keywords[:3])})")
-
-        # 현대적 요소 체크
-        modern_keywords = ["modern", "contemporary", "city", "car", "phone", "computer"]
-        has_modern = any(mk in prompt_text for mk in modern_keywords)
-        if has_modern:
-            issues.append(f"씬 {i+1}: 현대적 요소 포함 (역사적 고증 위반)")
-
-        # 네거티브 프롬프트 확인
-        negative = prompt_item.get("negative_prompt", "")
-        if not negative or "text" not in negative.lower():
-            warnings.append(f"씬 {i+1}: 네거티브 프롬프트에 'text' 미포함")
-
-    # 3. 검증 결과
-    if issues:
-        issues_str = "\n".join(f"  - {issue}" for issue in issues)
-        raise ValueError(
-            f"이미지 프롬프트 검수 실패 (진행 불가):\n{issues_str}"
-        )
-
-    # 4. 경고 로깅
-    if warnings:
-        warnings_str = "\n".join(f"  ⚠️ {w}" for w in warnings)
-        print(f"[ReviewAgent] 이미지 프롬프트 경고 (통과하지만 개선 권장):\n{warnings_str}")
-
-    print(f"[ReviewAgent] ✓ 이미지 프롬프트 검수 통과: {len(prompts)}개, 시대={era_name}")
-
-    return {
-        "passed": True,
-        "prompt_count": len(prompts),
-        "era_name": era_name,
-        "warnings": warnings,
-    }
+def check_character_availability(
+    character_name: str,
+    episode_number: int
+) -> bool:
+    """캐릭터 등장 가능 여부 확인"""
+    first_episode = CHARACTER_TIMELINE.get(character_name)
+    if first_episode is None:
+        return True  # 알 수 없는 캐릭터는 허용
+    return episode_number >= first_episode
