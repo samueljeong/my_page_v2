@@ -227,31 +227,34 @@ def generate_tts(
     sentences = split_into_sentences(script)
     print(f"[HISTORY-TTS] {len(sentences)}개 문장 처리 중...")
 
-    # 청크 병합 (API 제한 대응) - 타임아웃 방지로 1000자로 줄임
+    # 청크 병합 (API 제한 대응) - 문장 목록도 함께 저장
     MAX_CHARS = 1000
-    chunks = []
+    chunks = []  # [(chunk_text, [sentences_in_chunk]), ...]
     current_chunk = ""
+    current_sentences = []
 
     for sentence in sentences:
         if len(current_chunk) + len(sentence) + 1 <= MAX_CHARS:
             current_chunk += " " + sentence if current_chunk else sentence
+            current_sentences.append(sentence)
         else:
             if current_chunk:
-                chunks.append(current_chunk.strip())
+                chunks.append((current_chunk.strip(), current_sentences))
             current_chunk = sentence
+            current_sentences = [sentence]
 
     if current_chunk:
-        chunks.append(current_chunk.strip())
+        chunks.append((current_chunk.strip(), current_sentences))
 
     print(f"[HISTORY-TTS] {len(chunks)}개 청크로 병합")
 
     audio_paths = []
-    timeline = []
+    timeline = []  # [(start, end, sentence), ...] - 문장 단위
     current_time = 0.0
     failed_count = 0
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        for i, chunk in enumerate(chunks):
+        for i, (chunk, chunk_sentences) in enumerate(chunks):
             if not chunk:
                 continue
 
@@ -296,7 +299,17 @@ def generate_tts(
             duration = get_audio_duration(mp3_path)
             if duration > 0:
                 audio_paths.append(mp3_path)
-                timeline.append((current_time, current_time + duration, chunk))
+
+                # 문장별 타이밍 계산 (글자 수 비례)
+                total_chars = sum(len(s) for s in chunk_sentences)
+                chunk_start = current_time
+
+                for sentence in chunk_sentences:
+                    sentence_ratio = len(sentence) / total_chars if total_chars > 0 else 1
+                    sentence_duration = duration * sentence_ratio
+                    timeline.append((chunk_start, chunk_start + sentence_duration, sentence))
+                    chunk_start += sentence_duration
+
                 current_time += duration
                 failed_count = 0
 
