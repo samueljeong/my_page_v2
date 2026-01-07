@@ -1,20 +1,25 @@
 """
-이세계 파이프라인 - TTS 모듈 (Chirp3 HD 사용)
+이세계 파이프라인 - TTS 모듈 (Chirp3 HD - API Key 방식)
 
-- drama_server의 generate_chirp3_tts 함수 사용
 - Google Cloud TTS Chirp3 HD (고품질 한국어)
-- GOOGLE_SERVICE_ACCOUNT_JSON 환경변수 필요
+- GOOGLE_API_KEY 또는 GOOGLE_CLOUD_API_KEY 환경변수 사용
+- REST API 방식 (서비스 계정 불필요)
 """
 
 import os
 import re
+import json
+import base64
 import subprocess
 import tempfile
+import time
+import requests
 from typing import Dict, Any, List, Tuple
 
 
 # TTS 설정
-DEFAULT_VOICE = "Charon"  # 남성, 깊고 신뢰감
+DEFAULT_VOICE = "ko-KR-Chirp3-HD-Charon"  # Chirp3 HD 남성
+TTS_API_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 
 def split_into_sentences(text: str) -> List[str]:
@@ -79,15 +84,52 @@ def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
             f.write(f"{text}\n\n")
 
 
+def generate_chirp3_tts_chunk(text: str, voice_name: str, api_key: str) -> Dict[str, Any]:
+    """Google Cloud TTS REST API로 Chirp3 HD 청크 생성"""
+    url = f"{TTS_API_URL}?key={api_key}"
+
+    # 언어 코드 추출 (ko-KR-Chirp3-HD-Charon → ko-KR)
+    lang_code = "-".join(voice_name.split("-")[:2])
+
+    payload = {
+        "input": {"text": text},
+        "voice": {
+            "languageCode": lang_code,
+            "name": voice_name
+        },
+        "audioConfig": {
+            "audioEncoding": "MP3",
+            "sampleRateHertz": 24000
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=60)
+
+        if response.status_code == 200:
+            result = response.json()
+            audio_content = result.get("audioContent", "")
+            if audio_content:
+                audio_data = base64.b64decode(audio_content)
+                return {"ok": True, "audio_data": audio_data}
+            return {"ok": False, "error": "오디오 데이터 없음"}
+        else:
+            error_msg = response.text[:300] if response.text else f"HTTP {response.status_code}"
+            return {"ok": False, "error": f"TTS API 오류: {error_msg}"}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def generate_tts(
     episode_id: str,
     script: str,
     output_dir: str,
-    voice: str = DEFAULT_VOICE,
+    voice: str = "Charon",
     speed: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    대본에 대해 TTS 생성 (Google Cloud Chirp3 HD 사용)
+    대본에 대해 TTS 생성 (Chirp3 HD REST API)
 
     Args:
         episode_id: 에피소드 ID (예: "ep001")
@@ -99,34 +141,26 @@ def generate_tts(
     Returns:
         {"ok": True, "audio_path": "...", "srt_path": "...", "duration": 900.5}
     """
-    # drama_server에서 Chirp3 TTS 함수 가져오기
-    try:
-        import sys
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-
-        from drama_server import generate_chirp3_tts
-    except ImportError as e:
-        return {"ok": False, "error": f"drama_server 임포트 실패: {e}"}
+    api_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GOOGLE_CLOUD_API_KEY')
+    if not api_key:
+        return {"ok": False, "error": "GOOGLE_API_KEY 환경변수가 필요합니다"}
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # 음성 이름 파싱 (chirp3:Charon → Charon)
+    # 음성 이름 생성 (Charon → ko-KR-Chirp3-HD-Charon)
     voice_short = voice.split(":")[-1] if ":" in voice else voice
     valid_voices = ["Kore", "Charon", "Puck", "Fenrir", "Aoede", "Orus", "Leda", "Zephyr"]
     if voice_short not in valid_voices:
-        print(f"[ISEKAI-TTS] 잘못된 음성: {voice_short}, 기본값 Charon 사용")
         voice_short = "Charon"
 
-    chirp3_voice_name = f"ko-KR-Chirp3-HD-{voice_short}"
-    print(f"[ISEKAI-TTS] 음성: {chirp3_voice_name}")
+    voice_name = f"ko-KR-Chirp3-HD-{voice_short}"
+    print(f"[ISEKAI-TTS] 음성: {voice_name}")
 
     # 문장 분할
     sentences = split_into_sentences(script)
     print(f"[ISEKAI-TTS] {len(sentences)}개 문장 처리 중...")
 
-    # 청크 병합 (API 제한 대응 - 5000바이트 ≈ 1400자)
+    # 청크 병합 (5000바이트 ≈ 1400자)
     MAX_CHARS = 1400
     chunks = []
     current_chunk = ""
@@ -157,31 +191,30 @@ def generate_tts(
             if not chunk:
                 continue
 
-            # TTS 생성 (Chirp3 HD)
-            result = generate_chirp3_tts(
-                text=chunk,
-                voice_name=chirp3_voice_name,
-                language_code="ko-KR"
-            )
+            # TTS 생성 (재시도 포함)
+            result = None
+            for retry in range(3):
+                result = generate_chirp3_tts_chunk(chunk, voice_name, api_key)
+                if result.get("ok"):
+                    break
+                time.sleep(1)
 
             if not result.get("ok"):
                 print(f"[ISEKAI-TTS] 청크 {i+1} 실패: {result.get('error')}")
                 failed_count += 1
                 if failed_count >= 3:
-                    return {"ok": False, "error": f"TTS 생성 연속 실패: {result.get('error')}"}
+                    return {"ok": False, "error": f"TTS 연속 실패: {result.get('error')}"}
                 continue
 
-            # MP3 파일 저장 (Chirp3는 MP3 반환)
+            # MP3 저장
             mp3_path = os.path.join(temp_dir, f"chunk_{i:04d}.mp3")
             with open(mp3_path, 'wb') as f:
                 f.write(result["audio_data"])
 
-            # 길이 확인
             duration = get_audio_duration(mp3_path)
             if duration > 0:
                 audio_paths.append(mp3_path)
 
-                # 문장별 타이밍 계산 (글자 수 비례)
                 total_chars = sum(len(s) for s in chunk_sentences)
                 chunk_start = current_time
 
@@ -194,19 +227,16 @@ def generate_tts(
                 current_time += duration
                 failed_count = 0
 
-            # 진행률 표시
             if (i + 1) % 3 == 0 or i == len(chunks) - 1:
                 print(f"[ISEKAI-TTS] {i+1}/{len(chunks)} 완료 ({current_time:.1f}초)")
 
         if not audio_paths:
-            return {"ok": False, "error": "TTS 생성 실패 - 오디오 없음"}
+            return {"ok": False, "error": "TTS 생성 실패"}
 
-        # 오디오 합치기
         audio_output = os.path.join(output_dir, f"{episode_id}.mp3")
         if not merge_audio_files(audio_paths, audio_output):
             return {"ok": False, "error": "오디오 병합 실패"}
 
-        # SRT 생성
         srt_dir = os.path.join(os.path.dirname(output_dir), "subtitles")
         os.makedirs(srt_dir, exist_ok=True)
         srt_output = os.path.join(srt_dir, f"{episode_id}.srt")
@@ -225,5 +255,4 @@ def generate_tts(
 
 
 if __name__ == "__main__":
-    print("isekai_pipeline/tts.py 로드 완료")
-    print(f"기본 음성: Chirp3 HD - {DEFAULT_VOICE}")
+    print("isekai_pipeline/tts.py - Chirp3 HD (API Key)")
