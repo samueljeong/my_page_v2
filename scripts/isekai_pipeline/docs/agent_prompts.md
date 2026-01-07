@@ -506,8 +506,8 @@ wearing ornate black and red armor
       "pause_after": 0.3
     }
   ],
-  "total_segments": 500,
-  "estimated_duration": "50분"
+  "total_segments": 300,
+  "estimated_duration": "15분"
 }
 
 ## 감정 태그
