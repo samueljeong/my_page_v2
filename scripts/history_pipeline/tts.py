@@ -138,13 +138,30 @@ def generate_gemini_chunk(
         return {"ok": False, "error": str(e)}
 
 
-def convert_to_mp3(input_path: str, output_path: str) -> bool:
-    """오디오를 MP3로 변환"""
+def convert_to_mp3(input_path: str, output_path: str, is_raw_pcm: bool = False) -> bool:
+    """오디오를 MP3로 변환
+
+    Args:
+        input_path: 입력 파일 경로
+        output_path: 출력 MP3 경로
+        is_raw_pcm: True면 Gemini TTS raw PCM 형식 (24kHz, 16-bit, mono)
+    """
     try:
-        subprocess.run(
-            ['ffmpeg', '-y', '-i', input_path, '-c:a', 'libmp3lame', '-b:a', '128k', output_path],
-            capture_output=True, timeout=60
-        )
+        if is_raw_pcm:
+            # Gemini TTS: raw PCM (24kHz, 16-bit signed little-endian, mono)
+            cmd = [
+                'ffmpeg', '-y',
+                '-f', 's16le',      # 16-bit signed little-endian
+                '-ar', '24000',     # 24kHz sample rate
+                '-ac', '1',         # mono
+                '-i', input_path,
+                '-c:a', 'libmp3lame', '-b:a', '128k',
+                output_path
+            ]
+        else:
+            cmd = ['ffmpeg', '-y', '-i', input_path, '-c:a', 'libmp3lame', '-b:a', '128k', output_path]
+
+        subprocess.run(cmd, capture_output=True, timeout=60)
         return os.path.exists(output_path)
     except Exception:
         return False
@@ -224,8 +241,8 @@ def generate_tts(
             with open(raw_path, 'wb') as f:
                 f.write(result["audio_data"])
 
-            # MP3로 변환
-            if not convert_to_mp3(raw_path, mp3_path):
+            # MP3로 변환 (Gemini TTS는 raw PCM 반환)
+            if not convert_to_mp3(raw_path, mp3_path, is_raw_pcm=True):
                 print(f"[HISTORY-TTS] 청크 {i+1} 변환 실패")
                 continue
 
