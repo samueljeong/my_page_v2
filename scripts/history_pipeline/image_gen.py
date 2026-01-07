@@ -18,8 +18,8 @@ RENDER_API_URL = os.environ.get(
     "https://drama-s2ns.onrender.com"
 )
 
-# Gemini 이미지 생성 모델
-IMAGEN_MODEL = "imagen-3.0-generate-001"
+# Gemini 이미지 생성 모델 (Gemini 2.0 Flash - 실험적 이미지 생성)
+GEMINI_IMAGE_MODEL = "gemini-2.0-flash-exp"
 
 
 def _generate_image_via_render(
@@ -76,12 +76,12 @@ def _generate_image_via_gemini(
     style: str = "realistic",
     aspect_ratio: str = "16:9",
 ) -> Dict[str, Any]:
-    """로컬 Gemini API로 이미지 생성"""
+    """Gemini 2.0 Flash로 이미지 생성 (실험적 기능)"""
     api_key = os.environ.get("GOOGLE_API_KEY", "")
     if not api_key:
         return {"ok": False, "error": "GOOGLE_API_KEY 없음"}
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{IMAGEN_MODEL}:predict?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent?key={api_key}"
 
     # 스타일 힌트 추가
     style_hints = {
@@ -91,14 +91,15 @@ def _generate_image_via_gemini(
         "historical": "historical illustration, traditional art style, detailed",
     }
     style_suffix = style_hints.get(style, style_hints["realistic"])
-    enhanced_prompt = f"{prompt}, {style_suffix}"
+    enhanced_prompt = f"Generate an image: {prompt}, {style_suffix}"
 
-    # Imagen 3.0 predict API 형식
+    # Gemini 2.0 Flash generateContent API 형식
     payload = {
-        "instances": [{"prompt": enhanced_prompt}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": aspect_ratio,
+        "contents": [{
+            "parts": [{"text": enhanced_prompt}]
+        }],
+        "generationConfig": {
+            "responseModalities": ["IMAGE", "TEXT"],
         }
     }
 
@@ -107,24 +108,27 @@ def _generate_image_via_gemini(
 
         if response.status_code == 200:
             result = response.json()
-            # Imagen 3.0 응답 형식
-            predictions = result.get("predictions", [])
-            if predictions:
-                image_b64 = predictions[0].get("bytesBase64Encoded", "")
-                if not image_b64:
-                    return {"ok": False, "error": "이미지 데이터 없음 (빈 응답)"}
-                image_data = base64.b64decode(image_b64)
+            candidates = result.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                for part in parts:
+                    if "inlineData" in part:
+                        mime_type = part["inlineData"].get("mimeType", "")
+                        if "image" in mime_type:
+                            image_b64 = part["inlineData"].get("data", "")
+                            if image_b64:
+                                image_data = base64.b64decode(image_b64)
 
-                if output_path:
-                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                    with open(output_path, "wb") as f:
-                        f.write(image_data)
-                    print(f"[HISTORY-IMAGE] 저장: {output_path}")
-                    return {"ok": True, "image_path": output_path, "image_data": image_data}
-                else:
-                    return {"ok": True, "image_data": image_data}
-            else:
-                return {"ok": False, "error": "이미지 생성 결과 없음"}
+                                if output_path:
+                                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                                    with open(output_path, "wb") as f:
+                                        f.write(image_data)
+                                    print(f"[HISTORY-IMAGE] 저장: {output_path}")
+                                    return {"ok": True, "image_path": output_path, "image_data": image_data}
+                                else:
+                                    return {"ok": True, "image_data": image_data}
+
+            return {"ok": False, "error": "이미지 생성 결과 없음 (응답에 이미지 없음)"}
         else:
             error_body = response.text[:300] if response.text else ""
             return {"ok": False, "error": f"Gemini API 오류 {response.status_code}: {error_body}"}
