@@ -1,17 +1,26 @@
 """
-공통 모듈 패키지
-모든 파이프라인에서 공유하는 기능들
+scripts/common - 파이프라인 공통 모듈
+
+모든 파이프라인에서 공유하는 기본 클래스와 유틸리티를 제공합니다.
 
 - tts: TTS 생성 (Gemini, Chirp3, Google Cloud)
-- youtube: YouTube 업로드
-- image: 이미지 생성
+- base_agent: 에이전트 기본 클래스
+- srt_utils: SRT 자막 유틸리티
 
 사용법:
     from scripts.common.tts import generate_chirp3_tts, is_chirp3_voice
-    from scripts.common.youtube import upload_video
+    from scripts.common.base_agent import BaseAgent, AgentResult
 """
 
 __version__ = '1.0.0'
+
+# Base Agent 모듈
+from .base_agent import (
+    AgentStatus,
+    AgentResult,
+    BaseAgent,
+    BudgetManager,
+)
 
 # TTS 모듈
 from .tts import (
@@ -27,6 +36,11 @@ from .tts import (
 )
 
 __all__ = [
+    # Base Agent
+    "AgentStatus",
+    "AgentResult",
+    "BaseAgent",
+    "BudgetManager",
     # TTS
     'generate_gemini_tts',
     'generate_chirp3_tts',

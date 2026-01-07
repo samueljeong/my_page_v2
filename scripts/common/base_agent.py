@@ -1,16 +1,23 @@
 """
 Base Agent - 모든 에이전트의 기본 클래스
 
-영상 생성 파이프라인용 에이전트 시스템의 기반 클래스들을 정의합니다.
+모든 파이프라인(history, isekai, shorts, video)에서 공통으로 사용하는
+에이전트 시스템의 기반 클래스들을 정의합니다.
+
+사용법:
+    from scripts.common.base_agent import AgentStatus, AgentResult, BaseAgent
+
+    class MyAgent(BaseAgent):
+        async def execute(self, context, **kwargs) -> AgentResult:
+            # 구현
+            pass
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
 from enum import Enum
 import logging
-import time
-import uuid
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -28,7 +35,20 @@ class AgentStatus(Enum):
 
 @dataclass
 class AgentResult:
-    """에이전트 실행 결과"""
+    """
+    에이전트 실행 결과
+
+    Attributes:
+        success: 성공 여부
+        data: 결과 데이터
+        error: 에러 메시지 (실패 시)
+        feedback: 검수 에이전트의 피드백
+        needs_improvement: 개선 필요 여부
+        improvement_targets: 개선 대상 목록 (예: ["script", "images"])
+        cost: API 호출 비용 ($)
+        duration: 실행 시간 (초)
+        retries: 재시도 횟수
+    """
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -53,122 +73,37 @@ class AgentResult:
         }
 
 
-@dataclass
-class VideoTaskContext:
-    """
-    영상 생성 작업 컨텍스트 - 에이전트 간 공유 데이터
-
-    Google Sheets 행 데이터를 기반으로 전체 파이프라인에서 사용됩니다.
-    """
-    # 기본 식별자
-    task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    row_number: int = 0
-    sheet_name: str = ""
-
-    # 입력 데이터 (Google Sheets에서)
-    script: str = ""  # 원본 대본
-    title_input: str = ""  # 사용자 입력 제목
-    thumbnail_text_input: str = ""  # 사용자 입력 썸네일 문구
-    channel_id: str = ""
-    privacy_status: str = "private"
-    publish_at: Optional[str] = None
-    playlist_id: Optional[str] = None
-    voice: str = "chirp3:Charon"  # 기본: Chirp 3 HD 남성 음성
-    project_suffix: str = ""  # YouTube 프로젝트 ('', '_2')
-    input_category: str = ""  # 시트에서 입력된 카테고리 (news 등)
-    citation_links: str = ""  # ★ 인용링크 (유튜브 설명에 포함)
-
-    # 분석 결과
-    analysis_result: Optional[Dict[str, Any]] = None
-    scenes: Optional[List[Dict[str, Any]]] = None
-    youtube_metadata: Optional[Dict[str, Any]] = None
-    thumbnail_config: Optional[Dict[str, Any]] = None
-    video_effects: Optional[Dict[str, Any]] = None
-    detected_category: str = ""
-
-    # 생성된 에셋
-    tts_result: Optional[Dict[str, Any]] = None
-    subtitles: Optional[List[Dict[str, Any]]] = None
-    images: Optional[List[str]] = None
-    thumbnail_path: Optional[str] = None
-    video_path: Optional[str] = None
-
-    # 품질 검증 결과
-    quality_scores: Dict[str, float] = field(default_factory=dict)
-    quality_feedback: Dict[str, str] = field(default_factory=dict)
-
-    # 최종 결과
-    video_url: Optional[str] = None
-    shorts_url: Optional[str] = None
-
-    # 시도 횟수
-    analysis_attempts: int = 0
-    tts_attempts: int = 0
-    image_attempts: int = 0
-    video_attempts: int = 0
-    upload_attempts: int = 0
-
-    # 설정
-    max_attempts: int = 3
-
-    # 비용 추적
-    total_cost: float = 0.0
-    cost_breakdown: Dict[str, float] = field(default_factory=dict)
-
-    # 로그
-    logs: List[Dict[str, Any]] = field(default_factory=list)
-
-    # 전략 (슈퍼바이저가 결정)
-    strategy: Optional[Dict[str, Any]] = None
-
-    def add_log(self, agent: str, action: str, result: str, details: str = ""):
-        """로그 추가"""
-        self.logs.append({
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "agent": agent,
-            "action": action,
-            "result": result,
-            "details": details,
-        })
-
-    def add_cost(self, agent: str, amount: float):
-        """비용 추가"""
-        self.total_cost += amount
-        self.cost_breakdown[agent] = self.cost_breakdown.get(agent, 0) + amount
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "row_number": self.row_number,
-            "sheet_name": self.sheet_name,
-            "script_length": len(self.script) if self.script else 0,
-            "scenes_count": len(self.scenes) if self.scenes else 0,
-            "images_count": len(self.images) if self.images else 0,
-            "video_url": self.video_url,
-            "shorts_url": self.shorts_url,
-            "total_cost": self.total_cost,
-            "cost_breakdown": self.cost_breakdown,
-            "quality_scores": self.quality_scores,
-            "logs": self.logs,
-        }
-
-
 class BaseAgent(ABC):
-    """에이전트 기본 클래스"""
+    """
+    에이전트 기본 클래스
+
+    모든 에이전트는 이 클래스를 상속받아 execute() 메서드를 구현합니다.
+
+    사용법:
+        class ScriptAgent(BaseAgent):
+            async def execute(self, context, **kwargs) -> AgentResult:
+                # 대본 생성 로직
+                return AgentResult(success=True, data={"script": "..."})
+    """
 
     def __init__(self, name: str, max_retries: int = 3):
+        """
+        Args:
+            name: 에이전트 이름 (로깅용)
+            max_retries: 최대 재시도 횟수
+        """
         self.name = name
         self.status = AgentStatus.IDLE
         self.max_retries = max_retries
         self.logger = logging.getLogger(f"agent.{name}")
 
     @abstractmethod
-    async def execute(self, context: VideoTaskContext, **kwargs) -> AgentResult:
+    async def execute(self, context: Any, **kwargs) -> AgentResult:
         """
         에이전트 실행 - 하위 클래스에서 구현
 
         Args:
-            context: 작업 컨텍스트
+            context: 작업 컨텍스트 (파이프라인별로 다름)
             **kwargs: 추가 옵션 (feedback 등)
 
         Returns:
@@ -178,12 +113,14 @@ class BaseAgent(ABC):
 
     async def execute_with_retry(
         self,
-        context: VideoTaskContext,
+        context: Any,
         feedback: Optional[str] = None,
         **kwargs
     ) -> AgentResult:
         """
         재시도 로직이 포함된 실행
+
+        실패 시 지수 백오프로 재시도합니다.
 
         Args:
             context: 작업 컨텍스트
@@ -215,9 +152,9 @@ class BaseAgent(ABC):
                 last_error = str(e)
                 self.log(f"예외 발생: {last_error}", "error")
 
-            # 재시도 전 잠시 대기
+            # 재시도 전 잠시 대기 (지수 백오프)
             if attempt < self.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # 지수 백오프
+                await asyncio.sleep(2 ** attempt)
 
         self.set_status(AgentStatus.FAILED)
         return AgentResult(
@@ -230,6 +167,7 @@ class BaseAgent(ABC):
         """로그 출력"""
         log_func = getattr(self.logger, level, self.logger.info)
         log_func(f"[{self.name}] {message}")
+        print(f"[{self.name}] {message}")
 
     def set_status(self, status: AgentStatus):
         """상태 변경"""
@@ -241,15 +179,33 @@ class BudgetManager:
     """
     동적 예산 관리자
 
-    에이전트별 예산을 관리하고, 필요시 동적으로 재분배합니다.
+    에이전트별 API 호출 예산을 관리하고, 필요시 동적으로 재분배합니다.
+
+    사용법:
+        budget = BudgetManager(total_budget=1.00)
+
+        # 예산 사용
+        budget.spend("analysis", 0.03)
+
+        # 잔여 예산 확인
+        remaining = budget.get_remaining("creative")
+
+        # 프리미엄 모델 사용 여부 판단
+        if budget.should_use_premium("creative"):
+            # 고품질 모델 사용
+            pass
     """
 
     def __init__(self, total_budget: float = 1.00):
+        """
+        Args:
+            total_budget: 전체 예산 ($)
+        """
         self.total_budget = total_budget
 
         # 기본 예산 분배 비율
         self.default_allocation = {
-            "analysis": 0.10,   # 대본 분석 (GPT-5.1)
+            "analysis": 0.10,   # 대본 분석
             "audio": 0.15,      # TTS + 자막
             "creative": 0.50,   # 이미지 + 썸네일
             "quality": 0.05,    # 품질 검증
@@ -282,7 +238,7 @@ class BudgetManager:
         예산 사용
 
         Returns:
-            예산 내 사용 여부
+            예산 내 사용 여부 (초과 시 False)
         """
         self.spent[agent] = self.spent.get(agent, 0) + amount
         return self.spent[agent] <= self.get_allocated(agent)
