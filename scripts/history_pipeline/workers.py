@@ -241,7 +241,7 @@ def generate_image(
     ratio: str = "16:9",
 ) -> Dict[str, Any]:
     """
-    이미지 생성 (Gemini Imagen)
+    이미지 생성 (독립 모듈 사용 - 서버 불필요)
 
     Args:
         episode_id: 에피소드 ID
@@ -259,55 +259,31 @@ def generate_image(
     """
     ensure_directories()
 
-    try:
-        api_url = os.getenv(
-            "IMAGE_API_URL",
-            "http://localhost:5059/api/ai-tools/image-generate"
-        )
+    # 파일명 생성
+    if scene_index == 0:
+        filename = f"{episode_id}_thumbnail.png"
+    else:
+        filename = f"{episode_id}_scene_{scene_index:02d}.png"
 
-        # 기본 negative prompt 추가
-        full_negative = IMAGE_STYLE.get("negative_prompt", "")
-        if negative_prompt:
-            full_negative = f"{full_negative}, {negative_prompt}"
+    image_path = os.path.join(IMAGE_DIR, filename)
 
-        # 히스토리 기본 스타일 추가
-        full_prompt = f"{IMAGE_STYLE.get('base_prompt', '')}, {prompt}"
+    # 히스토리 기본 스타일 추가
+    full_prompt = f"{IMAGE_STYLE.get('base_prompt', '')}, {prompt}"
 
-        response = requests.post(
-            api_url,
-            json={
-                "prompt": full_prompt,
-                "negative_prompt": full_negative,
-                "style": style,
-                "ratio": ratio,
-            },
-            timeout=120,
-        )
+    # 독립 이미지 생성 모듈 사용 (서버 불필요)
+    from .image_gen import generate_image as img_gen
 
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("success"):
-                image_url = data.get("image_url")
+    result = img_gen(
+        prompt=full_prompt,
+        output_path=image_path,
+        style=style,
+        aspect_ratio=ratio,
+    )
 
-                # 파일명 생성
-                if scene_index == 0:
-                    filename = f"{episode_id}_thumbnail.png"
-                else:
-                    filename = f"{episode_id}_scene_{scene_index:02d}.png"
-
-                image_path = os.path.join(IMAGE_DIR, filename)
-
-                # 이미지 다운로드
-                img_response = requests.get(image_url, timeout=60)
-                if img_response.status_code == 200:
-                    with open(image_path, "wb") as f:
-                        f.write(img_response.content)
-                    return {"ok": True, "image_path": image_path}
-
-        return {"ok": False, "error": "이미지 생성 실패"}
-
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    if result.get("ok"):
+        return {"ok": True, "image_path": result.get("image_path", image_path)}
+    else:
+        return {"ok": False, "error": result.get("error", "이미지 생성 실패")}
 
 
 def generate_images_batch(
