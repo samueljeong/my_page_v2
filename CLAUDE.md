@@ -178,6 +178,8 @@ ruff check drama_server.py --fix
 | `/fix-bug` | 버그 수정 워크플로우 |
 | `/code-review` | 코드 리뷰 실행 |
 | `/test-local` | 로컬 테스트 |
+| `/simplify` | 코드 정리 (불필요 코드 제거, 최적화) |
+| `/verify` | 코드 검증 (문법, import, 린터) |
 | `/pipeline-run` | 파이프라인 실행 |
 | `/video-status` | 영상 생성 상태 확인 |
 
