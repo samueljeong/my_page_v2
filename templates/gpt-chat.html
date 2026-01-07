@@ -3,23 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GPT Chat - 가족 공용</title>
+  <title>GPT Chat</title>
   <style>
     :root {
-      --bg-main: #212121;
-      --bg-sidebar: #171717;
-      --bg-input: #2f2f2f;
-      --bg-user: #2f2f2f;
-      --bg-assistant: transparent;
-      --text-primary: #ececec;
-      --text-secondary: #b4b4b4;
-      --text-muted: #8e8e8e;
-      --border: #424242;
-      --accent: #10a37f;
-      --accent-hover: #1a7f64;
-      --gpt5: #ab68ff;
-      --gpt4: #19c37d;
-      --danger: #ef4444;
+      --bg-main: #f5f5f7;
+      --bg-sidebar: rgba(255, 255, 255, 0.72);
+      --bg-card: rgba(255, 255, 255, 0.8);
+      --bg-input: rgba(255, 255, 255, 0.9);
+      --bg-user-bubble: #007aff;
+      --bg-assistant-bubble: #e9e9eb;
+      --text-primary: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-muted: #86868b;
+      --text-user: #ffffff;
+      --border: rgba(0, 0, 0, 0.06);
+      --border-strong: rgba(0, 0, 0, 0.1);
+      --accent: #007aff;
+      --accent-hover: #0056b3;
+      --green: #34c759;
+      --purple: #af52de;
+      --danger: #ff3b30;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+      --blur: blur(20px);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,9 +37,10 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Noto Sans KR', sans-serif;
       background: var(--bg-main);
       color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
     }
 
     /* Layout */
@@ -43,49 +51,62 @@
 
     /* Sidebar */
     .sidebar {
-      width: 260px;
+      width: 280px;
       background: var(--bg-sidebar);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
       display: flex;
       flex-direction: column;
       border-right: 1px solid var(--border);
     }
 
     .sidebar-header {
-      padding: 12px;
+      padding: 16px;
       border-bottom: 1px solid var(--border);
     }
 
     .new-chat-btn {
       width: 100%;
       padding: 12px 16px;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-primary);
-      font-size: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 10px;
-      transition: background 0.2s;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-sm);
     }
 
     .new-chat-btn:hover {
-      background: var(--bg-input);
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .new-chat-btn:active {
+      transform: translateY(0);
     }
 
     /* User Selector */
     .user-selector {
-      padding: 12px;
+      padding: 16px;
       border-bottom: 1px solid var(--border);
     }
 
     .user-selector label {
       display: block;
-      font-size: 11px;
+      font-size: 12px;
+      font-weight: 600;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .user-select-wrapper {
@@ -95,57 +116,66 @@
 
     .user-select {
       flex: 1;
-      padding: 8px 12px;
+      padding: 10px 14px;
       background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 15px;
       cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2386868b' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
     }
 
     .add-user-btn {
-      padding: 8px 12px;
+      padding: 10px 14px;
       background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
       color: var(--text-primary);
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
+      font-weight: 300;
+      transition: all 0.2s;
     }
 
     .add-user-btn:hover {
-      background: var(--border);
+      background: var(--border-strong);
     }
 
     .chat-history {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 12px;
     }
 
     .chat-history-item {
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: 12px 14px;
+      border-radius: 10px;
       cursor: pointer;
       font-size: 14px;
       color: var(--text-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      transition: all 0.2s;
     }
 
     .chat-history-item:hover {
-      background: var(--bg-input);
+      background: rgba(0, 0, 0, 0.04);
     }
 
     .chat-history-item.active {
-      background: var(--bg-input);
-      color: var(--text-primary);
+      background: rgba(0, 122, 255, 0.1);
+      color: var(--accent);
+      font-weight: 500;
     }
 
     .chat-history-item .delete-btn {
@@ -156,6 +186,12 @@
       cursor: pointer;
       font-size: 14px;
       padding: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .chat-history-item .delete-btn:hover {
+      opacity: 1;
     }
 
     .chat-history-item:hover .delete-btn {
@@ -168,16 +204,19 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
+      background: linear-gradient(180deg, #ffffff 0%, var(--bg-main) 100%);
     }
 
     /* Header */
     .chat-header {
-      padding: 12px 16px;
+      padding: 16px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: var(--bg-sidebar);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
       border-bottom: 1px solid var(--border);
-      background: var(--bg-main);
     }
 
     .model-selector {
@@ -187,93 +226,106 @@
     }
 
     .model-dropdown {
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      padding: 8px 16px;
       color: var(--text-primary);
       font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
+      transition: all 0.2s;
+      box-shadow: var(--shadow-sm);
     }
 
     .model-dropdown:hover {
-      background: #3a3a3a;
+      box-shadow: var(--shadow-md);
     }
 
     .model-badge {
       font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
       font-weight: 600;
     }
 
     .model-badge.gpt5 {
-      background: var(--gpt5);
+      background: linear-gradient(135deg, var(--purple), #bf5af2);
       color: white;
     }
 
     .model-badge.gpt4 {
-      background: var(--gpt4);
+      background: linear-gradient(135deg, var(--green), #30d158);
       color: white;
     }
 
     .model-badge.mini {
-      background: #6b7280;
+      background: var(--text-muted);
       color: white;
     }
 
     .model-badge.auto {
-      background: var(--border);
-      color: var(--text-primary);
+      background: linear-gradient(135deg, var(--accent), #5ac8fa);
+      color: white;
     }
 
     /* Model Selector Popup */
     .model-popup {
       position: absolute;
-      top: 50px;
-      left: 16px;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
       background: var(--bg-sidebar);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 8px;
-      min-width: 280px;
+      min-width: 320px;
       z-index: 100;
       display: none;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      box-shadow: var(--shadow-lg);
     }
 
     .model-popup.show {
       display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 
     .model-option {
-      padding: 12px;
-      border-radius: 8px;
+      padding: 14px;
+      border-radius: 12px;
       cursor: pointer;
       display: flex;
       align-items: flex-start;
       gap: 12px;
+      transition: background 0.15s;
     }
 
     .model-option:hover {
-      background: var(--bg-input);
+      background: rgba(0, 0, 0, 0.04);
     }
 
     .model-option.selected {
-      background: var(--bg-input);
+      background: rgba(0, 122, 255, 0.08);
     }
 
     .model-option-icon {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: 16px;
       flex-shrink: 0;
     }
 
@@ -283,30 +335,38 @@
 
     .model-option-name {
       font-weight: 600;
-      font-size: 14px;
+      font-size: 15px;
       margin-bottom: 2px;
+      color: var(--text-primary);
     }
 
     .model-option-desc {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-muted);
       line-height: 1.4;
     }
 
     .model-option-check {
       color: var(--accent);
-      font-size: 16px;
+      font-size: 18px;
+      font-weight: bold;
     }
 
     /* Menu Button (Mobile) */
     .menu-btn {
       display: none;
-      background: none;
-      border: none;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
       color: var(--text-primary);
-      font-size: 20px;
+      font-size: 18px;
       cursor: pointer;
-      padding: 8px;
+      padding: 8px 12px;
+      transition: all 0.2s;
+    }
+
+    .menu-btn:hover {
+      background: var(--border-strong);
     }
 
     /* Messages Container */
@@ -320,95 +380,97 @@
     .messages-scroll {
       flex: 1;
       overflow-y: auto;
-      padding: 20px 0;
+      padding: 24px 0;
     }
 
     .message {
-      padding: 16px 24px;
+      padding: 8px 24px;
       display: flex;
-      gap: 16px;
       max-width: 900px;
       margin: 0 auto;
       width: 100%;
     }
 
-    .message-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      flex-shrink: 0;
+    .message.user {
+      justify-content: flex-end;
     }
 
-    .message.user .message-avatar {
-      background: var(--accent);
-      color: white;
+    .message.assistant {
+      justify-content: flex-start;
     }
 
-    .message.assistant .message-avatar {
-      background: var(--gpt5);
-      color: white;
-    }
-
-    .message.assistant.gpt4 .message-avatar {
-      background: var(--gpt4);
-    }
-
-    .message-content {
-      flex: 1;
-      line-height: 1.6;
+    .message-bubble {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      line-height: 1.5;
       font-size: 15px;
-      min-width: 0;
+      position: relative;
     }
 
-    .message-content p {
-      margin-bottom: 12px;
+    .message.user .message-bubble {
+      background: var(--bg-user-bubble);
+      color: var(--text-user);
+      border-bottom-right-radius: 6px;
     }
 
-    .message-content p:last-child {
+    .message.assistant .message-bubble {
+      background: var(--bg-assistant-bubble);
+      color: var(--text-primary);
+      border-bottom-left-radius: 6px;
+    }
+
+    .message-bubble p {
+      margin-bottom: 8px;
+    }
+
+    .message-bubble p:last-child {
       margin-bottom: 0;
     }
 
-    .message-content pre {
-      background: var(--bg-sidebar);
-      border-radius: 8px;
+    .message-bubble pre {
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 12px;
       padding: 12px;
       overflow-x: auto;
-      margin: 12px 0;
-      font-family: 'SF Mono', Consolas, monospace;
+      margin: 8px 0;
+      font-family: 'SF Mono', Menlo, Consolas, monospace;
       font-size: 13px;
     }
 
-    .message-content code {
-      background: var(--bg-sidebar);
+    .message.user .message-bubble pre {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .message-bubble code {
+      background: rgba(0, 0, 0, 0.06);
       padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'SF Mono', Consolas, monospace;
+      border-radius: 6px;
+      font-family: 'SF Mono', Menlo, Consolas, monospace;
       font-size: 13px;
     }
 
-    .message-content pre code {
+    .message.user .message-bubble code {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .message-bubble pre code {
       background: none;
       padding: 0;
-    }
-
-    .message-content img {
-      max-width: 300px;
-      max-height: 300px;
-      border-radius: 8px;
-      margin: 8px 0;
     }
 
     .message-meta {
       font-size: 11px;
       color: var(--text-muted);
-      margin-top: 8px;
+      margin-top: 6px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+    }
+
+    .message.user .message-meta {
+      justify-content: flex-end;
+      color: rgba(255, 255, 255, 0.7);
     }
 
     /* Welcome Screen */
@@ -418,32 +480,38 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px;
       text-align: center;
     }
 
     .welcome-logo {
-      width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, var(--gpt5), var(--gpt4));
-      border-radius: 50%;
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
-      margin-bottom: 24px;
+      font-size: 40px;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow-lg);
     }
 
     .welcome-title {
-      font-size: 24px;
+      font-size: 32px;
       font-weight: 600;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .welcome-subtitle {
       color: var(--text-muted);
-      font-size: 14px;
-      margin-bottom: 32px;
+      font-size: 16px;
+      margin-bottom: 40px;
+      line-height: 1.5;
     }
 
     .welcome-user {
@@ -455,38 +523,43 @@
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
-      max-width: 600px;
+      max-width: 560px;
       width: 100%;
     }
 
     .example-card {
-      background: var(--bg-input);
+      background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 16px;
+      padding: 18px;
       text-align: left;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-sm);
     }
 
     .example-card:hover {
-      background: #3a3a3a;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--accent);
     }
 
     .example-title {
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 600;
       margin-bottom: 4px;
+      color: var(--text-primary);
     }
 
     .example-desc {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-muted);
     }
 
     /* Input Area */
     .input-area {
       padding: 16px 24px 24px;
-      background: var(--bg-main);
+      background: linear-gradient(0deg, var(--bg-main) 0%, transparent 100%);
     }
 
     .input-container {
@@ -508,10 +581,11 @@
     }
 
     .image-preview img {
-      max-width: 150px;
-      max-height: 150px;
-      border-radius: 8px;
+      max-width: 120px;
+      max-height: 120px;
+      border-radius: 12px;
       border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
 
     .image-preview .remove-btn {
@@ -521,7 +595,7 @@
       width: 24px;
       height: 24px;
       background: var(--danger);
-      border: none;
+      border: 2px solid white;
       border-radius: 50%;
       color: white;
       cursor: pointer;
@@ -529,35 +603,70 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.2s;
+    }
+
+    .image-preview .remove-btn:hover {
+      transform: scale(1.1);
+    }
+
+    /* Voice Status Indicator */
+    .voice-status {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: rgba(255, 59, 48, 0.1);
+      border-radius: 20px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--danger);
+      font-weight: 500;
+    }
+
+    .voice-status.show {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .voice-status .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--danger);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
     }
 
     .input-wrapper {
       background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 16px;
+      border: 1px solid var(--border-strong);
+      border-radius: 24px;
       display: flex;
       align-items: flex-end;
-      padding: 8px 12px 8px 16px;
-      transition: border-color 0.2s;
+      padding: 8px 8px 8px 18px;
+      transition: all 0.2s;
+      box-shadow: var(--shadow-sm);
       gap: 8px;
     }
 
     .input-wrapper:focus-within {
-      border-color: var(--text-muted);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
     }
 
     .input-actions {
       display: flex;
-      gap: 4px;
-      padding-bottom: 4px;
+      gap: 2px;
+      padding-bottom: 6px;
     }
 
     .action-btn {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       background: transparent;
       border: none;
-      border-radius: 8px;
+      border-radius: 50%;
       color: var(--text-muted);
       cursor: pointer;
       display: flex;
@@ -568,7 +677,7 @@
     }
 
     .action-btn:hover {
-      background: var(--border);
+      background: rgba(0, 0, 0, 0.05);
       color: var(--text-primary);
     }
 
@@ -579,8 +688,8 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
     }
 
     .input-wrapper textarea {
@@ -588,13 +697,14 @@
       background: transparent;
       border: none;
       color: var(--text-primary);
-      font-size: 15px;
+      font-size: 16px;
       line-height: 1.5;
       resize: none;
-      max-height: 200px;
+      max-height: 150px;
       min-height: 24px;
       outline: none;
       font-family: inherit;
+      padding: 6px 0;
     }
 
     .input-wrapper textarea::placeholder {
@@ -604,33 +714,35 @@
     .send-btn {
       width: 36px;
       height: 36px;
-      background: var(--text-primary);
+      background: var(--accent);
       border: none;
-      border-radius: 8px;
-      color: var(--bg-main);
+      border-radius: 50%;
+      color: white;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
-      transition: opacity 0.2s;
+      font-size: 18px;
+      transition: all 0.2s;
       flex-shrink: 0;
     }
 
     .send-btn:disabled {
-      opacity: 0.3;
+      background: var(--text-muted);
+      opacity: 0.4;
       cursor: not-allowed;
     }
 
     .send-btn:hover:not(:disabled) {
-      opacity: 0.8;
+      background: var(--accent-hover);
+      transform: scale(1.05);
     }
 
     .input-info {
       text-align: center;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
-      margin-top: 8px;
+      margin-top: 10px;
     }
 
     /* Hidden file inputs */
@@ -641,7 +753,7 @@
     /* Loading Animation */
     .typing-indicator {
       display: flex;
-      gap: 4px;
+      gap: 5px;
       padding: 8px 0;
     }
 
@@ -672,7 +784,9 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
       z-index: 300;
       align-items: center;
       justify-content: center;
@@ -680,35 +794,43 @@
 
     .modal-overlay.show {
       display: flex;
+      animation: fadeIn 0.2s ease;
     }
 
     .modal {
       background: var(--bg-sidebar);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      max-width: 400px;
+      border-radius: 20px;
+      padding: 28px;
+      max-width: 380px;
       width: 90%;
+      box-shadow: var(--shadow-lg);
     }
 
     .modal h3 {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+      font-size: 20px;
+      font-weight: 600;
     }
 
     .modal input {
       width: 100%;
-      padding: 12px;
+      padding: 14px 16px;
       background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
       color: var(--text-primary);
-      font-size: 14px;
-      margin-bottom: 16px;
+      font-size: 16px;
+      margin-bottom: 20px;
+      transition: all 0.2s;
     }
 
     .modal input:focus {
       outline: none;
       border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
     }
 
     .modal-buttons {
@@ -718,16 +840,22 @@
     }
 
     .modal-btn {
-      padding: 10px 20px;
-      border-radius: 8px;
+      padding: 12px 24px;
+      border-radius: 12px;
       border: none;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 500;
+      transition: all 0.2s;
     }
 
     .modal-btn.cancel {
-      background: var(--bg-input);
+      background: rgba(0, 0, 0, 0.05);
       color: var(--text-primary);
+    }
+
+    .modal-btn.cancel:hover {
+      background: rgba(0, 0, 0, 0.1);
     }
 
     .modal-btn.confirm {
@@ -735,15 +863,19 @@
       color: white;
     }
 
+    .modal-btn.confirm:hover {
+      background: var(--accent-hover);
+    }
+
     /* Mobile Responsive */
     @media (max-width: 768px) {
       .sidebar {
         position: fixed;
-        left: -260px;
+        left: -280px;
         top: 0;
         bottom: 0;
         z-index: 200;
-        transition: left 0.3s;
+        transition: left 0.3s ease;
       }
 
       .sidebar.open {
@@ -754,7 +886,9 @@
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.5);
+        background: rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
         z-index: 150;
       }
 
@@ -763,18 +897,19 @@
       }
 
       .menu-btn {
-        display: block;
+        display: flex;
       }
 
       .message {
-        padding: 12px 16px;
-        gap: 12px;
+        padding: 6px 16px;
       }
 
-      .message-avatar {
-        width: 28px;
-        height: 28px;
-        font-size: 12px;
+      .message-bubble {
+        max-width: 85%;
+      }
+
+      .welcome-title {
+        font-size: 26px;
       }
 
       .welcome-examples {
@@ -782,19 +917,25 @@
       }
 
       .input-area {
-        padding: 12px 16px 16px;
+        padding: 12px 16px 20px;
       }
 
       .model-popup {
-        left: 8px;
-        right: 8px;
+        left: 16px;
+        right: 16px;
+        transform: none;
         min-width: auto;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     }
 
     /* Scrollbar */
     ::-webkit-scrollbar {
-      width: 8px;
+      width: 6px;
     }
 
     ::-webkit-scrollbar-track {
@@ -802,12 +943,12 @@
     }
 
     ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 3px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: var(--text-muted);
+      background: rgba(0, 0, 0, 0.25);
     }
   </style>
 </head>
@@ -827,7 +968,7 @@
 
       <!-- User Selector -->
       <div class="user-selector">
-        <label>사용자</label>
+        <label>사용자 선택</label>
         <div class="user-select-wrapper">
           <select class="user-select" id="userSelect" onchange="switchUser()">
             <option value="default">기본 사용자</option>
@@ -850,40 +991,40 @@
           <button class="model-dropdown" id="modelDropdown" onclick="toggleModelPopup()">
             <span class="model-badge auto" id="currentModelBadge">AUTO</span>
             <span id="currentModelName">자동 선택</span>
-            <span>▼</span>
+            <span style="font-size: 10px; opacity: 0.6;">▼</span>
           </button>
         </div>
-        <div style="width: 40px;"></div>
+        <div style="width: 48px;"></div>
       </header>
 
       <!-- Model Popup -->
       <div class="model-popup" id="modelPopup">
         <div class="model-option selected" data-model="auto" onclick="selectModel('auto')">
-          <div class="model-option-icon" style="background: var(--border);">⚡</div>
+          <div class="model-option-icon" style="background: linear-gradient(135deg, #007aff, #5ac8fa);">⚡</div>
           <div class="model-option-info">
             <div class="model-option-name">자동 선택</div>
-            <div class="model-option-desc">질문 복잡도에 따라 GPT-5.2/4o/4o-mini 자동 선택</div>
+            <div class="model-option-desc">질문에 따라 최적 모델 자동 선택</div>
           </div>
           <span class="model-option-check" id="check-auto">✓</span>
         </div>
         <div class="model-option" data-model="gpt-5.2" onclick="selectModel('gpt-5.2')">
-          <div class="model-option-icon" style="background: var(--gpt5);">🧠</div>
+          <div class="model-option-icon" style="background: linear-gradient(135deg, #af52de, #bf5af2);">🧠</div>
           <div class="model-option-info">
             <div class="model-option-name">GPT-5.2</div>
-            <div class="model-option-desc">복잡한 분석, 코딩, 창작에 최적화된 최신 모델</div>
+            <div class="model-option-desc">복잡한 분석, 코딩, 창작</div>
           </div>
           <span class="model-option-check" id="check-gpt-5.2" style="display:none;">✓</span>
         </div>
         <div class="model-option" data-model="gpt-4o" onclick="selectModel('gpt-4o')">
-          <div class="model-option-icon" style="background: var(--gpt4);">💬</div>
+          <div class="model-option-icon" style="background: linear-gradient(135deg, #34c759, #30d158);">💬</div>
           <div class="model-option-info">
             <div class="model-option-name">GPT-4o</div>
-            <div class="model-option-desc">이미지 분석, 번역, 설명에 적합</div>
+            <div class="model-option-desc">이미지 분석, 번역, 설명</div>
           </div>
           <span class="model-option-check" id="check-gpt-4o" style="display:none;">✓</span>
         </div>
         <div class="model-option" data-model="gpt-4o-mini" onclick="selectModel('gpt-4o-mini')">
-          <div class="model-option-icon" style="background: #6b7280;">⚡</div>
+          <div class="model-option-icon" style="background: #86868b;">⚡</div>
           <div class="model-option-info">
             <div class="model-option-name">GPT-4o-mini</div>
             <div class="model-option-desc">간단한 질문에 초고속 응답</div>
@@ -896,28 +1037,28 @@
       <div class="messages-container" id="messagesContainer">
         <!-- Welcome Screen -->
         <div class="welcome-screen" id="welcomeScreen">
-          <div class="welcome-logo">🤖</div>
+          <div class="welcome-logo">✨</div>
           <h1 class="welcome-title">무엇을 도와드릴까요?</h1>
           <p class="welcome-subtitle">
-            <span class="welcome-user" id="welcomeUser">기본 사용자</span>님, 안녕하세요!
-            <br>질문의 복잡도에 따라 최적의 모델이 자동 선택됩니다
+            <span class="welcome-user" id="welcomeUser">사용자</span>님, 안녕하세요!<br>
+            무엇이든 물어보세요
           </p>
           <div class="welcome-examples">
             <div class="example-card" onclick="setExample('Python으로 간단한 웹 스크래퍼 만들어줘')">
               <div class="example-title">💻 코드 작성</div>
-              <div class="example-desc">Python 웹 스크래퍼 예제</div>
+              <div class="example-desc">Python 웹 스크래퍼</div>
             </div>
-            <div class="example-card" onclick="setExample('마케팅 전략에서 AIDA 모델이 뭐야?')">
+            <div class="example-card" onclick="setExample('마케팅에서 AIDA 모델이 뭐야?')">
               <div class="example-title">📚 개념 설명</div>
               <div class="example-desc">마케팅 AIDA 모델</div>
             </div>
-            <div class="example-card" onclick="setExample('이 문장을 영어로 번역해줘: 오늘 날씨가 정말 좋네요')">
+            <div class="example-card" onclick="setExample('오늘 날씨가 정말 좋네요 영어로 번역해줘')">
               <div class="example-title">🌐 번역</div>
               <div class="example-desc">한영 번역</div>
             </div>
-            <div class="example-card" onclick="setExample('인공지능이 미래 일자리에 미치는 영향을 분석해줘')">
+            <div class="example-card" onclick="setExample('AI가 미래 일자리에 미치는 영향 분석해줘')">
               <div class="example-title">🔍 심층 분석</div>
-              <div class="example-desc">AI와 일자리 미래</div>
+              <div class="example-desc">AI와 일자리</div>
             </div>
           </div>
         </div>
@@ -933,6 +1074,12 @@
           <div class="image-preview" id="imagePreview">
             <img id="previewImg" src="" alt="Preview">
             <button class="remove-btn" onclick="removeImage()">✕</button>
+          </div>
+
+          <!-- Voice Status -->
+          <div class="voice-status" id="voiceStatus">
+            <span class="pulse-dot"></span>
+            <span>듣는 중...</span>
           </div>
 
           <div class="input-wrapper">
@@ -962,7 +1109,7 @@
             </button>
           </div>
           <div class="input-info">
-            GPT는 실수를 할 수 있습니다. 중요한 정보는 확인하세요.
+            AI는 실수할 수 있습니다. 중요한 정보는 확인하세요.
           </div>
         </div>
       </div>
@@ -977,7 +1124,7 @@
   <div class="modal-overlay" id="addUserModal">
     <div class="modal">
       <h3>새 사용자 추가</h3>
-      <input type="text" id="newUserName" placeholder="사용자 이름 입력...">
+      <input type="text" id="newUserName" placeholder="사용자 이름">
       <div class="modal-buttons">
         <button class="modal-btn cancel" onclick="hideAddUserModal()">취소</button>
         <button class="modal-btn confirm" onclick="addUser()">추가</button>
@@ -998,33 +1145,59 @@
     // Speech Recognition
     let recognition = null;
     let isRecording = false;
+    let finalTranscript = '';
 
     // Initialize Speech Recognition
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognition();
       recognition.lang = 'ko-KR';
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
 
       recognition.onresult = (event) => {
-        let transcript = '';
+        let interimTranscript = '';
+
+        // 최종 결과와 중간 결과를 분리하여 처리
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript = transcript;
+          }
         }
-        document.getElementById('messageInput').value = transcript;
-        autoResize(document.getElementById('messageInput'));
+
+        // 최종 결과 + 현재 중간 결과를 표시
+        const input = document.getElementById('messageInput');
+        input.value = finalTranscript + interimTranscript;
+        autoResize(input);
       };
 
       recognition.onend = () => {
+        // 녹음이 끝나면 최종 결과만 유지
+        const input = document.getElementById('messageInput');
+        input.value = finalTranscript;
+        autoResize(input);
+
         isRecording = false;
+        finalTranscript = '';
         document.getElementById('voiceBtn').classList.remove('recording');
+        document.getElementById('voiceStatus').classList.remove('show');
       };
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
+
+        // 에러 발생 시 기존 입력은 유지
+        const input = document.getElementById('messageInput');
+        input.value = finalTranscript;
+        autoResize(input);
+
         isRecording = false;
+        finalTranscript = '';
         document.getElementById('voiceBtn').classList.remove('recording');
+        document.getElementById('voiceStatus').classList.remove('show');
       };
     }
 
@@ -1171,8 +1344,7 @@
         badge.textContent = '4o';
         name.textContent = 'GPT-4o';
       } else if (model === 'gpt-4o-mini') {
-        badge.className = 'model-badge';
-        badge.style.background = '#6b7280';
+        badge.className = 'model-badge mini';
         badge.textContent = 'mini';
         name.textContent = 'GPT-4o-mini';
       }
@@ -1219,7 +1391,7 @@
       container.innerHTML = '';
 
       if (conversations.length === 0) {
-        container.innerHTML = '<div style="padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center;">대화 기록이 없습니다</div>';
+        container.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 14px; text-align: center;">대화 기록이 없습니다</div>';
         return;
       }
 
@@ -1334,10 +1506,13 @@
         recognition.stop();
         isRecording = false;
         document.getElementById('voiceBtn').classList.remove('recording');
+        document.getElementById('voiceStatus').classList.remove('show');
       } else {
+        finalTranscript = document.getElementById('messageInput').value;
         recognition.start();
         isRecording = true;
         document.getElementById('voiceBtn').classList.add('recording');
+        document.getElementById('voiceStatus').classList.add('show');
       }
     }
 
@@ -1351,7 +1526,7 @@
 
     function autoResize(textarea) {
       textarea.style.height = 'auto';
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
 
       const sendBtn = document.getElementById('sendBtn');
       sendBtn.disabled = (!textarea.value.trim() && !currentImage) || isLoading;
@@ -1369,9 +1544,7 @@
       const container = document.getElementById('messagesScroll');
 
       const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${role}${model === 'gpt-4o' ? ' gpt4' : ''}`;
-
-      const avatarText = role === 'user' ? '👤' : '🤖';
+      messageDiv.className = `message ${role}`;
 
       // Simple markdown parsing
       let formattedContent = content
@@ -1381,9 +1554,8 @@
         .replace(/\n/g, '<br>');
 
       messageDiv.innerHTML = `
-        <div class="message-avatar">${avatarText}</div>
-        <div class="message-content">
-          ${hasImage ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">📷 이미지 첨부됨</div>' : ''}
+        <div class="message-bubble">
+          ${hasImage ? '<div style="font-size:12px;opacity:0.7;margin-bottom:6px;">📷 이미지 첨부됨</div>' : ''}
           ${formattedContent}
           ${model ? `<div class="message-meta"><span class="model-badge ${model === 'gpt-5.2' ? 'gpt5' : model === 'gpt-4o-mini' ? 'mini' : 'gpt4'}">${model}</span></div>` : ''}
         </div>
@@ -1399,8 +1571,7 @@
       indicator.className = 'message assistant';
       indicator.id = 'typingIndicator';
       indicator.innerHTML = `
-        <div class="message-avatar">🤖</div>
-        <div class="message-content">
+        <div class="message-bubble">
           <div class="typing-indicator">
             <span></span><span></span><span></span>
           </div>
@@ -1479,7 +1650,7 @@
           appendMessage('assistant', data.response, data.model_used);
           loadConversations();
         } else {
-          appendMessage('assistant', `오류: ${data.error}`);
+          appendMessage('assistant', `오류가 발생했습니다: ${data.error}`);
         }
       } catch (err) {
         removeTypingIndicator();
