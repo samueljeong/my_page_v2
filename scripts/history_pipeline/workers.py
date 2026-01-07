@@ -94,7 +94,7 @@ def generate_tts(
     speed: float = None,
 ) -> Dict[str, Any]:
     """
-    TTS 생성 (Gemini TTS API 직접 호출)
+    TTS 생성 (로컬 서버 API 호출)
 
     Args:
         episode_id: 에피소드 ID (예: "ep001_광개토왕")
@@ -111,12 +111,11 @@ def generate_tts(
         }
     """
     import re
-    import subprocess
     import base64
 
     ensure_directories()
 
-    voice = voice or TTS_CONFIG.get("voice", "chirp3:Charon")
+    voice = voice or TTS_CONFIG.get("voice", "ko-KR-Neural2-C")
     speed = speed or TTS_CONFIG.get("speed", 0.95)
 
     # 대본 정리 (구분선 제거)
@@ -126,56 +125,33 @@ def generate_tts(
     print(f"[HISTORY TTS] 시작: {len(clean_script):,}자, 음성: {voice}", flush=True)
 
     try:
-        # Gemini TTS API 직접 호출
-        api_key = os.environ.get("GOOGLE_API_KEY", "")
-        if not api_key:
-            return {"ok": False, "error": "GOOGLE_API_KEY 환경변수 없음"}
+        # 로컬 서버 API 호출
+        api_url = os.getenv("TTS_API_URL", "http://localhost:5059/api/drama/generate-tts")
 
-        # Chirp3 음성 파싱 (chirp3:Charon -> Charon)
-        voice_name = voice
-        if voice.startswith("chirp3:"):
-            voice_name = voice.split(":")[1]
-
-        # Gemini TTS API 호출
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
-
-        payload = {
-            "contents": [{
-                "parts": [{"text": clean_script}]
-            }],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": {
-                        "prebuiltVoiceConfig": {
-                            "voiceName": voice_name
-                        }
-                    }
-                }
-            }
-        }
-
-        response = requests.post(url, json=payload, timeout=300)
+        response = requests.post(
+            api_url,
+            json={
+                "text": clean_script,
+                "speaker": voice,
+                "speed": speed,
+            },
+            timeout=600,  # 10분 타임아웃 (긴 대본용)
+        )
 
         if response.status_code != 200:
-            return {"ok": False, "error": f"TTS API 오류: {response.status_code} - {response.text[:200]}"}
+            return {"ok": False, "error": f"TTS API 오류: {response.status_code}"}
 
         data = response.json()
 
-        # 오디오 데이터 추출
-        audio_data = None
-        candidates = data.get("candidates", [])
-        if candidates:
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            for part in parts:
-                if "inlineData" in part:
-                    audio_b64 = part["inlineData"].get("data", "")
-                    audio_data = base64.b64decode(audio_b64)
-                    break
+        if not data.get("ok"):
+            return {"ok": False, "error": data.get("error", "TTS 실패")}
 
-        if not audio_data:
+        # 오디오 데이터 추출 (base64)
+        audio_b64 = data.get("audioContent", "")
+        if not audio_b64:
             return {"ok": False, "error": "TTS 응답에서 오디오 데이터 없음"}
+
+        audio_data = base64.b64decode(audio_b64)
 
         # 오디오 파일 저장
         audio_path = os.path.join(AUDIO_DIR, f"{episode_id}.mp3")
@@ -201,6 +177,8 @@ def generate_tts(
             "timeline": timeline,
         }
 
+    except requests.exceptions.ConnectionError:
+        return {"ok": False, "error": "로컬 서버 연결 실패 (localhost:5059)"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
