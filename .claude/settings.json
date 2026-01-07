@@ -32,6 +32,12 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "command": "bash .claude/hooks/session-start.sh",
+        "description": "세션 시작 시 코드 상태 자동 점검"
+      }
+    ],
     "postToolUse": [
       {
         "matcher": {
