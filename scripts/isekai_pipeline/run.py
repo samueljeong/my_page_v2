@@ -5,7 +5,7 @@
 
 창작 작업 (Claude가 대화에서 직접 수행):
 - 기획 (씬 구조, 클리프행어)
-- 대본 작성 (25,000자)
+- 대본 작성 (12,000~15,000자)
 - 이미지 프롬프트 생성
 - TTS 연출 지시
 - 자막 스타일 설계
@@ -76,7 +76,7 @@ def execute_episode(
     Args:
         episode: 에피소드 번호
         title: 에피소드 제목
-        script: 대본 (25,000자)
+        script: 대본 (12,000~15,000자)
         image_prompt: 이미지 프롬프트 (영문)
         metadata: YouTube 메타데이터 (title, description, tags)
         brief: 기획서 (선택)
