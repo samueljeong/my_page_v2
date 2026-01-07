@@ -115,7 +115,7 @@ def generate_tts(
 
     ensure_directories()
 
-    voice = voice or TTS_CONFIG.get("voice", "ko-KR-Neural2-C")
+    voice = voice or TTS_CONFIG.get("voice", "chirp3:Charon")
     speed = speed or TTS_CONFIG.get("speed", 0.95)
 
     # 대본 정리 (구분선 제거)
