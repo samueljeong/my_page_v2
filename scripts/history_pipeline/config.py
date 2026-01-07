@@ -7,7 +7,16 @@
 - 시트 구조 및 제한 설정
 """
 
+import os
 from typing import Dict, List, Any
+
+
+# ============================================================
+# YouTube 채널 설정
+# ============================================================
+
+YOUTUBE_CHANNEL_ID = os.getenv("HISTORY_CHANNEL_ID", "UCW1STziZB_NvnmcCvd1MXuQ")
+YOUTUBE_PLAYLIST_ID = os.getenv("HISTORY_PLAYLIST_ID", "")
 
 
 # ============================================================

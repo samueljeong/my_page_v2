@@ -358,6 +358,7 @@ def upload_youtube(
     privacy_status: str = "private",
     playlist_id: str = None,
     scheduled_time: str = None,
+    channel_id: str = None,
 ) -> Dict[str, Any]:
     """
     YouTube 업로드
@@ -371,6 +372,7 @@ def upload_youtube(
         privacy_status: 공개 설정 (private/unlisted/public)
         playlist_id: 플레이리스트 ID
         scheduled_time: 예약 공개 시간 (ISO 8601)
+        channel_id: YouTube 채널 ID (없으면 config에서 가져옴)
 
     Returns:
         {
@@ -382,15 +384,24 @@ def upload_youtube(
     try:
         # drama_server의 YouTube 업로드 함수 사용
         from drama_server import upload_to_youtube
+        from .config import YOUTUBE_CHANNEL_ID, YOUTUBE_PLAYLIST_ID
+
+        # channel_id가 없으면 config에서 가져옴
+        yt_channel_id = channel_id or YOUTUBE_CHANNEL_ID
+        yt_playlist_id = playlist_id or YOUTUBE_PLAYLIST_ID
+
+        if not yt_channel_id:
+            return {"ok": False, "error": "채널 ID가 없습니다. HISTORY_CHANNEL_ID 환경변수를 설정하세요."}
 
         result = upload_to_youtube(
             video_path=video_path,
             title=title,
             description=description,
             tags=tags or [],
+            channel_id=yt_channel_id,
             thumbnail_path=thumbnail_path,
             privacy_status=privacy_status,
-            playlist_id=playlist_id,
+            playlist_id=yt_playlist_id if yt_playlist_id else None,
             scheduled_time=scheduled_time,
         )
 

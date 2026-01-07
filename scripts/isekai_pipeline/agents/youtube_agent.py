@@ -1,14 +1,14 @@
 """
-한국사 파이프라인 - YouTube Agent (유튜브 메타데이터 에이전트)
+혈영 이세계편 - YouTube Agent (유튜브 메타데이터 에이전트)
 
 ## 성격 및 역할
-SEO 전문가이자 YouTube 알고리즘 마스터.
-시청자의 클릭을 유도하는 제목, 설명, 태그를 생성.
+10년 경력 웹소설/판타지 유튜브 SEO 전문가.
+회귀물, 이세계물 시청자의 클릭을 유도하는 제목, 설명, 태그를 생성.
 
 ## 철학
 - "클릭되지 않으면 의미가 없다" - CTR 최적화 우선
-- 정확한 정보와 호기심 유발의 균형
-- 알고리즘과 시청자 모두를 만족시키는 메타데이터
+- 웹소설 독자 감성을 자극하는 키워드 활용
+- 무협+판타지 하이브리드 장르 특성 활용
 
 ## 책임
 - SEO 최적화된 YouTube 제목 생성 (3가지 스타일)
@@ -17,14 +17,14 @@ SEO 전문가이자 YouTube 알고리즘 마스터.
 - 썸네일 텍스트 제안
 
 ## 제목 스타일
-1. curiosity: 호기심 유발 (~의 비밀, 왜 ~했을까?)
-2. solution: 정보 제공 (~하는 방법, ~의 진실)
-3. authority: 권위 강조 ([역사 다큐] ~의 모든 것)
+1. hook: 훅 강조 (~의 정체, 드디어 ~가)
+2. action: 액션/전투 강조 (~전투, ~격돌, ~각성)
+3. series: 시리즈 강조 ([혈영 이세계편] 제N화)
 
 ## SEO 원칙
 - 제목: 핵심 키워드 앞배치, 50자 이내
 - 설명: 첫 2줄에 핵심 정보, 해시태그 포함
-- 태그: 대주제 → 세부주제 순서
+- 태그: 장르 → 시리즈 → 에피소드 순서
 """
 
 import re
@@ -34,46 +34,87 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentResult, AgentStatus, EpisodeContext
 
 
-# 제목 스타일 템플릿
+# =====================================================
+# 이세계편 제목 템플릿
+# =====================================================
+
 TITLE_TEMPLATES = {
-    "curiosity": [
-        "{keyword}의 숨겨진 비밀",
-        "왜 {keyword}였을까?",
-        "{keyword}, 아무도 몰랐던 진실",
-        "{keyword}의 충격적인 결말",
-        "{era}의 미스터리, {keyword}",
+    "hook": [
+        "{keyword}의 정체가 밝혀지다",
+        "드디어 {keyword}",
+        "{keyword}, 그 충격적인 진실",
+        "모두가 놀란 {keyword}",
+        "{keyword}의 반전",
     ],
-    "solution": [
-        "{keyword} 완벽 정리",
-        "{keyword}의 모든 것",
-        "5분만에 이해하는 {keyword}",
-        "{keyword}, 이것만 알면 끝",
-        "{era} {keyword} 총정리",
+    "action": [
+        "{keyword} 격돌",
+        "{keyword} 각성",
+        "{keyword} 전투",
+        "{keyword} vs {opponent}",
+        "최강의 {keyword}",
     ],
-    "authority": [
-        "[한국사] {era} | {keyword}",
-        "[역사 다큐] {keyword}의 진실",
-        "[KBS 스타일] {keyword}",
-        "[역사 속으로] {era} {keyword}",
-        "[한국사 시리즈] {keyword}",
+    "series": [
+        "[혈영 이세계편] 제{ep}화 | {keyword}",
+        "혈영 이세계편 {ep}화 - {keyword}",
+        "[이세계 무협] 제{ep}화 {keyword}",
     ],
 }
 
-# 시대별 인기 키워드
-ERA_KEYWORDS = {
-    "고조선": ["단군", "환웅", "청동기", "위만"],
-    "삼국시대": ["광개토대왕", "삼국통일", "백제", "고구려", "신라"],
-    "발해": ["대조영", "해동성국", "고구려 부흥", "만주"],
-    "통일신라": ["불교", "경주", "골품제", "장보고"],
-    "고려": ["왕건", "거란", "몽골", "팔만대장경"],
-    "조선": ["세종대왕", "임진왜란", "이순신", "정조"],
-    "일제강점기": ["독립운동", "3.1운동", "위안부", "강제징용"],
-    "대한민국": ["6.25전쟁", "민주화", "경제성장", "IMF"],
+# =====================================================
+# 파트별 키워드
+# =====================================================
+
+PART_KEYWORDS = {
+    1: {  # 이방인 (1-10화)
+        "themes": ["전이", "각성", "적응", "마나"],
+        "characters": ["무영", "카이든", "라이트닝"],
+        "keywords": ["이세계", "무림 검객", "마나 각성", "자유도시"],
+    },
+    2: {  # 검은 별 (11-20화)
+        "themes": ["성장", "수련", "소드마스터"],
+        "characters": ["무영", "에이라", "볼드릭"],
+        "keywords": ["심법", "오러", "소드마스터", "검은 별"],
+    },
+    3: {  # 용의 친구 (21-30화)
+        "themes": ["명성", "동맹", "드래곤"],
+        "characters": ["무영", "이그니스", "이그니스 공주", "레인"],
+        "keywords": ["드래곤", "용의 친구", "제국", "마왕"],
+    },
+    4: {  # 대륙의 그림자 (31-40화)
+        "themes": ["정치", "음모", "충돌"],
+        "characters": ["무영", "혈마", "에이라"],
+        "keywords": ["혈마", "마왕군", "전쟁", "엘프"],
+    },
+    5: {  # 전쟁의 서막 (41-50화)
+        "themes": ["연합", "전쟁", "희생"],
+        "characters": ["무영", "카이든", "에이라", "이그니스"],
+        "keywords": ["연합군", "대전쟁", "9서클", "소드마스터"],
+    },
+    6: {  # 혈영, 다시 (51-60화)
+        "themes": ["결전", "귀환", "완결"],
+        "characters": ["무영", "혈마", "설하"],
+        "keywords": ["마왕성", "최종 결전", "그랜드 소드마스터", "귀환"],
+    },
 }
+
+# =====================================================
+# 인기 태그
+# =====================================================
+
+POPULAR_TAGS = [
+    # 장르
+    "이세계", "무협", "판타지", "웹소설",
+    "회귀물", "먼치킨", "사이다", "성장물",
+    # 플랫폼
+    "유튜브소설", "웹소설읽어주기", "소설낭독",
+    "ASMR소설", "소설TTS", "AI낭독",
+    # 시리즈
+    "혈영", "혈영이세계편", "무협소설", "판타지소설",
+]
 
 
 class YouTubeAgent(BaseAgent):
-    """유튜브 메타데이터 에이전트"""
+    """유튜브 메타데이터 에이전트 (혈영 이세계편 전용)"""
 
     def __init__(self):
         super().__init__("YouTubeAgent")
@@ -84,6 +125,10 @@ class YouTubeAgent(BaseAgent):
         self.max_description_length = 5000
         self.max_tags_length = 500
 
+        # 시리즈 정보
+        self.series_name = "혈영 이세계편"
+        self.total_episodes = 60
+
     async def execute(self, context: EpisodeContext, **kwargs) -> AgentResult:
         """
         YouTube 메타데이터 생성
@@ -91,7 +136,7 @@ class YouTubeAgent(BaseAgent):
         Args:
             context: 에피소드 컨텍스트 (script 필수)
             **kwargs:
-                style: 제목 스타일 (curiosity/solution/authority)
+                style: 제목 스타일 (hook/action/series)
                 custom_keywords: 추가 키워드 목록
 
         Returns:
@@ -100,7 +145,7 @@ class YouTubeAgent(BaseAgent):
         self.set_status(AgentStatus.RUNNING)
         start_time = time.time()
 
-        style = kwargs.get("style", "curiosity")
+        style = kwargs.get("style", "series")
         custom_keywords = kwargs.get("custom_keywords", [])
 
         context.add_log(
@@ -117,17 +162,21 @@ class YouTubeAgent(BaseAgent):
 
             script = context.script
 
+            # 파트 정보
+            part_num = self._get_part_number(context.episode_number)
+            part_info = PART_KEYWORDS.get(part_num, PART_KEYWORDS[1])
+
             # 키워드 추출
-            keywords = self._extract_keywords(script, context, custom_keywords)
+            keywords = self._extract_keywords(script, context, part_info, custom_keywords)
 
             # 제목 생성 (3가지 스타일)
-            titles = self._generate_titles(context, keywords)
+            titles = self._generate_titles(context, keywords, part_info)
 
             # 설명 생성
-            description = self._generate_description(context, keywords, script)
+            description = self._generate_description(context, keywords, part_info)
 
             # 태그 생성
-            tags = self._generate_tags(context, keywords)
+            tags = self._generate_tags(context, keywords, part_info)
 
             # 썸네일 텍스트 제안
             thumbnail_texts = self._generate_thumbnail_texts(context, keywords)
@@ -155,6 +204,7 @@ class YouTubeAgent(BaseAgent):
                     "timestamps": timestamps,
                     "keywords": keywords,
                     "selected_style": style,
+                    "part": part_num,
                 },
                 duration=duration,
             )
@@ -172,10 +222,17 @@ class YouTubeAgent(BaseAgent):
                 duration=duration,
             )
 
+    def _get_part_number(self, episode: int) -> int:
+        """에피소드 번호로 파트 번호 계산"""
+        if episode <= 0:
+            return 1
+        return min(6, (episode - 1) // 10 + 1)
+
     def _extract_keywords(
         self,
         script: str,
         context: EpisodeContext,
+        part_info: Dict,
         custom_keywords: List[str]
     ) -> Dict[str, Any]:
         """대본에서 키워드 추출"""
@@ -183,66 +240,87 @@ class YouTubeAgent(BaseAgent):
         keywords = {
             "primary": "",  # 메인 키워드
             "secondary": [],  # 서브 키워드
-            "era": context.era_name,
+            "characters": [],  # 등장 캐릭터
             "custom": custom_keywords,
         }
 
         # 1. 제목에서 메인 키워드
         if context.title:
-            # 쉼표로 분리된 경우 첫 번째 사용
-            keywords["primary"] = context.title.split(",")[0].strip()
+            keywords["primary"] = context.title
 
-        # 2. 시대별 인기 키워드에서 매칭
-        era_kws = ERA_KEYWORDS.get(context.era_name, [])
-        matched_era_kws = [kw for kw in era_kws if kw in script]
-        keywords["secondary"].extend(matched_era_kws[:3])
+        # 2. 파트별 캐릭터 매칭
+        for char in part_info.get("characters", []):
+            if char in script:
+                keywords["characters"].append(char)
 
-        # 3. 대본에서 자주 등장하는 인명/지명 추출
-        # 한글 이름 패턴 (2~4자)
-        name_pattern = r"[가-힣]{2,4}(?:왕|제|공|대왕|황제|장군|대사)"
-        names = re.findall(name_pattern, script)
-        # 빈도순 정렬
-        name_counts = {}
-        for name in names:
-            name_counts[name] = name_counts.get(name, 0) + 1
-        sorted_names = sorted(name_counts.items(), key=lambda x: x[1], reverse=True)
-        keywords["secondary"].extend([n[0] for n in sorted_names[:5]])
+        # 3. 파트별 키워드 매칭
+        for kw in part_info.get("keywords", []):
+            if kw in script and kw not in keywords["secondary"]:
+                keywords["secondary"].append(kw)
+
+        # 4. 대본에서 자주 등장하는 이름 추출
+        # 주요 캐릭터 이름 패턴
+        main_chars = ["무영", "에이라", "카이든", "이그니스", "혈마", "볼드릭", "레인", "설하"]
+        for char in main_chars:
+            if char in script and char not in keywords["characters"]:
+                count = script.count(char)
+                if count >= 3:  # 3회 이상 등장
+                    keywords["characters"].append(char)
+
+        # 5. 액션 키워드 추출
+        action_keywords = ["전투", "각성", "격돌", "검", "마나", "오러", "소드마스터"]
+        for kw in action_keywords:
+            if kw in script and kw not in keywords["secondary"]:
+                keywords["secondary"].append(kw)
 
         # 중복 제거
-        keywords["secondary"] = list(dict.fromkeys(keywords["secondary"]))
+        keywords["characters"] = list(dict.fromkeys(keywords["characters"]))[:5]
+        keywords["secondary"] = list(dict.fromkeys(keywords["secondary"]))[:10]
 
         return keywords
 
     def _generate_titles(
         self,
         context: EpisodeContext,
-        keywords: Dict[str, Any]
+        keywords: Dict[str, Any],
+        part_info: Dict
     ) -> Dict[str, str]:
         """3가지 스타일의 제목 생성"""
 
         titles = {}
-        primary = keywords["primary"] or context.title
-        era = keywords["era"]
+        primary = keywords["primary"] or context.title or "새로운 시작"
+        ep_num = context.episode_number or 1
 
-        for style, templates in TITLE_TEMPLATES.items():
-            # 스타일별 첫 번째 템플릿 사용
-            template = templates[0]
-            title = template.format(
-                keyword=primary,
-                era=era,
-            )
+        # 1. Hook 스타일 (호기심 유발)
+        hook_templates = TITLE_TEMPLATES["hook"]
+        titles["hook"] = hook_templates[0].format(keyword=primary)
 
-            # 길이 조정
+        # 주요 캐릭터가 있으면 반영
+        if keywords["characters"]:
+            main_char = keywords["characters"][0]
+            titles["hook"] = f"{main_char}, {primary}"
+
+        # 2. Action 스타일 (액션 강조)
+        if keywords["secondary"]:
+            action_kw = keywords["secondary"][0]
+            titles["action"] = f"{primary} - {action_kw}"
+        else:
+            titles["action"] = f"무영의 {primary}"
+
+        # 적 캐릭터가 있으면 vs 형식
+        if "혈마" in keywords["characters"]:
+            titles["action"] = f"무영 vs 혈마 - {primary}"
+
+        # 3. Series 스타일 (시리즈 강조)
+        titles["series"] = f"[혈영 이세계편] 제{ep_num}화 | {primary}"
+
+        # 길이 조정
+        for style, title in titles.items():
             if len(title) > self.optimal_title_length:
-                # 키워드만 사용
-                title = primary
-
-            titles[style] = title
-
-        # 에피소드 번호가 있으면 authority에 추가
-        if context.episode_number:
-            ep_num = context.episode_number
-            titles["authority"] = f"[한국사 {ep_num}화] {era} | {primary}"
+                if style == "series":
+                    titles[style] = f"혈영 이세계편 {ep_num}화 - {primary[:15]}"
+                else:
+                    titles[style] = title[:self.optimal_title_length - 3] + "..."
 
         return titles
 
@@ -250,36 +328,54 @@ class YouTubeAgent(BaseAgent):
         self,
         context: EpisodeContext,
         keywords: Dict[str, Any],
-        script: str
+        part_info: Dict
     ) -> str:
         """SEO 최적화된 설명 생성"""
 
         primary = keywords["primary"] or context.title
-        era = keywords["era"]
-        secondary = keywords["secondary"]
+        ep_num = context.episode_number or 1
+        part_num = self._get_part_number(ep_num)
+
+        # 파트 제목
+        part_titles = {
+            1: "이방인", 2: "검은 별", 3: "용의 친구",
+            4: "대륙의 그림자", 5: "전쟁의 서막", 6: "혈영, 다시"
+        }
+        part_title = part_titles.get(part_num, "")
 
         # 첫 2줄: 핵심 정보 (검색 결과에 표시됨)
-        intro = f"{era} 시대의 {primary}에 대해 알아봅니다.\n"
-        intro += f"{context.topic}" if context.topic else f"역사 속 숨겨진 이야기를 만나보세요."
+        intro = f"🗡️ 혈영 이세계편 제{ep_num}화 - {primary}\n"
+        intro += f"무림 최강 검객이 이세계에서 펼치는 새로운 전설!"
+
+        # 파트 정보
+        part_line = f"\n\n📖 {part_num}부: {part_title}"
+
+        # 등장인물
+        chars = keywords.get("characters", [])
+        char_line = ""
+        if chars:
+            char_line = f"\n\n👥 등장인물: {', '.join(chars[:4])}"
 
         # 해시태그
-        hashtags = [f"#한국사", f"#{era}", f"#{primary.replace(' ', '')}"]
-        hashtags.extend([f"#{kw.replace(' ', '')}" for kw in secondary[:3]])
-        hashtag_line = " ".join(hashtags)
-
-        # 참고 자료
-        refs = ""
-        if context.reference_links:
-            refs = "\n\n📚 참고 자료:\n"
-            refs += "\n".join([f"- {link}" for link in context.reference_links[:3]])
+        hashtags = [
+            "#혈영이세계편", "#이세계무협", "#웹소설",
+            "#무협판타지", "#소설낭독", f"#{ep_num}화"
+        ]
+        # 캐릭터 해시태그
+        for char in chars[:2]:
+            hashtags.append(f"#{char}")
+        hashtag_line = "\n\n" + " ".join(hashtags)
 
         # 구독 유도
-        cta = "\n\n🔔 구독과 좋아요는 영상 제작에 큰 힘이 됩니다!"
+        cta = "\n\n🔔 구독과 좋아요로 무영의 여정을 함께해주세요!"
 
         # 타임스탬프 플레이스홀더
-        timestamps = "\n\n⏰ 타임스탬프\n00:00 인트로\n(영상 업로드 후 추가)"
+        timestamps = "\n\n⏰ 타임스탬프\n00:00 오프닝\n(영상 업로드 후 추가)"
 
-        description = f"{intro}\n\n{hashtag_line}{refs}{cta}{timestamps}"
+        # 시리즈 정보
+        series_info = f"\n\n📺 혈영 이세계편 ({ep_num}/60화)"
+
+        description = f"{intro}{part_line}{char_line}{hashtag_line}{cta}{timestamps}{series_info}"
 
         # 길이 제한
         if len(description) > self.max_description_length:
@@ -290,46 +386,47 @@ class YouTubeAgent(BaseAgent):
     def _generate_tags(
         self,
         context: EpisodeContext,
-        keywords: Dict[str, Any]
+        keywords: Dict[str, Any],
+        part_info: Dict
     ) -> List[str]:
-        """SEO 태그 생성 (대주제 → 세부주제 순)"""
+        """SEO 태그 생성 (장르 → 시리즈 → 에피소드 순)"""
 
         tags = []
 
-        # 1. 대주제
-        tags.append("한국사")
-        tags.append("역사")
-        tags.append("역사 다큐멘터리")
+        # 1. 시리즈 태그 (최우선)
+        tags.append("혈영이세계편")
+        tags.append("혈영")
+        tags.append("이세계무협")
 
-        # 2. 시대
-        era = keywords["era"]
-        if era:
-            tags.append(era)
-            tags.append(f"{era} 역사")
+        # 2. 장르 태그
+        tags.append("이세계")
+        tags.append("무협")
+        tags.append("판타지")
+        tags.append("웹소설")
 
-        # 3. 메인 키워드
+        # 3. 에피소드 키워드
         primary = keywords["primary"]
         if primary:
-            tags.append(primary)
             tags.append(primary.replace(" ", ""))
 
-        # 4. 서브 키워드
-        for kw in keywords["secondary"]:
-            if kw not in tags:
-                tags.append(kw)
+        # 4. 캐릭터 태그
+        for char in keywords.get("characters", [])[:3]:
+            if char not in tags:
+                tags.append(char)
 
-        # 5. 커스텀 키워드
+        # 5. 파트별 키워드
+        for kw in part_info.get("keywords", [])[:3]:
+            if kw not in tags:
+                tags.append(kw.replace(" ", ""))
+
+        # 6. 커스텀 키워드
         for kw in keywords.get("custom", []):
             if kw not in tags:
                 tags.append(kw)
 
-        # 6. 일반 인기 태그
-        popular_tags = [
-            "한국역사", "KBS역사", "역사스페셜", "역사채널",
-            "역사공부", "역사이야기", "한국사능력검정",
-        ]
-        for tag in popular_tags:
-            if len(",".join(tags)) < self.max_tags_length - 20:
+        # 7. 인기 태그 추가
+        for tag in POPULAR_TAGS:
+            if tag not in tags and len(",".join(tags)) < self.max_tags_length - 20:
                 tags.append(tag)
 
         return tags
@@ -341,29 +438,40 @@ class YouTubeAgent(BaseAgent):
     ) -> List[str]:
         """썸네일 텍스트 제안"""
 
-        primary = keywords["primary"] or context.title
-        era = keywords["era"]
+        primary = keywords["primary"] or context.title or "새로운 시작"
+        ep_num = context.episode_number or 1
 
         suggestions = []
 
-        # 1. 짧은 키워드 (2줄용)
+        # 1. 에피소드 번호
+        suggestions.append(f"제{ep_num}화")
+
+        # 2. 짧은 키워드
         if len(primary) <= 6:
             suggestions.append(primary)
         else:
-            # 첫 6자
             suggestions.append(primary[:6])
 
-        # 2. 시대 + 키워드
-        if era and len(f"{era} {primary[:4]}") <= 10:
-            suggestions.append(f"{era} {primary[:4]}")
+        # 3. 캐릭터 기반
+        chars = keywords.get("characters", [])
+        if chars:
+            main_char = chars[0]
+            if main_char == "무영":
+                suggestions.append("무영 각성")
+            elif main_char == "혈마":
+                suggestions.append("혈마 등장")
+            else:
+                suggestions.append(f"{main_char}")
 
-        # 3. 호기심 유발
-        suggestions.append("이것이 진실?")
-        suggestions.append(f"{era}의 비밀")
-
-        # 4. 에피소드 번호
-        if context.episode_number:
-            suggestions.append(f"{context.episode_number}화")
+        # 4. 훅 텍스트
+        hook_texts = [
+            "드디어...",
+            "충격 반전",
+            "각성",
+            "최강",
+            "vs 혈마",
+        ]
+        suggestions.extend(hook_texts[:2])
 
         return suggestions[:5]
 
@@ -372,61 +480,48 @@ class YouTubeAgent(BaseAgent):
         script: str,
         context: EpisodeContext
     ) -> List[Dict[str, str]]:
-        """타임스탬프 제안 (대략적인 구간)"""
+        """타임스탬프 제안 (5막 구조 기준)"""
 
-        # 대본 길이 기준 예상 시간
+        # 대본 길이 기준 예상 시간 (910자 ≈ 1분)
         script_length = len(script)
         estimated_duration = script_length / 910  # 분
 
         timestamps = []
 
-        # 기본 구조
-        if context.brief and context.brief.get("structure"):
-            structure = context.brief["structure"]
-            current_time = 0
+        # 5막 구조 기반 타임스탬프
+        # 오프닝(15%) → 전개(22%) → 클라이맥스(28%) → 해결(20%) → 엔딩(15%)
+        structure = [
+            (0.00, "오프닝"),
+            (0.15, "전개"),
+            (0.37, "클라이맥스"),
+            (0.65, "해결"),
+            (0.85, "엔딩"),
+        ]
 
-            for section in structure:
-                part = section.get("part", "")
-                length = section.get("length", 2000)
-
-                # 시간 계산 (글자수 기준)
-                duration_min = length / 910
-
-                mm = int(current_time)
-                ss = int((current_time - mm) * 60)
-                time_str = f"{mm:02d}:{ss:02d}"
-
-                timestamps.append({
-                    "time": time_str,
-                    "label": part,
-                })
-
-                current_time += duration_min
-        else:
-            # 기본 5단계
-            default_sections = [
-                ("00:00", "인트로"),
-                (f"{int(estimated_duration * 0.1):02d}:00", "배경"),
-                (f"{int(estimated_duration * 0.3):02d}:00", "본론1"),
-                (f"{int(estimated_duration * 0.6):02d}:00", "본론2"),
-                (f"{int(estimated_duration * 0.85):02d}:00", "마무리"),
-            ]
-            timestamps = [{"time": t, "label": l} for t, l in default_sections]
+        for ratio, label in structure:
+            time_min = estimated_duration * ratio
+            mm = int(time_min)
+            ss = int((time_min - mm) * 60)
+            time_str = f"{mm:02d}:{ss:02d}"
+            timestamps.append({"time": time_str, "label": label})
 
         return timestamps
 
 
+# =====================================================
 # 동기 실행 래퍼
+# =====================================================
+
 def generate_youtube_metadata(
     context: EpisodeContext,
-    style: str = "curiosity"
+    style: str = "series"
 ) -> Dict[str, Any]:
     """
     YouTube 메타데이터 생성 (동기 버전)
 
     Args:
         context: 에피소드 컨텍스트 (script 필수)
-        style: 제목 스타일 (curiosity/solution/authority)
+        style: 제목 스타일 (hook/action/series)
 
     Returns:
         YouTube 메타데이터
@@ -453,16 +548,16 @@ def generate_youtube_metadata(
 
 def quick_metadata(
     title: str,
-    era: str,
+    episode: int = 1,
     script: str = "",
-    style: str = "curiosity"
+    style: str = "series"
 ) -> Dict[str, Any]:
     """
     간단 메타데이터 생성 (컨텍스트 없이)
 
     Args:
         title: 에피소드 제목
-        era: 시대명
+        episode: 에피소드 번호
         script: 대본 (선택)
         style: 제목 스타일
 
@@ -471,16 +566,20 @@ def quick_metadata(
     """
     agent = YouTubeAgent()
 
+    # 파트 계산
+    part = min(6, (episode - 1) // 10 + 1) if episode > 0 else 1
+
     # 임시 컨텍스트 생성
     context = EpisodeContext(
-        episode_id="temp",
-        episode_number=0,
-        era_name=era,
+        episode_id=f"ep{episode:03d}",
+        episode_number=episode,
+        era_name="",  # 이세계편에서는 사용 안함
         era_episode=0,
         title=title,
         topic="",
+        part=part,
     )
-    context.script = script or f"{era} {title}에 대한 역사 이야기입니다."
+    context.script = script or f"혈영 이세계편 {episode}화 - {title}"
 
     import asyncio
 
