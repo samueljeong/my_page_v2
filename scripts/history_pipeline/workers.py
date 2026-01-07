@@ -94,7 +94,7 @@ def generate_tts(
     speed: float = None,
 ) -> Dict[str, Any]:
     """
-    TTS 생성 (로컬 서버 API 호출)
+    TTS 생성 (독립 모듈 사용 - 서버 불필요)
 
     Args:
         episode_id: 에피소드 ID (예: "ep001_광개토왕")
@@ -111,7 +111,6 @@ def generate_tts(
         }
     """
     import re
-    import base64
 
     ensure_directories()
 
@@ -124,63 +123,29 @@ def generate_tts(
 
     print(f"[HISTORY TTS] 시작: {len(clean_script):,}자, 음성: {voice}", flush=True)
 
-    try:
-        # 로컬 서버 API 호출
-        api_url = os.getenv("TTS_API_URL", "http://localhost:5059/api/drama/generate-tts")
+    # 독립 TTS 모듈 사용 (서버 불필요, GOOGLE_API_KEY만 필요)
+    from .tts import generate_tts as tts_gemini
 
-        response = requests.post(
-            api_url,
-            json={
-                "text": clean_script,
-                "speaker": voice,
-                "speed": speed,
-            },
-            timeout=600,  # 10분 타임아웃 (긴 대본용)
-        )
+    result = tts_gemini(
+        episode_id=episode_id,
+        script=clean_script,
+        output_dir=AUDIO_DIR,
+        voice=voice,
+        speed=speed,
+    )
 
-        if response.status_code != 200:
-            return {"ok": False, "error": f"TTS API 오류: {response.status_code}"}
-
-        data = response.json()
-
-        if not data.get("ok"):
-            return {"ok": False, "error": data.get("error", "TTS 실패")}
-
-        # 오디오 데이터 추출 (base64)
-        audio_b64 = data.get("audioContent", "")
-        if not audio_b64:
-            return {"ok": False, "error": "TTS 응답에서 오디오 데이터 없음"}
-
-        audio_data = base64.b64decode(audio_b64)
-
-        # 오디오 파일 저장
-        audio_path = os.path.join(AUDIO_DIR, f"{episode_id}.mp3")
-        with open(audio_path, "wb") as f:
-            f.write(audio_data)
-
-        # Duration 측정
-        duration = _get_audio_duration(audio_path)
-        print(f"[HISTORY TTS] TTS 완료: {duration:.1f}초 ({duration/60:.1f}분)", flush=True)
-
-        # SRT 생성 (문장 단위)
-        srt_path = os.path.join(SUBTITLE_DIR, f"{episode_id}.srt")
-        timeline = _generate_sentence_timeline(clean_script, duration)
-        _write_srt_file(timeline, srt_path)
-        print(f"[HISTORY TTS] SRT 생성: {len(timeline)}개 자막", flush=True)
-
+    # 결과 반환 (기존 형식 유지)
+    if result.get("ok"):
         return {
             "ok": True,
-            "audio_path": audio_path,
-            "merged_audio": audio_path,
-            "srt_path": srt_path,
-            "duration": duration,
-            "timeline": timeline,
+            "audio_path": result.get("audio_path"),
+            "merged_audio": result.get("audio_path"),
+            "srt_path": result.get("srt_path"),
+            "duration": result.get("duration", 0),
+            "timeline": result.get("timeline", []),
         }
-
-    except requests.exceptions.ConnectionError:
-        return {"ok": False, "error": "로컬 서버 연결 실패 (localhost:5059)"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    else:
+        return {"ok": False, "error": result.get("error", "TTS 실패")}
 
 
 def _get_audio_duration(audio_path: str) -> float:
