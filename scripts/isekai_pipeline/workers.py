@@ -48,13 +48,18 @@ def generate_tts(
     speed: float = None,
 ) -> Dict[str, Any]:
     """
-    TTS 생성 (Gemini/Google TTS)
+    TTS 생성 (Chirp3 HD - 감정 태그 지원)
+
+    감정 태그 사용법:
+        [긴장] 무영은 검을 들었다. → 속도 1.05로 읽음
+        [슬픔] 설하를 떠올렸다. → 속도 0.8로 읽음
+        태그 없는 문장 → 기본 속도 0.9로 읽음
 
     Args:
         episode: 에피소드 번호
-        script: 대본 텍스트
+        script: 대본 텍스트 (감정 태그 포함 가능)
         voice: 음성 (기본: config의 TTS_CONFIG)
-        speed: 속도 (기본: config의 TTS_CONFIG)
+        speed: 기본 속도 (기본: config의 TTS_CONFIG)
 
     Returns:
         {
@@ -66,38 +71,52 @@ def generate_tts(
     """
     ensure_directories()
 
-    voice = voice or TTS_CONFIG.get("voice", "chirp3:Charon")
-    speed = speed or TTS_CONFIG.get("speed", 0.95)
+    voice = voice or TTS_CONFIG.get("voice", "Charon")
+    speed = speed or TTS_CONFIG.get("speed", 0.9)
 
     try:
-        # wuxia_pipeline의 TTS 모듈 재사용
-        from scripts.wuxia_pipeline.multi_voice_tts import (
-            generate_multi_voice_tts_simple,
-            generate_srt_from_timeline,
-        )
+        # 로컬 TTS 모듈 사용 (감정 태그 지원)
+        from .tts import generate_tts as local_generate_tts
 
         episode_id = f"ep{episode:03d}"
-        tts_result = generate_multi_voice_tts_simple(
-            text=script,
-            output_dir=AUDIO_DIR,
+        tts_result = local_generate_tts(
             episode_id=episode_id,
+            script=script,
+            output_dir=AUDIO_DIR,
             voice=voice,
             speed=speed,
         )
 
-        if tts_result.get("ok"):
-            # SRT 생성
-            srt_path = os.path.join(SUBTITLE_DIR, f"{episode_id}.srt")
-            if tts_result.get("timeline"):
-                generate_srt_from_timeline(tts_result["timeline"], srt_path)
-                tts_result["srt_path"] = srt_path
-
-            tts_result["audio_path"] = tts_result.get("merged_audio")
-
         return tts_result
 
-    except ImportError:
-        return {"ok": False, "error": "TTS 모듈 없음 (wuxia_pipeline 필요)"}
+    except ImportError as e:
+        # fallback: wuxia_pipeline 사용
+        try:
+            from scripts.wuxia_pipeline.multi_voice_tts import (
+                generate_multi_voice_tts_simple,
+                generate_srt_from_timeline,
+            )
+
+            episode_id = f"ep{episode:03d}"
+            tts_result = generate_multi_voice_tts_simple(
+                text=script,
+                output_dir=AUDIO_DIR,
+                episode_id=episode_id,
+                voice=voice,
+                speed=speed,
+            )
+
+            if tts_result.get("ok"):
+                srt_path = os.path.join(SUBTITLE_DIR, f"{episode_id}.srt")
+                if tts_result.get("timeline"):
+                    generate_srt_from_timeline(tts_result["timeline"], srt_path)
+                    tts_result["srt_path"] = srt_path
+                tts_result["audio_path"] = tts_result.get("merged_audio")
+
+            return tts_result
+
+        except ImportError:
+            return {"ok": False, "error": f"TTS 모듈 없음: {e}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
