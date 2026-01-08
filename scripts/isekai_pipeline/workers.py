@@ -293,16 +293,18 @@ def render_video(
     image_path: str,
     srt_path: str = None,
     bgm_mood: str = "calm",
+    bgm_volume: float = 0.10,
 ) -> Dict[str, Any]:
     """
-    영상 렌더링 (FFmpeg)
+    영상 렌더링 (FFmpeg) + BGM 믹싱
 
     Args:
         episode: 에피소드 번호
         audio_path: TTS 오디오 파일 경로
         image_path: 배경 이미지 경로
         srt_path: 자막 파일 경로 (선택)
-        bgm_mood: BGM 분위기
+        bgm_mood: BGM 분위기 (calm, tense, epic, dramatic, etc.)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.10 = 10%)
 
     Returns:
         {
@@ -317,7 +319,7 @@ def render_video(
         episode_id = f"ep{episode:03d}"
         video_path = os.path.join(VIDEO_DIR, f"{episode_id}.mp4")
 
-        # 자체 렌더러 사용
+        # 1단계: 기본 영상 렌더링 (이미지 + TTS)
         result = _render_video(
             audio_path=audio_path,
             image_path=image_path,
@@ -325,8 +327,63 @@ def render_video(
             srt_path=srt_path,
         )
 
+        if not result.get("ok"):
+            return result
+
+        # 2단계: BGM 믹싱
+        if bgm_mood:
+            bgm_result = _mix_bgm(video_path, bgm_mood, bgm_volume)
+            if bgm_result.get("ok"):
+                print(f"[ISEKAI-VIDEO] BGM 믹싱 완료: {bgm_mood}")
+            else:
+                print(f"[ISEKAI-VIDEO] BGM 믹싱 실패: {bgm_result.get('error', 'unknown')}, BGM 없이 진행")
+
         return result
 
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _mix_bgm(video_path: str, bgm_mood: str, bgm_volume: float = 0.10) -> Dict[str, Any]:
+    """
+    영상에 BGM 믹싱
+
+    Args:
+        video_path: 영상 파일 경로
+        bgm_mood: BGM 분위기
+        bgm_volume: BGM 볼륨
+
+    Returns:
+        {"ok": True} 또는 {"ok": False, "error": "..."}
+    """
+    try:
+        # drama_server의 BGM 함수 사용
+        from drama_server import _get_bgm_file, _mix_bgm_with_video
+
+        bgm_file = _get_bgm_file(bgm_mood)
+        if not bgm_file:
+            return {"ok": False, "error": f"BGM 파일 없음: {bgm_mood}"}
+
+        # 임시 출력 파일
+        bgm_output_path = video_path.replace(".mp4", "_bgm.mp4")
+
+        success = _mix_bgm_with_video(video_path, bgm_file, bgm_output_path, bgm_volume)
+
+        if success and os.path.exists(bgm_output_path):
+            try:
+                # 원본 교체
+                os.replace(bgm_output_path, video_path)
+                return {"ok": True}
+            except OSError as e:
+                # 교체 실패 시 임시 파일 정리
+                if os.path.exists(bgm_output_path):
+                    os.remove(bgm_output_path)
+                return {"ok": False, "error": f"파일 교체 실패: {e}"}
+        else:
+            return {"ok": False, "error": "BGM 믹싱 실패"}
+
+    except ImportError as e:
+        return {"ok": False, "error": f"drama_server import 실패: {e}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -444,6 +501,7 @@ def execute_episode(
     metadata: Dict[str, Any] = None,
     brief: Dict[str, Any] = None,
     bgm_mood: str = "epic",
+    bgm_volume: float = 0.10,
     generate_video: bool = False,
     upload: bool = False,
     privacy_status: str = "private",
@@ -461,6 +519,7 @@ def execute_episode(
         metadata: YouTube 메타데이터 (title, description, tags)
         brief: 기획서 (선택)
         bgm_mood: BGM 분위기 (epic, tense, calm, etc.)
+        bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.10 = 10%)
         generate_video: 영상 렌더링 여부
         upload: YouTube 업로드 여부
         privacy_status: 공개 설정
@@ -539,6 +598,7 @@ def execute_episode(
             image_path=result["image_paths"][0],  # 첫 번째 이미지 사용
             srt_path=result.get("srt_path"),
             bgm_mood=bgm_mood,
+            bgm_volume=bgm_volume,
         )
         if video_result.get("ok"):
             result["video_path"] = video_result.get("video_path")
