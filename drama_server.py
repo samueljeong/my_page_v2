@@ -15551,6 +15551,62 @@ def get_sheets_service_account():
         return None
 
 
+def get_docs_service_account():
+    """서비스 계정을 사용하여 Google Docs API 서비스 객체 반환"""
+    try:
+        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        if not service_account_json:
+            print("[DOCS] GOOGLE_SERVICE_ACCOUNT_JSON 환경변수가 설정되지 않음")
+            return None
+
+        service_account_info = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=[
+                'https://www.googleapis.com/auth/documents',
+                'https://www.googleapis.com/auth/documents.readonly'
+            ]
+        )
+        service = build('docs', 'v1', credentials=credentials)
+        return service
+    except json.JSONDecodeError as e:
+        print(f"[DOCS] 서비스 계정 JSON 파싱 실패: {e}")
+        return None
+    except Exception as e:
+        print(f"[DOCS] 서비스 계정 인증 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_drive_service_account():
+    """서비스 계정을 사용하여 Google Drive API 서비스 객체 반환"""
+    try:
+        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        if not service_account_json:
+            print("[DRIVE] GOOGLE_SERVICE_ACCOUNT_JSON 환경변수가 설정되지 않음")
+            return None
+
+        service_account_info = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=[
+                'https://www.googleapis.com/auth/drive',
+                'https://www.googleapis.com/auth/drive.file'
+            ]
+        )
+        service = build('drive', 'v3', credentials=credentials)
+        return service
+    except json.JSONDecodeError as e:
+        print(f"[DRIVE] 서비스 계정 JSON 파싱 실패: {e}")
+        return None
+    except Exception as e:
+        print(f"[DRIVE] 서비스 계정 인증 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 # Bible Blueprint 의존성 주입 (함수 정의 완료 후)
 bible_set_sheets_service(get_sheets_service_account)
 bible_set_bgm_mixer(_mix_bgm_with_video)
@@ -19348,7 +19404,6 @@ def run_isekai_video_pipeline(
 
     try:
         # 데이터 추출
-        script = row_data.get('대본', '').strip()
         image_prompt = row_data.get('image_prompt', '').strip()
         title = row_data.get('제목(입력)', '').strip() or row_data.get('제목(GPT생성)', '').strip()
         channel_id = row_data.get('채널ID', '').strip()
@@ -19358,15 +19413,43 @@ def run_isekai_video_pipeline(
         thumbnail_text = row_data.get('썸네일문구(입력)', '').strip()
         summary = row_data.get('summary', '').strip()
 
+        # 에피소드 번호 추출 (episode 컬럼이 "EP001" 형태)
+        episode_str = row_data.get('episode', '').strip()
+        if episode_str.startswith('EP'):
+            ep_num = int(episode_str[2:])
+        else:
+            ep_num = row_data.get('episode_num', 1)
+        ep_title = row_data.get('title', '').strip() or '무제'
+
+        # ★ 대본 가져오기: Google Docs 우선, 없으면 시트
+        script = ''
+        script_source = 'none'
+        doc_url = row_data.get('대본URL', '').strip()
+
+        if doc_url:
+            # Google Docs에서 대본 가져오기
+            try:
+                from scripts.isekai_pipeline.docs_manager import get_script_from_doc
+                docs_result = get_script_from_doc(ep_num)
+                if docs_result.get('ok') and docs_result.get('script'):
+                    script = docs_result['script'].strip()
+                    script_source = 'docs'
+                    print(f"[ISEKAI] ✓ Google Docs에서 대본 로드: {len(script):,}자")
+            except Exception as docs_err:
+                print(f"[ISEKAI] Docs 로드 실패, 시트 대본 사용: {docs_err}")
+
+        # Docs에서 못 가져오면 시트의 대본 컬럼 사용
         if not script:
-            return {"ok": False, "error": "대본이 없습니다", "video_url": None, "cost": 0}
+            script = row_data.get('대본', '').strip()
+            if script:
+                script_source = 'sheet'
+                print(f"[ISEKAI] 시트에서 대본 로드: {len(script):,}자")
+
+        if not script:
+            return {"ok": False, "error": "대본이 없습니다 (Docs/시트 모두 비어있음)", "video_url": None, "cost": 0}
 
         if not channel_id:
             return {"ok": False, "error": "채널ID가 없습니다", "video_url": None, "cost": 0}
-
-        # 에피소드 정보
-        ep_num = row_data.get('episode_num', 1)
-        ep_title = row_data.get('title', '').strip() or '무제'
 
         # 기본 제목
         if not title:
