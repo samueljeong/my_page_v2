@@ -1,65 +1,71 @@
 """
-이세계 파이프라인 - TTS 모듈 (Chirp3 HD - API Key 방식)
+이세계 파이프라인 - TTS 모듈 (ElevenLabs + Chirp3 폴백)
 
-- Google Cloud TTS Chirp3 HD (고품질 한국어)
-- GOOGLE_API_KEY 또는 GOOGLE_CLOUD_API_KEY 환경변수 사용
-- REST API 방식 (서비스 계정 불필요)
+- ElevenLabs TTS (V2 모델) 우선 사용
+- ELEVENLABS_API_KEY 환경변수 필요
+- Google Chirp3 HD 폴백 (ELEVENLABS_API_KEY 없을 경우)
 - 씬/감정별 속도 조절 지원
 """
 
 import os
 import re
-import json
 import base64
 import subprocess
 import tempfile
 import time
 import requests
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 
 
-# TTS 설정
-DEFAULT_VOICE = "ko-KR-Chirp3-HD-Charon"  # Chirp3 HD 남성
+# ElevenLabs 설정
+DEFAULT_VOICE_ID = "aurnUodFzOtofecLd3T1"  # Jung_Narrative
+ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+ELEVENLABS_MODEL = "eleven_multilingual_v2"
+
+# Google Chirp3 HD 폴백 설정
 TTS_API_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 # 감정별 TTS 속도 설정 (0.25 ~ 4.0)
 EMOTION_SPEED = {
-    "nostalgic": 0.92,    # 회상: 느리고 감성적
-    "sad": 0.88,          # 슬픔: 천천히
-    "calm": 0.95,         # 평화: 여유롭게
-    "romantic": 0.90,     # 로맨스: 부드럽게
-    "tense": 1.05,        # 긴장: 약간 빠르게
-    "fight": 1.10,        # 전투: 빠르게
-    "epic": 1.02,         # 웅장: 약간 빠르게
-    "dramatic": 0.95,     # 극적: 느리게
-    "mysterious": 0.93,   # 신비: 느리게
-    "hopeful": 0.98,      # 희망: 보통
-    "default": 1.0,       # 기본
+    "nostalgic": 0.92,
+    "sad": 0.88,
+    "calm": 0.95,
+    "romantic": 0.90,
+    "tense": 1.05,
+    "fight": 1.10,
+    "epic": 1.02,
+    "dramatic": 0.95,
+    "mysterious": 0.93,
+    "hopeful": 0.98,
+    "default": 1.0,
 }
 
-# 씬 마커 정규식: [SCENE:씬이름:감정:BGM]
+# 감정별 ElevenLabs 설정 (stability, similarity_boost)
+EMOTION_SETTINGS = {
+    "nostalgic": {"stability": 0.40, "similarity_boost": 0.80},
+    "sad": {"stability": 0.35, "similarity_boost": 0.75},
+    "calm": {"stability": 0.55, "similarity_boost": 0.70},
+    "romantic": {"stability": 0.40, "similarity_boost": 0.80},
+    "tense": {"stability": 0.50, "similarity_boost": 0.85},
+    "fight": {"stability": 0.60, "similarity_boost": 0.90},
+    "epic": {"stability": 0.55, "similarity_boost": 0.85},
+    "dramatic": {"stability": 0.45, "similarity_boost": 0.80},
+    "mysterious": {"stability": 0.40, "similarity_boost": 0.75},
+    "hopeful": {"stability": 0.50, "similarity_boost": 0.80},
+    "default": {"stability": 0.50, "similarity_boost": 0.75},
+}
+
 SCENE_MARKER_PATTERN = re.compile(r'\[SCENE:([^:]+):([^:]+):([^\]]+)\]')
 
 
 def parse_scenes(script: str) -> List[Dict[str, Any]]:
-    """
-    대본에서 씬 마커를 파싱하여 씬 목록 반환
-
-    씬 마커 형식: [SCENE:씬이름:감정:BGM]
-    예: [SCENE:오프닝:nostalgic:nostalgic]
-
-    Returns:
-        [{"name": "오프닝", "emotion": "nostalgic", "bgm": "nostalgic", "text": "..."}]
-    """
+    """대본에서 씬 마커를 파싱하여 씬 목록 반환"""
     scenes = []
     parts = SCENE_MARKER_PATTERN.split(script)
 
-    # parts: [텍스트전, 씬이름1, 감정1, BGM1, 텍스트1, 씬이름2, ...]
     if len(parts) == 1:
-        # 씬 마커 없음 - 전체를 하나의 기본 씬으로
         return [{"name": "default", "emotion": "default", "bgm": "calm", "text": script.strip()}]
 
-    # 첫 번째 텍스트 (마커 이전)
     if parts[0].strip():
         scenes.append({
             "name": "intro",
@@ -68,7 +74,6 @@ def parse_scenes(script: str) -> List[Dict[str, Any]]:
             "text": parts[0].strip()
         })
 
-    # 나머지 파싱 (4개씩: 씬이름, 감정, BGM, 텍스트)
     i = 1
     while i + 3 <= len(parts):
         scene_name = parts[i].strip()
@@ -96,7 +101,6 @@ def split_into_sentences(text: str) -> List[str]:
 
 def get_audio_duration(audio_path: str) -> float:
     """오디오 파일의 재생 시간(초) 반환"""
-    # mutagen 사용 (ffprobe 불필요)
     try:
         from mutagen.mp3 import MP3
         audio = MP3(audio_path)
@@ -104,7 +108,6 @@ def get_audio_duration(audio_path: str) -> float:
     except Exception:
         pass
 
-    # fallback: ffprobe
     try:
         result = subprocess.run(
             ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -126,7 +129,6 @@ def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
         shutil.copy(audio_paths[0], output_path)
         return True
 
-    # 방법 1: pydub 사용 (권장)
     try:
         from pydub import AudioSegment
         combined = AudioSegment.empty()
@@ -138,7 +140,6 @@ def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
     except Exception:
         pass
 
-    # 방법 2: ffmpeg concat
     try:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             for path in audio_paths:
@@ -155,7 +156,6 @@ def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
     except Exception:
         pass
 
-    # 방법 3: 단순 바이너리 병합 (fallback)
     try:
         with open(output_path, 'wb') as outfile:
             for path in audio_paths:
@@ -182,30 +182,53 @@ def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
             f.write(f"{text}\n\n")
 
 
+def generate_elevenlabs_tts_chunk(
+    text: str,
+    voice_id: str,
+    api_key: str,
+    stability: float = 0.5,
+    similarity_boost: float = 0.75,
+) -> Dict[str, Any]:
+    """ElevenLabs TTS API로 청크 생성"""
+    url = f"{ELEVENLABS_API_URL}/{voice_id}"
+
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+
+    payload = {
+        "text": text,
+        "model_id": ELEVENLABS_MODEL,
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity_boost,
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=120)
+
+        if response.status_code == 200:
+            return {"ok": True, "audio_data": response.content}
+        else:
+            error_msg = response.text[:300] if response.text else f"HTTP {response.status_code}"
+            return {"ok": False, "error": f"ElevenLabs API 오류: {error_msg}"}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def generate_chirp3_tts_chunk(
     text: str,
     voice_name: str,
     api_key: str,
     speaking_rate: float = 1.0
 ) -> Dict[str, Any]:
-    """
-    Google Cloud TTS REST API로 Chirp3 HD 청크 생성
-
-    Args:
-        text: TTS 변환할 텍스트
-        voice_name: 음성 이름 (ko-KR-Chirp3-HD-Charon)
-        api_key: Google API Key
-        speaking_rate: 말하기 속도 (0.25 ~ 4.0, 기본 1.0)
-
-    Returns:
-        {"ok": True, "audio_data": bytes} 또는 {"ok": False, "error": "..."}
-    """
+    """Google Cloud TTS REST API로 Chirp3 HD 청크 생성 (폴백용)"""
     url = f"{TTS_API_URL}?key={api_key}"
-
-    # 언어 코드 추출 (ko-KR-Chirp3-HD-Charon → ko-KR)
     lang_code = "-".join(voice_name.split("-")[:2])
-
-    # speaking_rate 범위 제한
     speaking_rate = max(0.25, min(4.0, speaking_rate))
 
     payload = {
@@ -243,46 +266,34 @@ def generate_tts(
     episode_id: str,
     script: str,
     output_dir: str,
-    voice: str = "Charon",
+    voice: str = "Jung_Narrative",
     speed: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    대본에 대해 TTS 생성 (Chirp3 HD REST API)
-    씬 마커가 있으면 씬별로 감정에 따른 속도 조절
-
-    Args:
-        episode_id: 에피소드 ID (예: "ep001")
-        script: 대본 텍스트 (씬 마커 포함 가능)
-        output_dir: 출력 디렉토리
-        voice: 음성 (Charon, Kore, Puck, Fenrir, Aoede)
-        speed: 기본 속도 배율 (감정 속도에 곱해짐)
-
-    Returns:
-        {
-            "ok": True,
-            "audio_path": "...",
-            "srt_path": "...",
-            "duration": 900.5,
-            "timeline": [...],
-            "scene_timeline": [{"name": "...", "bgm": "...", "start": 0.0, "end": 120.0}]
-        }
+    대본에 대해 TTS 생성 (ElevenLabs 우선, Google Chirp3 폴백)
+    씬 마커가 있으면 씬별로 감정에 따른 설정 조절
     """
-    api_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GOOGLE_CLOUD_API_KEY')
-    if not api_key:
-        return {"ok": False, "error": "GOOGLE_API_KEY 환경변수가 필요합니다"}
+    elevenlabs_api_key = os.environ.get('ELEVENLABS_API_KEY')
+    google_api_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GOOGLE_CLOUD_API_KEY')
+
+    use_elevenlabs = bool(elevenlabs_api_key)
+
+    if not use_elevenlabs and not google_api_key:
+        return {"ok": False, "error": "ELEVENLABS_API_KEY 또는 GOOGLE_API_KEY 환경변수가 필요합니다"}
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # 음성 이름 생성 (Charon → ko-KR-Chirp3-HD-Charon)
-    voice_short = voice.split(":")[-1] if ":" in voice else voice
-    valid_voices = ["Kore", "Charon", "Puck", "Fenrir", "Aoede", "Orus", "Leda", "Zephyr"]
-    if voice_short not in valid_voices:
-        voice_short = "Charon"
+    if use_elevenlabs:
+        voice_id = voice if len(voice) > 15 else DEFAULT_VOICE_ID
+        print(f"[ISEKAI-TTS] ElevenLabs 사용: {voice_id}")
+    else:
+        voice_short = voice.split(":")[-1] if ":" in voice else voice
+        valid_voices = ["Kore", "Charon", "Puck", "Fenrir", "Aoede", "Orus", "Leda", "Zephyr"]
+        if voice_short not in valid_voices:
+            voice_short = "Charon"
+        voice_name = f"ko-KR-Chirp3-HD-{voice_short}"
+        print(f"[ISEKAI-TTS] Google Chirp3 폴백: {voice_name}")
 
-    voice_name = f"ko-KR-Chirp3-HD-{voice_short}"
-    print(f"[ISEKAI-TTS] 음성: {voice_name}")
-
-    # 씬 파싱
     scenes = parse_scenes(script)
     print(f"[ISEKAI-TTS] {len(scenes)}개 씬 감지")
     for scene in scenes:
@@ -303,15 +314,13 @@ def generate_tts(
             emotion = scene["emotion"]
             bgm = scene["bgm"]
 
-            # 감정별 속도 계산
             emotion_speed = EMOTION_SPEED.get(emotion, 1.0) * speed
-            print(f"[ISEKAI-TTS] 씬 '{scene['name']}' 처리 중 (속도: {emotion_speed:.2f})")
+            emotion_setting = EMOTION_SETTINGS.get(emotion, EMOTION_SETTINGS["default"])
+            print(f"[ISEKAI-TTS] 씬 '{scene['name']}' 처리 중 (감정: {emotion})")
 
-            # 문장 분할
             sentences = split_into_sentences(scene_text)
 
-            # 청크 병합 (5000바이트 ≈ 1400자)
-            MAX_CHARS = 1400
+            MAX_CHARS = 4500 if use_elevenlabs else 1400
             chunks = []
             current_chunk = ""
             current_sentences = []
@@ -329,21 +338,26 @@ def generate_tts(
             if current_chunk:
                 chunks.append((current_chunk.strip(), list(current_sentences)))
 
-            # 씬의 청크들 처리
             for chunk, chunk_sentences in chunks:
                 if not chunk:
                     continue
 
-                # TTS 생성 (재시도 포함)
                 result = None
                 for retry in range(3):
-                    result = generate_chirp3_tts_chunk(
-                        chunk, voice_name, api_key,
-                        speaking_rate=emotion_speed
-                    )
+                    if use_elevenlabs:
+                        result = generate_elevenlabs_tts_chunk(
+                            chunk, voice_id, elevenlabs_api_key,
+                            stability=emotion_setting["stability"],
+                            similarity_boost=emotion_setting["similarity_boost"]
+                        )
+                    else:
+                        result = generate_chirp3_tts_chunk(
+                            chunk, voice_name, google_api_key,
+                            speaking_rate=emotion_speed
+                        )
                     if result.get("ok"):
                         break
-                    time.sleep(1)
+                    time.sleep(1 if use_elevenlabs else 0.5)
 
                 if not result.get("ok"):
                     print(f"[ISEKAI-TTS] 청크 {chunk_index+1} 실패: {result.get('error')}")
@@ -352,7 +366,6 @@ def generate_tts(
                         return {"ok": False, "error": f"TTS 연속 실패: {result.get('error')}"}
                     continue
 
-                # MP3 저장
                 mp3_path = os.path.join(temp_dir, f"chunk_{chunk_index:04d}.mp3")
                 with open(mp3_path, 'wb') as f:
                     f.write(result["audio_data"])
@@ -375,7 +388,6 @@ def generate_tts(
 
                 chunk_index += 1
 
-            # 씬 타임라인 기록
             scene_timeline.append({
                 "name": scene["name"],
                 "emotion": emotion,
@@ -398,8 +410,8 @@ def generate_tts(
 
         total_duration = get_audio_duration(audio_output)
 
-        # 씬 타임라인 출력
-        print(f"[ISEKAI-TTS] 완료: {total_duration:.1f}초, {len(timeline)}개 자막")
+        tts_type = "ElevenLabs" if use_elevenlabs else "Google Chirp3"
+        print(f"[ISEKAI-TTS] 완료 ({tts_type}): {total_duration:.1f}초, {len(timeline)}개 자막")
         print(f"[ISEKAI-TTS] 씬 타임라인:")
         for st in scene_timeline:
             print(f"  - {st['name']}: {st['start']:.1f}s ~ {st['end']:.1f}s (BGM: {st['bgm']})")
@@ -415,4 +427,4 @@ def generate_tts(
 
 
 if __name__ == "__main__":
-    print("isekai_pipeline/tts.py - Chirp3 HD (API Key)")
+    print("isekai_pipeline/tts.py - ElevenLabs + Chirp3 폴백")
