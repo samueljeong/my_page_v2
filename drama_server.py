@@ -7041,11 +7041,35 @@ def upload_youtube():
                 print(f"[YOUTUBE-UPLOAD] 업로드 완료! Video ID: {video_id}")
                 message = "YouTube 업로드가 완료되었습니다!"
 
+            # 자동 댓글 작성
+            auto_comment = data.get('auto_comment')
+            comment_id = None
+            if auto_comment:
+                try:
+                    comment_response = youtube.commentThreads().insert(
+                        part='snippet',
+                        body={
+                            'snippet': {
+                                'videoId': video_id,
+                                'topLevelComment': {
+                                    'snippet': {
+                                        'textOriginal': auto_comment
+                                    }
+                                }
+                            }
+                        }
+                    ).execute()
+                    comment_id = comment_response['id']
+                    print(f"[YOUTUBE-UPLOAD] 자동 댓글 작성 완료: {comment_id}")
+                except Exception as ce:
+                    print(f"[YOUTUBE-UPLOAD] 자동 댓글 실패: {ce}")
+
             return jsonify({
                 "success": True,
                 "video_id": video_id,
                 "video_url": video_url,
                 "publish_at": publish_at,
+                "comment_id": comment_id,
                 "message": message
             })
 
@@ -7125,6 +7149,144 @@ def upload_youtube_thumbnail():
 
     except Exception as e:
         print(f"[YOUTUBE-THUMBNAIL][ERROR] {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/drama/update-youtube-video', methods=['POST'])
+def update_youtube_video():
+    """YouTube 영상 정보 업데이트 (공개 상태 변경 등)"""
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+
+        data = request.get_json()
+        video_id = data.get('video_id')
+        channel_id = data.get('channel_id')
+        privacy_status = data.get('privacy_status')  # public, private, unlisted
+        title = data.get('title')
+        description = data.get('description')
+
+        if not video_id:
+            return jsonify({"success": False, "error": "video_id가 필요합니다."})
+
+        # 토큰 로드
+        token_data = load_youtube_token_from_db(channel_id) if channel_id else load_youtube_token_from_db()
+        if not token_data:
+            return jsonify({"success": False, "error": "YouTube 인증이 필요합니다."})
+
+        credentials = Credentials.from_authorized_user_info(token_data)
+
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            token_data['token'] = credentials.token
+            save_youtube_token_to_db(token_data, channel_id=channel_id)
+
+        youtube = build('youtube', 'v3', credentials=credentials)
+
+        # 현재 영상 정보 가져오기
+        video_response = youtube.videos().list(
+            part='snippet,status',
+            id=video_id
+        ).execute()
+
+        if not video_response.get('items'):
+            return jsonify({"success": False, "error": "영상을 찾을 수 없습니다."})
+
+        video = video_response['items'][0]
+        snippet = video['snippet']
+        status = video['status']
+
+        # 업데이트할 항목 적용
+        if privacy_status:
+            status['privacyStatus'] = privacy_status
+        if title:
+            snippet['title'] = title
+        if description:
+            snippet['description'] = description
+
+        # 업데이트 실행
+        update_response = youtube.videos().update(
+            part='snippet,status',
+            body={
+                'id': video_id,
+                'snippet': snippet,
+                'status': status
+            }
+        ).execute()
+
+        print(f"[YOUTUBE-UPDATE] 영상 업데이트 완료: {video_id}, privacy: {privacy_status}")
+
+        return jsonify({
+            "success": True,
+            "message": f"영상이 {privacy_status}로 변경되었습니다.",
+            "video_id": video_id
+        })
+
+    except Exception as e:
+        print(f"[YOUTUBE-UPDATE][ERROR] {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/drama/youtube-comment', methods=['POST'])
+def youtube_comment():
+    """YouTube 영상에 댓글 작성"""
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+
+        data = request.get_json()
+        video_id = data.get('video_id')
+        comment_text = data.get('comment')
+        channel_id = data.get('channel_id')
+
+        if not video_id:
+            return jsonify({"success": False, "error": "video_id가 필요합니다."})
+        if not comment_text:
+            return jsonify({"success": False, "error": "comment가 필요합니다."})
+
+        # 토큰 로드
+        token_data = load_youtube_token_from_db(channel_id) if channel_id else load_youtube_token_from_db()
+        if not token_data:
+            return jsonify({"success": False, "error": "YouTube 인증이 필요합니다."})
+
+        credentials = Credentials.from_authorized_user_info(token_data)
+
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            token_data['token'] = credentials.token
+            save_youtube_token_to_db(token_data, channel_id=channel_id)
+
+        youtube = build('youtube', 'v3', credentials=credentials)
+
+        # 댓글 작성
+        response = youtube.commentThreads().insert(
+            part='snippet',
+            body={
+                'snippet': {
+                    'videoId': video_id,
+                    'topLevelComment': {
+                        'snippet': {
+                            'textOriginal': comment_text
+                        }
+                    }
+                }
+            }
+        ).execute()
+
+        comment_id = response['id']
+        print(f"[YOUTUBE-COMMENT] 댓글 작성 완료: {video_id}, comment_id: {comment_id}")
+
+        return jsonify({
+            "success": True,
+            "message": "댓글 작성 완료",
+            "video_id": video_id,
+            "comment_id": comment_id
+        })
+
+    except Exception as e:
+        print(f"[YOUTUBE-COMMENT][ERROR] {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 
