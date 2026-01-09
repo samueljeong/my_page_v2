@@ -3,7 +3,7 @@
 19화 발해 영상 생성 스크립트
 
 Mac에서 직접 실행:
-  cd ~/Desktop/MY_PAGE/project/server/my_page_v2
+  cd ~/Desktop/MY_PAGE/project/server/youtube-automation
   source venv/bin/activate
   python scripts/history_pipeline/generate_ep019.py
 """

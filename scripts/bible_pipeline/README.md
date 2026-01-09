@@ -203,7 +203,7 @@ SUBTITLE_STYLE = {
 ## CLI 테스트
 
 ```bash
-cd /home/user/my_page_v2
+cd /home/user/youtube-automation
 python -m scripts.bible_pipeline.run
 ```
 

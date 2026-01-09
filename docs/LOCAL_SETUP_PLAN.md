@@ -99,7 +99,7 @@ Node.js:
 
 ```bash
 # 프로젝트 폴더로 이동
-cd ~/my_page_v2  # 또는 프로젝트 경로
+cd ~/youtube-automation  # 또는 프로젝트 경로
 
 # .env 파일 생성
 cat > .env << 'EOF'
@@ -129,7 +129,7 @@ echo "✅ .env 파일 생성 완료"
 
 ```bash
 # .zshrc에 자동 로드 추가 (Mac 기본 셸)
-echo 'export $(cat ~/my_page_v2/.env | xargs)' >> ~/.zshrc
+echo 'export $(cat ~/youtube-automation/.env | xargs)' >> ~/.zshrc
 source ~/.zshrc
 
 # 확인
@@ -152,8 +152,8 @@ echo $GOOGLE_API_KEY | head -c 10
 ```bash
 # 1. 프로젝트 클론 (이미 있으면 스킵)
 cd ~
-git clone https://github.com/samueljeong/my_page_v2.git
-cd my_page_v2
+git clone https://github.com/samueljeong/youtube-automation.git
+cd youtube-automation
 
 # 2. 가상환경 생성
 python3 -m venv venv
@@ -185,7 +185,7 @@ python -c "import flask; import openai; print('✅ 패키지 설치 완료')"
 
 ```bash
 # 터미널 1: 서버 시작
-cd ~/my_page_v2
+cd ~/youtube-automation
 source venv/bin/activate
 python drama_server.py
 
@@ -227,7 +227,7 @@ MCP(Model Context Protocol)를 사용하면 Claude Code가 당신 PC의 터미�
 npm install -g @anthropic-ai/claude-code-mcp
 
 # 2. MCP 서버 실행 (프로젝트 폴더에서)
-cd ~/my_page_v2
+cd ~/youtube-automation
 claude-code-mcp
 
 # 출력 예시:
@@ -286,7 +286,7 @@ cat > ~/Library/LaunchAgents/com.drama.server.plist << 'EOF'
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>cd ~/my_page_v2 && source venv/bin/activate && python drama_server.py</string>
+        <string>cd ~/youtube-automation && source venv/bin/activate && python drama_server.py</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

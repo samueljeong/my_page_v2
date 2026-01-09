@@ -133,7 +133,7 @@ def _generate_image_via_image_module(prompt: str, ratio: str = "16:9") -> Dict[s
             image_url = result["image_url"]
             if image_url.startswith("/"):
                 # 로컬 파일 경로
-                local_path = f"/home/user/my_page_v2{image_url}"
+                local_path = f"/home/user/youtube-automation{image_url}"
                 if os.path.exists(local_path):
                     with open(local_path, "rb") as f:
                         image_data = f.read()

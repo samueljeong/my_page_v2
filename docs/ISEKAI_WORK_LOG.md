@@ -20,7 +20,7 @@
 ### 23:00 - API 키 이슈 해결
 - 기존 GOOGLE_API_KEY 유출로 차단됨
 - 새 API 키 발급 및 .env 업데이트
-- .env 위치: `/Users/samueljeong/Desktop/my_page_v2/.env`
+- .env 위치: `/Users/samueljeong/Desktop/youtube-automation/.env`
 
 ### 23:15 - 썸네일 생성 테스트
 - Imagen 4.0 API 사용 (imagen-4.0-generate-001)
@@ -116,7 +116,7 @@
 
 | 파일 | 경로 |
 |------|------|
-| .env | `/Users/samueljeong/Desktop/my_page_v2/.env` |
+| .env | `/Users/samueljeong/Desktop/youtube-automation/.env` |
 | 에이전트 프롬프트 | `scripts/isekai_pipeline/docs/agent_prompts.md` |
 | EP001 대본 | `outputs/isekai/EP001/EP001_script.txt` |
 | EP001 이미지 프롬프트 | `outputs/isekai/EP001/EP001_image_prompts.json` |
