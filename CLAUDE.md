@@ -160,13 +160,22 @@ blueprints/              # Flask Blueprint 모듈
 ├── isekai.py            # Isekai Pipeline
 ├── bible.py             # Bible Pipeline
 ├── history.py           # History Pipeline
+├── sermon.py            # Sermon API
 └── tts.py               # TTS API
 scripts/
 ├── common/              # 공통 모듈 (에이전트 기본 클래스, SRT 유틸리티)
+├── bible_pipeline/      # 성경통독 파이프라인
 ├── history_pipeline/    # 한국사 파이프라인
 ├── isekai_pipeline/     # 이세계 파이프라인 (혈영 이세계편)
-├── bible_pipeline/      # 성경통독 파이프라인
+├── shorts_pipeline/     # 숏츠 파이프라인
+├── news_pipeline/       # 뉴스 파이프라인
+├── wuxia_pipeline/      # 무협 파이프라인
 └── migrations/          # DB 마이그레이션 스크립트
+tts/                     # TTS 관련 모듈
+sermon_modules/          # Sermon API 모듈
+image/                   # 이미지 생성 모듈
+lang/                    # 언어별 설정 (ko, ja, en)
+prompts/                 # GPT 프롬프트 템플릿
 ```
 
 ---

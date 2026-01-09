@@ -14,10 +14,6 @@ from datetime import datetime as dt
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, send_from_directory
 from openai import OpenAI
 
-# Assistant Blueprint 등록
-from assistant_server import assistant_bp
-# TubeLens Blueprint 등록
-from tubelens_server import tubelens_bp
 # Routes Blueprint 등록
 from routes import register_blueprints
 
@@ -100,10 +96,6 @@ from scripts.common.tts import (
 
 app = Flask(__name__)
 
-# Assistant Blueprint 등록
-app.register_blueprint(assistant_bp)
-# TubeLens Blueprint 등록
-app.register_blueprint(tubelens_bp)
 # Sermon API Blueprint 등록
 app.register_blueprint(api_sermon_bp)
 # Routes Blueprint 등록 (products, drama, youtube 등)
