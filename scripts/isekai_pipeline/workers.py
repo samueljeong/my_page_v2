@@ -294,6 +294,7 @@ def render_video(
     srt_path: str = None,
     bgm_mood: str = "calm",
     bgm_volume: float = 0.10,
+    scene_timeline: List[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     영상 렌더링 (FFmpeg) + BGM 믹싱
@@ -303,8 +304,10 @@ def render_video(
         audio_path: TTS 오디오 파일 경로
         image_path: 배경 이미지 경로
         srt_path: 자막 파일 경로 (선택)
-        bgm_mood: BGM 분위기 (calm, tense, epic, dramatic, etc.)
+        bgm_mood: 단일 BGM 분위기 (scene_timeline 없을 때 사용)
         bgm_volume: BGM 볼륨 (0.0~1.0, 기본 0.10 = 10%)
+        scene_timeline: 씬별 타임라인 (TTS generate_tts에서 반환)
+            [{"name": "...", "bgm": "nostalgic", "start": 0.0, "end": 120.0}]
 
     Returns:
         {
@@ -331,7 +334,18 @@ def render_video(
             return result
 
         # 2단계: BGM 믹싱
-        if bgm_mood:
+        if scene_timeline and len(scene_timeline) > 1:
+            # 씬별 BGM 믹싱
+            bgm_result = _mix_scene_bgm(video_path, scene_timeline, bgm_volume)
+            if bgm_result.get("ok"):
+                print(f"[ISEKAI-VIDEO] 씬별 BGM 믹싱 완료: {len(scene_timeline)}개 씬")
+            else:
+                print(f"[ISEKAI-VIDEO] 씬별 BGM 실패: {bgm_result.get('error')}, 단일 BGM으로 폴백")
+                # 폴백: 단일 BGM
+                if bgm_mood:
+                    _mix_bgm(video_path, bgm_mood, bgm_volume)
+        elif bgm_mood:
+            # 단일 BGM 믹싱
             bgm_result = _mix_bgm(video_path, bgm_mood, bgm_volume)
             if bgm_result.get("ok"):
                 print(f"[ISEKAI-VIDEO] BGM 믹싱 완료: {bgm_mood}")
@@ -384,6 +398,116 @@ def _mix_bgm(video_path: str, bgm_mood: str, bgm_volume: float = 0.10) -> Dict[s
 
     except ImportError as e:
         return {"ok": False, "error": f"drama_server import 실패: {e}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _mix_scene_bgm(
+    video_path: str,
+    scene_timeline: List[Dict[str, Any]],
+    bgm_volume: float = 0.10
+) -> Dict[str, Any]:
+    """
+    씬별로 다른 BGM을 믹싱
+
+    Args:
+        video_path: 영상 파일 경로
+        scene_timeline: 씬 타임라인
+            [{"name": "...", "bgm": "nostalgic", "start": 0.0, "end": 120.0}]
+        bgm_volume: BGM 볼륨
+
+    Returns:
+        {"ok": True} 또는 {"ok": False, "error": "..."}
+    """
+    try:
+        import subprocess
+        import tempfile
+        from drama_server import _get_bgm_file
+
+        # 씬별 BGM 파일 수집
+        scene_bgms = []
+        for scene in scene_timeline:
+            bgm_mood = scene.get("bgm", "calm")
+            bgm_file = _get_bgm_file(bgm_mood)
+            if not bgm_file:
+                # 폴백: calm
+                bgm_file = _get_bgm_file("calm")
+            scene_bgms.append({
+                "file": bgm_file,
+                "start": scene["start"],
+                "end": scene["end"],
+                "mood": bgm_mood,
+            })
+
+        if not scene_bgms:
+            return {"ok": False, "error": "BGM 파일 없음"}
+
+        # FFmpeg 복잡 필터로 씬별 BGM 믹싱
+        # 각 BGM을 해당 구간에만 재생하도록 설정
+        filter_parts = []
+        input_args = ["-i", video_path]
+
+        for i, bgm in enumerate(scene_bgms):
+            input_args.extend(["-i", bgm["file"]])
+            start = bgm["start"]
+            duration = bgm["end"] - bgm["start"]
+
+            # BGM을 해당 구간에 맞게 자르고 페이드 적용
+            # 페이드 인 2초, 페이드 아웃 3초
+            fade_in = min(2.0, duration * 0.1)
+            fade_out = min(3.0, duration * 0.1)
+            fade_out_start = max(0, duration - fade_out)
+
+            filter_parts.append(
+                f"[{i+1}:a]atrim=0:{duration},asetpts=PTS-STARTPTS,"
+                f"afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_out_start}:d={fade_out},"
+                f"volume={bgm_volume},adelay={int(start*1000)}|{int(start*1000)}[bgm{i}]"
+            )
+
+        # 모든 BGM 믹스
+        bgm_mix_inputs = "".join(f"[bgm{i}]" for i in range(len(scene_bgms)))
+        filter_parts.append(
+            f"{bgm_mix_inputs}amix=inputs={len(scene_bgms)}:duration=longest[bgm_mixed]"
+        )
+
+        # 원본 오디오와 BGM 믹스
+        filter_parts.append(
+            "[0:a][bgm_mixed]amix=inputs=2:duration=first:weights=1 0.5[aout]"
+        )
+
+        filter_complex = ";".join(filter_parts)
+
+        # 임시 출력 파일
+        output_path = video_path.replace(".mp4", "_scene_bgm.mp4")
+
+        cmd = [
+            "ffmpeg", "-y",
+            *input_args,
+            "-filter_complex", filter_complex,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            output_path
+        ]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=600
+        )
+
+        if result.returncode == 0 and os.path.exists(output_path):
+            os.replace(output_path, video_path)
+            print(f"[ISEKAI-VIDEO] 씬별 BGM 믹싱 완료")
+            for bgm in scene_bgms:
+                print(f"  - {bgm['start']:.1f}s~{bgm['end']:.1f}s: {bgm['mood']}")
+            return {"ok": True}
+        else:
+            error_msg = result.stderr[:500] if result.stderr else "unknown"
+            return {"ok": False, "error": f"FFmpeg 실패: {error_msg}"}
+
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
