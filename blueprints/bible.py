@@ -14,6 +14,12 @@ import tempfile
 from flask import Blueprint, request, jsonify
 from datetime import datetime as dt, timezone, timedelta
 
+# Telegram 알림
+try:
+    from scripts.common.notify import send_error, send_success, send_warning
+except ImportError:
+    send_error = send_success = send_warning = None
+
 # Blueprint 생성
 bible_bp = Blueprint('bible', __name__)
 
@@ -719,10 +725,16 @@ def run_bible_episode_pipeline(
         if not upload_result.get("ok"):
             error_msg = f"YouTube 업로드 실패: {upload_result.get('error')}"
             update_episode_status(service, sheet_id, row_idx, "실패", error_message=error_msg)
+            # 업로드 실패 알림
+            if send_error:
+                send_error(error_msg, episode=f"Day{day_number}", pipeline="bible")
             return {"ok": False, "error": error_msg}
 
         video_url = upload_result.get("videoUrl", "")
         print(f"[BIBLE] YouTube 업로드 완료: {video_url}", flush=True)
+        # 업로드 성공 알림
+        if send_success:
+            send_success(f"YouTube 업로드 완료\n{title}", episode=f"Day{day_number}", pipeline="bible", url=video_url)
 
         # ========== 6. 시트 업데이트 ==========
         print(f"[BIBLE] 6. 시트 업데이트...", flush=True)

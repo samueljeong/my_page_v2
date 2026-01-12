@@ -28,6 +28,12 @@ import requests
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+# Telegram 알림
+try:
+    from scripts.common.notify import send_error, send_success, send_warning
+except ImportError:
+    send_error = send_success = send_warning = None
+
 from .config import (
     OUTPUT_BASE,
     TTS_CONFIG,
@@ -744,8 +750,14 @@ def execute_episode(
         if yt_result.get("ok"):
             result["youtube_url"] = yt_result.get("video_url")
             print(f"    ✓ 업로드 완료: {result['youtube_url']}")
+            # 업로드 성공 알림
+            if send_success:
+                send_success(f"YouTube 업로드 완료\n{title}", episode=f"ep{episode:03d}", pipeline="isekai", url=result["youtube_url"])
         else:
             print(f"    ✗ 업로드 실패: {yt_result.get('error')}")
+            # 업로드 실패 알림
+            if send_error:
+                send_error(f"YouTube 업로드 실패: {yt_result.get('error')}", episode=f"ep{episode:03d}", pipeline="isekai")
 
     result["ok"] = True
     print(f"\n{'='*60}")

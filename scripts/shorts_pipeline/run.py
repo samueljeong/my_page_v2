@@ -33,6 +33,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 프로젝트 루트 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+# Telegram 알림
+try:
+    from scripts.common.notify import send_error, send_success, send_warning
+except ImportError:
+    send_error = send_success = send_warning = None
+
 from .config import (
     SHEET_NAME,
     estimate_cost,
@@ -2418,8 +2424,14 @@ def run_viral_pipeline(
 
             if youtube_result.get("ok"):
                 print(f"[SHORTS] YouTube 업로드 성공: {youtube_result.get('video_url')}")
+                # 업로드 성공 알림
+                if send_success:
+                    send_success(f"YouTube 업로드 완료\n{yt_title}", episode=person, pipeline="shorts", url=youtube_result.get('video_url'))
             else:
                 print(f"[SHORTS] YouTube 업로드 실패: {youtube_result.get('error')}")
+                # 업로드 실패 알림
+                if send_error:
+                    send_error(f"YouTube 업로드 실패: {youtube_result.get('error')}", episode=person, pipeline="shorts")
 
         # ============================================================
         # 완료
