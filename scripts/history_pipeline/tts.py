@@ -1,10 +1,9 @@
 """
-한국사 파이프라인 - TTS 모듈 (Gemini + ElevenLabs 폴백)
+한국사 파이프라인 - TTS 모듈 (ElevenLabs 전용)
 
-- 1순위: Gemini TTS (GOOGLE_API_KEY)
-- 2순위: ElevenLabs TTS (ELEVENLABS_API_KEY)
-- 문장 단위 자막 생성
-- 독립 실행 가능
+- ElevenLabs TTS만 사용 (alignment 데이터로 정확한 자막 싱크)
+- Gemini 폴백 없음 - 실패 시 에러 반환
+- ELEVENLABS_API_KEY 필수
 """
 
 import os
@@ -309,6 +308,86 @@ def extract_sentence_timing_from_alignment(
     return timeline
 
 
+def verify_subtitle_sync(timeline: List[Tuple[float, float, str]], total_duration: float) -> Dict[str, Any]:
+    """
+    자막 싱크 검증 (초반/중반/끝 3부분 확인)
+
+    Args:
+        timeline: [(start, end, text), ...] 타임라인
+        total_duration: 전체 오디오 길이 (초)
+
+    Returns:
+        {"ok": True/False, "issues": [...], "samples": {...}}
+    """
+    if not timeline:
+        return {"ok": False, "issues": ["타임라인이 비어있음"], "samples": {}}
+
+    issues = []
+    samples = {"beginning": [], "middle": [], "end": []}
+
+    # 섹션 경계 정의
+    beginning_end = min(30.0, total_duration * 0.1)  # 0-30초 또는 전체의 10%
+    middle_start = total_duration * 0.45
+    middle_end = total_duration * 0.55
+    end_start = max(total_duration - 30.0, total_duration * 0.9)  # 마지막 30초 또는 90% 이후
+
+    prev_end = 0.0
+    all_zeros = True
+
+    for i, (start, end, text) in enumerate(timeline):
+        # 전체가 0초인지 확인
+        if start > 0 or end > 0:
+            all_zeros = False
+
+        # 시간 역행 확인
+        if start < prev_end - 0.1:  # 0.1초 허용 오차
+            issues.append(f"자막 {i+1}: 시간 역행 ({prev_end:.1f}초 → {start:.1f}초)")
+
+        # end < start 확인
+        if end < start:
+            issues.append(f"자막 {i+1}: 종료 시간이 시작보다 앞섬 ({start:.1f} > {end:.1f})")
+
+        # 샘플 수집
+        short_text = text[:30] + "..." if len(text) > 30 else text
+        sample_entry = {"idx": i+1, "start": round(start, 2), "end": round(end, 2), "text": short_text}
+
+        if start <= beginning_end:
+            samples["beginning"].append(sample_entry)
+        elif middle_start <= start <= middle_end:
+            samples["middle"].append(sample_entry)
+        elif start >= end_start:
+            samples["end"].append(sample_entry)
+
+        prev_end = end
+
+    # 전체 0초 문제
+    if all_zeros:
+        issues.append("모든 자막 시간이 0초 (alignment 데이터 미사용)")
+
+    # 마지막 자막이 영상 길이를 크게 벗어나는지
+    last_end = timeline[-1][1]
+    if last_end > total_duration * 1.1:
+        issues.append(f"마지막 자막 종료({last_end:.1f}초)가 영상 길이({total_duration:.1f}초)를 초과")
+    elif last_end < total_duration * 0.8:
+        issues.append(f"마지막 자막 종료({last_end:.1f}초)가 영상 길이({total_duration:.1f}초)보다 너무 짧음")
+
+    # 샘플 개수 제한 (각 섹션당 3개)
+    for key in samples:
+        samples[key] = samples[key][:3]
+
+    return {
+        "ok": len(issues) == 0,
+        "issues": issues,
+        "samples": samples,
+        "stats": {
+            "total_subtitles": len(timeline),
+            "first_start": round(timeline[0][0], 2),
+            "last_end": round(timeline[-1][1], 2),
+            "total_duration": round(total_duration, 2)
+        }
+    }
+
+
 def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
     """타임라인으로 SRT 파일 생성"""
     def format_time(seconds: float) -> str:
@@ -385,40 +464,29 @@ def generate_tts(
     speed: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    대본에 대해 TTS 생성 (Gemini 우선, ElevenLabs 폴백)
+    대본에 대해 TTS 생성 (ElevenLabs 전용)
 
     Args:
         episode_id: 에피소드 ID (예: "ep019")
         script: 대본 텍스트
         output_dir: 출력 디렉토리
-        voice: 음성 이름 (gemini:Charon 또는 ElevenLabs ID)
-        speed: 속도 (현재 미사용)
+        voice: ElevenLabs 음성 ID (없으면 기본값 사용)
+        speed: 속도 (0.7 ~ 1.2)
 
     Returns:
         {"ok": True, "audio_path": "...", "srt_path": "...", "duration": 900.5}
+        또는 {"ok": False, "error": "..."}
     """
+    # ElevenLabs API 키 필수
+    elevenlabs_key = os.environ.get('ELEVENLABS_API_KEY')
+    if not elevenlabs_key:
+        return {"ok": False, "error": "ELEVENLABS_API_KEY 환경변수가 필요합니다. Gemini 폴백 없음."}
+
     os.makedirs(output_dir, exist_ok=True)
 
-    # TTS 엔진 선택
-    google_api_key = os.environ.get('GOOGLE_API_KEY')
-    elevenlabs_key = os.environ.get('ELEVENLABS_API_KEY')
-
-    use_gemini = bool(google_api_key)
-
-    # gemini: 프리픽스가 있으면 Gemini 사용
-    gemini_voice = "Charon"  # 기본값
-    if voice and voice.startswith("gemini:"):
-        use_gemini = True
-        gemini_voice = voice.split(":")[1] if ":" in voice else "Charon"
-    elif voice and voice.startswith("chirp3:"):
-        use_gemini = True
-        gemini_voice = voice.split(":")[1] if ":" in voice else "Charon"
-
-    if use_gemini:
-        print(f"[HISTORY-TTS] 음성: Gemini - {gemini_voice}")
-    else:
-        voice_id = voice if voice and len(voice) > 15 else DEFAULT_VOICE_ID
-        print(f"[HISTORY-TTS] 음성: ElevenLabs - {voice_id}")
+    # 음성 ID 설정 (ElevenLabs만 사용)
+    voice_id = voice if voice and len(voice) > 15 else DEFAULT_VOICE_ID
+    print(f"[HISTORY-TTS] 음성: ElevenLabs - {voice_id}")
 
     # 문장 분할
     sentences = split_into_sentences(script)
@@ -455,21 +523,22 @@ def generate_tts(
             if not chunk:
                 continue
 
-            # TTS 생성 (Gemini 또는 ElevenLabs)
+            # TTS 생성 (ElevenLabs 전용)
             result = None
             for retry in range(3):
-                if use_gemini:
-                    result = generate_gemini_tts_chunk(chunk, gemini_voice, google_api_key)
-                else:
-                    result = generate_elevenlabs_tts_chunk(chunk, voice_id, elevenlabs_key, speed=speed)
+                result = generate_elevenlabs_tts_chunk(chunk, voice_id, elevenlabs_key, speed=speed)
 
                 if result.get("ok"):
                     break
                 error_msg = result.get('error', '')
+
+                # quota 초과 시 즉시 실패 (폴백 없음)
+                if 'quota' in error_msg.lower() or 'quota_exceeded' in error_msg:
+                    return {"ok": False, "error": f"ElevenLabs 크레딧 초과. 크레딧 리셋 후 재시도하세요. ({error_msg})"}
+
                 if 'Rate limit' in error_msg or '429' in error_msg:
-                    wait_time = 45 if use_gemini else 2
-                    print(f"[HISTORY-TTS] 청크 {i+1} Rate limit, {wait_time}초 대기 ({retry+1}/3)...")
-                    time.sleep(wait_time)
+                    print(f"[HISTORY-TTS] 청크 {i+1} Rate limit, 2초 대기 ({retry+1}/3)...")
+                    time.sleep(2)
                 elif 'timeout' in error_msg.lower() or 'timed out' in error_msg.lower():
                     print(f"[HISTORY-TTS] 청크 {i+1} 타임아웃, 재시도 {retry+1}/3...")
                     time.sleep(2)
@@ -483,17 +552,15 @@ def generate_tts(
                     return {"ok": False, "error": f"TTS 생성 연속 실패: {result.get('error')}"}
                 continue
 
-            # 오디오 파일 저장 (Gemini=WAV, ElevenLabs=MP3)
-            audio_format = result.get("format", "mp3")
-            audio_ext = "wav" if audio_format == "wav" else "mp3"
-            audio_path = os.path.join(temp_dir, f"chunk_{i:04d}.{audio_ext}")
+            # 오디오 파일 저장 (ElevenLabs = MP3)
+            audio_path = os.path.join(temp_dir, f"chunk_{i:04d}.mp3")
 
             with open(audio_path, 'wb') as f:
                 f.write(result["audio_data"])
 
             # 형식 확인 (첫 청크만)
             if i == 0:
-                print(f"[HISTORY-TTS] 오디오 형식: {audio_ext.upper()}, 크기: {len(result['audio_data'])} bytes")
+                print(f"[HISTORY-TTS] 오디오 형식: MP3, 크기: {len(result['audio_data'])} bytes")
 
             # 길이 확인
             duration = get_audio_duration(audio_path)
@@ -502,7 +569,7 @@ def generate_tts(
 
                 # ElevenLabs alignment 데이터 사용 (정확한 타이밍)
                 alignment = result.get("alignment")
-                if alignment and not use_gemini:
+                if alignment:
                     chunk_timeline = extract_sentence_timing_from_alignment(
                         chunk, chunk_sentences, alignment, current_time
                     )
@@ -521,7 +588,8 @@ def generate_tts(
                             timeline.append((chunk_start, chunk_start + sentence_duration, sentence))
                             chunk_start += sentence_duration
                 else:
-                    # Gemini 또는 alignment 없음: 글자 수 비례 계산 (폴백)
+                    # alignment 없음 (드문 케이스): 글자 수 비례 계산
+                    print(f"[HISTORY-TTS] 청크 {i+1} alignment 없음, 비례 계산 사용")
                     total_chars = sum(len(s) for s in chunk_sentences)
                     chunk_start = current_time
                     for sentence in chunk_sentences:
@@ -554,6 +622,21 @@ def generate_tts(
         total_duration = get_audio_duration(audio_output)
         print(f"[HISTORY-TTS] 완료: {total_duration:.1f}초, {len(timeline)}개 자막")
 
+        # 자막 싱크 검증 (초반/중반/끝 확인)
+        sync_check = verify_subtitle_sync(timeline, total_duration)
+        if sync_check["ok"]:
+            print(f"[HISTORY-TTS] 자막 싱크 검증 통과")
+        else:
+            print(f"[HISTORY-TTS] ⚠️ 자막 싱크 문제 발견:")
+            for issue in sync_check["issues"]:
+                print(f"    - {issue}")
+
+        # 샘플 출력 (첫 실행 시 확인용)
+        if sync_check["samples"]["beginning"]:
+            print(f"[HISTORY-TTS] 초반 샘플: {sync_check['samples']['beginning'][0]}")
+        if sync_check["samples"]["end"]:
+            print(f"[HISTORY-TTS] 끝부분 샘플: {sync_check['samples']['end'][-1]}")
+
         return {
             "ok": True,
             "audio_path": audio_output,
@@ -561,6 +644,7 @@ def generate_tts(
             "duration": total_duration,
             "timeline": timeline,
             "provider": "elevenlabs",
+            "sync_check": sync_check,
         }
 
 
