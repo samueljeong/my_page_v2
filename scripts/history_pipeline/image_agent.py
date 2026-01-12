@@ -418,7 +418,7 @@ def get_figure_visual(name: str) -> Optional[Dict[str, Any]]:
 
 def calculate_image_count(script: str) -> int:
     """대본 길이 기반 이미지 개수 계산"""
-    chars_per_minute = 910  # 한국어 TTS 기준
+    chars_per_minute = 600  # 한국어 다큐멘터리 내레이션 기준 (느린 속도)
     length = len(script)
     estimated_minutes = length / chars_per_minute
 
@@ -682,12 +682,71 @@ def _get_image_type_sequence(count: int) -> List[str]:
 
 
 # =============================================================================
-# 시간 기반 10개 이미지 생성 (0-5분: 1분 간격, 5분+: 2-3분 간격)
+# 시간 기반 이미지 생성 (2026년 새 규칙)
 # =============================================================================
+# 이미지 노출 간격 규칙:
+# - 0초~1분: 10초마다 (초반 시청자 이탈 방지)
+# - 1분~5분: 30초마다
+# - 5분~10분: 40초마다
+# - 10분~끝: 60초마다 (1분)
+#
+# 20분 영상 기준: 약 31~32장
 
-# 10개 이미지 타임라인 (분 단위)
-# 0-5분: 0, 1, 2, 3, 4분 (5개)
-# 5분+: 5, 7, 9, 11, 13분 (5개) - 약 2분 간격
+
+def calculate_image_timestamps(video_duration_seconds: int) -> list:
+    """
+    영상 길이에 따른 이미지 타임스탬프 계산 (초 단위)
+
+    규칙:
+    - 0초~60초: 10초마다
+    - 60초~300초 (1~5분): 30초마다
+    - 300초~600초 (5~10분): 40초마다
+    - 600초~끝 (10분~): 60초마다
+
+    Args:
+        video_duration_seconds: 영상 길이 (초)
+
+    Returns:
+        이미지가 표시될 타임스탬프 리스트 (초 단위)
+    """
+    timestamps = []
+
+    # 구간 1: 0초~60초, 10초 간격
+    t = 0
+    while t < min(60, video_duration_seconds):
+        timestamps.append(t)
+        t += 10
+
+    # 구간 2: 60초~300초, 30초 간격
+    if video_duration_seconds > 60:
+        t = 60
+        while t < min(300, video_duration_seconds):
+            timestamps.append(t)
+            t += 30
+
+    # 구간 3: 300초~600초, 40초 간격
+    if video_duration_seconds > 300:
+        t = 300
+        while t < min(600, video_duration_seconds):
+            timestamps.append(t)
+            t += 40
+
+    # 구간 4: 600초~끝, 60초 간격
+    if video_duration_seconds > 600:
+        t = 600
+        while t < video_duration_seconds:
+            timestamps.append(t)
+            t += 60
+
+    return timestamps
+
+
+def calculate_image_count_by_duration(video_duration_seconds: int) -> int:
+    """영상 길이에 따른 총 이미지 개수 반환"""
+    return len(calculate_image_timestamps(video_duration_seconds))
+
+
+# 하위 호환용 (deprecated)
 IMAGE_TIMESTAMPS_MINUTES = [0, 1, 2, 3, 4, 5, 7, 9, 11, 13]
 
 
