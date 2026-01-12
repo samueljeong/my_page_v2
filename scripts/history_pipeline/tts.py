@@ -1,10 +1,10 @@
 """
-한국사 파이프라인 - TTS 모듈 (ElevenLabs)
+한국사 파이프라인 - TTS 모듈 (Gemini + ElevenLabs 폴백)
 
-- ElevenLabs TTS (multilingual_v2 모델)
+- 1순위: Gemini TTS (GOOGLE_API_KEY)
+- 2순위: ElevenLabs TTS (ELEVENLABS_API_KEY)
 - 문장 단위 자막 생성
 - 독립 실행 가능
-- ELEVENLABS_API_KEY 필요
 """
 
 import os
@@ -119,6 +119,72 @@ def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
         return False
 
 
+def generate_gemini_tts_chunk(
+    text: str,
+    voice_name: str = "Charon",
+    api_key: str = None
+) -> Dict[str, Any]:
+    """Gemini TTS API로 청크 생성"""
+    if not api_key:
+        api_key = os.environ.get('GOOGLE_API_KEY', '')
+    if not api_key:
+        return {"ok": False, "error": "GOOGLE_API_KEY 없음"}
+
+    valid_voices = ["Kore", "Charon", "Puck", "Fenrir", "Aoede"]
+    if voice_name not in valid_voices:
+        voice_name = "Charon"
+
+    model = "gemini-2.5-flash-preview-tts"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": voice_name
+                    }
+                }
+            }
+        }
+    }
+
+    try:
+        import base64
+        response = requests.post(url, json=payload, timeout=120)
+
+        if response.status_code == 429:
+            return {"ok": False, "error": "Gemini Rate limit"}
+
+        if response.status_code != 200:
+            return {"ok": False, "error": f"Gemini API 오류: {response.status_code}"}
+
+        result = response.json()
+        candidates = result.get("candidates", [])
+        if not candidates:
+            return {"ok": False, "error": "응답 없음"}
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        for part in parts:
+            inline_data = part.get("inlineData", {})
+            if inline_data.get("mimeType", "").startswith("audio/"):
+                audio_b64 = inline_data.get("data", "")
+                if audio_b64:
+                    audio_data = base64.b64decode(audio_b64)
+                    return {
+                        "ok": True,
+                        "audio_data": audio_data,
+                        "format": "wav"
+                    }
+
+        return {"ok": False, "error": "오디오 데이터 없음"}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
     """타임라인으로 SRT 파일 생성"""
     def format_time(seconds: float) -> str:
@@ -195,27 +261,40 @@ def generate_tts(
     speed: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    대본에 대해 TTS 생성 (ElevenLabs 사용)
+    대본에 대해 TTS 생성 (Gemini 우선, ElevenLabs 폴백)
 
     Args:
         episode_id: 에피소드 ID (예: "ep019")
         script: 대본 텍스트
         output_dir: 출력 디렉토리
-        voice: 음성 ID (없으면 기본값 사용)
-        speed: 속도 (현재 미사용, ElevenLabs는 자동 조절)
+        voice: 음성 이름 (gemini:Charon 또는 ElevenLabs ID)
+        speed: 속도 (현재 미사용)
 
     Returns:
         {"ok": True, "audio_path": "...", "srt_path": "...", "duration": 900.5}
     """
-    api_key = os.environ.get('ELEVENLABS_API_KEY')
-    if not api_key:
-        return {"ok": False, "error": "ELEVENLABS_API_KEY 환경변수가 필요합니다"}
-
     os.makedirs(output_dir, exist_ok=True)
 
-    # 음성 ID 설정
-    voice_id = voice if voice and len(voice) > 15 else DEFAULT_VOICE_ID
-    print(f"[HISTORY-TTS] 음성: ElevenLabs - {voice_id}")
+    # TTS 엔진 선택
+    google_api_key = os.environ.get('GOOGLE_API_KEY')
+    elevenlabs_key = os.environ.get('ELEVENLABS_API_KEY')
+
+    use_gemini = bool(google_api_key)
+
+    # gemini: 프리픽스가 있으면 Gemini 사용
+    gemini_voice = "Charon"  # 기본값
+    if voice and voice.startswith("gemini:"):
+        use_gemini = True
+        gemini_voice = voice.split(":")[1] if ":" in voice else "Charon"
+    elif voice and voice.startswith("chirp3:"):
+        use_gemini = True
+        gemini_voice = voice.split(":")[1] if ":" in voice else "Charon"
+
+    if use_gemini:
+        print(f"[HISTORY-TTS] 음성: Gemini - {gemini_voice}")
+    else:
+        voice_id = voice if voice and len(voice) > 15 else DEFAULT_VOICE_ID
+        print(f"[HISTORY-TTS] 음성: ElevenLabs - {voice_id}")
 
     # 문장 분할
     sentences = split_into_sentences(script)
@@ -252,18 +331,26 @@ def generate_tts(
             if not chunk:
                 continue
 
-            # TTS 생성 (타임아웃 시 재시도)
+            # TTS 생성 (Gemini 또는 ElevenLabs)
             result = None
             for retry in range(3):
-                result = generate_elevenlabs_tts_chunk(chunk, voice_id, api_key, speed=speed)
+                if use_gemini:
+                    result = generate_gemini_tts_chunk(chunk, gemini_voice, google_api_key)
+                else:
+                    result = generate_elevenlabs_tts_chunk(chunk, voice_id, elevenlabs_key, speed=speed)
+
                 if result.get("ok"):
                     break
                 error_msg = result.get('error', '')
-                if 'timeout' in error_msg.lower() or 'timed out' in error_msg.lower():
+                if 'Rate limit' in error_msg or '429' in error_msg:
+                    wait_time = 45 if use_gemini else 2
+                    print(f"[HISTORY-TTS] 청크 {i+1} Rate limit, {wait_time}초 대기 ({retry+1}/3)...")
+                    time.sleep(wait_time)
+                elif 'timeout' in error_msg.lower() or 'timed out' in error_msg.lower():
                     print(f"[HISTORY-TTS] 청크 {i+1} 타임아웃, 재시도 {retry+1}/3...")
                     time.sleep(2)
                 else:
-                    time.sleep(1)  # ElevenLabs rate limit 대응
+                    time.sleep(1)
 
             if not result.get("ok"):
                 print(f"[HISTORY-TTS] 청크 {i+1} 실패: {result.get('error')}")
@@ -272,20 +359,22 @@ def generate_tts(
                     return {"ok": False, "error": f"TTS 생성 연속 실패: {result.get('error')}"}
                 continue
 
-            # ElevenLabs는 직접 MP3 반환
-            mp3_path = os.path.join(temp_dir, f"chunk_{i:04d}.mp3")
+            # 오디오 파일 저장 (Gemini=WAV, ElevenLabs=MP3)
+            audio_format = result.get("format", "mp3")
+            audio_ext = "wav" if audio_format == "wav" else "mp3"
+            audio_path = os.path.join(temp_dir, f"chunk_{i:04d}.{audio_ext}")
 
-            with open(mp3_path, 'wb') as f:
+            with open(audio_path, 'wb') as f:
                 f.write(result["audio_data"])
 
             # 형식 확인 (첫 청크만)
             if i == 0:
-                print(f"[HISTORY-TTS] 오디오 형식: MP3, 크기: {len(result['audio_data'])} bytes")
+                print(f"[HISTORY-TTS] 오디오 형식: {audio_ext.upper()}, 크기: {len(result['audio_data'])} bytes")
 
             # 길이 확인
-            duration = get_audio_duration(mp3_path)
+            duration = get_audio_duration(audio_path)
             if duration > 0:
-                audio_paths.append(mp3_path)
+                audio_paths.append(audio_path)
 
                 # 글자 수 비례로 자막 타이밍 계산 (이세계와 동일한 방식)
                 total_chars = sum(len(s) for s in chunk_sentences)
