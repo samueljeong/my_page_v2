@@ -8,6 +8,7 @@ Routes:
 - /api/history/test-topic: 주제 기반 테스트
 - /api/history/auto-generate: 대본 자동 생성
 - /api/history/status: 전체 현황 조회
+- /api/history/execute-episode: 에피소드 파일로 영상 생성
 """
 
 import os
@@ -339,6 +340,146 @@ def api_history_status():
 
         return jsonify(status)
 
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/execute-episode', methods=['GET', 'POST'])
+def api_history_execute_episode():
+    """
+    에피소드 파일에서 데이터를 로드하여 영상 생성 파이프라인 실행
+
+    파라미터:
+    - episode: 에피소드 번호 (예: 21)
+    - generate_video: 영상 렌더링 여부 (기본 true)
+    - upload: YouTube 업로드 여부 (기본 false)
+    - privacy_status: 공개 설정 (기본 private)
+
+    예시:
+    - GET /api/history/execute-episode?episode=21
+    - GET /api/history/execute-episode?episode=21&upload=1&privacy_status=public
+    """
+    print("[HISTORY] ===== execute-episode 호출됨 =====")
+
+    try:
+        import importlib.util
+        import glob as glob_module
+        from scripts.history_pipeline import execute_episode
+
+        episode_num = request.args.get('episode')
+        if not episode_num and request.is_json:
+            episode_num = request.json.get('episode')
+        if not episode_num:
+            return jsonify({
+                "ok": False,
+                "error": "episode 파라미터가 필요합니다 (예: ?episode=21)"
+            }), 400
+
+        episode_num = int(episode_num)
+        episode_id = f"ep{episode_num:03d}"
+
+        # 에피소드 파일 경로
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        episode_files = glob_module.glob(os.path.join(
+            base_path, "scripts", "history_pipeline", "episodes", f"{episode_id}_*.py"
+        ))
+
+        # 메인 에피소드 파일 찾기 (image_prompts 제외)
+        main_file = None
+        image_prompts_file = None
+        for f in episode_files:
+            if "image_prompts" in f:
+                image_prompts_file = f
+            elif "data" not in f:  # _data 파일 제외
+                main_file = f
+
+        if not main_file:
+            return jsonify({
+                "ok": False,
+                "error": f"{episode_id} 에피소드 파일을 찾을 수 없습니다",
+                "searched_path": os.path.join(base_path, "scripts", "history_pipeline", "episodes"),
+                "found_files": episode_files
+            }), 404
+
+        # 메인 모듈 로드
+        spec = importlib.util.spec_from_file_location(f"{episode_id}_main", main_file)
+        episode_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(episode_module)
+
+        # 필수 데이터 추출
+        episode_info = getattr(episode_module, 'EPISODE_INFO', {})
+        script = getattr(episode_module, 'SCRIPT', '')
+        metadata = getattr(episode_module, 'METADATA', {})
+        brief = getattr(episode_module, 'BRIEF', None)
+
+        if not script:
+            return jsonify({
+                "ok": False,
+                "error": f"{episode_id} 대본(SCRIPT)이 없습니다"
+            }), 400
+
+        # 이미지 프롬프트 로드
+        image_prompts = []
+        if image_prompts_file:
+            img_spec = importlib.util.spec_from_file_location(f"{episode_id}_image_prompts", image_prompts_file)
+            img_module = importlib.util.module_from_spec(img_spec)
+            img_spec.loader.exec_module(img_module)
+            image_prompts = getattr(img_module, 'IMAGE_PROMPTS', [])
+
+        # 파라미터 처리
+        generate_video = request.args.get('generate_video', '1') != '0'
+        upload = request.args.get('upload', '0') == '1'
+        privacy_status = request.args.get('privacy_status', 'private')
+
+        title = episode_info.get('title', f'한국사 {episode_num}화')
+
+        print(f"[HISTORY] 에피소드: {episode_id}")
+        print(f"[HISTORY] 제목: {title}")
+        print(f"[HISTORY] 대본 길이: {len(script):,}자")
+        print(f"[HISTORY] 이미지 프롬프트: {len(image_prompts)}개")
+        print(f"[HISTORY] 영상 생성: {generate_video}, 업로드: {upload}")
+
+        # 실행
+        result = execute_episode(
+            episode_id=episode_id,
+            title=title,
+            script=script,
+            image_prompts=image_prompts,
+            metadata=metadata,
+            brief=brief,
+            generate_video=generate_video,
+            upload=upload,
+            privacy_status=privacy_status,
+        )
+
+        if result.get("ok"):
+            return jsonify({
+                "ok": True,
+                "episode_id": episode_id,
+                "title": title,
+                "script_length": len(script),
+                "image_count": len(image_prompts),
+                "audio_path": result.get("audio_path"),
+                "video_path": result.get("video_path"),
+                "youtube_url": result.get("youtube_url"),
+                "duration": result.get("duration"),
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "알 수 없는 오류"),
+                "episode_id": episode_id,
+            }), 500
+
+    except ImportError as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "error": f"모듈 로드 실패: {e}"
+        }), 500
     except Exception as e:
         import traceback
         traceback.print_exc()
