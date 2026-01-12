@@ -14,6 +14,13 @@ import time
 import requests
 from typing import Dict, Any, List, Tuple
 
+# Telegram 알림
+try:
+    from scripts.common.notify import send_error, send_warning
+except ImportError:
+    send_error = None
+    send_warning = None
+
 
 # ElevenLabs 설정
 DEFAULT_VOICE_ID = "aurnUodFzOtofecLd3T1"  # Jung_Narrative (이세계와 동일)
@@ -534,7 +541,10 @@ def generate_tts(
 
                 # quota 초과 시 즉시 실패 (폴백 없음)
                 if 'quota' in error_msg.lower() or 'quota_exceeded' in error_msg:
-                    return {"ok": False, "error": f"ElevenLabs 크레딧 초과. 크레딧 리셋 후 재시도하세요. ({error_msg})"}
+                    err = f"ElevenLabs 크레딧 초과. 크레딧 리셋 후 재시도하세요. ({error_msg})"
+                    if send_error:
+                        send_error(err, episode=episode_id, pipeline="history")
+                    return {"ok": False, "error": err}
 
                 if 'Rate limit' in error_msg or '429' in error_msg:
                     print(f"[HISTORY-TTS] 청크 {i+1} Rate limit, 2초 대기 ({retry+1}/3)...")
@@ -549,7 +559,10 @@ def generate_tts(
                 print(f"[HISTORY-TTS] 청크 {i+1} 실패: {result.get('error')}")
                 failed_count += 1
                 if failed_count >= 3:
-                    return {"ok": False, "error": f"TTS 생성 연속 실패: {result.get('error')}"}
+                    err = f"TTS 생성 연속 실패: {result.get('error')}"
+                    if send_error:
+                        send_error(err, episode=episode_id, pipeline="history")
+                    return {"ok": False, "error": err}
                 continue
 
             # 오디오 파일 저장 (ElevenLabs = MP3)
@@ -606,12 +619,18 @@ def generate_tts(
                 print(f"[HISTORY-TTS] {i+1}/{len(chunks)} 완료 ({current_time:.1f}초)")
 
         if not audio_paths:
-            return {"ok": False, "error": "TTS 생성 실패 - 오디오 없음"}
+            err = "TTS 생성 실패 - 오디오 없음"
+            if send_error:
+                send_error(err, episode=episode_id, pipeline="history")
+            return {"ok": False, "error": err}
 
         # 오디오 합치기
         audio_output = os.path.join(output_dir, f"{episode_id}.mp3")
         if not merge_audio_files(audio_paths, audio_output):
-            return {"ok": False, "error": "오디오 병합 실패"}
+            err = "오디오 병합 실패"
+            if send_error:
+                send_error(err, episode=episode_id, pipeline="history")
+            return {"ok": False, "error": err}
 
         # SRT 생성
         srt_dir = os.path.join(os.path.dirname(output_dir), "subtitles")
@@ -630,6 +649,9 @@ def generate_tts(
             print(f"[HISTORY-TTS] ⚠️ 자막 싱크 문제 발견:")
             for issue in sync_check["issues"]:
                 print(f"    - {issue}")
+            # 자막 싱크 문제 경고 알림
+            if send_warning:
+                send_warning(f"자막 싱크 문제: {', '.join(sync_check['issues'][:3])}", episode=episode_id, pipeline="history")
 
         # 샘플 출력 (첫 실행 시 확인용)
         if sync_check["samples"]["beginning"]:
