@@ -185,6 +185,85 @@ def generate_gemini_tts_chunk(
         return {"ok": False, "error": str(e)}
 
 
+def extract_sentence_timing_from_alignment(
+    chunk_text: str,
+    sentences: List[str],
+    alignment: Dict[str, Any],
+    time_offset: float = 0.0
+) -> List[Tuple[float, float, str]]:
+    """
+    ElevenLabs alignment 데이터에서 문장별 타이밍 추출
+
+    Args:
+        chunk_text: 청크 전체 텍스트
+        sentences: 문장 리스트
+        alignment: ElevenLabs alignment 데이터
+            - characters: 문자 리스트
+            - character_start_times_seconds: 각 문자 시작 시간
+            - character_end_times_seconds: 각 문자 종료 시간
+        time_offset: 이전 청크들의 누적 시간
+
+    Returns:
+        [(start, end, text), ...] 타이밍 리스트
+    """
+    if not alignment:
+        return []
+
+    chars = alignment.get("characters", [])
+    starts = alignment.get("character_start_times_seconds", [])
+    ends = alignment.get("character_end_times_seconds", [])
+
+    if not chars or not starts or not ends:
+        return []
+
+    timeline = []
+    char_idx = 0
+
+    for sentence in sentences:
+        sentence_clean = sentence.strip()
+        if not sentence_clean:
+            continue
+
+        # 문장의 첫 글자 찾기 (공백 건너뛰기)
+        sentence_start = None
+        sentence_end = None
+
+        # 청크 내에서 문장 위치 찾기
+        found_start = False
+        match_count = 0
+
+        for i in range(char_idx, len(chars)):
+            c = chars[i]
+
+            # 문장의 첫 글자와 매칭 시작
+            if not found_start:
+                if match_count < len(sentence_clean) and c == sentence_clean[match_count]:
+                    if match_count == 0:
+                        sentence_start = starts[i] if i < len(starts) else None
+                    match_count += 1
+                    if match_count >= len(sentence_clean):
+                        sentence_end = ends[i] if i < len(ends) else None
+                        char_idx = i + 1
+                        found_start = True
+                        break
+                elif c in ' \n\t':
+                    # 공백은 건너뛰기
+                    continue
+                else:
+                    # 매칭 실패, 리셋
+                    match_count = 0
+                    sentence_start = None
+
+        if sentence_start is not None and sentence_end is not None:
+            timeline.append((
+                time_offset + sentence_start,
+                time_offset + sentence_end,
+                sentence_clean
+            ))
+
+    return timeline
+
+
 def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
     """타임라인으로 SRT 파일 생성"""
     def format_time(seconds: float) -> str:
@@ -376,15 +455,35 @@ def generate_tts(
             if duration > 0:
                 audio_paths.append(audio_path)
 
-                # 글자 수 비례로 자막 타이밍 계산 (이세계와 동일한 방식)
-                total_chars = sum(len(s) for s in chunk_sentences)
-                chunk_start = current_time
-
-                for sentence in chunk_sentences:
-                    sentence_ratio = len(sentence) / total_chars if total_chars > 0 else 1
-                    sentence_duration = duration * sentence_ratio
-                    timeline.append((chunk_start, chunk_start + sentence_duration, sentence))
-                    chunk_start += sentence_duration
+                # ElevenLabs alignment 데이터 사용 (정확한 타이밍)
+                alignment = result.get("alignment")
+                if alignment and not use_gemini:
+                    chunk_timeline = extract_sentence_timing_from_alignment(
+                        chunk, chunk_sentences, alignment, current_time
+                    )
+                    if chunk_timeline:
+                        timeline.extend(chunk_timeline)
+                        if i == 0:
+                            print(f"[HISTORY-TTS] alignment 데이터 사용 (정확한 싱크)")
+                    else:
+                        # alignment 추출 실패 시 폴백
+                        print(f"[HISTORY-TTS] 청크 {i+1} alignment 추출 실패, 비례 계산 사용")
+                        total_chars = sum(len(s) for s in chunk_sentences)
+                        chunk_start = current_time
+                        for sentence in chunk_sentences:
+                            sentence_ratio = len(sentence) / total_chars if total_chars > 0 else 1
+                            sentence_duration = duration * sentence_ratio
+                            timeline.append((chunk_start, chunk_start + sentence_duration, sentence))
+                            chunk_start += sentence_duration
+                else:
+                    # Gemini 또는 alignment 없음: 글자 수 비례 계산 (폴백)
+                    total_chars = sum(len(s) for s in chunk_sentences)
+                    chunk_start = current_time
+                    for sentence in chunk_sentences:
+                        sentence_ratio = len(sentence) / total_chars if total_chars > 0 else 1
+                        sentence_duration = duration * sentence_ratio
+                        timeline.append((chunk_start, chunk_start + sentence_duration, sentence))
+                        chunk_start += sentence_duration
 
                 current_time += duration
                 failed_count = 0
