@@ -156,3 +156,25 @@ ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=n
 **예방책**:
 - 수동 작성 시 `len(SCRIPT)` 확인
 - 또는 `scripts/history_pipeline/agents/review_agent.py`의 `review_script_strict()` 함수로 검증
+
+---
+
+## 2026-01-12: TTS 자막 싱크 불일치 및 Gemini 폴백 제거
+
+**증상**: 18, 19, 20, 21화에서 자막 싱크가 맞지 않음. ElevenLabs 크레딧 초과 시 Gemini TTS로 폴백되어 alignment 데이터 없이 자막 생성됨.
+
+**원인**:
+- Gemini TTS는 alignment 데이터를 제공하지 않아 글자 수 비례 계산으로 자막 타이밍 추정
+- 이 방식은 부정확하여 자막이 영상과 맞지 않음
+- WAV 파일 병합 시 손상 발생
+
+**수정** (`scripts/history_pipeline/tts.py`):
+- Gemini TTS 폴백 완전 제거 (ElevenLabs 전용)
+- `use_gemini` 변수 및 관련 코드 삭제
+- ElevenLabs quota 초과 시 즉시 에러 반환 (폴백 없음)
+- `verify_subtitle_sync()` 함수 추가 (초반/중반/끝 3부분 자막 검증)
+- TTS 완료 후 자동 싱크 검증 및 로그 출력
+
+**커밋**: `690fda1`
+
+**교훈**: TTS 품질이 중요할 때는 폴백 없이 실패하는 것이 더 나음. 자동 검증으로 문제를 조기 발견할 것.
