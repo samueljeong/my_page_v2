@@ -73,14 +73,16 @@ from blueprints.tts import (
     set_lang_ko as tts_set_lang_ko,
     validate_tts_voice,
 )
-# Telegram Bot Blueprint (선택적 - 실패해도 서버 시작)
-try:
-    from blueprints.telegram import telegram_bp
-    _telegram_available = True
-except Exception as e:
-    print(f"[WARNING] Telegram Blueprint 로드 실패: {e}")
-    telegram_bp = None
-    _telegram_available = False
+# Telegram Bot Blueprint - 임시 비활성화
+telegram_bp = None
+_telegram_available = False
+# try:
+#     from blueprints.telegram import telegram_bp
+#     _telegram_available = True
+# except Exception as e:
+#     print(f"[WARNING] Telegram Blueprint 로드 실패: {e}")
+#     telegram_bp = None
+#     _telegram_available = False
 
 # TTS 공통 모듈 (scripts/common/tts.py)
 from scripts.common.tts import (
