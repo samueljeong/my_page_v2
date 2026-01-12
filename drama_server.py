@@ -6798,6 +6798,30 @@ def api_youtube_tokens_debug():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+@app.route('/api/youtube/token-export/<channel_id>')
+def api_youtube_token_export(channel_id):
+    """YouTube 토큰 내보내기 (로컬 동기화용) - API 키 필수"""
+    try:
+        api_key = request.args.get('key') or request.headers.get('X-API-Key')
+        expected_key = os.getenv('SYNC_API_KEY', 'local-sync-key-2026')
+
+        if api_key != expected_key:
+            return jsonify({"ok": False, "error": "Invalid API key"}), 403
+
+        token_data = load_youtube_token_from_db(channel_id)
+        if not token_data:
+            return jsonify({"ok": False, "error": f"Token not found for {channel_id}"}), 404
+
+        return jsonify({
+            "ok": True,
+            "channel_id": channel_id,
+            "token_data": token_data
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route('/api/drama/youtube-channels')
 def youtube_channels():
     """YouTube 채널 목록 가져오기 (저장된 모든 채널 반환)"""
