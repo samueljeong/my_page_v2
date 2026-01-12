@@ -34,16 +34,11 @@ def split_into_sentences(text: str) -> List[str]:
 
 
 def get_audio_duration(audio_path: str) -> float:
-    """오디오 파일의 재생 시간(초) 반환"""
-    # mutagen 먼저 시도 (더 정확)
-    try:
-        from mutagen.mp3 import MP3
-        audio = MP3(audio_path)
-        return audio.info.length
-    except Exception:
-        pass
+    """오디오 파일의 재생 시간(초) 반환 - WAV/MP3 모두 지원"""
+    if not os.path.exists(audio_path):
+        return 0.0
 
-    # ffprobe 시도
+    # ffprobe 먼저 시도 (가장 정확, 모든 포맷 지원)
     try:
         result = subprocess.run(
             ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -56,11 +51,37 @@ def get_audio_duration(audio_path: str) -> float:
     except Exception:
         pass
 
-    # 파일 크기로 추정 (MP3 128kbps 기준)
+    # WAV 파일 직접 파싱
+    if audio_path.lower().endswith('.wav'):
+        try:
+            import wave
+            with wave.open(audio_path, 'rb') as wav:
+                frames = wav.getnframes()
+                rate = wav.getframerate()
+                if rate > 0:
+                    return frames / rate
+        except Exception:
+            pass
+
+    # mutagen으로 MP3 시도
+    if audio_path.lower().endswith('.mp3'):
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(audio_path)
+            return audio.info.length
+        except Exception:
+            pass
+
+    # 파일 크기로 추정 (폴백)
     try:
         file_size = os.path.getsize(audio_path)
         if file_size > 0:
-            return file_size / 16000.0
+            if audio_path.lower().endswith('.wav'):
+                # WAV: 24kHz mono 16-bit = 48,000 bytes/sec
+                return file_size / 48000.0
+            else:
+                # MP3: 128kbps = 16,000 bytes/sec
+                return file_size / 16000.0
     except Exception:
         pass
 
@@ -68,28 +89,48 @@ def get_audio_duration(audio_path: str) -> float:
 
 
 def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
-    """여러 오디오 파일을 하나로 합침"""
+    """여러 오디오 파일을 하나로 합침 - WAV/MP3 모두 지원"""
     if not audio_paths:
         return False
 
     if len(audio_paths) == 1:
+        # 단일 파일: 포맷 변환 필요 시 처리
+        src = audio_paths[0]
+        if src.lower().endswith('.wav') and output_path.lower().endswith('.mp3'):
+            # WAV to MP3 변환
+            try:
+                subprocess.run(
+                    ['ffmpeg', '-y', '-i', src, '-c:a', 'libmp3lame', '-b:a', '128k', output_path],
+                    capture_output=True, timeout=120
+                )
+                return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+            except Exception:
+                pass
         import shutil
-        shutil.copy(audio_paths[0], output_path)
+        shutil.copy(src, output_path)
         return True
 
-    # pydub 먼저 시도
+    # 파일 포맷 확인
+    has_wav = any(p.lower().endswith('.wav') for p in audio_paths)
+
+    # pydub 시도 (WAV/MP3 모두 지원)
     try:
         from pydub import AudioSegment
         combined = AudioSegment.empty()
         for path in audio_paths:
-            audio = AudioSegment.from_mp3(path)
+            if path.lower().endswith('.wav'):
+                audio = AudioSegment.from_wav(path)
+            else:
+                audio = AudioSegment.from_mp3(path)
             combined += audio
         combined.export(output_path, format="mp3", bitrate="128k")
-        return os.path.exists(output_path)
-    except Exception:
-        pass
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            print(f"[HISTORY-TTS] pydub로 {len(audio_paths)}개 파일 병합 완료")
+            return True
+    except Exception as e:
+        print(f"[HISTORY-TTS] pydub 병합 실패: {e}")
 
-    # ffmpeg 시도
+    # ffmpeg 시도 (포맷 자동 감지)
     try:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             for path in audio_paths:
@@ -99,24 +140,28 @@ def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
         subprocess.run(
             ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', list_path,
              '-c:a', 'libmp3lame', '-b:a', '128k', output_path],
-            capture_output=True, timeout=300
+            capture_output=True, timeout=600
         )
         os.unlink(list_path)
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            print(f"[HISTORY-TTS] ffmpeg로 {len(audio_paths)}개 파일 병합 완료")
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[HISTORY-TTS] ffmpeg 병합 실패: {e}")
 
-    # 순수 Python 바이너리 병합 (폴백)
-    try:
-        print("[HISTORY-TTS] 순수 Python으로 MP3 병합...")
-        with open(output_path, 'wb') as outfile:
-            for path in audio_paths:
-                with open(path, 'rb') as infile:
-                    outfile.write(infile.read())
-        return os.path.exists(output_path)
-    except Exception:
-        return False
+    # 바이너리 병합은 WAV/MP3 혼합 시 사용 불가
+    if not has_wav:
+        try:
+            print("[HISTORY-TTS] 순수 Python으로 MP3 병합...")
+            with open(output_path, 'wb') as outfile:
+                for path in audio_paths:
+                    with open(path, 'rb') as infile:
+                        outfile.write(infile.read())
+            return os.path.exists(output_path)
+        except Exception:
+            pass
+
+    return False
 
 
 def generate_gemini_tts_chunk(
