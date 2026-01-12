@@ -73,6 +73,8 @@ from blueprints.tts import (
     set_lang_ko as tts_set_lang_ko,
     validate_tts_voice,
 )
+# Telegram Bot Blueprint
+from blueprints.telegram import telegram_bp
 
 # TTS 공통 모듈 (scripts/common/tts.py)
 from scripts.common.tts import (
@@ -105,6 +107,8 @@ app.register_blueprint(bible_bp)
 app.register_blueprint(history_bp)
 # TTS API Blueprint 등록
 app.register_blueprint(tts_bp)
+# Telegram Bot Blueprint 등록
+app.register_blueprint(telegram_bp)
 
 # ===== 전역 에러 핸들러 (항상 JSON 반환) =====
 @app.errorhandler(500)
