@@ -25,10 +25,10 @@ import requests
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-# Telegram 알림
+# Telegram 알림 (선택적)
 try:
     from scripts.common.notify import send_error, send_success, send_warning
-except ImportError:
+except Exception:
     send_error = send_success = send_warning = None
 
 

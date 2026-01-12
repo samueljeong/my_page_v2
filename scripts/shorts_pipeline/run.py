@@ -33,10 +33,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 프로젝트 루트 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-# Telegram 알림
+# Telegram 알림 (선택적)
 try:
     from scripts.common.notify import send_error, send_success, send_warning
-except ImportError:
+except Exception:
     send_error = send_success = send_warning = None
 
 from .config import (

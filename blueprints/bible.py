@@ -14,10 +14,10 @@ import tempfile
 from flask import Blueprint, request, jsonify
 from datetime import datetime as dt, timezone, timedelta
 
-# Telegram 알림
+# Telegram 알림 (선택적)
 try:
     from scripts.common.notify import send_error, send_success, send_warning
-except ImportError:
+except Exception:
     send_error = send_success = send_warning = None
 
 # Blueprint 생성

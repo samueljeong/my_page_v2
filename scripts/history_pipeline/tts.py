@@ -14,10 +14,10 @@ import time
 import requests
 from typing import Dict, Any, List, Tuple
 
-# Telegram 알림
+# Telegram 알림 (선택적)
 try:
     from scripts.common.notify import send_error, send_warning
-except ImportError:
+except Exception:
     send_error = None
     send_warning = None
 
