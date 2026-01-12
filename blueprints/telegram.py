@@ -41,25 +41,32 @@ def telegram_webhook():
     Telegram이 메시지를 보내면 이 엔드포인트로 전달됨
     """
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        print(f"[TELEGRAM] Webhook 수신: {data}", flush=True)
 
         if not data:
-            return jsonify({"ok": False, "error": "No data"}), 400
+            return jsonify({"ok": True, "note": "No data"})
 
         # 메시지 처리
         message = data.get("message")
         if message and handle_message:
+            print(f"[TELEGRAM] 메시지 처리 중: {message.get('text', '')[:50]}", flush=True)
             response_text = handle_message(message)
 
             if response_text:
                 chat_id = message.get("chat", {}).get("id")
+                print(f"[TELEGRAM] 응답 전송: {response_text[:50]}...", flush=True)
                 send_message(response_text, chat_id=str(chat_id))
+        else:
+            print(f"[TELEGRAM] handle_message 없음 또는 메시지 없음", flush=True)
 
         return jsonify({"ok": True})
 
     except Exception as e:
-        print(f"[TELEGRAM] Webhook 오류: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        import traceback
+        print(f"[TELEGRAM] Webhook 오류: {e}", flush=True)
+        traceback.print_exc()
+        return jsonify({"ok": True, "error": str(e)})
 
 
 @telegram_bp.route('/api/telegram/set-webhook', methods=['GET', 'POST'])
