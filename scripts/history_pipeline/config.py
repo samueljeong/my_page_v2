@@ -18,6 +18,12 @@ from typing import Dict, List, Any
 YOUTUBE_CHANNEL_ID = os.getenv("HISTORY_CHANNEL_ID", "UCW1STziZB_NvnmcCvd1MXuQ")
 YOUTUBE_PLAYLIST_ID = os.getenv("HISTORY_PLAYLIST_ID", "")
 
+# 기본 첫 댓글 (업로드 시 자동 작성)
+DEFAULT_FIRST_COMMENT = """영상이 마음에 드셨다면 구독과 좋아요 부탁드려요! 🙏
+
+📌 다음 에피소드가 궁금하시면 알림 설정을 켜주세요.
+💬 궁금한 점이나 다뤄줬으면 하는 주제가 있다면 댓글로 알려주세요!"""
+
 
 # ============================================================
 # 시대 트랙 설정 (순서 고정)

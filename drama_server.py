@@ -7188,6 +7188,7 @@ def update_youtube_video():
         video_id = data.get('video_id')
         channel_id = data.get('channel_id')
         privacy_status = data.get('privacy_status')  # public, private, unlisted
+        publish_at = data.get('publish_at')  # ISO 8601 형식 예약 공개 시간
         title = data.get('title')
         description = data.get('description')
 
@@ -7222,7 +7223,12 @@ def update_youtube_video():
         status = video['status']
 
         # 업데이트할 항목 적용
-        if privacy_status:
+        if publish_at:
+            # 예약 공개 설정: publishAt이 있으면 반드시 private 상태여야 함
+            status['privacyStatus'] = 'private'
+            status['publishAt'] = publish_at
+            print(f"[YOUTUBE-UPDATE] 예약 공개 설정: {publish_at}")
+        elif privacy_status:
             status['privacyStatus'] = privacy_status
         if title:
             snippet['title'] = title
@@ -7239,13 +7245,21 @@ def update_youtube_video():
             }
         ).execute()
 
-        print(f"[YOUTUBE-UPDATE] 영상 업데이트 완료: {video_id}, privacy: {privacy_status}")
-
-        return jsonify({
-            "success": True,
-            "message": f"영상이 {privacy_status}로 변경되었습니다.",
-            "video_id": video_id
-        })
+        if publish_at:
+            print(f"[YOUTUBE-UPDATE] 예약 공개 설정 완료: {video_id}, 공개 예정: {publish_at}")
+            return jsonify({
+                "success": True,
+                "message": f"예약 공개가 설정되었습니다. ({publish_at})",
+                "video_id": video_id,
+                "publish_at": publish_at
+            })
+        else:
+            print(f"[YOUTUBE-UPDATE] 영상 업데이트 완료: {video_id}, privacy: {privacy_status}")
+            return jsonify({
+                "success": True,
+                "message": f"영상이 {privacy_status}로 변경되었습니다.",
+                "video_id": video_id
+            })
 
     except Exception as e:
         print(f"[YOUTUBE-UPDATE][ERROR] {str(e)}")
@@ -20220,7 +20234,8 @@ def upload_to_youtube(
     scheduled_time: str = None,
     playlist_id: str = None,
     thumbnail_path: str = None,
-    selected_project: str = ""
+    selected_project: str = "",
+    first_comment: str = None
 ) -> dict:
     """
     YouTube 업로드 래퍼 함수 (기존 API 활용)
@@ -20236,6 +20251,7 @@ def upload_to_youtube(
         playlist_id: 플레이리스트 ID
         thumbnail_path: 썸네일 이미지 경로
         selected_project: YouTube 프로젝트 접미사
+        first_comment: 첫 댓글 (자동 작성)
     """
     try:
         import requests as req
@@ -20257,6 +20273,9 @@ def upload_to_youtube(
 
         if thumbnail_path:
             upload_data["thumbnailPath"] = thumbnail_path
+
+        if first_comment:
+            upload_data["firstComment"] = first_comment
 
         # API 호출 (Render 환경에서는 PORT 환경변수 사용)
         port = os.environ.get("PORT", "5059")

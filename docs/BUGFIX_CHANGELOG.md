@@ -134,3 +134,25 @@ ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=n
 ```
 
 **교훈**: FFmpeg `concat` demuxer와 `-shortest` 조합은 신뢰할 수 없음. 항상 `-t` 옵션으로 명시적 길이 제한 필요.
+
+---
+
+## 2026-01-12: 한국사 대본 길이 미달 (ep019, ep020)
+
+**증상**: ep019(발해), ep020(후삼국) 대본이 가이드라인(12,000자)의 절반 수준(~6,800자)
+
+**원인**: 에피소드 파일을 수동 작성할 때 `script_generator.py`의 검증 로직을 거치지 않음
+- 자동 파이프라인: 12,000자 미만 시 자동 이어쓰기
+- 수동 작성: 검증 없이 그대로 사용
+
+**영향**:
+- ep019: 6,814자 (예상 17분 → 실제 11분)
+- ep020: 6,789자 (예상 23분 → 실제 17분)
+
+**조치**:
+- ep019, ep020은 이미 업로드되어 그대로 유지
+- 다음 에피소드(21화)부터 자동 파이프라인 사용 또는 수동 작성 시 12,000자 이상 확인 필수
+
+**예방책**:
+- 수동 작성 시 `len(SCRIPT)` 확인
+- 또는 `scripts/history_pipeline/agents/review_agent.py`의 `review_script_strict()` 함수로 검증

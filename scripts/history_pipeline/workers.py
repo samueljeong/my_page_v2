@@ -412,6 +412,7 @@ def upload_youtube(
     playlist_id: str = None,
     scheduled_time: str = None,
     channel_id: str = None,
+    first_comment: str = None,
 ) -> Dict[str, Any]:
     """
     YouTube 업로드
@@ -426,6 +427,7 @@ def upload_youtube(
         playlist_id: 플레이리스트 ID
         scheduled_time: 예약 공개 시간 (ISO 8601)
         channel_id: YouTube 채널 ID (없으면 config에서 가져옴)
+        first_comment: 첫 댓글 (자동 작성)
 
     Returns:
         {
@@ -456,6 +458,7 @@ def upload_youtube(
             privacy_status=privacy_status,
             playlist_id=yt_playlist_id if yt_playlist_id else None,
             scheduled_time=scheduled_time,
+            first_comment=first_comment,
         )
 
         return result
@@ -616,6 +619,7 @@ def execute_episode(
     # 7. YouTube 업로드 (선택)
     if upload and result.get("video_path"):
         print(f"\n[HISTORY] 7. YouTube 업로드 중...")
+        from .config import DEFAULT_FIRST_COMMENT
         yt_result = upload_youtube(
             video_path=result["video_path"],
             title=metadata.get("title", title),
@@ -625,6 +629,7 @@ def execute_episode(
             privacy_status=privacy_status,
             playlist_id=metadata.get("playlist_id"),
             scheduled_time=metadata.get("scheduled_time"),
+            first_comment=metadata.get("first_comment", DEFAULT_FIRST_COMMENT),
         )
         if yt_result.get("ok"):
             result["youtube_url"] = yt_result.get("video_url")
