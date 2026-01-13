@@ -16,6 +16,16 @@ import time
 import requests
 from typing import Dict, Any, List, Tuple
 
+# 공통 오디오 유틸리티
+from scripts.common.audio_utils import (
+    get_audio_duration,
+    merge_audio_files,
+    split_into_sentences,
+    generate_srt,
+    convert_wav_to_mp3,
+    convert_pcm_to_mp3,
+)
+
 
 # ElevenLabs 설정
 DEFAULT_VOICE_ID = "aurnUodFzOtofecLd3T1"  # Jung_Narrative
@@ -119,95 +129,6 @@ def parse_scenes(script: str) -> List[Dict[str, Any]]:
         i += 4
 
     return scenes
-
-
-def split_into_sentences(text: str) -> List[str]:
-    """텍스트를 문장 단위로 분할"""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in sentences if s.strip()]
-
-
-def get_audio_duration(audio_path: str) -> float:
-    """오디오 파일의 재생 시간(초) 반환"""
-    try:
-        from mutagen.mp3 import MP3
-        audio = MP3(audio_path)
-        return audio.info.length
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-             '-of', 'default=noprint_wrappers=1:nokey=1', audio_path],
-            capture_output=True, text=True, timeout=30
-        )
-        return float(result.stdout.strip()) if result.stdout.strip() else 0.0
-    except Exception:
-        return 0.0
-
-
-def merge_audio_files(audio_paths: List[str], output_path: str) -> bool:
-    """여러 오디오 파일을 하나로 합침"""
-    if not audio_paths:
-        return False
-
-    if len(audio_paths) == 1:
-        import shutil
-        shutil.copy(audio_paths[0], output_path)
-        return True
-
-    try:
-        from pydub import AudioSegment
-        combined = AudioSegment.empty()
-        for path in audio_paths:
-            audio = AudioSegment.from_mp3(path)
-            combined += audio
-        combined.export(output_path, format="mp3", bitrate="128k")
-        return os.path.exists(output_path)
-    except Exception:
-        pass
-
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            for path in audio_paths:
-                f.write(f"file '{path}'\n")
-            list_path = f.name
-
-        subprocess.run(
-            ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', list_path,
-             '-c:a', 'libmp3lame', '-b:a', '128k', output_path],
-            capture_output=True, timeout=300
-        )
-        os.unlink(list_path)
-        return os.path.exists(output_path)
-    except Exception:
-        pass
-
-    try:
-        with open(output_path, 'wb') as outfile:
-            for path in audio_paths:
-                with open(path, 'rb') as infile:
-                    outfile.write(infile.read())
-        return os.path.exists(output_path)
-    except Exception:
-        return False
-
-
-def generate_srt(timeline: List[Tuple[float, float, str]], output_path: str):
-    """타임라인으로 SRT 파일 생성"""
-    def format_time(seconds: float) -> str:
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
-        millis = int((seconds % 1) * 1000)
-        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for i, (start, end, text) in enumerate(timeline, 1):
-            f.write(f"{i}\n")
-            f.write(f"{format_time(start)} --> {format_time(end)}\n")
-            f.write(f"{text}\n\n")
 
 
 def generate_elevenlabs_tts_chunk(
@@ -353,71 +274,6 @@ def generate_gemini_tts_chunk(
 
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
-
-def convert_pcm_to_mp3(pcm_data: bytes, output_path: str, sample_rate: int = 24000) -> bool:
-    """
-    Raw PCM 데이터를 MP3 파일로 변환
-    Gemini TTS는 WAV 헤더 없는 raw PCM (24kHz, 16-bit, mono)을 반환함
-    """
-    pcm_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix='.pcm', delete=False) as pcm_file:
-            pcm_file.write(pcm_data)
-            pcm_path = pcm_file.name
-
-        print(f"[PCM→MP3] PCM 크기: {len(pcm_data)} bytes, 파일: {pcm_path}")
-
-        # raw PCM → MP3 변환 (16-bit signed little-endian, mono)
-        result = subprocess.run(
-            ['ffmpeg', '-y',
-             '-f', 's16le',           # 16-bit signed little-endian
-             '-ar', str(sample_rate), # sample rate
-             '-ac', '1',              # mono
-             '-i', pcm_path,
-             '-codec:a', 'libmp3lame',
-             '-b:a', '128k',
-             output_path],
-            capture_output=True, timeout=60, text=True
-        )
-
-        if pcm_path and os.path.exists(pcm_path):
-            os.unlink(pcm_path)
-
-        if result.returncode != 0:
-            print(f"[PCM→MP3] ffmpeg 실패: {result.stderr}")
-            return False
-
-        return os.path.exists(output_path)
-    except Exception as e:
-        print(f"[PCM→MP3] 예외 발생: {e}")
-        if pcm_path and os.path.exists(pcm_path):
-            os.unlink(pcm_path)
-        return False
-
-
-def convert_wav_to_mp3(wav_data: bytes, output_path: str) -> bool:
-    """WAV 또는 PCM 데이터를 MP3 파일로 변환"""
-    # WAV 헤더 확인 (RIFF로 시작)
-    if wav_data[:4] == b'RIFF':
-        # 표준 WAV 파일
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as wav_file:
-                wav_file.write(wav_data)
-                wav_path = wav_file.name
-
-            result = subprocess.run(
-                ['ffmpeg', '-y', '-i', wav_path, '-codec:a', 'libmp3lame', '-b:a', '128k', output_path],
-                capture_output=True, timeout=60
-            )
-
-            os.unlink(wav_path)
-            return os.path.exists(output_path)
-        except Exception:
-            return False
-    else:
-        # Raw PCM 데이터 (Gemini TTS)
-        return convert_pcm_to_mp3(wav_data, output_path)
 
 
 def generate_tts(

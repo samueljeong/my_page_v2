@@ -13,6 +13,13 @@ import subprocess
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 
+# 공통 오디오 유틸리티
+from scripts.common.audio_utils import (
+    get_audio_duration,
+    merge_audio_files,
+    sec_to_srt_time,
+)
+
 from .config import (
     VOICE_MAP,
     DEFAULT_VOICE,
@@ -287,63 +294,6 @@ def generate_google_cloud_tts(text: str, voice: str, speaking_rate: float = 0.9)
         return {"ok": False, "error": str(e)}
 
 
-def get_audio_duration(audio_path: str) -> float:
-    """ffprobe로 오디오 길이 측정"""
-    if not os.path.exists(audio_path):
-        return 0.0
-
-    try:
-        cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            audio_path
-        ]
-        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
-        return float(out)
-    except Exception:
-        # 파일 크기 기반 추정 (MP3 128kbps 기준)
-        try:
-            return os.path.getsize(audio_path) / 16000
-        except:
-            return 0.0
-
-
-def merge_audio_files(files: List[str], output_path: str) -> bool:
-    """FFmpeg로 오디오 파일 병합"""
-    if not files:
-        return False
-
-    if len(files) == 1:
-        import shutil
-        shutil.copy(files[0], output_path)
-        return True
-
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            for path in files:
-                f.write(f"file '{os.path.abspath(path)}'\n")
-            list_file = f.name
-
-        cmd = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", list_file,
-            "-c", "copy",
-            output_path
-        ]
-
-        subprocess.run(cmd, check=True, capture_output=True)
-        os.unlink(list_file)
-
-        print(f"[MULTI-TTS] 병합 완료: {len(files)}개 → {output_path}", flush=True)
-        return True
-
-    except Exception as e:
-        print(f"[MULTI-TTS] 병합 오류: {e}", flush=True)
-        return False
-
-
 def generate_srt_from_timeline(timeline: List[Dict], srt_path: str) -> bool:
     """타임라인에서 SRT 자막 생성"""
     os.makedirs(os.path.dirname(srt_path), exist_ok=True)
@@ -364,15 +314,6 @@ def generate_srt_from_timeline(timeline: List[Dict], srt_path: str) -> bool:
 
     print(f"[SRT] 생성 완료: {len(timeline)}개 항목 → {srt_path}", flush=True)
     return True
-
-
-def sec_to_srt_time(sec: float) -> str:
-    """초를 SRT 타임코드로 변환 (HH:MM:SS,mmm)"""
-    h = int(sec // 3600)
-    m = int((sec % 3600) // 60)
-    s = int(sec % 60)
-    ms = int((sec - int(sec)) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
 # =====================================================
