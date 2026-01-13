@@ -82,6 +82,9 @@ except Exception as e:
     telegram_bp = None
     _telegram_available = False
 
+# Dashboard Blueprint
+from blueprints.dashboard import dashboard_bp
+
 # TTS 공통 모듈 (scripts/common/tts.py)
 from scripts.common.tts import (
     preprocess_tts_text,
@@ -117,6 +120,8 @@ app.register_blueprint(tts_bp)
 if _telegram_available and telegram_bp:
     app.register_blueprint(telegram_bp)
     print("[TELEGRAM] Blueprint 등록 완료")
+# Dashboard Blueprint 등록
+app.register_blueprint(dashboard_bp)
 
 # ===== 전역 에러 핸들러 (항상 JSON 반환) =====
 @app.errorhandler(500)
