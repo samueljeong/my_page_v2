@@ -62,21 +62,56 @@
         .filter-btn.type-thumb.active { background: #f59e0b; color: #000; }
         .filter-btn.type-scene.active { background: #10b981; color: #fff; }
 
+        /* Image Sections */
+        .images-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .images-grid { grid-template-columns: 1fr; }
+        }
+        .image-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+        .section-header {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-header .icon { font-size: 16px; }
+        .section-header .count {
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: #666;
+            margin-left: auto;
+        }
+
         /* Image Grid */
         .image-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
         }
         .image-card {
-            background: #16213e;
-            border-radius: 12px;
+            background: #0d1117;
+            border-radius: 8px;
             overflow: hidden;
             border: 1px solid #333;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .image-card:hover { border-color: #3b82f6; transform: translateY(-5px); }
+        .image-card:hover { border-color: #3b82f6; transform: translateY(-3px); }
         .image-wrapper {
             aspect-ratio: 16/9;
             overflow: hidden;
@@ -645,21 +680,6 @@ no text, no watermark"</div>
             </div>
         </div>
 
-        <div class="stats-bar">
-            <div class="stat-item">
-                <span class="stat-value" id="stat-total">0</span>
-                <span class="stat-label">Total</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="stat-thumb">0</span>
-                <span class="stat-label">Thumbnails</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="stat-scene">0</span>
-                <span class="stat-label">Scenes</span>
-            </div>
-        </div>
-
         <div class="filter-bar">
             <div class="filter-group">
                 <button class="filter-btn active" data-filter="pipeline" data-value="all">All</button>
@@ -667,15 +687,32 @@ no text, no watermark"</div>
                 <button class="filter-btn" data-filter="pipeline" data-value="isekai">Isekai</button>
                 <button class="filter-btn" data-filter="pipeline" data-value="bible">Bible</button>
             </div>
-            <div class="filter-group">
-                <button class="filter-btn type-thumb" data-filter="type" data-value="all">All Types</button>
-                <button class="filter-btn type-thumb" data-filter="type" data-value="thumb">Thumbnails</button>
-                <button class="filter-btn type-scene" data-filter="type" data-value="scene">Scenes</button>
-            </div>
         </div>
 
-        <div class="image-grid" id="image-grid">
-            <div class="empty-state">Loading...</div>
+        <div class="images-grid">
+            <!-- Thumbnails -->
+            <div class="image-section">
+                <div class="section-header">
+                    <span class="icon">🖼️</span>
+                    <span>Thumbnails</span>
+                    <span class="count" id="thumb-count">0</span>
+                </div>
+                <div class="image-grid" id="thumb-grid">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Scenes -->
+            <div class="image-section">
+                <div class="section-header">
+                    <span class="icon">🎬</span>
+                    <span>Scenes</span>
+                    <span class="count" id="scene-count">0</span>
+                </div>
+                <div class="image-grid" id="scene-grid">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -689,43 +726,53 @@ no text, no watermark"</div>
 
     <script>
         let allImages = [];
-        let filters = { pipeline: 'all', type: 'all' };
+        let pipelineFilter = 'all';
 
         async function fetchImages() {
             try {
                 const res = await fetch('/api/dashboard/images?limit=200');
                 const data = await res.json();
                 allImages = data.images || [];
-                updateStats();
                 renderImages();
             } catch (e) {
-                document.getElementById('image-grid').innerHTML = '<div class="empty-state">Failed to load images</div>';
+                document.getElementById('thumb-grid').innerHTML = '<div class="empty-state">Failed to load</div>';
+                document.getElementById('scene-grid').innerHTML = '<div class="empty-state">Failed to load</div>';
             }
-        }
-
-        function updateStats() {
-            document.getElementById('stat-total').textContent = allImages.length;
-            document.getElementById('stat-thumb').textContent = allImages.filter(i => i.type === 'thumb').length;
-            document.getElementById('stat-scene').textContent = allImages.filter(i => i.type === 'scene').length;
         }
 
         function renderImages() {
-            const container = document.getElementById('image-grid');
             let images = allImages;
 
-            if (filters.pipeline !== 'all') {
-                images = images.filter(i => i.pipeline === filters.pipeline);
-            }
-            if (filters.type !== 'all') {
-                images = images.filter(i => i.type === filters.type);
+            if (pipelineFilter !== 'all') {
+                images = images.filter(i => i.pipeline === pipelineFilter);
             }
 
-            if (images.length === 0) {
-                container.innerHTML = '<div class="empty-state">No images found</div>';
-                return;
+            const thumbs = images.filter(i => i.type === 'thumb');
+            const scenes = images.filter(i => i.type === 'scene');
+
+            // Update counts
+            document.getElementById('thumb-count').textContent = thumbs.length;
+            document.getElementById('scene-count').textContent = scenes.length;
+
+            // Render thumbnails
+            const thumbContainer = document.getElementById('thumb-grid');
+            if (thumbs.length === 0) {
+                thumbContainer.innerHTML = '<div class="empty-state">No thumbnails</div>';
+            } else {
+                thumbContainer.innerHTML = thumbs.map(img => renderImageCard(img)).join('');
             }
 
-            container.innerHTML = images.map(img => `
+            // Render scenes
+            const sceneContainer = document.getElementById('scene-grid');
+            if (scenes.length === 0) {
+                sceneContainer.innerHTML = '<div class="empty-state">No scenes</div>';
+            } else {
+                sceneContainer.innerHTML = scenes.map(img => renderImageCard(img)).join('');
+            }
+        }
+
+        function renderImageCard(img) {
+            return `
                 <div class="image-card" onclick="viewImage('${img.url}', '${img.name}')">
                     <div class="image-wrapper">
                         <img src="${img.url}" alt="${img.name}" loading="lazy">
@@ -733,12 +780,11 @@ no text, no watermark"</div>
                     <div class="image-info">
                         <div class="image-name">${img.name}</div>
                         <div class="image-meta">
-                            <span class="image-badge badge-${img.type}">${img.type === 'thumb' ? 'Thumbnail' : 'Scene'}</span>
                             <span class="image-badge badge-${img.pipeline}">${img.pipeline}</span>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
         }
 
         function viewImage(url, name) {
@@ -753,16 +799,9 @@ no text, no watermark"</div>
 
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const filterType = btn.dataset.filter;
-                const value = btn.dataset.value;
-
-                // Update active state within same group
-                document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => {
-                    b.classList.remove('active');
-                });
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-
-                filters[filterType] = value;
+                pipelineFilter = btn.dataset.value;
                 renderImages();
             });
         });

@@ -52,26 +52,64 @@
         .filter-btn.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
         .filter-btn:hover { border-color: #8b5cf6; }
 
-        /* TTS List */
-        .tts-list { display: flex; flex-direction: column; gap: 12px; }
-        .tts-item {
+        /* TTS Grid */
+        .tts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 1100px) {
+            .tts-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 700px) {
+            .tts-grid { grid-template-columns: 1fr; }
+        }
+        .tts-section {
             background: #16213e;
             border-radius: 12px;
             padding: 20px;
             border: 1px solid #333;
+        }
+        .section-header {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 8px;
         }
-        .tts-item:hover { border-color: #8b5cf6; }
+        .section-header .icon { font-size: 16px; }
+        .section-header .count {
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: #666;
+            margin-left: auto;
+        }
+
+        /* TTS List */
+        .tts-list { display: flex; flex-direction: column; gap: 12px; }
+        .tts-item {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .tts-item:hover { border-color: #8b5cf6; background: #1a1a2e; }
         .tts-play {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: #8b5cf6;
             border: none;
             color: #fff;
-            font-size: 20px;
+            font-size: 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -80,8 +118,8 @@
         }
         .tts-play:hover { background: #7c3aed; }
         .tts-play.playing { background: #ef4444; }
-        .tts-info { flex: 1; }
-        .tts-name { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 5px; }
+        .tts-info { flex: 1; min-width: 0; }
+        .tts-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tts-meta {
             display: flex;
             gap: 20px;
@@ -500,15 +538,42 @@
             </div>
         </div>
 
-        <div class="filter-bar">
-            <button class="filter-btn active" data-filter="all">All</button>
-            <button class="filter-btn" data-filter="history">History</button>
-            <button class="filter-btn" data-filter="isekai">Isekai</button>
-            <button class="filter-btn" data-filter="bible">Bible</button>
-        </div>
+        <div class="tts-grid">
+            <!-- History TTS -->
+            <div class="tts-section">
+                <div class="section-header">
+                    <span class="icon">📚</span>
+                    <span>History (한국사)</span>
+                    <span class="count" id="history-count">0</span>
+                </div>
+                <div class="tts-list" id="history-tts">
+                    <div class="empty-state" style="padding:20px;">Loading...</div>
+                </div>
+            </div>
 
-        <div class="tts-list" id="tts-list">
-            <div class="empty-state">Loading...</div>
+            <!-- Isekai TTS -->
+            <div class="tts-section">
+                <div class="section-header">
+                    <span class="icon">🗡️</span>
+                    <span>Isekai (이세계)</span>
+                    <span class="count" id="isekai-count">0</span>
+                </div>
+                <div class="tts-list" id="isekai-tts">
+                    <div class="empty-state" style="padding:20px;">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Bible TTS -->
+            <div class="tts-section">
+                <div class="section-header">
+                    <span class="icon">📖</span>
+                    <span>Bible (성경통독)</span>
+                    <span class="count" id="bible-count">0</span>
+                </div>
+                <div class="tts-list" id="bible-tts">
+                    <div class="empty-state" style="padding:20px;">Loading...</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -516,7 +581,6 @@
 
     <script>
         let allTTS = [];
-        let currentFilter = 'all';
         let currentPlaying = null;
         const audio = document.getElementById('audio-player');
 
@@ -527,58 +591,57 @@
                 allTTS = data.tts || [];
                 renderTTS();
             } catch (e) {
-                document.getElementById('tts-list').innerHTML = '<div class="empty-state">Failed to load TTS files</div>';
+                ['history', 'isekai', 'bible'].forEach(p => {
+                    document.getElementById(`${p}-tts`).innerHTML = '<div class="empty-state">Failed to load</div>';
+                });
             }
         }
 
         function renderTTS() {
-            const container = document.getElementById('tts-list');
-            let tts = allTTS;
+            const pipelines = ['history', 'isekai', 'bible'];
 
-            if (currentFilter !== 'all') {
-                tts = tts.filter(t => t.pipeline === currentFilter);
-            }
+            pipelines.forEach(pipeline => {
+                const tts = allTTS.filter(t => t.pipeline === pipeline);
+                const container = document.getElementById(`${pipeline}-tts`);
+                document.getElementById(`${pipeline}-count`).textContent = tts.length;
 
-            if (tts.length === 0) {
-                container.innerHTML = '<div class="empty-state">No TTS files found</div>';
-                return;
-            }
+                if (tts.length === 0) {
+                    container.innerHTML = '<div class="empty-state" style="padding:20px;font-size:12px;">No files</div>';
+                    return;
+                }
 
-            container.innerHTML = tts.map((t, i) => `
+                container.innerHTML = tts.map((t, i) => {
+                    const globalIdx = allTTS.indexOf(t);
+                    return renderTTSItem(t, globalIdx);
+                }).join('');
+            });
+        }
+
+        function renderTTSItem(t, i) {
+            return `
                 <div class="tts-item" id="tts-${i}">
                     <button class="tts-play" onclick="togglePlay(${i}, '${t.url}')">&#9654;</button>
                     <div class="tts-info">
-                        <div class="tts-name">${t.name}</div>
+                        <div class="tts-name" title="${t.name}">${t.name}</div>
                         <div class="tts-meta">
                             <span>${t.date}</span>
                             <span>${t.duration}</span>
-                            <span class="tts-badge badge-${t.pipeline}">${t.pipeline.toUpperCase()}</span>
                         </div>
                     </div>
-                    <div class="tts-waveform paused">
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                    </div>
                 </div>
-            `).join('');
+            `;
         }
 
         function togglePlay(index, url) {
             const item = document.getElementById(`tts-${index}`);
+            if (!item) return;
             const btn = item.querySelector('.tts-play');
-            const waveform = item.querySelector('.tts-waveform');
 
             if (currentPlaying === index) {
                 // Pause
                 audio.pause();
                 btn.innerHTML = '&#9654;';
                 btn.classList.remove('playing');
-                waveform.classList.add('paused');
                 currentPlaying = null;
             } else {
                 // Stop previous
@@ -587,7 +650,6 @@
                     if (prevItem) {
                         prevItem.querySelector('.tts-play').innerHTML = '&#9654;';
                         prevItem.querySelector('.tts-play').classList.remove('playing');
-                        prevItem.querySelector('.tts-waveform').classList.add('paused');
                     }
                 }
 
@@ -596,7 +658,6 @@
                 audio.play();
                 btn.innerHTML = '&#9632;';
                 btn.classList.add('playing');
-                waveform.classList.remove('paused');
                 currentPlaying = index;
             }
         }
@@ -607,19 +668,9 @@
                 if (item) {
                     item.querySelector('.tts-play').innerHTML = '&#9654;';
                     item.querySelector('.tts-play').classList.remove('playing');
-                    item.querySelector('.tts-waveform').classList.add('paused');
                 }
                 currentPlaying = null;
             }
-        });
-
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFilter = btn.dataset.filter;
-                renderTTS();
-            });
         });
 
         fetchTTS();
