@@ -55,6 +55,26 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .card-header h2 { margin-bottom: 0; }
+        .view-all-btn {
+            font-size: 12px;
+            color: #3b82f6;
+            text-decoration: none;
+            padding: 4px 10px;
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+        .view-all-btn:hover {
+            background: #3b82f6;
+            color: #fff;
+        }
         .card-value {
             font-size: 32px;
             font-weight: 700;
@@ -240,6 +260,78 @@
         .toast.show { opacity: 1; transform: translateY(0); }
         .toast.success { background: #10b981; }
         .toast.error { background: #ef4444; }
+
+        /* Asset List (Script, TTS) */
+        .asset-list {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .asset-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .asset-item:hover { background: #232946; }
+        .asset-name {
+            font-size: 13px;
+            color: #fff;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .asset-meta {
+            font-size: 11px;
+            color: #666;
+            margin-left: 10px;
+        }
+        .asset-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge-script { background: #3b82f6; color: #fff; }
+        .badge-tts { background: #8b5cf6; color: #fff; }
+        .badge-thumb { background: #f59e0b; color: #000; }
+        .badge-scene { background: #10b981; color: #fff; }
+
+        /* Image Grid */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .image-thumb {
+            aspect-ratio: 16/9;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+        }
+        .image-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-thumb:hover { opacity: 0.8; }
+        .image-thumb .img-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.7);
+            font-size: 9px;
+            padding: 2px 4px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -280,7 +372,10 @@
 
             <!-- Pipeline Execution -->
             <div class="card">
-                <h2>Run Pipeline</h2>
+                <div class="card-header">
+                    <h2>Run Pipeline</h2>
+                    <a href="/dashboard/script-writer" class="view-all-btn">Script Writer</a>
+                </div>
                 <div class="pipeline-grid">
                     <button class="pipeline-btn history" onclick="showEpisodeInput('history')">
                         <span>📜</span> History
@@ -298,6 +393,42 @@
                 <div class="episode-input" id="episode-input" style="display: none;">
                     <input type="number" id="episode-number" placeholder="Episode #" min="1">
                     <button onclick="runWithEpisode()">Run</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Script, TTS, Image Section -->
+        <div class="grid">
+            <!-- Script (대본) -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Scripts (대본)</h2>
+                    <a href="/dashboard/scripts" class="view-all-btn">View All</a>
+                </div>
+                <div class="asset-list" id="script-list">
+                    <div class="card-sub">Loading...</div>
+                </div>
+            </div>
+
+            <!-- TTS -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>TTS Audio</h2>
+                    <a href="/dashboard/tts" class="view-all-btn">View All</a>
+                </div>
+                <div class="asset-list" id="tts-list">
+                    <div class="card-sub">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Images (썸네일, 씬) -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Images (썸네일/씬)</h2>
+                    <a href="/dashboard/images" class="view-all-btn">View All</a>
+                </div>
+                <div class="image-grid" id="image-list">
+                    <div class="card-sub">Loading...</div>
                 </div>
             </div>
         </div>
@@ -480,12 +611,83 @@
             }
         }
 
+        // Fetch scripts
+        async function fetchScripts() {
+            try {
+                const res = await fetch('/api/dashboard/scripts');
+                const data = await res.json();
+                const container = document.getElementById('script-list');
+
+                if (data.scripts && data.scripts.length > 0) {
+                    container.innerHTML = data.scripts.map(s => `
+                        <div class="asset-item">
+                            <span class="asset-name">${s.name}</span>
+                            <span class="asset-meta">${s.date}</span>
+                            <span class="asset-badge badge-script">${s.pipeline}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="card-sub">No scripts found</div>';
+                }
+            } catch (e) {
+                document.getElementById('script-list').innerHTML = '<div class="card-sub">Failed to load</div>';
+            }
+        }
+
+        // Fetch TTS files
+        async function fetchTTS() {
+            try {
+                const res = await fetch('/api/dashboard/tts');
+                const data = await res.json();
+                const container = document.getElementById('tts-list');
+
+                if (data.tts && data.tts.length > 0) {
+                    container.innerHTML = data.tts.map(t => `
+                        <div class="asset-item">
+                            <span class="asset-name">${t.name}</span>
+                            <span class="asset-meta">${t.duration || t.date}</span>
+                            <span class="asset-badge badge-tts">${t.pipeline}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="card-sub">No TTS files found</div>';
+                }
+            } catch (e) {
+                document.getElementById('tts-list').innerHTML = '<div class="card-sub">Failed to load</div>';
+            }
+        }
+
+        // Fetch images
+        async function fetchImages() {
+            try {
+                const res = await fetch('/api/dashboard/images');
+                const data = await res.json();
+                const container = document.getElementById('image-list');
+
+                if (data.images && data.images.length > 0) {
+                    container.innerHTML = data.images.map(img => `
+                        <div class="image-thumb" onclick="window.open('${img.url}', '_blank')">
+                            <img src="${img.url}" alt="${img.name}" loading="lazy">
+                            <div class="img-label">${img.type}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="card-sub">No images found</div>';
+                }
+            } catch (e) {
+                document.getElementById('image-list').innerHTML = '<div class="card-sub">Failed to load</div>';
+            }
+        }
+
         // Refresh all
         function refreshAll() {
             fetchQuota();
             fetchTasks();
             fetchVideos();
             fetchLogs();
+            fetchScripts();
+            fetchTTS();
+            fetchImages();
         }
 
         // Initial load

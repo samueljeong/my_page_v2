@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scripts - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        h1 { font-size: 24px; color: #fff; }
+        .back-btn {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-btn:hover { background: #444; }
+
+        /* Filter */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid #333;
+            border-radius: 20px;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .filter-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .filter-btn:hover { border-color: #3b82f6; }
+
+        /* Script List */
+        .script-list { display: flex; flex-direction: column; gap: 12px; }
+        .script-item {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .script-item:hover { border-color: #3b82f6; transform: translateX(5px); }
+        .script-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .script-name { font-size: 16px; font-weight: 600; color: #fff; }
+        .script-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-history { background: #3b82f6; color: #fff; }
+        .badge-isekai { background: #8b5cf6; color: #fff; }
+        .badge-bible { background: #10b981; color: #fff; }
+        .script-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+        .script-preview {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0d1117;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #888;
+            max-height: 100px;
+            overflow: hidden;
+            display: none;
+        }
+        .script-item.expanded .script-preview { display: block; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            padding: 40px;
+            overflow-y: auto;
+        }
+        .modal.show { display: block; }
+        .modal-content {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .modal-body {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 70vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Scripts (대본)</h1>
+            <a href="/dashboard" class="back-btn">Back to Dashboard</a>
+        </header>
+
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="history">History</button>
+            <button class="filter-btn" data-filter="isekai">Isekai</button>
+            <button class="filter-btn" data-filter="bible">Bible</button>
+        </div>
+
+        <div class="script-list" id="script-list">
+            <div class="empty-state">Loading...</div>
+        </div>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Script</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        let allScripts = [];
+        let currentFilter = 'all';
+
+        async function fetchScripts() {
+            try {
+                const res = await fetch('/api/dashboard/scripts?limit=100');
+                const data = await res.json();
+                allScripts = data.scripts || [];
+                renderScripts();
+            } catch (e) {
+                document.getElementById('script-list').innerHTML = '<div class="empty-state">Failed to load scripts</div>';
+            }
+        }
+
+        function renderScripts() {
+            const container = document.getElementById('script-list');
+            let scripts = allScripts;
+
+            if (currentFilter !== 'all') {
+                scripts = scripts.filter(s => s.pipeline === currentFilter);
+            }
+
+            if (scripts.length === 0) {
+                container.innerHTML = '<div class="empty-state">No scripts found</div>';
+                return;
+            }
+
+            container.innerHTML = scripts.map(s => `
+                <div class="script-item" onclick="viewScript('${s.pipeline}', '${s.name}')">
+                    <div class="script-header">
+                        <span class="script-name">${s.name}</span>
+                        <span class="script-badge badge-${s.pipeline}">${s.pipeline.toUpperCase()}</span>
+                    </div>
+                    <div class="script-meta">
+                        <span>Modified: ${s.date}</span>
+                        <span>Size: ${s.size || '-'}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewScript(pipeline, name) {
+            document.getElementById('modal-title').textContent = name;
+            document.getElementById('modal-body').textContent = 'Loading...';
+            document.getElementById('modal').classList.add('show');
+
+            try {
+                const res = await fetch(`/api/dashboard/script-content?pipeline=${pipeline}&name=${encodeURIComponent(name)}`);
+                const data = await res.json();
+                document.getElementById('modal-body').textContent = data.content || 'Failed to load content';
+            } catch (e) {
+                document.getElementById('modal-body').textContent = 'Error loading script';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderScripts();
+            });
+        });
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') closeModal();
+        });
+
+        fetchScripts();
+    </script>
+</body>
+</html>

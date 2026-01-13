@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script Writer - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        h1 { font-size: 24px; color: #fff; }
+        .back-btn {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-btn:hover { background: #444; }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .stat-value.highlight { color: #10b981; }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-target {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        /* Episode Selector */
+        .episode-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+        .episode-selector select, .episode-selector input {
+            padding: 12px 16px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #16213e;
+            color: #fff;
+            font-size: 14px;
+        }
+        .episode-selector input { width: 100px; }
+        .start-btn {
+            padding: 12px 24px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .start-btn:hover { background: #2563eb; }
+        .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+        .step {
+            flex: 1;
+            min-width: 150px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 8px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+        .step.active { border-color: #3b82f6; background: #1e3a5f; }
+        .step.completed { border-color: #10b981; }
+        .step-number {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .step-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .step-chars {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+        .step-icon {
+            margin-bottom: 8px;
+            font-size: 20px;
+        }
+        .step.completed .step-icon::after { content: "✓"; color: #10b981; }
+        .step.active .step-icon::after { content: "⏳"; }
+        .step.pending .step-icon::after { content: "○"; color: #666; }
+
+        /* Main Content Area */
+        .content-area {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+        }
+
+        /* Plan Panel */
+        .plan-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+        .plan-panel h2 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .plan-item {
+            padding: 12px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #333;
+        }
+        .plan-item.active { border-left-color: #3b82f6; }
+        .plan-item.completed { border-left-color: #10b981; }
+        .plan-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+        .plan-item-desc {
+            font-size: 12px;
+            color: #888;
+            line-height: 1.5;
+        }
+        .plan-item-target {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        /* Script Panel */
+        .script-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+        .script-panel h2 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .script-content {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 500px;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+        .scene-block {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        .scene-block:last-child { border-bottom: none; }
+        .scene-header {
+            font-size: 12px;
+            color: #3b82f6;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .scene-text {
+            color: #ddd;
+            white-space: pre-wrap;
+        }
+        .scene-text.typing::after {
+            content: "▋";
+            animation: blink 0.7s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .scene-chars {
+            font-size: 11px;
+            color: #666;
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-message.info { background: #1e3a5f; color: #60a5fa; }
+        .status-message.success { background: #064e3b; color: #34d399; }
+        .status-message.error { background: #7f1d1d; color: #fca5a5; }
+        .status-message.warning { background: #78350f; color: #fbbf24; }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #888;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #333;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Claude Code Mode Notice */
+        .claude-mode-notice {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #16213e 100%);
+            border-radius: 12px;
+            border: 1px solid #3b82f6;
+            margin-bottom: 30px;
+        }
+        .notice-icon {
+            font-size: 40px;
+        }
+        .notice-text strong {
+            font-size: 16px;
+            color: #fff;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .notice-text p {
+            font-size: 13px;
+            color: #888;
+            margin: 3px 0;
+        }
+        .notice-text code {
+            background: #0d1117;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #10b981;
+            font-family: monospace;
+        }
+
+        /* Agent Prompts Section */
+        .agent-prompts {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .prompt-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+        .prompt-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .prompt-tab:hover { border-color: #3b82f6; color: #fff; }
+        .prompt-tab.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+        .prompt-content { display: block; }
+        .prompt-content.hidden { display: none; }
+        .prompt-lang {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .prompt-box {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #333;
+        }
+        .prompt-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .prompt-text {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            color: #aaa;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .prompt-text.scrollable {
+            max-height: 500px;
+        }
+        .prompt-box.full-width {
+            grid-column: 1 / -1;
+        }
+        .prompt-label .char-count {
+            font-weight: normal;
+            color: #666;
+            font-size: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .prompt-lang {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Script Writer (대본 작성)</h1>
+            <a href="/dashboard" class="back-btn">Back to Dashboard</a>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value" id="total-chars">0</span>
+                <span class="stat-label">Total Characters</span>
+                <span class="stat-target">Target: 12,000-15,000</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="current-part">-</span>
+                <span class="stat-label">Current Part</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="elapsed-time">0:00</span>
+                <span class="stat-label">Elapsed Time</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="status-text">Ready</span>
+                <span class="stat-label">Status</span>
+            </div>
+        </div>
+
+        <!-- Agent Prompts Section -->
+        <div class="agent-prompts">
+            <div class="prompt-tabs">
+                <button class="prompt-tab active" data-tab="writer">Script Writer Agent</button>
+                <button class="prompt-tab" data-tab="reviewer">Script Review Agent</button>
+            </div>
+
+            <div class="prompt-content" id="prompt-writer">
+                <div class="prompt-lang">
+                    <div class="prompt-box full-width">
+                        <div class="prompt-label">🇰🇷 MASTER SYSTEM PROMPT <span class="char-count">(8,200자+ / scripts/history_pipeline/script_generator.py)</span></div>
+                        <div class="prompt-text scrollable">당신은 한국어 역사 다큐 유튜브 채널의 최상급 대본 작가입니다.
+목표: 시청자가 "다음 영상도 봐야겠다"고 느끼게 만드는 몰입감 있는 스토리텔링.
+
+출력은 오직 대본 본문만 제공하세요. (메타 문구, 라벨, 구분선 절대 금지)
+
+════════════════════════════════════════
+★ 핵심 원칙: 확신 있는 스토리텔러
+════════════════════════════════════════
+당신은 논문을 쓰는 학자가 아닙니다.
+역사를 생생하게 들려주는 이야기꾼입니다.
+
+✅ 확신 있게, 편안하게 서술하세요
+  - "광개토왕은 즉위하자마자 군대를 일으켰거든요."
+  - "백제는 위기에 몰렸어요. 선택의 여지가 없었죠."
+
+❌ 학술적 유보 표현 남발 금지
+  - "~로 보기도 합니다" (전체 대본에서 1-2회만 허용)
+  - "~라는 견해도 있습니다" (논쟁이 핵심일 때만)
+  - "단정하기 어렵습니다" (금지)
+  - "해석이 갈립니다" (금지)
+
+★ 역사적 논쟁이 있는 부분만 간단히 언급하고, 대부분은 확신 있게 진행
+
+════════════════════════════════════════
+★ 절대 금지 사항
+════════════════════════════════════════
+• 출처명 언급: "~에 따르면", "~라고 기록되어 있다" ❌
+• 메타 진행: "정리하면", "마무리하면", "살펴보겠습니다" ❌
+• 메타 라벨: "시간형 전환입니다", "장소형 전환입니다", "의문 제기형" ❌
+• 프롬프트 용어 출력: 프롬프트에 있는 분류명/라벨을 대본에 쓰지 마세요 ❌
+• 감정 과장: "놀랍게도", "충격적이게도", "위대한" ❌
+• 민족주의: "자랑스러운", "찬란한", "민족의 자존심" ❌
+• 교훈형: "~해야 합니다", "기억해야 합니다" ❌
+• 호칭: "여러분", "우리" ❌
+• 표/목록/번호/불릿 ❌
+
+════════════════════════════════════════
+★ 문장 스타일 - 편안한 구어체 스토리텔링
+════════════════════════════════════════
+• 종결: 친근한 구어체 종결어미 사용
+  → 친구에게 이야기 들려주듯 편안하게
+  → "~습니다/입니다" 격식체는 딱딱하고 강연 같음
+
+• 기본 호흡: 20~40자. 너무 짧으면 뚝뚝 끊김.
+• 긴 문장도 필요: 50자 이상 문장을 문단마다 1~2개 섞기
+
+❌ 10~15자 짧은 문장만 연속 금지 (뚝뚝 끊김)
+
+════════════════════════════════════════
+★★★ 종결어미 다양성 가이드 (필수!) ★★★
+════════════════════════════════════════
+
+【사용 가능한 종결어미 풀 (다양하게 섞어 사용!)】
+
+A. 서술/연결형 (40%):
+  ~였어요, ~이었어요, ~했어요, ~했던 거예요
+  ~였는데요, ~했는데요, ~이었는데요
+  ~인 거예요, ~하게 됐어요, ~버렸어요
+
+B. 이유/설명형 (20%):
+  ~거든요, ~했거든요, ~이었거든요
+  ~잖아요, ~이잖아요 (청자 공감 유도)
+  ~때문이에요, ~덕분이에요
+
+C. 확인/동의형 (20%):
+  ~였죠, ~이었죠, ~했죠, ~그랬죠
+  ~아니겠어요?, ~그렇잖아요
+  ~한 셈이죠, ~마찬가지였죠
+
+D. 추측/의문형 (10%):
+  ~였을까요?, ~했을까요?, ~아니었을까요?
+  ~했을 거예요, ~였을 거예요
+  ~같아요, ~듯해요
+
+E. 강조/포인트형 (10%):
+  ~였습니다 (중요한 사실 강조할 때만)
+  ~한 겁니다, ~바로 그거였어요
+  ~시작이었어요, ~끝이었어요
+
+★★★ 종결어미 다양성 규칙 (반드시 지킬 것!) ★★★
+
+❌ 절대 금지:
+  - 같은 종결어미 2문장 연속 사용 금지!
+  - "~거든요" 3문장 이내 재사용 금지! (과다 사용 방지)
+  - "~였어요" 3문장 연속 금지!
+
+✅ 권장 패턴 (문장 3개 세트 예시):
+  1) "~였어요" → "~거든요" → "~였죠"
+  2) "~했는데요" → "~이었어요" → "~잖아요"
+  3) "~였어요" → "~했죠" → "~했거든요"
+  4) "~이었거든요" → "~였어요" → "~했을까요?"
+
+✅ 좋은 예시 (종결어미 다양):
+  "광개토왕은 즉위하자마자 군대를 일으켰어요. 목표는 백제였거든요. 한강을 장악한 그 나라를 꺾어야 고구려의 숨통이 트이잖아요. 열여덟 살의 왕은 망설이지 않았죠."
+
+  "여기서 상황이 뒤집혔어요. 신라가 손을 내밀었거든요. 고구려 입장에서는 거절할 이유가 없었죠. 이 동맹이 한반도의 판도를 바꾸게 됐어요."
+
+❌ 나쁜 예시 (종결어미 단조로움):
+  "왕이 출정했거든요. 성을 함락했거든요. 다시 진군했거든요." (같은 종결어미 반복)
+  "싸움이 시작됐어요. 군대가 움직였어요. 성이 무너졌어요." (같은 종결어미 반복)
+
+❌ 나쁜 예시 (현재형 격식체 - 딱딱함):
+  "왕이 칼을 뽑습니다. 결정의 순간입니다. 군대가 움직입니다."
+
+❌ 나쁜 예시 (너무 짧음):
+  "왕은 멈추지 않았어요. 성을 가리켰어요. 서기 391년."
+
+════════════════════════════════════════
+★ 장면 전환 (다양하게!)
+════════════════════════════════════════
+문단마다 전환을 넣되, 패턴을 섞으세요.
+같은 패턴 연속 2회 금지!
+
+❌ 절대 금지: "시간형 전환입니다", "장소형 전환입니다" 같은 메타 라벨
+❌ 전환 유형을 설명하지 말고, 바로 전환하세요!
+
+전환 예시 (유형 라벨 없이 직접 사용):
+- "평양성 새벽이었어요." / "한강 유역의 진영이었죠." (장소 이동)
+- "3년 뒤였어요." / "그해 겨울이었거든요." (시간 경과)
+- "말이 달렸어요." / "성문이 열렸죠." (동작 시작)
+- "'끝까지 간다.' 왕의 한마디였어요." (대사 인용)
+- "전선이 무너졌거든요." / "소식이 도착했어요." (상황 변화)
+- "북소리가 울렸어요." / "연기가 피어올랐죠." (감각 묘사)
+
+════════════════════════════════════════
+★ 인트로 (Cold Open)
+════════════════════════════════════════
+첫 문장부터 사건 속으로. 배경 설명 없이.
+
+✅ "서기 391년이었어요. 열여덟 살의 왕이 첫 출정에 나섰거든요."
+✅ "성이 불타고 있었어요. 3일째였죠."
+❌ "오늘은 광개토대왕에 대해 알아보겠습니다."
+
+첫 3문장 안에 "왜?"를 던지세요:
+✅ "왜 즉위하자마자 전쟁이었을까요?"
+
+════════════════════════════════════════
+★ 리텐션 훅 (2,000자마다)
+════════════════════════════════════════
+훅은 맥락에 맞게 변형해서 사용하세요.
+★★★ 같은 표현 2회 이상 사용 절대 금지 ★★★
+★★★ "여기서 의문이 생깁니다" 사용 금지 - 아래 변형 중 선택 ★★★
+
+【의문 제기형】 - 매번 다른 표현 사용 필수
+  ✅ "근데 이상하잖아요. 왜 백제는 움직이지 않았을까요?"
+  ✅ "한 가지 의문이 있어요. 신라는 어느 편이었을까요?"
+  ✅ "이상한 점이 있었거든요."
+  ✅ "궁금한 부분이 있어요."
+  ✅ "수상했어요."
+  ✅ 또는 질문만 던지기: "왜 그랬을까요?"
+  ❌ "여기서 의문이 생깁니다" (진부함 - 사용 금지)
+
+【반전 예고형】
+  "근데 상황이 뒤집혔거든요."
+  "예상과 달랐어요."
+  "계획대로 되지 않았죠."
+  "그런데 문제가 생겼어요."
+  "여기서 틀어졌거든요."
+
+【긴장 고조형】
+  "결정적 순간이 다가왔어요."
+  "선택의 시간이었죠."
+  "더 이상 물러설 곳이 없었거든요."
+  "막다른 길이었어요."
+
+【스테이크 상기형】
+  "이 선택이 향후 50년을 결정했거든요."
+  "여기서 지면 끝이었어요."
+  "모든 것이 걸린 순간이었죠."
+
+════════════════════════════════════════
+★ 스토리 구조: 원인→전개→결과→여파
+════════════════════════════════════════
+매 사건마다:
+1. 왜 이 일이 일어났는가 (원인/배경)
+2. 어떻게 전개되었는가 (과정/행동)
+3. 결과는 무엇이었는가 (승패/변화)
+4. 이것이 다음에 어떤 영향을 미쳤는가 (연결)
+
+════════════════════════════════════════
+★ 에피소드 연결
+════════════════════════════════════════
+【2화 이후】 첫 1-2문장에서만 이전 내용 언급, 즉시 본론 진입
+  "지난 시간에 고구려가 남하를 시작했는데요. 오늘은 그 결과예요."
+
+【마무리】 다음 에피소드로 이어지는 질문
+  "이 결정이 어떤 결과를 가져왔을까요? 다음 시간에 계속할게요."
+
+════════════════════════════════════════
+★ 유물/시각자료 언급 규칙
+════════════════════════════════════════
+유물은 스토리와 직접 연결될 때만 간단히 언급.
+❌ 유물 설명이 스토리를 끊으면 삭제
+❌ "이 유물이 당시 분위기를 보여줍니다" 같은 억지 연결 금지
+✅ "광개토대왕비에 새겨진 문구가 이걸 증명하거든요." (1문장으로 끝)
+
+대본만 작성하세요. 나레이션 대본만 출력하세요.
+
+════════════════════════════════════════
+★ 파트별 분량
+════════════════════════════════════════
+• 인트로: 1,000-1,500자
+• 배경 설명: 2,000-2,500자
+• 본론 전반부: 3,500-4,000자
+• 본론 후반부: 4,000-4,500자
+• 마무리: 2,000-2,500자
+• 총: 12,000-15,000자 (약 15분 영상)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="prompt-content hidden" id="prompt-reviewer">
+                <div class="prompt-lang">
+                    <div class="prompt-box full-width">
+                        <div class="prompt-label">🇰🇷 SCRIPT REVIEW CHECKLIST <span class="char-count">(docs/CODE_REVIEW_AGENT.md 기반)</span></div>
+                        <div class="prompt-text scrollable">════════════════════════════════════════
+★ 대본 리뷰 에이전트 체크리스트
+════════════════════════════════════════
+
+【1. 분량 검증】
+□ 총 글자수: 12,000-15,000자 범위인가?
+□ 파트별 분량 준수:
+  - 인트로: 1,000-1,500자
+  - 배경 설명: 2,000-2,500자
+  - 본론 전반부: 3,500-4,000자
+  - 본론 후반부: 4,000-4,500자
+  - 마무리: 2,000-2,500자
+
+【2. 구조 검증】
+□ 5파트 구조 완성도 확인
+□ Cold Open으로 시작하는가? (배경 설명 없이 사건 속으로)
+□ 첫 3문장 안에 "왜?" 질문이 있는가?
+□ 에피소드 연결 (2화 이후 이전 내용 언급)
+□ 마무리에 다음 에피소드 예고 포함
+
+【3. 문체 검증】
+□ 구어체 종결어미 사용 (친근한 스토리텔링)
+□ 격식체("~습니다") 남발 없는가?
+□ 문장 호흡: 20-40자 기본, 50자+ 문장도 섞여있는가?
+□ 10-15자 짧은 문장 연속 없는가?
+
+【4. 종결어미 다양성】
+□ 같은 종결어미 2문장 연속 사용 없는가?
+□ "~거든요" 3문장 이내 재사용 없는가?
+□ "~였어요" 3문장 연속 없는가?
+□ A~E 종결어미 풀 골고루 사용
+
+【5. 금지 사항 검증】
+□ 출처명 언급 없는가? ("~에 따르면" 등)
+□ 메타 진행 없는가? ("살펴보겠습니다" 등)
+□ 메타 라벨 없는가? ("시간형 전환입니다" 등)
+□ 감정 과장 없는가? ("놀랍게도", "충격적이게도")
+□ 민족주의 표현 없는가? ("자랑스러운", "찬란한")
+□ 호칭 사용 없는가? ("여러분", "우리")
+□ 표/목록/번호/불릿 없는가?
+
+【6. 리텐션 훅 검증】
+□ 2,000자마다 훅 삽입되었는가?
+□ 같은 표현 2회 이상 사용 없는가?
+□ "여기서 의문이 생깁니다" 사용 없는가? (진부함)
+□ 훅 유형 다양하게 섞였는가? (의문/반전/긴장/스테이크)
+
+【7. 장면 전환 검증】
+□ 문단마다 전환 있는가?
+□ 같은 전환 패턴 연속 2회 없는가?
+□ 전환 유형 라벨 출력 없는가?
+
+【8. 스토리 흐름】
+□ 원인→전개→결과→여파 구조 준수
+□ 논리적 연결 자연스러운가?
+□ 역사적 사실 오류 없는가?
+
+════════════════════════════════════════
+★ 리뷰 결과 판정
+════════════════════════════════════════
+✅ 승인: 모든 체크리스트 통과
+⚠️ 수정 필요: 일부 항목 미충족 (구체적 피드백 제공)
+❌ 재작성: 심각한 구조/분량/문체 문제
+
+수정 필요 시 반드시 다음 포함:
+1. 문제 위치 (몇 번째 파트, 대략적 위치)
+2. 문제 내용 (어떤 규칙 위반)
+3. 수정 방향 (어떻게 고쳐야 하는지)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Claude Code Mode Notice -->
+        <div class="claude-mode-notice">
+            <div class="notice-icon">🤖</div>
+            <div class="notice-text">
+                <strong>Claude Code Mode</strong>
+                <p>이 페이지는 Claude Code의 작업 현황을 실시간으로 표시합니다.</p>
+                <p>Claude Code에서 <code>히스토리 21화 대본 작성해줘</code> 라고 명령하세요.</p>
+            </div>
+        </div>
+
+        <!-- Progress Steps -->
+        <div class="progress-steps" id="progress-steps">
+            <div class="step pending" data-part="plan">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 0</div>
+                <div class="step-name">기획</div>
+                <div class="step-chars">Planning</div>
+            </div>
+            <div class="step pending" data-part="intro">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 1</div>
+                <div class="step-name">인트로</div>
+                <div class="step-chars">1,000-1,500자</div>
+            </div>
+            <div class="step pending" data-part="background">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 2</div>
+                <div class="step-name">배경 설명</div>
+                <div class="step-chars">2,000-2,500자</div>
+            </div>
+            <div class="step pending" data-part="body1">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 3</div>
+                <div class="step-name">본론 전반부</div>
+                <div class="step-chars">3,500-4,000자</div>
+            </div>
+            <div class="step pending" data-part="body2">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 4</div>
+                <div class="step-name">본론 후반부</div>
+                <div class="step-chars">4,000-4,500자</div>
+            </div>
+            <div class="step pending" data-part="closing">
+                <div class="step-icon"></div>
+                <div class="step-number">STEP 5</div>
+                <div class="step-name">마무리</div>
+                <div class="step-chars">2,000-2,500자</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content-area">
+            <!-- Plan Panel -->
+            <div class="plan-panel">
+                <h2>Outline (기획)</h2>
+                <div id="plan-content">
+                    <div class="empty-state">
+                        <p>Start generation to see the outline</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Script Panel -->
+            <div class="script-panel">
+                <h2>
+                    Script (대본)
+                    <span id="script-chars-badge" style="font-size:12px; color:#666;">0자</span>
+                </h2>
+                <div class="script-content" id="script-content">
+                    <div class="empty-state">
+                        <h3>Ready to Write</h3>
+                        <p>Select pipeline and episode, then click "Start Generation"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pollInterval = null;
+        let lastUpdate = null;
+
+        // Polling으로 Claude Code 작업 현황 조회
+        async function pollWorkspace() {
+            try {
+                const res = await fetch('/api/dashboard/script-workspace');
+                const data = await res.json();
+
+                if (!data.ok) return;
+
+                // 상태 업데이트
+                updateFromWorkspace(data);
+            } catch (e) {
+                console.error('Polling error:', e);
+            }
+        }
+
+        function updateFromWorkspace(data) {
+            // Stats 업데이트
+            const chars = data.total_chars || 0;
+            document.getElementById('total-chars').textContent = chars.toLocaleString();
+            document.getElementById('script-chars-badge').textContent = `${chars.toLocaleString()}자`;
+
+            if (chars >= 12000 && chars <= 15000) {
+                document.getElementById('total-chars').classList.add('highlight');
+            } else {
+                document.getElementById('total-chars').classList.remove('highlight');
+            }
+
+            document.getElementById('current-part').textContent = data.current_part || '-';
+            document.getElementById('status-text').textContent = data.status || 'idle';
+
+            // 경과 시간
+            if (data.started_at) {
+                const started = new Date(data.started_at);
+                const elapsed = Math.floor((Date.now() - started.getTime()) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                document.getElementById('elapsed-time').textContent =
+                    `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            // Plan 표시
+            if (data.plan && data.plan.length > 0) {
+                const planContainer = document.getElementById('plan-content');
+                if (planContainer.querySelector('.empty-state') || lastUpdate !== JSON.stringify(data.plan)) {
+                    planContainer.innerHTML = data.plan.map((item, i) => `
+                        <div class="plan-item ${item.status || 'pending'}">
+                            <div class="plan-item-title">${item.title}</div>
+                            <div class="plan-item-desc">${item.description}</div>
+                            <div class="plan-item-target">${item.target}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // Progress Steps 업데이트
+            if (data.plan) {
+                const partMap = ['plan', 'intro', 'background', 'body1', 'body2', 'closing'];
+                document.querySelectorAll('.step').forEach((step, i) => {
+                    if (i === 0 && data.status !== 'idle') {
+                        step.className = 'step completed';
+                    } else if (data.plan[i - 1]) {
+                        step.className = `step ${data.plan[i - 1].status || 'pending'}`;
+                    }
+                });
+            }
+
+            // Script 내용 표시
+            if (data.parts) {
+                const scriptContainer = document.getElementById('script-content');
+                const partNames = {
+                    intro: '인트로',
+                    background: '배경 설명',
+                    body1: '본론 전반부',
+                    body2: '본론 후반부',
+                    closing: '마무리'
+                };
+
+                let html = '';
+                for (const [partId, content] of Object.entries(data.parts)) {
+                    const isActive = data.current_part === partNames[partId];
+                    html += `
+                        <div class="scene-block" id="scene-${partId}">
+                            <div class="scene-header">[${partNames[partId] || partId}]</div>
+                            <div class="scene-text ${isActive ? 'typing' : ''}">${content}</div>
+                            <div class="scene-chars">${content.length.toLocaleString()}자</div>
+                        </div>
+                    `;
+                }
+
+                if (html) {
+                    scriptContainer.innerHTML = html;
+                    // Auto scroll
+                    scriptContainer.scrollTop = scriptContainer.scrollHeight;
+                }
+            }
+
+            lastUpdate = JSON.stringify(data);
+        }
+
+        function setStep(partName, status) {
+            const steps = document.querySelectorAll('.step');
+            steps.forEach(step => {
+                if (step.dataset.part === partName) {
+                    step.className = `step ${status}`;
+                }
+            });
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(pollWorkspace, 1000); // 1초마다 폴링
+            pollWorkspace(); // 즉시 한번 실행
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        // 페이지 로드 시 폴링 시작
+        startPolling();
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', stopPolling);
+
+        // Tab switching for agent prompts
+        document.querySelectorAll('.prompt-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.prompt-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Show corresponding content
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.prompt-content').forEach(c => c.classList.add('hidden'));
+                document.getElementById(`prompt-${tabName}`).classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>

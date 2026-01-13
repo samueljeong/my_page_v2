@@ -12,9 +12,12 @@ Routes:
 """
 
 import os
+import json
+import time
+import glob
 import requests
 from datetime import datetime
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, send_from_directory, Response
 
 # Blueprint 생성
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -43,6 +46,91 @@ def add_log(message: str):
 def dashboard_page():
     """대시보드 페이지"""
     return render_template('dashboard.html')
+
+
+@dashboard_bp.route('/dashboard/scripts')
+def dashboard_scripts_page():
+    """대본 상세 페이지"""
+    return render_template('dashboard_scripts.html')
+
+
+@dashboard_bp.route('/dashboard/tts')
+def dashboard_tts_page():
+    """TTS 상세 페이지"""
+    return render_template('dashboard_tts.html')
+
+
+@dashboard_bp.route('/dashboard/images')
+def dashboard_images_page():
+    """이미지 상세 페이지"""
+    return render_template('dashboard_images.html')
+
+
+@dashboard_bp.route('/dashboard/script-writer')
+def dashboard_script_writer_page():
+    """대본 작성 페이지"""
+    return render_template('dashboard_script_writer.html')
+
+
+@dashboard_bp.route('/static/outputs/<path:filepath>')
+def serve_output_file(filepath):
+    """outputs 디렉토리 파일 서빙"""
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    outputs_dir = os.path.join(base_dir, "outputs")
+    return send_from_directory(outputs_dir, filepath)
+
+
+@dashboard_bp.route('/api/dashboard/script-content')
+def api_script_content():
+    """스크립트 내용 조회"""
+    pipeline = request.args.get('pipeline')
+    name = request.args.get('name')
+
+    if not pipeline or not name:
+        return jsonify({"ok": False, "error": "pipeline and name required"})
+
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    script_dirs = {
+        "history": "scripts/history_pipeline/episodes",
+        "isekai": "scripts/isekai_pipeline/episodes",
+        "bible": "outputs/bible/scripts",
+    }
+
+    dir_path = script_dirs.get(pipeline)
+    if not dir_path:
+        return jsonify({"ok": False, "error": "Invalid pipeline"})
+
+    filepath = os.path.join(base_dir, dir_path, name)
+    if not os.path.exists(filepath):
+        return jsonify({"ok": False, "error": "Script not found"})
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({"ok": True, "content": content})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@dashboard_bp.route('/api/dashboard/script-workspace')
+def api_script_workspace():
+    """Claude Code 작업 현황 조회 (파일 기반)"""
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    workspace_file = os.path.join(base_dir, "outputs/workspace/current_script.json")
+
+    try:
+        if os.path.exists(workspace_file):
+            with open(workspace_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return jsonify({"ok": True, **data})
+        else:
+            return jsonify({
+                "ok": True,
+                "status": "idle",
+                "message": "Workspace not initialized"
+            })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @dashboard_bp.route('/api/dashboard/quota')
@@ -222,6 +310,136 @@ def api_run():
     except Exception as e:
         add_log(f"Error starting {pipeline}: {e}")
         return jsonify({"ok": False, "error": str(e)})
+
+
+@dashboard_bp.route('/api/dashboard/scripts')
+def api_scripts():
+    """최근 대본 파일 조회"""
+    limit = request.args.get('limit', 15, type=int)
+    scripts = []
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+
+    script_dirs = [
+        ("history", "scripts/history_pipeline/episodes"),
+        ("isekai", "scripts/isekai_pipeline/episodes"),
+        ("bible", "outputs/bible/scripts"),
+    ]
+
+    for pipeline, dir_path in script_dirs:
+        full_path = os.path.join(base_dir, dir_path)
+        if not os.path.exists(full_path):
+            continue
+
+        try:
+            for filename in os.listdir(full_path):
+                if filename.endswith(('.txt', '.json')):
+                    filepath = os.path.join(full_path, filename)
+                    mtime = os.path.getmtime(filepath)
+                    date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
+                    size_kb = os.path.getsize(filepath) / 1024
+
+                    scripts.append({
+                        "name": filename,
+                        "date": date_str,
+                        "size": f"{size_kb:.1f}KB",
+                        "pipeline": pipeline,
+                        "mtime": mtime
+                    })
+        except Exception:
+            continue
+
+    scripts.sort(key=lambda x: x["mtime"], reverse=True)
+    return jsonify({"ok": True, "scripts": scripts[:limit]})
+
+
+@dashboard_bp.route('/api/dashboard/tts')
+def api_tts():
+    """최근 TTS 파일 조회"""
+    limit = request.args.get('limit', 15, type=int)
+    tts_files = []
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+
+    tts_dirs = [
+        ("history", "outputs/history/tts"),
+        ("isekai", "outputs/isekai/tts"),
+        ("bible", "outputs/bible/tts"),
+    ]
+
+    for pipeline, dir_path in tts_dirs:
+        full_path = os.path.join(base_dir, dir_path)
+        if not os.path.exists(full_path):
+            continue
+
+        try:
+            for filename in os.listdir(full_path):
+                if filename.endswith(('.mp3', '.wav')):
+                    filepath = os.path.join(full_path, filename)
+                    mtime = os.path.getmtime(filepath)
+                    date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
+                    size_mb = os.path.getsize(filepath) / (1024 * 1024)
+
+                    # URL 생성
+                    rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
+                    url = f"/static/outputs/{rel_path}"
+
+                    tts_files.append({
+                        "name": filename,
+                        "date": date_str,
+                        "duration": f"{size_mb:.1f}MB",
+                        "pipeline": pipeline,
+                        "url": url,
+                        "mtime": mtime
+                    })
+        except Exception:
+            continue
+
+    tts_files.sort(key=lambda x: x["mtime"], reverse=True)
+    return jsonify({"ok": True, "tts": tts_files[:limit]})
+
+
+@dashboard_bp.route('/api/dashboard/images')
+def api_images():
+    """최근 이미지 파일 조회 (썸네일, 씬)"""
+    limit = request.args.get('limit', 20, type=int)
+    images = []
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+
+    image_dirs = [
+        ("history", "outputs/history/thumbnails", "thumb"),
+        ("history", "outputs/history/scenes", "scene"),
+        ("isekai", "outputs/isekai/thumbnails", "thumb"),
+        ("isekai", "outputs/isekai/scenes", "scene"),
+        ("bible", "outputs/bible/thumbnails", "thumb"),
+        ("bible", "outputs/bible/scenes", "scene"),
+    ]
+
+    for pipeline, dir_path, img_type in image_dirs:
+        full_path = os.path.join(base_dir, dir_path)
+        if not os.path.exists(full_path):
+            continue
+
+        try:
+            for filename in os.listdir(full_path):
+                if filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    filepath = os.path.join(full_path, filename)
+                    mtime = os.path.getmtime(filepath)
+
+                    # 상대 URL 생성 (outputs 기준)
+                    rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
+                    url = f"/static/outputs/{rel_path}"
+
+                    images.append({
+                        "name": filename,
+                        "type": img_type,
+                        "pipeline": pipeline,
+                        "url": url,
+                        "mtime": mtime
+                    })
+        except Exception:
+            continue
+
+    images.sort(key=lambda x: x["mtime"], reverse=True)
+    return jsonify({"ok": True, "images": images[:limit]})
 
 
 # 외부에서 로그 추가할 수 있도록 export

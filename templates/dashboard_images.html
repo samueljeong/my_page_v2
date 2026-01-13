@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Images - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        h1 { font-size: 24px; color: #fff; }
+        .back-btn {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-btn:hover { background: #444; }
+
+        /* Filter */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-group {
+            display: flex;
+            gap: 5px;
+            padding: 5px;
+            background: #16213e;
+            border-radius: 25px;
+        }
+        .filter-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .filter-btn.active { background: #3b82f6; color: #fff; }
+        .filter-btn:hover:not(.active) { color: #fff; }
+        .filter-btn.type-thumb.active { background: #f59e0b; color: #000; }
+        .filter-btn.type-scene.active { background: #10b981; color: #fff; }
+
+        /* Image Grid */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .image-card {
+            background: #16213e;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #333;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .image-card:hover { border-color: #3b82f6; transform: translateY(-5px); }
+        .image-wrapper {
+            aspect-ratio: 16/9;
+            overflow: hidden;
+            background: #0d1117;
+        }
+        .image-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+        .image-card:hover .image-wrapper img { transform: scale(1.05); }
+        .image-info {
+            padding: 15px;
+        }
+        .image-name {
+            font-size: 13px;
+            color: #fff;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .image-meta {
+            display: flex;
+            gap: 8px;
+        }
+        .image-badge {
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .badge-thumb { background: #f59e0b; color: #000; }
+        .badge-scene { background: #10b981; color: #fff; }
+        .badge-history { background: #3b82f6; color: #fff; }
+        .badge-isekai { background: #8b5cf6; color: #fff; }
+        .badge-bible { background: #10b981; color: #fff; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            padding: 40px;
+            overflow-y: auto;
+        }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+        .modal-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+        }
+        .modal-content img {
+            max-width: 100%;
+            max-height: 85vh;
+            border-radius: 8px;
+        }
+        .modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 30px;
+            cursor: pointer;
+        }
+        .modal-info {
+            margin-top: 15px;
+            text-align: center;
+            color: #888;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            grid-column: 1 / -1;
+        }
+
+        /* Agent Prompts */
+        .agent-prompts {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .prompt-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+        .prompt-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .prompt-tab:hover { border-color: #10b981; color: #fff; }
+        .prompt-tab.active {
+            background: #10b981;
+            border-color: #10b981;
+            color: #fff;
+        }
+        .prompt-content { display: block; }
+        .prompt-content.hidden { display: none; }
+        .prompt-lang {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .prompt-box {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #333;
+        }
+        .prompt-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .prompt-text {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            color: #aaa;
+            white-space: pre-wrap;
+        }
+        @media (max-width: 768px) {
+            .prompt-lang { grid-template-columns: 1fr; }
+        }
+
+        /* Stats */
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 8px;
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stat-value { font-size: 20px; font-weight: 700; color: #fff; }
+        .stat-label { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Images (썸네일/씬)</h1>
+            <a href="/dashboard" class="back-btn">Back to Dashboard</a>
+        </header>
+
+        <!-- Agent Prompts -->
+        <div class="agent-prompts">
+            <div class="prompt-tabs">
+                <button class="prompt-tab active" data-tab="thumbnail">Thumbnail Agent</button>
+                <button class="prompt-tab" data-tab="scene">Scene Image Agent</button>
+            </div>
+
+            <div class="prompt-content" id="prompt-thumbnail">
+                <div class="prompt-lang">
+                    <div class="prompt-box">
+                        <div class="prompt-label">🇰🇷 Korean</div>
+                        <div class="prompt-text">썸네일 이미지를 생성해줘.
+
+[요구사항]
+- 크기: 1280x720 (16:9)
+- 스타일: 역사 다큐멘터리 느낌
+- 텍스트: 7자 이내 2줄
+- 색감: 강렬하고 눈에 띄게
+
+[주의사항]
+- 한글 텍스트 포함 금지 (영어만)
+- 클릭 유도하는 구도
+- 인물/사건 핵심 장면</div>
+                    </div>
+                    <div class="prompt-box">
+                        <div class="prompt-label">🇺🇸 English</div>
+                        <div class="prompt-text">Generate thumbnail image.
+
+[Requirements]
+- Size: 1280x720 (16:9)
+- Style: Historical documentary feel
+- Text: Max 7 chars, 2 lines
+- Colors: Bold and eye-catching
+
+[Guidelines]
+- No Korean text (English only)
+- Click-inducing composition
+- Key moment of person/event</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="prompt-content hidden" id="prompt-scene">
+                <div class="prompt-lang">
+                    <div class="prompt-box">
+                        <div class="prompt-label">🇰🇷 Korean</div>
+                        <div class="prompt-text">씬 배경 이미지를 생성해줘.
+
+[요구사항]
+- 총 10장 (대본 흐름에 맞춰)
+- 스타일: 한국 역사 정확한 시대 고증
+- 색감: 일관된 톤 유지
+
+[주의사항]
+- 텍스트 포함 금지
+- 시대에 맞는 의상/건축물
+- 각 씬의 분위기 반영</div>
+                    </div>
+                    <div class="prompt-box">
+                        <div class="prompt-label">🇺🇸 English</div>
+                        <div class="prompt-text">Generate scene background images.
+
+[Requirements]
+- Total 10 images (following script flow)
+- Style: Historically accurate Korean period
+- Colors: Maintain consistent tone
+
+[Guidelines]
+- No text in images
+- Period-accurate costumes/architecture
+- Reflect each scene's atmosphere</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value" id="stat-total">0</span>
+                <span class="stat-label">Total</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-thumb">0</span>
+                <span class="stat-label">Thumbnails</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-scene">0</span>
+                <span class="stat-label">Scenes</span>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="pipeline" data-value="all">All</button>
+                <button class="filter-btn" data-filter="pipeline" data-value="history">History</button>
+                <button class="filter-btn" data-filter="pipeline" data-value="isekai">Isekai</button>
+                <button class="filter-btn" data-filter="pipeline" data-value="bible">Bible</button>
+            </div>
+            <div class="filter-group">
+                <button class="filter-btn type-thumb" data-filter="type" data-value="all">All Types</button>
+                <button class="filter-btn type-thumb" data-filter="type" data-value="thumb">Thumbnails</button>
+                <button class="filter-btn type-scene" data-filter="type" data-value="scene">Scenes</button>
+            </div>
+        </div>
+
+        <div class="image-grid" id="image-grid">
+            <div class="empty-state">Loading...</div>
+        </div>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <img id="modal-img" src="" alt="">
+            <div class="modal-info" id="modal-info"></div>
+        </div>
+    </div>
+
+    <script>
+        let allImages = [];
+        let filters = { pipeline: 'all', type: 'all' };
+
+        async function fetchImages() {
+            try {
+                const res = await fetch('/api/dashboard/images?limit=200');
+                const data = await res.json();
+                allImages = data.images || [];
+                updateStats();
+                renderImages();
+            } catch (e) {
+                document.getElementById('image-grid').innerHTML = '<div class="empty-state">Failed to load images</div>';
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total').textContent = allImages.length;
+            document.getElementById('stat-thumb').textContent = allImages.filter(i => i.type === 'thumb').length;
+            document.getElementById('stat-scene').textContent = allImages.filter(i => i.type === 'scene').length;
+        }
+
+        function renderImages() {
+            const container = document.getElementById('image-grid');
+            let images = allImages;
+
+            if (filters.pipeline !== 'all') {
+                images = images.filter(i => i.pipeline === filters.pipeline);
+            }
+            if (filters.type !== 'all') {
+                images = images.filter(i => i.type === filters.type);
+            }
+
+            if (images.length === 0) {
+                container.innerHTML = '<div class="empty-state">No images found</div>';
+                return;
+            }
+
+            container.innerHTML = images.map(img => `
+                <div class="image-card" onclick="viewImage('${img.url}', '${img.name}')">
+                    <div class="image-wrapper">
+                        <img src="${img.url}" alt="${img.name}" loading="lazy">
+                    </div>
+                    <div class="image-info">
+                        <div class="image-name">${img.name}</div>
+                        <div class="image-meta">
+                            <span class="image-badge badge-${img.type}">${img.type === 'thumb' ? 'Thumbnail' : 'Scene'}</span>
+                            <span class="image-badge badge-${img.pipeline}">${img.pipeline}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function viewImage(url, name) {
+            document.getElementById('modal-img').src = url;
+            document.getElementById('modal-info').textContent = name;
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filterType = btn.dataset.filter;
+                const value = btn.dataset.value;
+
+                // Update active state within same group
+                document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+
+                filters[filterType] = value;
+                renderImages();
+            });
+        });
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') closeModal();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        fetchImages();
+
+        // Tab switching for agent prompts
+        document.querySelectorAll('.prompt-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.prompt-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.prompt-content').forEach(c => c.classList.add('hidden'));
+                document.getElementById(`prompt-${tabName}`).classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>
