@@ -333,7 +333,11 @@ def api_scripts():
         try:
             for filename in os.listdir(full_path):
                 # history/isekai는 .py 파일, bible은 .txt/.json 파일
+                # 보조 파일 제외: _image_prompts, _data, _scene 등
                 if filename.endswith(('.txt', '.json', '.py')) and not filename.startswith('__'):
+                    # 보조 파일 스킵
+                    if any(x in filename for x in ['_image_prompts', '_data', '_scene']):
+                        continue
                     filepath = os.path.join(full_path, filename)
                     mtime = os.path.getmtime(filepath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
