@@ -3,72 +3,24 @@
 
 - 이미지 + 오디오 합성
 - SRT → ASS 자막 변환 및 하드코딩
-- 독립 실행 가능 (외부 의존성 없음)
+- 공통 렌더러 유틸리티 사용
 """
 
 import os
-import re
-import subprocess
-import tempfile
-import shutil
 from typing import Dict, Any, List
 
-
-def get_audio_duration(audio_path: str) -> float:
-    """오디오 파일의 재생 시간(초) 반환"""
-    try:
-        result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-             '-of', 'default=noprint_wrappers=1:nokey=1', audio_path],
-            capture_output=True, text=True, timeout=30
-        )
-        return float(result.stdout.strip()) if result.stdout.strip() else 60.0
-    except Exception:
-        return 60.0
+# 공통 렌더링 유틸리티
+from scripts.common.renderer_utils import (
+    srt_to_ass,
+    render_video as _render_video,
+    render_multi_image_video as _render_multi_image_video,
+    mix_audio_with_bgm,
+)
+from scripts.common.audio_utils import get_audio_duration
 
 
-def srt_to_ass(srt_content: str, font_name: str = "NotoSansKR-Bold") -> str:
-    """SRT를 ASS 형식으로 변환"""
-
-    def srt_to_ass_time(srt_time: str) -> str:
-        """SRT 타임스탬프를 ASS 형식으로 변환"""
-        hours, minutes, seconds_ms = srt_time.split(':')
-        seconds, milliseconds = seconds_ms.split(',')
-        centiseconds = int(milliseconds) // 10
-        return f"{int(hours)}:{minutes}:{seconds}.{centiseconds:02d}"
-
-    ass_header = f"""[Script Info]
-ScriptType: v4.00+
-Collisions: Normal
-PlayResX: 1920
-PlayResY: 1080
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},80,&HFFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,4,3,1,2,20,20,120,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-
-    ass_events = []
-    srt_normalized = srt_content.replace('\r\n', '\n').strip()
-    srt_blocks = re.split(r'\n\s*\n', srt_normalized)
-
-    for block in srt_blocks:
-        lines = block.strip().split('\n')
-        if len(lines) >= 3:
-            time_match = re.match(
-                r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})',
-                lines[1]
-            )
-            if time_match:
-                start_time = srt_to_ass_time(time_match.group(1))
-                end_time = srt_to_ass_time(time_match.group(2))
-                text = '\\N'.join(lines[2:])
-                ass_events.append(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text}")
-
-    return ass_header + '\n'.join(ass_events)
+# 파이프라인별 로그 접두사
+LOG_PREFIX = "[HISTORY-RENDERER]"
 
 
 def render_video(
@@ -79,97 +31,17 @@ def render_video(
     resolution: str = "1920x1080",
     fps: int = 30,
 ) -> Dict[str, Any]:
-    """
-    단일 이미지 + 오디오로 영상 생성
-
-    Args:
-        audio_path: TTS 오디오 파일 경로
-        image_path: 배경 이미지 경로
-        output_path: 출력 영상 경로
-        srt_path: SRT 자막 파일 경로 (선택)
-        resolution: 해상도 (기본: 1920x1080)
-        fps: 프레임레이트 (기본: 30)
-
-    Returns:
-        {"ok": True, "video_path": "...", "duration": 900.5}
-    """
-    try:
-        # FFmpeg 확인
-        ffmpeg_path = shutil.which('ffmpeg')
-        if not ffmpeg_path:
-            return {"ok": False, "error": "FFmpeg가 설치되어 있지 않습니다."}
-
-        # 오디오 길이 확인
-        duration = get_audio_duration(audio_path)
-        print(f"[HISTORY-RENDERER] 오디오 길이: {duration:.1f}초")
-
-        # 임시 디렉토리 생성
-        with tempfile.TemporaryDirectory() as temp_dir:
-            width, height = resolution.split('x')
-
-            # 기본 FFmpeg 필터
-            vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-
-            # 자막 처리
-            if srt_path and os.path.exists(srt_path):
-                print(f"[HISTORY-RENDERER] 자막 파일: {srt_path}")
-                with open(srt_path, 'r', encoding='utf-8') as f:
-                    srt_content = f.read()
-
-                # SRT → ASS 변환
-                ass_content = srt_to_ass(srt_content)
-                ass_path = os.path.join(temp_dir, "subtitle.ass")
-                with open(ass_path, 'w', encoding='utf-8') as f:
-                    f.write(ass_content)
-
-                # ASS 필터 추가
-                escaped_ass_path = ass_path.replace('\\', '\\\\').replace(':', '\\:')
-                vf_filter = f"{vf_filter},ass={escaped_ass_path}"
-
-            # FFmpeg 명령어 구성
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-loop', '1', '-i', image_path,  # 이미지를 무한 루프
-                '-i', audio_path,
-                '-vf', vf_filter,
-                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-                '-c:a', 'aac', '-b:a', '128k',
-                '-r', str(fps),
-                '-shortest',  # 오디오 길이에 맞춤
-                '-pix_fmt', 'yuv420p',
-                '-threads', '2',
-                output_path
-            ]
-
-            print(f"[HISTORY-RENDERER] FFmpeg 실행 중...")
-            process = subprocess.run(
-                ffmpeg_cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                timeout=1800  # 30분 타임아웃
-            )
-
-            if process.returncode != 0:
-                error_msg = process.stderr.decode('utf-8', errors='ignore')[:500]
-                print(f"[HISTORY-RENDERER] FFmpeg 오류: {error_msg}")
-                return {"ok": False, "error": f"FFmpeg 오류: {error_msg[:200]}"}
-
-            # 결과 확인
-            if os.path.exists(output_path):
-                file_size = os.path.getsize(output_path)
-                print(f"[HISTORY-RENDERER] 완료: {output_path} ({file_size / 1024 / 1024:.1f}MB)")
-                return {
-                    "ok": True,
-                    "video_path": output_path,
-                    "duration": duration,
-                }
-            else:
-                return {"ok": False, "error": "출력 파일이 생성되지 않았습니다."}
-
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "FFmpeg 타임아웃 (30분 초과)"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    """단일 이미지 + 오디오로 영상 생성"""
+    return _render_video(
+        audio_path=audio_path,
+        image_path=image_path,
+        output_path=output_path,
+        srt_path=srt_path,
+        resolution=resolution,
+        fps=fps,
+        style_preset="history",
+        log_prefix=LOG_PREFIX,
+    )
 
 
 def render_multi_image_video(
@@ -180,185 +52,18 @@ def render_multi_image_video(
     resolution: str = "1920x1080",
     fps: int = 30,
 ) -> Dict[str, Any]:
-    """
-    여러 이미지 + 오디오로 영상 생성 (시간 균등 분배)
-
-    Args:
-        audio_path: TTS 오디오 파일 경로
-        image_paths: 배경 이미지 경로 목록
-        output_path: 출력 영상 경로
-        srt_path: SRT 자막 파일 경로 (선택)
-        resolution: 해상도
-        fps: 프레임레이트
-
-    Returns:
-        {"ok": True, "video_path": "...", "duration": 900.5}
-    """
-    if not image_paths:
-        return {"ok": False, "error": "이미지가 없습니다."}
-
-    if len(image_paths) == 1:
-        return render_video(
-            audio_path=audio_path,
-            image_path=image_paths[0],
-            output_path=output_path,
-            srt_path=srt_path,
-            resolution=resolution,
-            fps=fps,
-        )
-
-    try:
-        ffmpeg_path = shutil.which('ffmpeg')
-        if not ffmpeg_path:
-            return {"ok": False, "error": "FFmpeg가 설치되어 있지 않습니다."}
-
-        # 오디오 길이 확인
-        duration = get_audio_duration(audio_path)
-        image_duration = duration / len(image_paths)
-        print(f"[HISTORY-RENDERER] 오디오: {duration:.1f}초, 이미지당: {image_duration:.1f}초")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            width, height = resolution.split('x')
-
-            # 이미지 리스트 파일 생성 (절대 경로 사용)
-            list_path = os.path.join(temp_dir, "images.txt")
-            with open(list_path, 'w') as f:
-                for img_path in image_paths:
-                    abs_path = os.path.abspath(img_path)
-                    f.write(f"file '{abs_path}'\n")
-                    f.write(f"duration {image_duration}\n")
-                abs_last = os.path.abspath(image_paths[-1])
-                f.write(f"file '{abs_last}'\n")  # 마지막 이미지 한번 더
-
-            # 기본 필터
-            vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-
-            # 자막 처리
-            if srt_path and os.path.exists(srt_path):
-                with open(srt_path, 'r', encoding='utf-8') as f:
-                    srt_content = f.read()
-
-                ass_content = srt_to_ass(srt_content)
-                ass_path = os.path.join(temp_dir, "subtitle.ass")
-                with open(ass_path, 'w', encoding='utf-8') as f:
-                    f.write(ass_content)
-
-                escaped_ass_path = ass_path.replace('\\', '\\\\').replace(':', '\\:')
-                vf_filter = f"{vf_filter},ass={escaped_ass_path}"
-
-            # FFmpeg 명령어
-            # 주의: -shortest 대신 -t 사용 (concat demuxer와 -shortest 조합 시 싱크 문제 발생)
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-f', 'concat', '-safe', '0', '-i', list_path,
-                '-i', audio_path,
-                '-t', str(duration),  # 오디오 길이로 명시적 제한 (싱크 보장)
-                '-vf', vf_filter,
-                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-                '-c:a', 'aac', '-b:a', '128k',
-                '-r', str(fps),
-                '-pix_fmt', 'yuv420p',
-                '-threads', '2',
-                output_path
-            ]
-
-            print(f"[HISTORY-RENDERER] FFmpeg 실행 중... ({len(image_paths)}개 이미지)")
-
-            # 디버깅: 이미지 리스트 파일 확인
-            with open(list_path, 'r') as f:
-                print(f"[HISTORY-RENDERER] 이미지 리스트:\n{f.read()[:500]}")
-
-            process = subprocess.run(
-                ffmpeg_cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                timeout=1800
-            )
-
-            if process.returncode != 0:
-                error_msg = process.stderr.decode('utf-8', errors='ignore')
-                print(f"[HISTORY-RENDERER] FFmpeg 전체 에러:\n{error_msg}")
-                return {"ok": False, "error": f"FFmpeg 오류: {error_msg[:500]}"}
-
-            if os.path.exists(output_path):
-                file_size = os.path.getsize(output_path)
-                print(f"[HISTORY-RENDERER] 완료: {output_path} ({file_size / 1024 / 1024:.1f}MB)")
-                return {
-                    "ok": True,
-                    "video_path": output_path,
-                    "duration": duration,
-                }
-            else:
-                return {"ok": False, "error": "출력 파일이 생성되지 않았습니다."}
-
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "FFmpeg 타임아웃"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-def mix_audio_with_bgm(
-    voice_path: str,
-    bgm_path: str,
-    output_path: str,
-    bgm_volume: float = 0.15,
-) -> Dict[str, Any]:
-    """
-    음성과 BGM 믹싱
-
-    Args:
-        voice_path: 음성 파일 경로
-        bgm_path: BGM 파일 경로
-        output_path: 출력 파일 경로
-        bgm_volume: BGM 볼륨 (0.0 ~ 1.0, 기본 0.15)
-
-    Returns:
-        {"ok": True, "audio_path": "..."}
-    """
-    try:
-        # BGM 볼륨 dB 계산 (0.15 ≈ -16dB)
-        import math
-        bgm_db = 20 * math.log10(max(bgm_volume, 0.01))
-
-        # 음성 길이 확인
-        voice_duration = get_audio_duration(voice_path)
-
-        # FFmpeg로 믹싱
-        # BGM을 음성 길이에 맞게 루프하고 페이드 아웃
-        ffmpeg_cmd = [
-            'ffmpeg', '-y',
-            '-i', voice_path,
-            '-stream_loop', '-1', '-i', bgm_path,  # BGM 무한 루프
-            '-filter_complex',
-            f'[1:a]volume={bgm_volume},afade=t=out:st={voice_duration-3}:d=3[bgm];'
-            f'[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[out]',
-            '-map', '[out]',
-            '-c:a', 'libmp3lame', '-b:a', '192k',
-            '-t', str(voice_duration),
-            output_path
-        ]
-
-        print(f"[HISTORY-RENDERER] BGM 믹싱 중... (볼륨: {bgm_volume*100:.0f}%)")
-
-        process = subprocess.run(
-            ffmpeg_cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            timeout=300
-        )
-
-        if process.returncode != 0:
-            error_msg = process.stderr.decode('utf-8', errors='ignore')[:300]
-            return {"ok": False, "error": f"BGM 믹싱 오류: {error_msg}"}
-
-        if os.path.exists(output_path):
-            print(f"[HISTORY-RENDERER] BGM 믹싱 완료: {output_path}")
-            return {"ok": True, "audio_path": output_path}
-        else:
-            return {"ok": False, "error": "믹싱 출력 파일 없음"}
-
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    """여러 이미지 + 오디오로 영상 생성 (시간 균등 분배)"""
+    return _render_multi_image_video(
+        audio_path=audio_path,
+        image_paths=image_paths,
+        output_path=output_path,
+        srt_path=srt_path,
+        resolution=resolution,
+        fps=fps,
+        style_preset="history",
+        log_prefix=LOG_PREFIX,
+        use_absolute_path=True,
+    )
 
 
 # 기본 BGM 경로
