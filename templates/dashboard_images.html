@@ -99,19 +99,48 @@
 
         /* Image Grid */
         .image-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-height: 70vh;
+            overflow-y: auto;
         }
-        .image-card {
+        .episode-group {
             background: #0d1117;
             border-radius: 8px;
+            padding: 15px;
+        }
+        .episode-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #3b82f6;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ep-count {
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: #888;
+            font-weight: normal;
+        }
+        .episode-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .image-card {
+            background: #16213e;
+            border-radius: 6px;
             overflow: hidden;
             border: 1px solid #333;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .image-card:hover { border-color: #3b82f6; transform: translateY(-3px); }
+        .image-card:hover { border-color: #3b82f6; transform: scale(1.02); }
         .image-wrapper {
             aspect-ratio: 16/9;
             overflow: hidden;
@@ -125,12 +154,11 @@
         }
         .image-card:hover .image-wrapper img { transform: scale(1.05); }
         .image-info {
-            padding: 15px;
+            padding: 8px 10px;
         }
         .image-name {
-            font-size: 13px;
-            color: #fff;
-            margin-bottom: 8px;
+            font-size: 11px;
+            color: #888;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -754,34 +782,57 @@ no text, no watermark"</div>
             document.getElementById('thumb-count').textContent = thumbs.length;
             document.getElementById('scene-count').textContent = scenes.length;
 
-            // Render thumbnails
+            // Render thumbnails (grouped by episode)
             const thumbContainer = document.getElementById('thumb-grid');
-            if (thumbs.length === 0) {
-                thumbContainer.innerHTML = '<div class="empty-state">No thumbnails</div>';
-            } else {
-                thumbContainer.innerHTML = thumbs.map(img => renderImageCard(img)).join('');
+            thumbContainer.innerHTML = renderGroupedImages(thumbs);
+
+            // Render scenes (grouped by episode)
+            const sceneContainer = document.getElementById('scene-grid');
+            sceneContainer.innerHTML = renderGroupedImages(scenes);
+        }
+
+        function getEpisodeFromName(name) {
+            // ep019_scene_27.png -> EP019
+            const match = name.match(/ep(\d+)/i);
+            return match ? `EP${match[1].padStart(3, '0')}` : 'Other';
+        }
+
+        function renderGroupedImages(images) {
+            if (images.length === 0) {
+                return '<div class="empty-state">No images</div>';
             }
 
-            // Render scenes
-            const sceneContainer = document.getElementById('scene-grid');
-            if (scenes.length === 0) {
-                sceneContainer.innerHTML = '<div class="empty-state">No scenes</div>';
-            } else {
-                sceneContainer.innerHTML = scenes.map(img => renderImageCard(img)).join('');
-            }
+            // Group by episode
+            const groups = {};
+            images.forEach(img => {
+                const ep = getEpisodeFromName(img.name);
+                if (!groups[ep]) groups[ep] = [];
+                groups[ep].push(img);
+            });
+
+            // Sort episodes descending (EP021 first)
+            const sortedEps = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+            return sortedEps.map(ep => `
+                <div class="episode-group">
+                    <div class="episode-header">${ep} <span class="ep-count">${groups[ep].length}</span></div>
+                    <div class="episode-images">
+                        ${groups[ep].map(img => renderImageCard(img)).join('')}
+                    </div>
+                </div>
+            `).join('');
         }
 
         function renderImageCard(img) {
+            // 파일명에서 씬 번호만 추출 (ep019_scene_27.png -> scene_27)
+            const shortName = img.name.replace(/ep\d+_/i, '').replace(/\.(png|jpg|jpeg|webp)$/i, '');
             return `
                 <div class="image-card" onclick="viewImage('${img.url}', '${img.name}')">
                     <div class="image-wrapper">
                         <img src="${img.url}" alt="${img.name}" loading="lazy">
                     </div>
                     <div class="image-info">
-                        <div class="image-name">${img.name}</div>
-                        <div class="image-meta">
-                            <span class="image-badge badge-${img.pipeline}">${img.pipeline}</span>
-                        </div>
+                        <div class="image-name" title="${img.name}">${shortName}</div>
                     </div>
                 </div>
             `;
