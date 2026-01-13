@@ -321,9 +321,44 @@
         .agent-prompts {
             background: #16213e;
             border-radius: 12px;
-            padding: 20px;
             margin-bottom: 20px;
             border: 1px solid #333;
+            overflow: hidden;
+        }
+        .prompts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .prompts-header:hover { background: #1e3a5f; }
+        .prompts-header h3 {
+            font-size: 14px;
+            color: #fff;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .prompts-toggle {
+            font-size: 12px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        .prompts-toggle.open { transform: rotate(180deg); }
+        .prompts-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .prompts-body.open {
+            max-height: 2000px;
+        }
+        .prompts-body-inner {
+            padding: 0 20px 20px 20px;
         }
         .prompt-tabs {
             display: flex;
@@ -428,14 +463,20 @@
 
         <!-- Agent Prompts Section -->
         <div class="agent-prompts">
-            <div class="prompt-tabs">
-                <button class="prompt-tab active" data-tab="writer">Script Writer Agent</button>
-                <button class="prompt-tab" data-tab="reviewer">Script Review Agent</button>
+            <div class="prompts-header" onclick="togglePrompts(this)">
+                <h3>Script Agent Prompts</h3>
+                <span class="prompts-toggle">▼</span>
             </div>
+            <div class="prompts-body">
+                <div class="prompts-body-inner">
+                    <div class="prompt-tabs">
+                        <button class="prompt-tab active" data-tab="writer">Script Writer Agent</button>
+                        <button class="prompt-tab" data-tab="reviewer">Script Review Agent</button>
+                    </div>
 
-            <div class="prompt-content" id="prompt-writer">
-                <div class="prompt-lang">
-                    <div class="prompt-box full-width">
+                    <div class="prompt-content" id="prompt-writer">
+                        <div class="prompt-lang">
+                            <div class="prompt-box full-width">
                         <div class="prompt-label">🇰🇷 MASTER SYSTEM PROMPT <span class="char-count">(8,200자+ / scripts/history_pipeline/script_generator.py)</span></div>
                         <div class="prompt-text scrollable">당신은 한국어 역사 다큐 유튜브 채널의 최상급 대본 작가입니다.
 목표: 시청자가 "다음 영상도 봐야겠다"고 느끼게 만드는 몰입감 있는 스토리텔링.
@@ -720,6 +761,8 @@ E. 강조/포인트형 (10%):
 1. 문제 위치 (몇 번째 파트, 대략적 위치)
 2. 문제 내용 (어떤 규칙 위반)
 3. 수정 방향 (어떻게 고쳐야 하는지)</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -947,6 +990,14 @@ E. 강조/포인트형 (10%):
                 document.getElementById(`prompt-${tabName}`).classList.remove('hidden');
             });
         });
+
+        // Toggle prompts section
+        function togglePrompts(header) {
+            const body = header.nextElementSibling;
+            const toggle = header.querySelector('.prompts-toggle');
+            body.classList.toggle('open');
+            toggle.classList.toggle('open');
+        }
     </script>
 </body>
 </html>
