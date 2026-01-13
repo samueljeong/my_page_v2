@@ -374,9 +374,9 @@ def api_tts():
     base_dir = os.path.dirname(os.path.dirname(__file__))
 
     tts_dirs = [
-        ("history", "outputs/history/tts"),
-        ("isekai", "outputs/isekai/tts"),
-        ("bible", "outputs/bible/tts"),
+        ("history", "outputs/history/audio"),
+        ("isekai", "outputs/isekai/audio"),
+        ("bible", "outputs/bible/audio"),
     ]
 
     for pipeline, dir_path in tts_dirs:
@@ -419,15 +419,12 @@ def api_images():
     base_dir = os.path.dirname(os.path.dirname(__file__))
 
     image_dirs = [
-        ("history", "outputs/history/thumbnails", "thumb"),
-        ("history", "outputs/history/scenes", "scene"),
-        ("isekai", "outputs/isekai/thumbnails", "thumb"),
-        ("isekai", "outputs/isekai/scenes", "scene"),
-        ("bible", "outputs/bible/thumbnails", "thumb"),
-        ("bible", "outputs/bible/scenes", "scene"),
+        ("history", "outputs/history/images", "thumb"),  # 썸네일+씬 혼합
+        ("isekai", "outputs/isekai/images", "thumb"),
+        ("bible", "outputs/bible/images", "thumb"),
     ]
 
-    for pipeline, dir_path, img_type in image_dirs:
+    for pipeline, dir_path, _ in image_dirs:
         full_path = os.path.join(base_dir, dir_path)
         if not os.path.exists(full_path):
             continue
@@ -437,6 +434,9 @@ def api_images():
                 if filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
                     filepath = os.path.join(full_path, filename)
                     mtime = os.path.getmtime(filepath)
+
+                    # 파일명으로 타입 판별 (thumbnail/scene)
+                    img_type = "thumb" if "thumb" in filename.lower() else "scene"
 
                     # 상대 URL 생성 (outputs 기준)
                     rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
