@@ -215,6 +215,35 @@
         }
         .refresh-btn:hover { background: #444; }
 
+        /* Navigation */
+        .nav-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        .nav-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover { transform: translateY(-2px); }
+        .nav-btn.script { background: #3b82f6; color: #fff; }
+        .nav-btn.tts { background: #8b5cf6; color: #fff; }
+        .nav-btn.image { background: #10b981; color: #fff; }
+        .nav-btn.writer { background: #f59e0b; color: #000; }
+
         /* Full Width Card */
         .full-width { grid-column: 1 / -1; }
 
@@ -343,6 +372,14 @@
                 <button class="refresh-btn" onclick="refreshAll()">Refresh</button>
             </div>
         </header>
+
+        <!-- Navigation Bar -->
+        <div class="nav-bar">
+            <a href="/dashboard/script-writer" class="nav-btn writer">Script Writer</a>
+            <a href="/dashboard/scripts" class="nav-btn script">Scripts</a>
+            <a href="/dashboard/tts" class="nav-btn tts">TTS</a>
+            <a href="/dashboard/images" class="nav-btn image">Images</a>
+        </div>
 
         <div class="grid">
             <!-- ElevenLabs Credit -->
