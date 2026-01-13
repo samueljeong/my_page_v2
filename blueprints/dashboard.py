@@ -368,44 +368,50 @@ def api_scripts():
 
 @dashboard_bp.route('/api/dashboard/tts')
 def api_tts():
-    """최근 TTS 파일 조회"""
-    limit = request.args.get('limit', 15, type=int)
+    """최근 TTS 파일 조회 - 재귀 검색"""
+    limit = request.args.get('limit', 50, type=int)
     tts_files = []
     base_dir = os.path.dirname(os.path.dirname(__file__))
 
-    tts_dirs = [
-        ("history", "outputs/history/audio"),
-        ("isekai", "outputs/isekai/audio"),
-        ("bible", "outputs/bible/audio"),
+    # 파이프라인별 outputs 디렉토리
+    pipeline_dirs = [
+        ("history", "outputs/history"),
+        ("isekai", "outputs/isekai"),
+        ("bible", "outputs/bible"),
     ]
 
-    for pipeline, dir_path in tts_dirs:
+    for pipeline, dir_path in pipeline_dirs:
         full_path = os.path.join(base_dir, dir_path)
         if not os.path.exists(full_path):
             continue
 
-        try:
-            for filename in os.listdir(full_path):
+        # 재귀적으로 오디오 파일 검색
+        for root, dirs, files in os.walk(full_path):
+            for filename in files:
                 if filename.endswith(('.mp3', '.wav')):
-                    filepath = os.path.join(full_path, filename)
-                    mtime = os.path.getmtime(filepath)
-                    date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
-                    size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                    # chunk 파일이나 bgm 파일은 제외
+                    if 'chunk' in filename.lower() or 'bgm' in filename.lower():
+                        continue
+                    filepath = os.path.join(root, filename)
+                    try:
+                        mtime = os.path.getmtime(filepath)
+                        date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
+                        size_mb = os.path.getsize(filepath) / (1024 * 1024)
 
-                    # URL 생성
-                    rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
-                    url = f"/static/outputs/{rel_path}"
+                        # URL 생성
+                        rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
+                        url = f"/static/outputs/{rel_path}"
 
-                    tts_files.append({
-                        "name": filename,
-                        "date": date_str,
-                        "duration": f"{size_mb:.1f}MB",
-                        "pipeline": pipeline,
-                        "url": url,
-                        "mtime": mtime
-                    })
-        except Exception:
-            continue
+                        tts_files.append({
+                            "name": filename,
+                            "date": date_str,
+                            "duration": f"{size_mb:.1f}MB",
+                            "pipeline": pipeline,
+                            "url": url,
+                            "mtime": mtime
+                        })
+                    except Exception:
+                        continue
 
     tts_files.sort(key=lambda x: x["mtime"], reverse=True)
     return jsonify({"ok": True, "tts": tts_files[:limit]})
@@ -413,44 +419,47 @@ def api_tts():
 
 @dashboard_bp.route('/api/dashboard/images')
 def api_images():
-    """최근 이미지 파일 조회 (썸네일, 씬)"""
-    limit = request.args.get('limit', 20, type=int)
+    """최근 이미지 파일 조회 (썸네일, 씬) - 재귀 검색"""
+    limit = request.args.get('limit', 100, type=int)
     images = []
     base_dir = os.path.dirname(os.path.dirname(__file__))
 
-    image_dirs = [
-        ("history", "outputs/history/images", "thumb"),  # 썸네일+씬 혼합
-        ("isekai", "outputs/isekai/images", "thumb"),
-        ("bible", "outputs/bible/images", "thumb"),
+    # 파이프라인별 outputs 디렉토리
+    pipeline_dirs = [
+        ("history", "outputs/history"),
+        ("isekai", "outputs/isekai"),
+        ("bible", "outputs/bible"),
     ]
 
-    for pipeline, dir_path, _ in image_dirs:
+    for pipeline, dir_path in pipeline_dirs:
         full_path = os.path.join(base_dir, dir_path)
         if not os.path.exists(full_path):
             continue
 
-        try:
-            for filename in os.listdir(full_path):
+        # 재귀적으로 이미지 파일 검색
+        for root, dirs, files in os.walk(full_path):
+            for filename in files:
                 if filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                    filepath = os.path.join(full_path, filename)
-                    mtime = os.path.getmtime(filepath)
+                    filepath = os.path.join(root, filename)
+                    try:
+                        mtime = os.path.getmtime(filepath)
 
-                    # 파일명으로 타입 판별 (thumbnail/scene)
-                    img_type = "thumb" if "thumb" in filename.lower() else "scene"
+                        # 파일명으로 타입 판별 (thumbnail/scene)
+                        img_type = "thumb" if "thumb" in filename.lower() else "scene"
 
-                    # 상대 URL 생성 (outputs 기준)
-                    rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
-                    url = f"/static/outputs/{rel_path}"
+                        # 상대 URL 생성 (outputs 기준)
+                        rel_path = os.path.relpath(filepath, os.path.join(base_dir, "outputs"))
+                        url = f"/static/outputs/{rel_path}"
 
-                    images.append({
-                        "name": filename,
-                        "type": img_type,
-                        "pipeline": pipeline,
-                        "url": url,
-                        "mtime": mtime
-                    })
-        except Exception:
-            continue
+                        images.append({
+                            "name": filename,
+                            "type": img_type,
+                            "pipeline": pipeline,
+                            "url": url,
+                            "mtime": mtime
+                        })
+                    except Exception:
+                        continue
 
     images.sort(key=lambda x: x["mtime"], reverse=True)
     return jsonify({"ok": True, "images": images[:limit]})
