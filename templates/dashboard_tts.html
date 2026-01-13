@@ -91,17 +91,50 @@
         }
 
         /* TTS List */
-        .tts-list { display: flex; flex-direction: column; gap: 12px; }
-        .tts-item {
+        .tts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .episode-group {
             background: #0d1117;
             border-radius: 8px;
-            padding: 15px;
+            padding: 12px;
+        }
+        .episode-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: #8b5cf6;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ep-count {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            color: #888;
+            font-weight: normal;
+        }
+        .episode-tts {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tts-item {
+            background: #16213e;
+            border-radius: 6px;
+            padding: 10px 12px;
             border: 1px solid #333;
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
         }
-        .tts-item:hover { border-color: #8b5cf6; background: #1a1a2e; }
+        .tts-item:hover { border-color: #8b5cf6; background: #1e3a5f; }
         .tts-play {
             width: 40px;
             height: 40px;
@@ -610,11 +643,39 @@
                     return;
                 }
 
-                container.innerHTML = tts.map((t, i) => {
-                    const globalIdx = allTTS.indexOf(t);
-                    return renderTTSItem(t, globalIdx);
-                }).join('');
+                // 에피소드별 그룹핑
+                container.innerHTML = renderGroupedTTS(tts);
             });
+        }
+
+        function getEpisodeFromName(name) {
+            const match = name.match(/ep(\d+)/i);
+            return match ? `EP${match[1].padStart(3, '0')}` : 'Other';
+        }
+
+        function renderGroupedTTS(ttsFiles) {
+            // Group by episode
+            const groups = {};
+            ttsFiles.forEach(t => {
+                const ep = getEpisodeFromName(t.name);
+                if (!groups[ep]) groups[ep] = [];
+                groups[ep].push(t);
+            });
+
+            // Sort episodes descending
+            const sortedEps = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+            return sortedEps.map(ep => `
+                <div class="episode-group">
+                    <div class="episode-header">${ep} <span class="ep-count">${groups[ep].length}</span></div>
+                    <div class="episode-tts">
+                        ${groups[ep].map(t => {
+                            const globalIdx = allTTS.indexOf(t);
+                            return renderTTSItem(t, globalIdx);
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
         }
 
         function renderTTSItem(t, i) {
