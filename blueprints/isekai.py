@@ -107,7 +107,10 @@ def api_isekai_push_episode():
             spreadsheetId=sheet_id,
             range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
-        headers = result.get('values', [[]])[0]
+        values = result.get('values', [])
+        headers = values[0] if values and len(values) > 0 else []
+        if not headers:
+            return jsonify({"ok": False, "error": "시트 헤더를 찾을 수 없습니다"}), 400
         col_map = {h: i for i, h in enumerate(headers)}
 
         updates = []
@@ -327,7 +330,10 @@ def api_isekai_push_ep001():
             spreadsheetId=sheet_id,
             range=f"{SHEET_NAME}!A2:AZ2"
         ).execute()
-        headers = result.get('values', [[]])[0]
+        values = result.get('values', [])
+        headers = values[0] if values and len(values) > 0 else []
+        if not headers:
+            return jsonify({"ok": False, "error": "시트 헤더를 찾을 수 없습니다"}), 400
         col_map = {h: i for i, h in enumerate(headers)}
 
         updates = []

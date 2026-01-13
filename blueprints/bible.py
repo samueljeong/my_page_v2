@@ -966,9 +966,11 @@ def api_bible_check_and_process():
                 spreadsheetId=sheet_id,
                 range="BIBLE!B1"
             ).execute()
-            channel_id = result.get('values', [[]])[0][0] if result.get('values') else ""
-        except:
-            pass
+            values = result.get('values', [])
+            if values and len(values) > 0 and len(values[0]) > 0:
+                channel_id = values[0][0]
+        except Exception as e:
+            print(f"[BIBLE] 채널 ID 조회 실패: {e}")
 
         # 파이프라인 실행
         result = run_bible_episode_pipeline(
@@ -999,8 +1001,9 @@ def api_bible_check_and_process():
         return jsonify({"ok": False, "error": str(e)}), 500
 
     finally:
-        if _pipeline_lock:
+        if _pipeline_lock is not None:
             try:
                 _pipeline_lock.release()
-            except:
+            except RuntimeError:
+                # Lock이 이미 해제된 경우
                 pass

@@ -93,14 +93,14 @@ def api_ai_tools_youtube():
 
                 try:
                     transcript = transcript_list.find_transcript(['ko'])
-                except:
+                except Exception:
                     try:
                         transcript = transcript_list.find_transcript(['en'])
-                    except:
+                    except Exception:
                         try:
                             transcript = transcript_list.find_generated_transcript(['ko', 'en'])
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"[AI-TOOLS] 자막 조회 실패: {e}")
 
                 if transcript:
                     captions = transcript.fetch()
