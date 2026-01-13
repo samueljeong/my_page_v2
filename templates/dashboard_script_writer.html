@@ -469,15 +469,18 @@
             </div>
             <div class="prompts-body">
                 <div class="prompts-body-inner">
+                    <!-- Pipeline Tabs -->
                     <div class="prompt-tabs">
-                        <button class="prompt-tab active" data-tab="writer">Script Writer Agent</button>
-                        <button class="prompt-tab" data-tab="reviewer">Script Review Agent</button>
+                        <button class="prompt-tab active" data-tab="history">History (한국사)</button>
+                        <button class="prompt-tab" data-tab="isekai">Isekai (이세계)</button>
+                        <button class="prompt-tab" data-tab="bible">Bible (성경통독)</button>
                     </div>
 
-                    <div class="prompt-content" id="prompt-writer">
+                    <!-- History Pipeline -->
+                    <div class="prompt-content" id="prompt-history">
                         <div class="prompt-lang">
                             <div class="prompt-box full-width">
-                        <div class="prompt-label">🇰🇷 MASTER SYSTEM PROMPT <span class="char-count">(8,200자+ / scripts/history_pipeline/script_generator.py)</span></div>
+                        <div class="prompt-label">🇰🇷 HISTORY MASTER PROMPT <span class="char-count">(8,200자+ / scripts/history_pipeline/)</span></div>
                         <div class="prompt-text scrollable">당신은 한국어 역사 다큐 유튜브 채널의 최상급 대본 작가입니다.
 목표: 시청자가 "다음 영상도 봐야겠다"고 느끼게 만드는 몰입감 있는 스토리텔링.
 
@@ -688,6 +691,180 @@ E. 강조/포인트형 (10%):
                     </div>
                 </div>
             </div>
+
+                    <!-- Isekai Pipeline -->
+                    <div class="prompt-content hidden" id="prompt-isekai">
+                        <div class="prompt-lang">
+                            <div class="prompt-box full-width">
+                                <div class="prompt-label">🗡️ ISEKAI MASTER PROMPT <span class="char-count">(혈영 이세계편 / scripts/isekai_pipeline/)</span></div>
+                                <div class="prompt-text scrollable">════════════════════════════════════════
+★ 혈영 이세계편 - 대본 작성 가이드
+════════════════════════════════════════
+
+【시리즈 정보】
+• 제목: 혈영 이세계편 (시즌2)
+• 장르: 이세계 무협 판타지
+• 주인공: 무영 (무림 최강 검객 → 이세계 전이)
+• 총 60화, 6부작
+
+════════════════════════════════════════
+★ 분량 설정
+════════════════════════════════════════
+• 목표 글자수: 14,000자 (약 15분)
+• 최소: 12,000자 / 최대: 15,000자
+• 씬당 구조: 에피소드당 5개 씬
+• TTS: chirp3:Charon (속도 0.95)
+
+════════════════════════════════════════
+★ 문체 설정 (웹소설 스타일 - 광마회귀 참고)
+════════════════════════════════════════
+
+【문장 스타일】
+• 짧은 문장: 10~25자 (기본)
+• 최대: 35자
+• 한 문장 = 한 줄 (줄바꿈)
+
+【문단 스타일】
+• 문단당 1~3문장 (짧게)
+• 액션/심리는 한 문장씩 끊기
+
+【대사 비율】
+• 대사 비율: 45~55% (높음!)
+• 대화만 읽어도 상황 파악 가능하게
+
+【내면 독백】
+• 스타일: 냉소적 유머
+• 무협 용어로 현대/판타지 해석
+• 이세계 문화 당황 표현
+• 형식: '이런 식으로' (작은따옴표)
+
+════════════════════════════════════════
+★ 효과 표현
+════════════════════════════════════════
+• 효과음 단독 줄: "쾅.", "철컥."
+• 말줄임표로 감정: "......"
+• 침묵 표현: "......"
+
+════════════════════════════════════════
+★ 금지 사항
+════════════════════════════════════════
+• 태그 사용 ([나레이션], [무영] 등) ❌
+• 미사여구 반복 ❌
+• 설명조 서술 (장황한 배경 설명) ❌
+• 장문 남발 (40자 이상) ❌
+• 인터넷 밈/드립 직접 사용 ❌
+
+════════════════════════════════════════
+★ 권장 사항
+════════════════════════════════════════
+• 짧고 임팩트 있는 문장
+• 대화만 읽어도 상황 파악 가능
+• 무영의 냉소적 내면 독백
+• 무협 용어를 이세계에 적용하는 유머
+• 액션씬은 짧은 문장으로 속도감
+
+════════════════════════════════════════
+★ 주요 캐릭터 말투
+════════════════════════════════════════
+
+【무영 (주인공)】
+• 과묵, 짧은 문장
+• "...", "시끄럽다.", "상관없어."
+
+【에이라 (히로인)】
+• 차갑지만 점점 부드러워짐
+• 하프엘프, 9서클 마법사
+
+【카이든 (동료)】
+• 밝고 친근함
+• "야, 무! 이것 좀 봐!"
+
+【이그니스 (드래곤)】
+• 자존심 강하지만 장난기
+• "흥, 이 위대한 이그니스님이..."</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bible Pipeline -->
+                    <div class="prompt-content hidden" id="prompt-bible">
+                        <div class="prompt-lang">
+                            <div class="prompt-box full-width">
+                                <div class="prompt-label">📖 BIBLE MASTER PROMPT <span class="char-count">(성경통독 / scripts/bible_pipeline/)</span></div>
+                                <div class="prompt-text scrollable">════════════════════════════════════════
+★ 성경통독 파이프라인 설정
+════════════════════════════════════════
+
+【기본 정보】
+• 성경: 개역개정
+• 형식: 성경 낭독 영상
+• 영상 길이: 20분
+
+════════════════════════════════════════
+★ 분량 설정
+════════════════════════════════════════
+• 목표 글자수: 18,200자 (20분)
+• 계산: 910자/분 × 20분
+• TTS 속도: 0.9x (느리게, 성경 낭독에 적합)
+
+════════════════════════════════════════
+★ TTS 설정
+════════════════════════════════════════
+• 음성: gemini:pro:Charon
+• 속도: 0.9 (천천히)
+• 톤: 깊고 신뢰감 있는 남성 목소리
+
+════════════════════════════════════════
+★ 자막 스타일
+════════════════════════════════════════
+• 폰트 크기: 48px
+• 폰트 색상: #FFFFFF (흰색)
+• 배경: #000000 (검정, 70% 투명도)
+• 절 번호 색상: #FFD700 (골드)
+• 위치: 하단
+
+════════════════════════════════════════
+★ 화면 구성
+════════════════════════════════════════
+
+【장 표시】
+• 폰트 크기: 64px
+• 색상: #FFD700 (골드)
+• 표시 시간: 3초
+• 위치: 중앙
+• 예: "창세기 1장"
+
+【배경】
+• 타입: 이미지/그라데이션
+• 기본 색상: #1a1a2e → #16213e (어두운 블루)
+
+════════════════════════════════════════
+★ 성경 66권 구조
+════════════════════════════════════════
+
+【구약 39권】
+모세오경: 창세기~신명기 (5권)
+역사서: 여호수아~에스더 (12권)
+시가서: 욥기~아가 (5권)
+대선지서: 이사야~다니엘 (5권)
+소선지서: 호세아~말라기 (12권)
+
+【신약 27권】
+복음서: 마태~요한 (4권)
+역사서: 사도행전 (1권)
+바울서신: 로마서~빌레몬서 (13권)
+일반서신: 히브리서~유다서 (8권)
+예언서: 요한계시록 (1권)
+
+════════════════════════════════════════
+★ 시트 헤더 구조
+════════════════════════════════════════
+에피소드 | 책 | 시작장 | 끝장 | 예상시간
+글자수 | 상태 | 제목 | 음성 | 공개설정
+예약시간 | 플레이리스트ID | 영상URL | 에러메시지</div>
+                            </div>
+                        </div>
+                    </div>
 
             <div class="prompt-content hidden" id="prompt-reviewer">
                 <div class="prompt-lang">
@@ -977,7 +1154,7 @@ E. 강조/포인트형 (10%):
         // Cleanup on page unload
         window.addEventListener('beforeunload', stopPolling);
 
-        // Tab switching for agent prompts
+        // Tab switching for agent prompts (Pipeline tabs)
         document.querySelectorAll('.prompt-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 // Update active tab
@@ -987,7 +1164,10 @@ E. 강조/포인트형 (10%):
                 // Show corresponding content
                 const tabName = tab.dataset.tab;
                 document.querySelectorAll('.prompt-content').forEach(c => c.classList.add('hidden'));
-                document.getElementById(`prompt-${tabName}`).classList.remove('hidden');
+                const targetContent = document.getElementById(`prompt-${tabName}`);
+                if (targetContent) {
+                    targetContent.classList.remove('hidden');
+                }
             });
         });
 

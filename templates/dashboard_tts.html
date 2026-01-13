@@ -201,6 +201,34 @@
         @media (max-width: 768px) {
             .prompt-lang { grid-template-columns: 1fr; }
         }
+
+        /* Tabs */
+        .prompt-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+        .prompt-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .prompt-tab:hover { border-color: #8b5cf6; color: #fff; }
+        .prompt-tab.active {
+            background: #8b5cf6;
+            border-color: #8b5cf6;
+            color: #fff;
+        }
+        .prompt-content { display: block; }
+        .prompt-content.hidden { display: none; }
     </style>
 </head>
 <body>
@@ -218,10 +246,20 @@
             </div>
             <div class="prompts-body">
                 <div class="prompts-body-inner">
-                    <div class="prompt-lang">
-                        <div class="prompt-box" style="grid-column: 1 / -1;">
-                            <div class="prompt-label">TTS 파이프라인 구조 <span style="font-weight:normal;color:#666;font-size:10px;">(tts/tts_service.py)</span></div>
-                            <div class="prompt-text">════════════════════════════════════════
+                    <!-- Pipeline Tabs -->
+                    <div class="prompt-tabs">
+                        <button class="prompt-tab active" data-tab="common">Common (공통)</button>
+                        <button class="prompt-tab" data-tab="history">History (한국사)</button>
+                        <button class="prompt-tab" data-tab="isekai">Isekai (이세계)</button>
+                        <button class="prompt-tab" data-tab="bible">Bible (성경통독)</button>
+                    </div>
+
+                    <!-- Common TTS Settings -->
+                    <div class="prompt-content" id="prompt-common">
+                        <div class="prompt-lang">
+                            <div class="prompt-box" style="grid-column: 1 / -1;">
+                                <div class="prompt-label">TTS 파이프라인 공통 구조 <span style="font-weight:normal;color:#666;font-size:10px;">(tts/tts_service.py)</span></div>
+                                <div class="prompt-text">════════════════════════════════════════
 ★ TTS 파이프라인 흐름
 ════════════════════════════════════════
 
@@ -229,22 +267,6 @@
 2. 청크별 TTS 호출 → MP3 세그먼트 생성
 3. FFmpeg로 전체 오디오 병합
 4. 문장별 타임라인 계산 → SRT 자막 생성
-
-════════════════════════════════════════
-★ 음성 설정 (Voice Config)
-════════════════════════════════════════
-
-【Google Cloud TTS (기본)】
-- 언어: ko-KR (한국어)
-- 음성: ko-KR-Neural2-B (남성) / ko-KR-Neural2-C (여성)
-- 속도: 0.9x (자연스러운 속도)
-- 인코딩: MP3
-
-【ElevenLabs (프리미엄)】
-- 음성: Charon (역사 다큐 전용)
-- 안정성: 0.5 (자연스러운 변주)
-- 유사성: 0.75 (일관성 유지)
-- 스타일: 0.3 (차분한 나레이션)
 
 ════════════════════════════════════════
 ★ 청킹 규칙 (Chunking)
@@ -269,34 +291,6 @@
 - ffprobe로 실제 오디오 길이 측정
 - 타임코드: HH:MM:SS,mmm 형식
 
-【출력 예시】
-1
-00:00:00,000 --> 00:00:03,500
-서기 391년이었어요.
-
-2
-00:00:03,500 --> 00:00:07,200
-열여덟 살의 왕이 첫 출정에 나섰거든요.
-
-════════════════════════════════════════
-★ 입력 형식 (Step3 Input)
-════════════════════════════════════════
-
-{
-  "episode_id": "history_ep21",
-  "language": "ko-KR",
-  "voice": {
-    "gender": "MALE",
-    "name": "ko-KR-Neural2-B",
-    "speaking_rate": 0.9
-  },
-  "scenes": [
-    { "id": "scene1", "narration": "..." },
-    { "id": "scene2", "narration": "..." }
-  ],
-  "sentence_mode": true
-}
-
 ════════════════════════════════════════
 ★ 출력 형식
 ════════════════════════════════════════
@@ -312,6 +306,194 @@
     "successful_chunks": 45
   }
 }</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History TTS Settings -->
+                    <div class="prompt-content hidden" id="prompt-history">
+                        <div class="prompt-lang">
+                            <div class="prompt-box" style="grid-column: 1 / -1;">
+                                <div class="prompt-label">📚 History TTS 설정 <span style="font-weight:normal;color:#666;font-size:10px;">(scripts/history_pipeline/)</span></div>
+                                <div class="prompt-text">════════════════════════════════════════
+★ History (한국사) TTS 설정
+════════════════════════════════════════
+
+【기본 설정】
+• 언어: ko-KR (한국어)
+• 목표 분량: 12,000-15,000자 (약 15분)
+• 1분당 글자수: 약 910자
+
+════════════════════════════════════════
+★ 음성 옵션
+════════════════════════════════════════
+
+【Google Cloud TTS (기본)】
+• 음성: ko-KR-Neural2-B (남성)
+• 속도: 0.9x (자연스러운 속도)
+• 인코딩: MP3
+
+【ElevenLabs (프리미엄)】
+• 음성: Charon (역사 다큐 전용)
+• 안정성: 0.5 (자연스러운 변주)
+• 유사성: 0.75 (일관성 유지)
+• 스타일: 0.3 (차분한 나레이션)
+
+════════════════════════════════════════
+★ 대본 스타일 특징
+════════════════════════════════════════
+
+【톤】
+• 친근한 구어체 스토리텔링
+• "~였어요", "~거든요", "~했죠" 종결어미
+• 역사 다큐 전문 느낌
+
+【문장 호흡】
+• 기본: 20~40자
+• 간간이 50자+ 문장 섞기
+• 10~15자 짧은 문장 연속 금지
+
+════════════════════════════════════════
+★ 입력 예시
+════════════════════════════════════════
+
+{
+  "episode_id": "history_ep21",
+  "language": "ko-KR",
+  "voice": {
+    "gender": "MALE",
+    "name": "ko-KR-Neural2-B",
+    "speaking_rate": 0.9
+  },
+  "scenes": [...],
+  "sentence_mode": true
+}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Isekai TTS Settings -->
+                    <div class="prompt-content hidden" id="prompt-isekai">
+                        <div class="prompt-lang">
+                            <div class="prompt-box" style="grid-column: 1 / -1;">
+                                <div class="prompt-label">🗡️ Isekai TTS 설정 <span style="font-weight:normal;color:#666;font-size:10px;">(scripts/isekai_pipeline/config.py)</span></div>
+                                <div class="prompt-text">════════════════════════════════════════
+★ Isekai (혈영 이세계편) TTS 설정
+════════════════════════════════════════
+
+【기본 설정】
+• 언어: ko-KR (한국어)
+• 목표 분량: 14,000자 (약 15분)
+• 최소/최대: 12,000 ~ 15,000자
+
+════════════════════════════════════════
+★ 음성 설정
+════════════════════════════════════════
+
+【chirp3:Charon】
+• 프리미엄 음성 (웹소설 전용)
+• 속도: 0.95x (약간 빠르게)
+• 감정 표현: calm, tense, sad, angry,
+            confused, excited, whisper, shout
+
+════════════════════════════════════════
+★ 대본 스타일 특징
+════════════════════════════════════════
+
+【톤】
+• 웹소설체 (광마회귀 스타일)
+• 짧은 문장 (10~25자, 최대 35자)
+• 한 문장 = 한 줄 (줄바꿈)
+
+【대사 비율】
+• 45~55% (대사 중심!)
+• 대화만 읽어도 상황 파악 가능
+
+【효과 표현】
+• 효과음 단독 줄: "쾅.", "철컥."
+• 말줄임표로 감정: "......"
+
+════════════════════════════════════════
+★ 입력 예시
+════════════════════════════════════════
+
+{
+  "episode_id": "isekai_ep05",
+  "language": "ko-KR",
+  "voice": {
+    "name": "chirp3:Charon",
+    "speaking_rate": 0.95
+  },
+  "scenes": [...],
+  "sentence_mode": true
+}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bible TTS Settings -->
+                    <div class="prompt-content hidden" id="prompt-bible">
+                        <div class="prompt-lang">
+                            <div class="prompt-box" style="grid-column: 1 / -1;">
+                                <div class="prompt-label">📖 Bible TTS 설정 <span style="font-weight:normal;color:#666;font-size:10px;">(scripts/bible_pipeline/config.py)</span></div>
+                                <div class="prompt-text">════════════════════════════════════════
+★ Bible (성경통독) TTS 설정
+════════════════════════════════════════
+
+【기본 설정】
+• 언어: ko-KR (한국어)
+• 영상 길이: 20분 (더 길게)
+• 목표 글자수: 18,200자
+
+════════════════════════════════════════
+★ 음성 설정
+════════════════════════════════════════
+
+【gemini:pro:Charon】
+• 고품질 Gemini Pro TTS
+• 톤: 깊고 신뢰감 있는 남성 목소리
+• 속도: 0.9x (천천히, 성경 낭독에 적합)
+
+════════════════════════════════════════
+★ 대본 스타일 특징
+════════════════════════════════════════
+
+【톤】
+• 성경 낭독 전용
+• 경건하고 차분한 톤
+• 절 번호 포함 낭독
+
+【자막 스타일】
+• 절 번호 색상: #FFD700 (골드)
+• 폰트 크기: 48px
+• 배경: 70% 투명도 검정
+
+════════════════════════════════════════
+★ 장 표시
+════════════════════════════════════════
+
+【장 전환 시】
+• 폰트 크기: 64px
+• 색상: #FFD700 (골드)
+• 표시 시간: 3초
+• 예: "창세기 1장"
+
+════════════════════════════════════════
+★ 입력 예시
+════════════════════════════════════════
+
+{
+  "episode_id": "bible_ep001",
+  "language": "ko-KR",
+  "voice": {
+    "name": "gemini:pro:Charon",
+    "speaking_rate": 0.9
+  },
+  "book": "창세기",
+  "start_chapter": 1,
+  "end_chapter": 15
+}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -449,6 +631,23 @@
             body.classList.toggle('open');
             toggle.classList.toggle('open');
         }
+
+        // Tab switching
+        document.querySelectorAll('.prompt-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.prompt-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Show corresponding content
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.prompt-content').forEach(c => c.classList.add('hidden'));
+                const targetContent = document.getElementById(`prompt-${tabName}`);
+                if (targetContent) {
+                    targetContent.classList.remove('hidden');
+                }
+            });
+        });
     </script>
 </body>
 </html>
