@@ -250,74 +250,236 @@
         <!-- Agent Prompts -->
         <div class="agent-prompts">
             <div class="prompt-tabs">
-                <button class="prompt-tab active" data-tab="thumbnail">Thumbnail Agent</button>
+                <button class="prompt-tab active" data-tab="thumbnail">Thumbnail Guide</button>
                 <button class="prompt-tab" data-tab="scene">Scene Image Agent</button>
+                <button class="prompt-tab" data-tab="style">Era Style Presets</button>
             </div>
 
             <div class="prompt-content" id="prompt-thumbnail">
                 <div class="prompt-lang">
-                    <div class="prompt-box">
-                        <div class="prompt-label">🇰🇷 Korean</div>
-                        <div class="prompt-text">썸네일 이미지를 생성해줘.
+                    <div class="prompt-box" style="grid-column: 1 / -1;">
+                        <div class="prompt-label">썸네일 가이드 <span style="font-weight:normal;color:#666;font-size:10px;">(scripts/history_pipeline/agents/image_agent.py)</span></div>
+                        <div class="prompt-text" style="max-height:400px;">════════════════════════════════════════
+★ 썸네일 구성 요소
+════════════════════════════════════════
 
-[요구사항]
-- 크기: 1280x720 (16:9)
-- 스타일: 역사 다큐멘터리 느낌
-- 텍스트: 7자 이내 2줄
-- 색감: 강렬하고 눈에 띄게
+【텍스트 문구】
+- 2줄 구성 (줄바꿈으로 구분)
+- 1줄당 7자 이내 권장 (10자 초과 금지)
+- 짧고 임팩트 있게
+- 질문형 또는 감탄형
 
-[주의사항]
-- 한글 텍스트 포함 금지 (영어만)
-- 클릭 유도하는 구도
-- 인물/사건 핵심 장면</div>
-                    </div>
-                    <div class="prompt-box">
-                        <div class="prompt-label">🇺🇸 English</div>
-                        <div class="prompt-text">Generate thumbnail image.
+예시:
+```
+18세 왕의
+첫 출정
+```
 
-[Requirements]
-- Size: 1280x720 (16:9)
-- Style: Historical documentary feel
-- Text: Max 7 chars, 2 lines
-- Colors: Bold and eye-catching
+```
+숨겨진 진실
+밝혀지다
+```
 
-[Guidelines]
-- No Korean text (English only)
-- Click-inducing composition
-- Key moment of person/event</div>
+【이미지 스타일】
+- 시대별 스타일 프리셋 적용
+- 가장 임팩트 있는 장면 선택
+- 인물 클로즈업 또는 극적인 순간
+- 시선을 사로잡는 구도
+
+════════════════════════════════════════
+★ 썸네일 구도 팁
+════════════════════════════════════════
+
+✅ 권장:
+- 중앙에 핵심 인물/상징 배치
+- 1/3 지점에 텍스트 영역 확보
+- 고대비 색상으로 가독성 확보
+
+❌ 피해야 할 것:
+- 복잡한 배경
+- 작은 글씨
+- 여러 인물 동시 등장
+
+════════════════════════════════════════
+★ 영문 프롬프트 예시 (Gemini/DALL-E)
+════════════════════════════════════════
+
+Portrait of a young Korean king in his late teens,
+wearing traditional Goguryeo royal armor,
+dramatic rim lighting,
+historical painting style,
+heroic expression,
+Three Kingdoms period Korea,
+dynamic composition,
+no text, no watermark,
+16:9 aspect ratio, high resolution</div>
                     </div>
                 </div>
             </div>
 
             <div class="prompt-content hidden" id="prompt-scene">
                 <div class="prompt-lang">
-                    <div class="prompt-box">
-                        <div class="prompt-label">🇰🇷 Korean</div>
-                        <div class="prompt-text">씬 배경 이미지를 생성해줘.
+                    <div class="prompt-box" style="grid-column: 1 / -1;">
+                        <div class="prompt-label">씬 이미지 에이전트 <span style="font-weight:normal;color:#666;font-size:10px;">(scripts/history_pipeline/script_generator.py - IMAGE_PROMPT_SYSTEM)</span></div>
+                        <div class="prompt-text" style="max-height:450px;">════════════════════════════════════════
+★ 이미지 프롬프트 규칙 (영문 필수!)
+════════════════════════════════════════
 
-[요구사항]
-- 총 10장 (대본 흐름에 맞춰)
-- 스타일: 한국 역사 정확한 시대 고증
-- 색감: 일관된 톤 유지
+【스타일 고정 (역사 다큐멘터리)】
+- "Korean historical documentary style"
+- "Cinematic wide shot, dramatic lighting"
+- "Realistic oil painting style" OR "Historical illustration"
+- "Period-accurate Korean costumes and architecture"
+- "16:9 aspect ratio, high resolution"
+- "No text, no letters, no words, no watermarks"
 
-[주의사항]
-- 텍스트 포함 금지
-- 시대에 맞는 의상/건축물
-- 각 씬의 분위기 반영</div>
+════════════════════════════════════════
+★ 씬 유형별 프롬프트 템플릿
+════════════════════════════════════════
+
+【1. 인물 장면 (character_portrait)】
+Portrait of [historical figure description],
+wearing [period costume],
+[expression], dramatic rim lighting,
+historical painting style
+
+【2. 전투 장면 (action_scene)】
+Epic battle scene, [army description],
+[location], dust and smoke,
+dynamic composition, cinematic wide shot
+
+【3. 궁정/정치 장면 (narrative_scene)】
+Royal court of [dynasty],
+[king/officials] in formal attire,
+grand throne room, candlelight,
+solemn atmosphere
+
+【4. 풍경/지도 장면 (establishing_shot)】
+Aerial view of ancient Korea,
+[specific location], misty mountains,
+traditional architecture, golden hour lighting
+
+【5. 문화재/유물 장면 (cultural_artifact)】
+Close-up of [artifact],
+museum lighting, detailed texture,
+historical significance
+
+════════════════════════════════════════
+★ 이미지 개수 계산 (자동)
+════════════════════════════════════════
+
+대본 길이 기준 (910자 = 1분):
+- 8분 미만: 5개
+- 8-10분: 8개
+- 10-15분: 11개
+- 15분 이상: 12개
+
+════════════════════════════════════════
+★ 절대 금지
+════════════════════════════════════════
+❌ 한글 이미지 프롬프트 (영문만!)
+❌ 텍스트/글자 포함 요청
+❌ 현대적 요소 (현대 건물, 의상 등)
+❌ 부정확한 시대 고증
+❌ 폭력적/선정적 묘사
+
+════════════════════════════════════════
+★ JSON 출력 형식
+════════════════════════════════════════
+
+{
+  "scenes": [
+    {
+      "scene_number": 1,
+      "scene_title": "씬 제목 (한글)",
+      "narration_preview": "이 씬의 나레이션 첫 50자...",
+      "image_prompt": "English image prompt..."
+    }
+  ],
+  "thumbnail": {
+    "image_prompt": "English thumbnail prompt..."
+  }
+}</div>
                     </div>
-                    <div class="prompt-box">
-                        <div class="prompt-label">🇺🇸 English</div>
-                        <div class="prompt-text">Generate scene background images.
+                </div>
+            </div>
 
-[Requirements]
-- Total 10 images (following script flow)
-- Style: Historically accurate Korean period
-- Colors: Maintain consistent tone
+            <div class="prompt-content hidden" id="prompt-style">
+                <div class="prompt-lang">
+                    <div class="prompt-box" style="grid-column: 1 / -1;">
+                        <div class="prompt-label">시대별 스타일 프리셋 <span style="font-weight:normal;color:#666;font-size:10px;">(ERA_STYLE_PRESETS)</span></div>
+                        <div class="prompt-text" style="max-height:450px;">════════════════════════════════════════
+★ 시대별 스타일 프리셋
+════════════════════════════════════════
 
-[Guidelines]
-- No text in images
-- Period-accurate costumes/architecture
-- Reflect each scene's atmosphere</div>
+【고조선 (Bronze Age)】
+- style: mythological, ancient Korean, bronze age aesthetic
+- color: earth tones, bronze, deep blue
+- mood: mysterious, legendary, primordial
+
+【삼국시대 (Three Kingdoms)】
+- style: Three Kingdoms period Korea, traditional East Asian art
+- color: gold, red, forest green
+- mood: heroic, dynamic, martial
+
+【통일신라 (Unified Silla)】
+- style: Unified Silla period, Buddhist influenced art
+- color: gold, jade green, royal purple
+- mood: refined, spiritual, prosperous
+
+【발해 (Balhae)】
+- style: Balhae kingdom, northern Korean aesthetics
+- color: dark blue, white, silver
+- mood: vast, powerful, frontier
+
+【고려 (Goryeo)】
+- style: Goryeo dynasty, Buddhist and aristocratic
+- color: celadon green, gold, deep red
+- mood: elegant, spiritual, cultured
+
+【조선 전기 (Early Joseon)】
+- style: early Joseon dynasty, Confucian aesthetics
+- color: white, black, muted colors
+- mood: austere, dignified, scholarly
+
+【조선 중기 (Mid Joseon)】
+- style: mid Joseon dynasty, classical Korean painting
+- color: ink wash, subtle colors
+- mood: contemplative, refined, literary
+
+【조선 후기 (Late Joseon)】
+- style: late Joseon, folk painting (minhwa) style
+- color: vibrant primary colors
+- mood: lively, expressive, populist
+
+【대한제국 (Korean Empire)】
+- style: Korean Empire period, East-West fusion
+- color: imperial yellow, western influences
+- mood: transitional, modernizing, proud
+
+【일제강점기 (Colonial Period)】
+- style: Japanese colonial period, historical photography style
+- color: sepia, muted, somber
+- mood: resistant, sorrowful, enduring
+
+【현대 대한민국 (Modern Korea)】
+- style: modern Korea, documentary photography
+- color: realistic, full color
+- mood: dynamic, progressive, hopeful
+
+════════════════════════════════════════
+★ 프롬프트에 시대 스타일 적용 예시
+════════════════════════════════════════
+
+원본: "A Korean king giving orders to his generals"
+
+삼국시대 적용:
+"Three Kingdoms period Korea, traditional East Asian art,
+heroic, dynamic, martial atmosphere,
+gold, red, forest green color palette,
+A Korean king giving orders to his generals,
+no text, no watermark, no modern elements,
+historically accurate"</div>
                     </div>
                 </div>
             </div>
