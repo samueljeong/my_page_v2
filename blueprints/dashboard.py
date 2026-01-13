@@ -91,17 +91,24 @@ def api_script_content():
 
     base_dir = os.path.dirname(os.path.dirname(__file__))
     script_dirs = {
-        "history": "scripts/history_pipeline/episodes",
-        "isekai": "scripts/isekai_pipeline/episodes",
-        "bible": "outputs/bible/scripts",
+        "history": ["scripts/history_pipeline/episodes", "outputs/history/scripts"],
+        "isekai": ["scripts/isekai_pipeline/episodes", "outputs/isekai/scripts"],
+        "bible": ["outputs/bible/scripts"],
     }
 
-    dir_path = script_dirs.get(pipeline)
-    if not dir_path:
+    dirs = script_dirs.get(pipeline)
+    if not dirs:
         return jsonify({"ok": False, "error": "Invalid pipeline"})
 
-    filepath = os.path.join(base_dir, dir_path, name)
-    if not os.path.exists(filepath):
+    # 여러 디렉토리에서 파일 찾기
+    filepath = None
+    for dir_path in dirs:
+        check_path = os.path.join(base_dir, dir_path, name)
+        if os.path.exists(check_path):
+            filepath = check_path
+            break
+
+    if not filepath:
         return jsonify({"ok": False, "error": "Script not found"})
 
     try:
@@ -321,7 +328,9 @@ def api_scripts():
 
     script_dirs = [
         ("history", "scripts/history_pipeline/episodes"),
+        ("history", "outputs/history/scripts"),  # 최종 대본
         ("isekai", "scripts/isekai_pipeline/episodes"),
+        ("isekai", "outputs/isekai/scripts"),  # 최종 대본
         ("bible", "outputs/bible/scripts"),
     ]
 
