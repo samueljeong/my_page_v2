@@ -332,7 +332,8 @@ def api_scripts():
 
         try:
             for filename in os.listdir(full_path):
-                if filename.endswith(('.txt', '.json')):
+                # history/isekai는 .py 파일, bible은 .txt/.json 파일
+                if filename.endswith(('.txt', '.json', '.py')) and not filename.startswith('__'):
                     filepath = os.path.join(full_path, filename)
                     mtime = os.path.getmtime(filepath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
