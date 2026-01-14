@@ -7,6 +7,7 @@
 """
 
 import os
+import base64
 import tempfile
 import time
 import requests
@@ -37,72 +38,6 @@ ELEVENLABS_MODEL = "eleven_multilingual_v2"
 DEFAULT_STABILITY = 0.50
 DEFAULT_SIMILARITY_BOOST = 0.75
 DEFAULT_SPEED = 0.95  # 0.7 ~ 1.2 (한국사 다큐용 차분한 톤)
-
-
-def generate_gemini_tts_chunk(
-    text: str,
-    voice_name: str = "Charon",
-    api_key: str = None
-) -> Dict[str, Any]:
-    """Gemini TTS API로 청크 생성"""
-    if not api_key:
-        api_key = os.environ.get('GOOGLE_API_KEY', '')
-    if not api_key:
-        return {"ok": False, "error": "GOOGLE_API_KEY 없음"}
-
-    valid_voices = ["Kore", "Charon", "Puck", "Fenrir", "Aoede"]
-    if voice_name not in valid_voices:
-        voice_name = "Charon"
-
-    model = "gemini-2.5-flash-preview-tts"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-    payload = {
-        "contents": [{"parts": [{"text": text}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {
-                        "voiceName": voice_name
-                    }
-                }
-            }
-        }
-    }
-
-    try:
-        import base64
-        response = requests.post(url, json=payload, timeout=120)
-
-        if response.status_code == 429:
-            return {"ok": False, "error": "Gemini Rate limit"}
-
-        if response.status_code != 200:
-            return {"ok": False, "error": f"Gemini API 오류: {response.status_code}"}
-
-        result = response.json()
-        candidates = result.get("candidates", [])
-        if not candidates:
-            return {"ok": False, "error": "응답 없음"}
-
-        parts = candidates[0].get("content", {}).get("parts", [])
-        for part in parts:
-            inline_data = part.get("inlineData", {})
-            if inline_data.get("mimeType", "").startswith("audio/"):
-                audio_b64 = inline_data.get("data", "")
-                if audio_b64:
-                    audio_data = base64.b64decode(audio_b64)
-                    return {
-                        "ok": True,
-                        "audio_data": audio_data,
-                        "format": "wav"
-                    }
-
-        return {"ok": False, "error": "오디오 데이터 없음"}
-
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
 
 
 def extract_sentence_timing_from_alignment(
@@ -384,7 +319,6 @@ def generate_elevenlabs_tts_chunk(
         if response.status_code == 200:
             data = response.json()
             # audio_base64와 alignment 정보 반환
-            import base64
             audio_data = base64.b64decode(data.get("audio_base64", ""))
             alignment = data.get("alignment", {})
             return {
