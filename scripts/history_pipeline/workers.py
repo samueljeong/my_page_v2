@@ -352,6 +352,9 @@ def render_video(
     image_paths: List[str],
     srt_path: str = None,
     bgm_mood: str = "calm",
+    voice_volume: float = 1.0,  # TTS 볼륨 (1.0 = 원본)
+    bgm_volume: float = 0.10,  # BGM 볼륨 (10%)
+    timestamps: List[int] = None,  # 이미지별 시작 시간 (초)
 ) -> Dict[str, Any]:
     """
     영상 렌더링 (독립 모듈 - FFmpeg만 필요)
@@ -361,7 +364,10 @@ def render_video(
         audio_path: TTS 오디오 파일 경로
         image_paths: 배경 이미지 경로 목록 (시간순)
         srt_path: 자막 파일 경로 (선택)
-        bgm_mood: BGM 분위기 (현재 미사용)
+        bgm_mood: BGM 분위기 (calm, epic, tense)
+        voice_volume: TTS 볼륨 증폭 비율
+        bgm_volume: BGM 볼륨
+        timestamps: 이미지별 시작 시간 (초) - None이면 균등 분배
 
     Returns:
         {
@@ -375,23 +381,59 @@ def render_video(
     video_path = os.path.join(VIDEO_DIR, f"{episode_id}.mp4")
 
     # 독립 렌더러 모듈 사용
-    from .renderer import render_video as render_single, render_multi_image_video
+    from .renderer import render_video as render_single, render_multi_image_video, mix_audio_with_bgm, DEFAULT_BGM_PATH
+
+    # BGM 파일 선택
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    bgm_dir = os.path.join(base_dir, "static", "audio", "bgm")
+    bgm_files = {
+        "calm": os.path.join(bgm_dir, "calm_01.mp3"),
+        "epic": os.path.join(bgm_dir, "epic_01.mp3"),
+        "tense": os.path.join(bgm_dir, "tense_01.mp3"),
+    }
+    bgm_path = bgm_files.get(bgm_mood, DEFAULT_BGM_PATH)
+
+    # BGM 파일이 없으면 기본값 사용
+    if not os.path.exists(bgm_path):
+        bgm_path = DEFAULT_BGM_PATH
+    if not os.path.exists(bgm_path):
+        print(f"[HISTORY-RENDERER] ⚠ BGM 파일 없음, BGM 없이 진행")
+        bgm_path = None
+
+    # BGM 믹싱 (BGM 파일이 있는 경우)
+    final_audio_path = audio_path
+    if bgm_path:
+        mixed_audio_path = os.path.join(AUDIO_DIR, f"{episode_id}_mixed.mp3")
+        mix_result = mix_audio_with_bgm(
+            voice_path=audio_path,
+            bgm_path=bgm_path,
+            output_path=mixed_audio_path,
+            bgm_volume=bgm_volume,
+            voice_volume=voice_volume,
+            log_prefix="[HISTORY-RENDERER]",
+        )
+        if mix_result.get("ok"):
+            final_audio_path = mix_result.get("audio_path", mixed_audio_path)
+            print(f"[HISTORY-RENDERER] ✓ BGM 믹싱 완료 (볼륨: voice={voice_volume}x, bgm={bgm_volume*100:.0f}%)")
+        else:
+            print(f"[HISTORY-RENDERER] ⚠ BGM 믹싱 실패, 원본 오디오 사용: {mix_result.get('error')}")
 
     if len(image_paths) == 1:
         # 단일 이미지
         result = render_single(
-            audio_path=audio_path,
+            audio_path=final_audio_path,
             image_path=image_paths[0],
             output_path=video_path,
             srt_path=srt_path,
         )
     else:
-        # 여러 이미지 (시간 균등 분배)
+        # 여러 이미지 (타임스탬프 기반 또는 균등 분배)
         result = render_multi_image_video(
-            audio_path=audio_path,
+            audio_path=final_audio_path,
             image_paths=image_paths,
             output_path=video_path,
             srt_path=srt_path,
+            timestamps=timestamps,
         )
 
     if result.get("ok"):
@@ -597,7 +639,18 @@ def execute_episode(
     # 5. 이미지 생성
     print(f"\n[HISTORY] 5. 이미지 생성 중...")
     if image_prompts:
-        img_result = generate_images_batch(episode_id, image_prompts)
+        # image_prompts 형식 변환: timestamp 기반 → scene_index 기반
+        # ep021_image_prompts.py: [{"timestamp_sec": 0, "prompt": "..."}, ...]
+        # generate_images_batch 기대: [{"prompt": "...", "scene_index": 1}, ...]
+        converted_prompts = []
+        for i, p in enumerate(image_prompts):
+            prompt_text = p.get("prompt", "") if isinstance(p, dict) else str(p)
+            converted_prompts.append({
+                "prompt": prompt_text,
+                "scene_index": i,  # 0 = thumbnail, 1+ = scene
+            })
+
+        img_result = generate_images_batch(episode_id, converted_prompts)
         result["image_paths"] = [img["path"] for img in img_result.get("images", [])]
         print(f"    ✓ {len(result['image_paths'])}개 이미지 생성")
         if img_result.get("failed"):

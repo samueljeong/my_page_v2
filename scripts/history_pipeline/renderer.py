@@ -51,8 +51,9 @@ def render_multi_image_video(
     srt_path: str = None,
     resolution: str = "1920x1080",
     fps: int = 30,
+    timestamps: List[int] = None,
 ) -> Dict[str, Any]:
-    """여러 이미지 + 오디오로 영상 생성 (시간 균등 분배)"""
+    """여러 이미지 + 오디오로 영상 생성 (타임스탬프 기반 또는 균등 분배)"""
     return _render_multi_image_video(
         audio_path=audio_path,
         image_paths=image_paths,
@@ -63,6 +64,7 @@ def render_multi_image_video(
         style_preset="history",
         log_prefix=LOG_PREFIX,
         use_absolute_path=True,
+        timestamps=timestamps,
     )
 
 
@@ -71,6 +73,14 @@ DEFAULT_BGM_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "static", "audio", "bgm", "epic_01.mp3"
 )
+
+# mix_audio_with_bgm 함수 re-export (workers.py에서 사용)
+__all__ = [
+    'render_video',
+    'render_multi_image_video',
+    'mix_audio_with_bgm',
+    'DEFAULT_BGM_PATH',
+]
 
 
 if __name__ == "__main__":

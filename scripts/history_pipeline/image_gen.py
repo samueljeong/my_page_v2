@@ -10,6 +10,10 @@
 import os
 import sys
 import shutil
+
+# .env 로드 (API 키)
+from dotenv import load_dotenv
+load_dotenv()
 from typing import Dict, Any, List, Optional
 from PIL import Image, ImageDraw, ImageFont
 

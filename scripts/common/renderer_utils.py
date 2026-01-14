@@ -242,9 +242,16 @@ def render_multi_image_video(
     style_preset: str = "default",
     log_prefix: str = "[RENDERER]",
     use_absolute_path: bool = True,
+    timestamps: List[int] = None,
 ) -> Dict[str, Any]:
     """
-    여러 이미지 + 오디오로 영상 생성 (시간 균등 분배)
+    여러 이미지 + 오디오로 영상 생성
+
+    2단계 렌더링 방식:
+    1. 이미지 + 오디오로 영상 생성 (자막 없이)
+    2. 생성된 영상에 자막 추가
+
+    이렇게 하면 concat demuxer의 타임스탬프 문제가 해결됨
 
     Args:
         audio_path: TTS 오디오 파일 경로
@@ -256,6 +263,7 @@ def render_multi_image_video(
         style_preset: 자막 스타일 프리셋
         log_prefix: 로그 접두사
         use_absolute_path: 이미지 경로를 절대 경로로 변환 (기본: True)
+        timestamps: 이미지별 시작 시간 (초) - None이면 균등 분배
 
     Returns:
         {"ok": True, "video_path": "...", "duration": 900.5}
@@ -282,8 +290,23 @@ def render_multi_image_video(
 
         # 오디오 길이 확인
         duration = get_audio_duration(audio_path)
-        image_duration = duration / len(image_paths)
-        print(f"{log_prefix} 오디오: {duration:.1f}초, 이미지당: {image_duration:.1f}초")
+
+        # 이미지별 duration 계산
+        if timestamps and len(timestamps) == len(image_paths):
+            # 타임스탬프 기반 배치
+            image_durations = []
+            for i in range(len(timestamps)):
+                if i < len(timestamps) - 1:
+                    img_dur = timestamps[i + 1] - timestamps[i]
+                else:
+                    img_dur = duration - timestamps[i]
+                image_durations.append(max(img_dur, 0.1))  # 최소 0.1초
+            print(f"{log_prefix} 오디오: {duration:.1f}초, 타임스탬프 기반 배치 ({len(image_paths)}개)")
+        else:
+            # 균등 분배
+            image_duration = duration / len(image_paths)
+            image_durations = [image_duration] * len(image_paths)
+            print(f"{log_prefix} 오디오: {duration:.1f}초, 이미지당: {image_duration:.1f}초")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             width, height = resolution.split('x')
@@ -291,46 +314,40 @@ def render_multi_image_video(
             # 이미지 리스트 파일 생성
             list_path = os.path.join(temp_dir, "images.txt")
             with open(list_path, 'w') as f:
-                for img_path in image_paths:
+                for i, img_path in enumerate(image_paths):
                     path = os.path.abspath(img_path) if use_absolute_path else img_path
                     f.write(f"file '{path}'\n")
-                    f.write(f"duration {image_duration}\n")
+                    f.write(f"duration {image_durations[i]}\n")
                 # 마지막 이미지 한번 더 (FFmpeg concat 요구사항)
                 last_path = os.path.abspath(image_paths[-1]) if use_absolute_path else image_paths[-1]
                 f.write(f"file '{last_path}'\n")
 
-            # 기본 필터
+            # 기본 필터 (자막 없이)
             vf_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
 
-            # 자막 처리
+            # ===== 1단계: 영상 생성 (자막 없이) =====
             if srt_path and os.path.exists(srt_path):
-                with open(srt_path, 'r', encoding='utf-8') as f:
-                    srt_content = f.read()
+                # 자막이 있으면 2단계 렌더링
+                temp_video_path = os.path.join(temp_dir, "temp_video.mp4")
+            else:
+                # 자막 없으면 바로 최종 경로에
+                temp_video_path = output_path
 
-                ass_content = srt_to_ass(srt_content, style_preset=style_preset)
-                ass_path = os.path.join(temp_dir, "subtitle.ass")
-                with open(ass_path, 'w', encoding='utf-8') as f:
-                    f.write(ass_content)
-
-                escaped_ass_path = ass_path.replace('\\', '\\\\').replace(':', '\\:')
-                vf_filter = f"{vf_filter},ass={escaped_ass_path}"
-
-            # FFmpeg 명령어 (-t로 정확한 길이 지정)
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat', '-safe', '0', '-i', list_path,
                 '-i', audio_path,
-                '-t', str(duration),  # 오디오 길이로 명시적 제한
+                '-t', str(duration),
                 '-vf', vf_filter,
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
                 '-c:a', 'aac', '-b:a', '128k',
                 '-r', str(fps),
                 '-pix_fmt', 'yuv420p',
                 '-threads', '2',
-                output_path
+                temp_video_path
             ]
 
-            print(f"{log_prefix} FFmpeg 실행 중... ({len(image_paths)}개 이미지)")
+            print(f"{log_prefix} [1단계] 영상 생성 중... ({len(image_paths)}개 이미지)")
 
             process = subprocess.run(
                 ffmpeg_cmd,
@@ -343,6 +360,44 @@ def render_multi_image_video(
                 error_msg = process.stderr.decode('utf-8', errors='ignore')
                 print(f"{log_prefix} FFmpeg 오류:\n{error_msg[:500]}")
                 return {"ok": False, "error": f"FFmpeg 오류: {error_msg[:500]}"}
+
+            # ===== 2단계: 자막 추가 =====
+            if srt_path and os.path.exists(srt_path):
+                print(f"{log_prefix} [2단계] 자막 추가 중...")
+
+                with open(srt_path, 'r', encoding='utf-8') as f:
+                    srt_content = f.read()
+
+                ass_content = srt_to_ass(srt_content, style_preset=style_preset)
+                ass_path = os.path.join(temp_dir, "subtitle.ass")
+                with open(ass_path, 'w', encoding='utf-8') as f:
+                    f.write(ass_content)
+
+                escaped_ass_path = ass_path.replace('\\', '\\\\').replace(':', '\\:')
+                sub_filter = f"ass={escaped_ass_path}"
+
+                # 자막 추가 FFmpeg 명령어
+                ffmpeg_sub_cmd = [
+                    'ffmpeg', '-y',
+                    '-i', temp_video_path,
+                    '-vf', sub_filter,
+                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+                    '-c:a', 'copy',  # 오디오는 그대로 복사
+                    '-threads', '2',
+                    output_path
+                ]
+
+                process = subprocess.run(
+                    ffmpeg_sub_cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    timeout=1800
+                )
+
+                if process.returncode != 0:
+                    error_msg = process.stderr.decode('utf-8', errors='ignore')
+                    print(f"{log_prefix} 자막 추가 오류:\n{error_msg[:500]}")
+                    return {"ok": False, "error": f"자막 추가 오류: {error_msg[:500]}"}
 
             if os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
@@ -366,6 +421,7 @@ def mix_audio_with_bgm(
     bgm_path: str,
     output_path: str,
     bgm_volume: float = 0.15,
+    voice_volume: float = 1.0,
     log_prefix: str = "[RENDERER]",
 ) -> Dict[str, Any]:
     """
@@ -376,6 +432,7 @@ def mix_audio_with_bgm(
         bgm_path: BGM 파일 경로
         output_path: 출력 파일 경로
         bgm_volume: BGM 볼륨 (0.0 ~ 1.0, 기본 0.15)
+        voice_volume: 음성 볼륨 증폭 (1.0 = 원본, 1.5 = 1.5배)
         log_prefix: 로그 접두사
 
     Returns:
@@ -385,21 +442,23 @@ def mix_audio_with_bgm(
         # 음성 길이 확인
         voice_duration = get_audio_duration(voice_path)
 
-        # FFmpeg로 믹싱 (BGM 루프 + 페이드 아웃)
+        # FFmpeg로 믹싱 (음성 볼륨 증폭 + BGM 루프 + 페이드 아웃)
+        # amix는 자동으로 볼륨을 낮추므로 normalize=0으로 비활성화
         ffmpeg_cmd = [
             'ffmpeg', '-y',
             '-i', voice_path,
             '-stream_loop', '-1', '-i', bgm_path,
             '-filter_complex',
+            f'[0:a]volume={voice_volume}[voice];'
             f'[1:a]volume={bgm_volume},afade=t=out:st={voice_duration-3}:d=3[bgm];'
-            f'[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[out]',
+            f'[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[out]',
             '-map', '[out]',
             '-c:a', 'libmp3lame', '-b:a', '192k',
             '-t', str(voice_duration),
             output_path
         ]
 
-        print(f"{log_prefix} BGM 믹싱 중... (볼륨: {bgm_volume*100:.0f}%)")
+        print(f"{log_prefix} BGM 믹싱 중... (voice={voice_volume}x, bgm={bgm_volume*100:.0f}%)")
 
         process = subprocess.run(
             ffmpeg_cmd,
