@@ -7151,15 +7151,47 @@ def upload_youtube_thumbnail():
         # 토큰 로드
         token_data = load_youtube_token_from_db(channel_id) if channel_id else load_youtube_token_from_db()
         if not token_data:
-            return jsonify({"success": False, "error": "YouTube 인증이 필요합니다."})
+            reauth_url = f"/api/drama/youtube-auth?channel_id={channel_id}" if channel_id else "/api/drama/youtube-auth"
+            return jsonify({
+                "success": False,
+                "error": "YouTube 인증이 필요합니다.",
+                "reauth_url": reauth_url
+            })
+
+        # 필수 scope 체크
+        required_scopes = ['youtube.upload', 'youtube.force-ssl', 'youtube']
+        token_scopes = token_data.get('scopes', [])
+        has_required_scope = any(any(req in scope for req in required_scopes) for scope in token_scopes)
+
+        print(f"[YOUTUBE-THUMBNAIL] 토큰 scopes: {token_scopes}")
+        print(f"[YOUTUBE-THUMBNAIL] 필수 scope 존재: {has_required_scope}")
+
+        if not has_required_scope and token_scopes:
+            reauth_url = f"/api/drama/youtube-auth?channel_id={channel_id}" if channel_id else "/api/drama/youtube-auth"
+            return jsonify({
+                "success": False,
+                "error": f"토큰에 필요한 권한이 없습니다. 현재 scopes: {token_scopes}",
+                "reauth_url": reauth_url
+            })
+
+        # client_id, client_secret 없으면 환경변수에서 가져오기
+        if not token_data.get('client_id') or not token_data.get('client_secret'):
+            token_data['client_id'] = os.getenv('YOUTUBE_CLIENT_ID') or os.getenv('GOOGLE_CLIENT_ID')
+            token_data['client_secret'] = os.getenv('YOUTUBE_CLIENT_SECRET') or os.getenv('GOOGLE_CLIENT_SECRET')
+            token_data['token_uri'] = token_data.get('token_uri') or 'https://oauth2.googleapis.com/token'
 
         credentials = Credentials.from_authorized_user_info(token_data)
 
-        # 토큰 갱신
-        if credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-            token_data['token'] = credentials.token
-            save_youtube_token_to_db(token_data, channel_id=channel_id)
+        # 토큰 갱신 (만료 여부와 상관없이 시도)
+        if credentials.refresh_token:
+            try:
+                credentials.refresh(Request())
+                token_data['token'] = credentials.token
+                save_youtube_token_to_db(token_data, channel_id=channel_id)
+                print(f"[YOUTUBE-THUMBNAIL] 토큰 갱신 성공")
+            except Exception as refresh_error:
+                print(f"[YOUTUBE-THUMBNAIL] 토큰 갱신 실패: {refresh_error}")
+                # 갱신 실패해도 기존 토큰으로 시도
 
         youtube = build('youtube', 'v3', credentials=credentials)
 
@@ -7167,17 +7199,19 @@ def upload_youtube_thumbnail():
         with tempfile.TemporaryDirectory() as temp_dir:
             if thumbnail_data:
                 # base64 디코딩
-                thumb_path = os.path.join(temp_dir, 'thumbnail.png')
+                thumb_path = os.path.join(temp_dir, 'thumbnail.jpg')
                 thumb_bytes = base64.b64decode(thumbnail_data)
                 with open(thumb_path, 'wb') as f:
                     f.write(thumb_bytes)
+                mimetype = 'image/jpeg'
             else:
                 thumb_path = thumbnail_path
+                mimetype = 'image/jpeg' if thumb_path.endswith('.jpg') else 'image/png'
 
-            print(f"[YOUTUBE-THUMBNAIL] 썸네일 업로드 중: {video_id}")
+            print(f"[YOUTUBE-THUMBNAIL] 썸네일 업로드 중: {video_id}, 파일: {thumb_path}")
 
             # 썸네일 업로드
-            media = MediaFileUpload(thumb_path, mimetype='image/png')
+            media = MediaFileUpload(thumb_path, mimetype=mimetype)
             response = youtube.thumbnails().set(
                 videoId=video_id,
                 media_body=media
@@ -7192,8 +7226,20 @@ def upload_youtube_thumbnail():
             })
 
     except Exception as e:
-        print(f"[YOUTUBE-THUMBNAIL][ERROR] {str(e)}")
-        return jsonify({"success": False, "error": str(e)})
+        error_str = str(e)
+        print(f"[YOUTUBE-THUMBNAIL][ERROR] {error_str}")
+
+        # 권한 오류인 경우 재인증 URL 제공
+        if '403' in error_str or 'forbidden' in error_str.lower() or 'authorized' in error_str.lower():
+            reauth_url = f"/api/drama/youtube-auth?channel_id={channel_id}" if channel_id else "/api/drama/youtube-auth"
+            return jsonify({
+                "success": False,
+                "error": error_str,
+                "reauth_url": reauth_url,
+                "hint": "채널 재인증이 필요합니다. reauth_url로 접속하여 인증해주세요."
+            })
+
+        return jsonify({"success": False, "error": error_str})
 
 
 @app.route('/api/drama/update-youtube-video', methods=['POST'])
