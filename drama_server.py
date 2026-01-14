@@ -6414,31 +6414,37 @@ def youtube_auth():
                 "error": "YouTube API 인증 정보가 설정되지 않았습니다. YOUTUBE_CLIENT_ID/GOOGLE_CLIENT_ID와 YOUTUBE_CLIENT_SECRET/GOOGLE_CLIENT_SECRET 환경 변수를 설정해주세요."
             })
 
-        # 이미 인증된 토큰이 있는지 확인 (데이터베이스에서) - 해당 채널/프로젝트의 토큰만 확인
-        token_data = load_youtube_token_from_db(channel_id=target_channel_id or 'default', project_suffix=project_suffix)
-        if token_data and token_data.get('refresh_token'):
-            try:
-                from google.auth.transport.requests import Request
-                credentials = Credentials.from_authorized_user_info(token_data)
-                if credentials:
-                    # 토큰이 만료되었으면 갱신 시도
-                    if credentials.expired and credentials.refresh_token:
-                        try:
-                            credentials.refresh(Request())
-                            # 갱신된 토큰 저장
-                            token_data['token'] = credentials.token
-                            save_youtube_token_to_db(token_data)
-                            print(f"[YOUTUBE-AUTH] 토큰 갱신 성공")
-                        except Exception as refresh_error:
-                            print(f"[YOUTUBE-AUTH] 토큰 갱신 실패: {refresh_error}")
-                            # 갱신 실패 시 새로운 인증 필요
-                            pass
+        # force 파라미터 확인 (강제 재인증)
+        force_reauth = request.args.get('force', '0') == '1' if request.method == 'GET' else (request.get_json() or {}).get('force', False)
 
-                    # 유효한 토큰이 있으면 성공 반환
-                    if credentials.valid or (credentials.refresh_token and not credentials.expired):
-                        return jsonify({"success": True, "message": "이미 인증되어 있습니다."})
-            except Exception as e:
-                print(f"[YOUTUBE-AUTH] 기존 토큰 검증 실패: {e}")
+        if force_reauth:
+            print(f"[YOUTUBE-AUTH] force=1 - 강제 재인증 진행 (channel: {target_channel_id or 'default'})")
+        else:
+            # 이미 인증된 토큰이 있는지 확인 (데이터베이스에서) - 해당 채널/프로젝트의 토큰만 확인
+            token_data = load_youtube_token_from_db(channel_id=target_channel_id or 'default', project_suffix=project_suffix)
+            if token_data and token_data.get('refresh_token'):
+                try:
+                    from google.auth.transport.requests import Request
+                    credentials = Credentials.from_authorized_user_info(token_data)
+                    if credentials:
+                        # 토큰이 만료되었으면 갱신 시도
+                        if credentials.expired and credentials.refresh_token:
+                            try:
+                                credentials.refresh(Request())
+                                # 갱신된 토큰 저장
+                                token_data['token'] = credentials.token
+                                save_youtube_token_to_db(token_data)
+                                print(f"[YOUTUBE-AUTH] 토큰 갱신 성공")
+                            except Exception as refresh_error:
+                                print(f"[YOUTUBE-AUTH] 토큰 갱신 실패: {refresh_error}")
+                                # 갱신 실패 시 새로운 인증 필요
+                                pass
+
+                        # 유효한 토큰이 있으면 성공 반환
+                        if credentials.valid or (credentials.refresh_token and not credentials.expired):
+                            return jsonify({"success": True, "message": "이미 인증되어 있습니다."})
+                except Exception as e:
+                    print(f"[YOUTUBE-AUTH] 기존 토큰 검증 실패: {e}")
 
         # OAuth 플로우 생성
         client_config = {
