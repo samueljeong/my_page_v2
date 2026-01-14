@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script-Image Editor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+
+        /* 상단 컨트롤 */
+        .controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        input, select {
+            padding: 0.5rem 0.75rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 정보 박스 */
+        .info-box {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        .info-item { font-size: 0.875rem; }
+        .info-label { color: #64748b; margin-right: 0.5rem; }
+        .info-value { font-weight: 500; }
+
+        /* 간격 규칙 안내 */
+        .rules-box {
+            background: #1a2332;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .rules-box strong { color: #3b82f6; }
+
+        /* 세그먼트 목록 */
+        .segments { display: flex; flex-direction: column; gap: 0.5rem; }
+        .segment {
+            display: grid;
+            grid-template-columns: 80px 1fr 1fr;
+            gap: 0.75rem;
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 0.75rem;
+            border-left: 3px solid #334155;
+        }
+        .segment.zone-0 { border-left-color: #ef4444; } /* 0-1분: 빨강 */
+        .segment.zone-1 { border-left-color: #f59e0b; } /* 1-5분: 주황 */
+        .segment.zone-2 { border-left-color: #10b981; } /* 5-10분: 초록 */
+        .segment.zone-3 { border-left-color: #3b82f6; } /* 10분+: 파랑 */
+
+        .segment-time {
+            font-size: 0.75rem;
+            color: #64748b;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .segment-time .time { font-weight: 600; color: #e2e8f0; font-size: 0.875rem; }
+        .segment-time .zone { font-size: 0.625rem; margin-top: 0.25rem; }
+
+        .segment-script {
+            background: #0f172a;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            max-height: 100px;
+            overflow-y: auto;
+            color: #94a3b8;
+        }
+
+        .segment-prompt textarea {
+            width: 100%;
+            height: 80px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            resize: vertical;
+        }
+        .segment-prompt textarea:focus { outline: none; border-color: #3b82f6; }
+        .segment-prompt textarea::placeholder { color: #475569; }
+
+        /* 로딩 상태 */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+
+        /* 토스트 */
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 0.75rem 1.25rem;
+            background: #1e293b;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.error { border-left-color: #ef4444; }
+        .toast.success { border-left-color: #10b981; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 헤더 */
+        .header-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 1fr;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Script-Image Editor</h1>
+
+        <!-- 컨트롤 -->
+        <div class="controls">
+            <input type="number" id="episode-num" placeholder="EP #" min="1" max="999" style="width:80px;">
+            <button class="btn btn-primary" onclick="loadScript()">Load Script</button>
+            <button class="btn btn-success" onclick="savePrompts()" id="save-btn" disabled>Save Prompts</button>
+            <button class="btn btn-secondary" onclick="generateImages()" id="gen-btn" disabled>Generate Images</button>
+            <button class="btn btn-secondary" onclick="renderVideo()" id="render-btn" disabled>Render Video</button>
+        </div>
+
+        <!-- 정보 -->
+        <div class="info-box" id="info-box" style="display:none;">
+            <div class="info-item">
+                <span class="info-label">Title:</span>
+                <span class="info-value" id="info-title">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Length:</span>
+                <span class="info-value" id="info-length">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Duration:</span>
+                <span class="info-value" id="info-duration">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Segments:</span>
+                <span class="info-value" id="info-segments">-</span>
+            </div>
+        </div>
+
+        <!-- 간격 규칙 -->
+        <div class="rules-box">
+            <strong>Interval Rules:</strong>
+            0-1min: <span style="color:#ef4444;">10s</span> |
+            1-5min: <span style="color:#f59e0b;">30s</span> |
+            5-10min: <span style="color:#10b981;">40s</span> |
+            10min+: <span style="color:#3b82f6;">60s</span>
+        </div>
+
+        <!-- 헤더 -->
+        <div class="header-row" id="header-row" style="display:none;">
+            <div>Time</div>
+            <div>Script Segment</div>
+            <div>Image Prompt</div>
+        </div>
+
+        <!-- 세그먼트 목록 -->
+        <div class="segments" id="segments">
+            <div class="loading">Enter episode number and click "Load Script"</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let currentEpisode = null;
+        let segments = [];
+
+        // 간격 규칙에 따른 타임스탬프 생성
+        function generateTimestamps(durationSec) {
+            const timestamps = [];
+            let t = 0;
+
+            // 0-1분: 10초 간격
+            while (t < 60 && t < durationSec) {
+                timestamps.push({ sec: t, zone: 0 });
+                t += 10;
+            }
+
+            // 1-5분: 30초 간격
+            while (t < 300 && t < durationSec) {
+                timestamps.push({ sec: t, zone: 1 });
+                t += 30;
+            }
+
+            // 5-10분: 40초 간격
+            while (t < 600 && t < durationSec) {
+                timestamps.push({ sec: t, zone: 2 });
+                t += 40;
+            }
+
+            // 10분+: 60초 간격
+            while (t < durationSec) {
+                timestamps.push({ sec: t, zone: 3 });
+                t += 60;
+            }
+
+            return timestamps;
+        }
+
+        // 시간 포맷
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // Zone 이름
+        function getZoneName(zone) {
+            const names = ['0-1m (10s)', '1-5m (30s)', '5-10m (40s)', '10m+ (60s)'];
+            return names[zone] || '';
+        }
+
+        // 대본 로드
+        async function loadScript() {
+            const epNum = document.getElementById('episode-num').value;
+            if (!epNum) {
+                showToast('Enter episode number', 'error');
+                return;
+            }
+
+            document.getElementById('segments').innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                // 대본 정보 가져오기
+                const res = await fetch(`${API_BASE}/api/history/script-image-matching?episode=${epNum}`);
+                const data = await res.json();
+
+                if (!data.ok) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+
+                currentEpisode = {
+                    id: data.episode_id,
+                    title: data.title,
+                    scriptLength: data.script_length,
+                    duration: data.estimated_duration_sec,
+                    sections: data.sections,
+                    existingImages: data.total_images
+                };
+
+                // 정보 표시
+                document.getElementById('info-box').style.display = 'flex';
+                document.getElementById('info-title').textContent = data.title;
+                document.getElementById('info-length').textContent = `${data.script_length.toLocaleString()} chars`;
+                document.getElementById('info-duration').textContent = formatTime(data.estimated_duration_sec);
+
+                // 타임스탬프 생성
+                const timestamps = generateTimestamps(data.estimated_duration_sec);
+                document.getElementById('info-segments').textContent = `${timestamps.length} images`;
+
+                // 대본을 타임스탬프에 맞게 분할
+                segments = [];
+                const totalChars = data.sections.reduce((sum, s) => sum + s.char_count, 0);
+                const charsPerSec = totalChars / data.estimated_duration_sec;
+
+                for (let i = 0; i < timestamps.length; i++) {
+                    const ts = timestamps[i];
+                    const nextTs = timestamps[i + 1] || { sec: data.estimated_duration_sec };
+
+                    // 이 구간에 해당하는 대본 찾기
+                    let scriptText = '';
+                    for (const section of data.sections) {
+                        if (section.start_sec >= ts.sec && section.start_sec < nextTs.sec) {
+                            scriptText += section.text + ' ';
+                        }
+                    }
+
+                    // 기존 이미지 프롬프트 찾기
+                    let existingPrompt = '';
+                    for (const section of data.sections) {
+                        if (section.image && section.image.timestamp_sec >= ts.sec && section.image.timestamp_sec < nextTs.sec) {
+                            existingPrompt = section.image.prompt || '';
+                            break;
+                        }
+                    }
+
+                    segments.push({
+                        index: i,
+                        timestamp_sec: ts.sec,
+                        zone: ts.zone,
+                        script: scriptText.trim() || `[${formatTime(ts.sec)} - ${formatTime(nextTs.sec)}]`,
+                        prompt: existingPrompt
+                    });
+                }
+
+                renderSegments();
+
+                document.getElementById('header-row').style.display = 'grid';
+                document.getElementById('save-btn').disabled = false;
+                document.getElementById('gen-btn').disabled = false;
+                document.getElementById('render-btn').disabled = false;
+
+                showToast(`Loaded: ${data.title}`, 'success');
+
+            } catch (e) {
+                document.getElementById('segments').innerHTML = `<div class="loading" style="color:#ef4444;">Error: ${e.message}</div>`;
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 세그먼트 렌더링
+        function renderSegments() {
+            const container = document.getElementById('segments');
+            container.innerHTML = segments.map((seg, i) => `
+                <div class="segment zone-${seg.zone}">
+                    <div class="segment-time">
+                        <div class="time">${formatTime(seg.timestamp_sec)}</div>
+                        <div class="zone">${getZoneName(seg.zone)}</div>
+                    </div>
+                    <div class="segment-script">${escapeHtml(seg.script)}</div>
+                    <div class="segment-prompt">
+                        <textarea
+                            id="prompt-${i}"
+                            placeholder="Image prompt for this segment..."
+                            onchange="updatePrompt(${i}, this.value)"
+                        >${escapeHtml(seg.prompt)}</textarea>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 프롬프트 업데이트
+        function updatePrompt(index, value) {
+            if (segments[index]) {
+                segments[index].prompt = value;
+            }
+        }
+
+        // 프롬프트 저장
+        async function savePrompts() {
+            if (!currentEpisode) {
+                showToast('No episode loaded', 'error');
+                return;
+            }
+
+            // 현재 입력값 수집
+            segments.forEach((seg, i) => {
+                const textarea = document.getElementById(`prompt-${i}`);
+                if (textarea) {
+                    seg.prompt = textarea.value;
+                }
+            });
+
+            const imagePrompts = segments.map(seg => ({
+                timestamp_sec: seg.timestamp_sec,
+                prompt: seg.prompt
+            }));
+
+            try {
+                const res = await fetch(`${API_BASE}/api/history/save-image-prompts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        episode_id: currentEpisode.id,
+                        image_prompts: imagePrompts
+                    })
+                });
+
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(`Saved ${imagePrompts.length} prompts`, 'success');
+                } else {
+                    throw new Error(data.error || 'Save failed');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 이미지 생성
+        async function generateImages() {
+            if (!currentEpisode) {
+                showToast('No episode loaded', 'error');
+                return;
+            }
+
+            showToast('Image generation started...', 'success');
+
+            // TODO: /history-render skill 연동
+            window.open(`/history?episode=${currentEpisode.id.replace('ep', '')}`, '_blank');
+        }
+
+        // 영상 렌더링
+        async function renderVideo() {
+            if (!currentEpisode) {
+                showToast('No episode loaded', 'error');
+                return;
+            }
+
+            showToast('Video rendering started...', 'success');
+            window.open(`/history?episode=${currentEpisode.id.replace('ep', '')}`, '_blank');
+        }
+
+        // HTML 이스케이프
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        // 토스트
+        function showToast(message, type = '') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Enter 키 지원
+        document.getElementById('episode-num').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadScript();
+        });
+    </script>
+</body>
+</html>

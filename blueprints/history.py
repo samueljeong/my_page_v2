@@ -9,13 +9,33 @@ Routes:
 - /api/history/auto-generate: 대본 자동 생성
 - /api/history/status: 전체 현황 조회
 - /api/history/execute-episode: 에피소드 파일로 영상 생성
+- /api/history/execute-background: 백그라운드 실행 (대시보드용)
+- /api/history/job-status: 작업 상태 조회
 """
 
 import os
-from flask import Blueprint, request, jsonify
+import threading
+import uuid
+from datetime import datetime
+from flask import Blueprint, request, jsonify, render_template
 
 # Blueprint 생성
 history_bp = Blueprint('history', __name__)
+
+
+@history_bp.route('/history')
+def history_dashboard_page():
+    """History Pipeline 대시보드 페이지"""
+    return render_template('history_dashboard.html')
+
+
+@history_bp.route('/script-editor')
+def script_image_editor_page():
+    """Script-Image Editor 페이지 (대본-이미지 프롬프트 매칭)"""
+    return render_template('script_image_editor.html')
+
+# 백그라운드 작업 추적
+_history_jobs = {}  # {job_id: {status, episode_id, started_at, result, error}}
 
 # 의존성 주입
 _get_sheets_service = None
@@ -296,12 +316,20 @@ def api_history_status():
     """
     한국사 시리즈 전체 현황 조회
 
+    파라미터:
+    - episode: 특정 에피소드 파일 정보 조회 (선택)
+
     응답:
     - 전체 에피소드 수 (60화)
     - 시대별 에피소드 목록
     - 현재 진행 상황 (시트 연결 시)
     """
     try:
+        # 특정 에피소드 조회
+        episode_num = request.args.get('episode')
+        if episode_num:
+            return _get_episode_file_info(int(episode_num))
+
         from scripts.history_pipeline import (
             ERAS, ERA_ORDER, HISTORY_TOPICS,
             get_total_episode_count,
@@ -344,6 +372,68 @@ def api_history_status():
         import traceback
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _get_episode_file_info(episode_num: int):
+    """에피소드 파일 정보 조회"""
+    import importlib.util
+    import glob as glob_module
+
+    episode_id = f"ep{episode_num:03d}"
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    episode_files = glob_module.glob(os.path.join(
+        base_path, "scripts", "history_pipeline", "episodes", f"{episode_id}_*.py"
+    ))
+
+    main_file = None
+    image_prompts_file = None
+    for f in episode_files:
+        if "image_prompts" in f:
+            image_prompts_file = f
+        elif "data" not in f:
+            main_file = f
+
+    if not main_file:
+        return jsonify({
+            "ok": False,
+            "error": f"{episode_id} 에피소드 파일 없음"
+        }), 404
+
+    try:
+        spec = importlib.util.spec_from_file_location(f"{episode_id}_main", main_file)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        episode_info = getattr(module, 'EPISODE_INFO', {})
+        script = getattr(module, 'SCRIPT', '')
+        metadata = getattr(module, 'METADATA', {})
+
+        # 이미지 프롬프트 수
+        image_count = 0
+        if image_prompts_file:
+            img_spec = importlib.util.spec_from_file_location(f"{episode_id}_img", image_prompts_file)
+            img_module = importlib.util.module_from_spec(img_spec)
+            img_spec.loader.exec_module(img_module)
+            image_prompts = getattr(img_module, 'IMAGE_PROMPTS', [])
+            image_count = len(image_prompts)
+
+        return jsonify({
+            "ok": True,
+            "episode": {
+                "episode_id": episode_id,
+                "title": episode_info.get('title') or metadata.get('title') or f'한국사 {episode_num}화',
+                "script_length": len(script),
+                "image_count": image_count,
+                "has_script": bool(script),
+                "has_metadata": bool(metadata),
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"파일 로드 실패: {e}"
+        }), 500
 
 
 @history_bp.route('/api/history/execute-episode', methods=['GET', 'POST'])
@@ -413,6 +503,7 @@ def api_history_execute_episode():
         script = getattr(episode_module, 'SCRIPT', '')
         metadata = getattr(episode_module, 'METADATA', {})
         brief = getattr(episode_module, 'BRIEF', None)
+        thumbnail = getattr(episode_module, 'THUMBNAIL', None)
 
         if not script:
             return jsonify({
@@ -452,6 +543,7 @@ def api_history_execute_episode():
             generate_video=generate_video,
             upload=upload,
             privacy_status=privacy_status,
+            thumbnail_config=thumbnail,
         )
 
         if result.get("ok"):
@@ -480,6 +572,534 @@ def api_history_execute_episode():
             "ok": False,
             "error": f"모듈 로드 실패: {e}"
         }), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/execute-background', methods=['GET', 'POST'])
+def api_history_execute_background():
+    """
+    백그라운드에서 에피소드 실행 (대시보드용)
+    즉시 job_id 반환, 실제 작업은 백그라운드에서 진행
+
+    파라미터:
+    - episode: 에피소드 번호 (예: 22)
+    - upload: YouTube 업로드 여부 (기본 true)
+    - privacy_status: 공개 설정 (기본 private)
+
+    응답:
+    {
+        "ok": true,
+        "job_id": "abc-123",
+        "message": "작업이 시작되었습니다"
+    }
+    """
+    try:
+        import importlib.util
+        import glob as glob_module
+        from scripts.history_pipeline import execute_episode
+
+        # 파라미터 추출
+        episode_num = request.args.get('episode')
+        if not episode_num and request.is_json:
+            episode_num = request.json.get('episode')
+        if not episode_num:
+            return jsonify({"ok": False, "error": "episode 파라미터가 필요합니다"}), 400
+
+        episode_num = int(episode_num)
+        episode_id = f"ep{episode_num:03d}"
+
+        # 이미 실행 중인지 확인
+        for job_id, job in _history_jobs.items():
+            if job.get("episode_id") == episode_id and job.get("status") == "running":
+                return jsonify({
+                    "ok": False,
+                    "error": f"{episode_id} 이미 실행 중입니다",
+                    "job_id": job_id
+                }), 409
+
+        # 에피소드 파일 로드
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        episode_files = glob_module.glob(os.path.join(
+            base_path, "scripts", "history_pipeline", "episodes", f"{episode_id}_*.py"
+        ))
+
+        main_file = None
+        image_prompts_file = None
+        for f in episode_files:
+            if "image_prompts" in f:
+                image_prompts_file = f
+            elif "data" not in f:
+                main_file = f
+
+        if not main_file:
+            return jsonify({"ok": False, "error": f"{episode_id} 에피소드 파일 없음"}), 404
+
+        # 모듈 로드
+        spec = importlib.util.spec_from_file_location(f"{episode_id}_main", main_file)
+        episode_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(episode_module)
+
+        episode_info = getattr(episode_module, 'EPISODE_INFO', {})
+        script = getattr(episode_module, 'SCRIPT', '')
+        metadata = getattr(episode_module, 'METADATA', {})
+        brief = getattr(episode_module, 'BRIEF', None)
+        thumbnail = getattr(episode_module, 'THUMBNAIL', None)
+
+        if not script:
+            return jsonify({"ok": False, "error": f"{episode_id} 대본 없음"}), 400
+
+        # 이미지 프롬프트 로드
+        image_prompts = []
+        if image_prompts_file:
+            img_spec = importlib.util.spec_from_file_location(f"{episode_id}_image_prompts", image_prompts_file)
+            img_module = importlib.util.module_from_spec(img_spec)
+            img_spec.loader.exec_module(img_module)
+            image_prompts = getattr(img_module, 'IMAGE_PROMPTS', [])
+
+        # 파라미터
+        upload = request.args.get('upload', '1') == '1'  # 기본 True
+        privacy_status = request.args.get('privacy_status', 'private')
+        title = episode_info.get('title', f'한국사 {episode_num}화')
+
+        # Job 생성
+        job_id = str(uuid.uuid4())[:8]
+        _history_jobs[job_id] = {
+            "status": "running",
+            "episode_id": episode_id,
+            "title": title,
+            "started_at": datetime.now().isoformat(),
+            "result": None,
+            "error": None,
+        }
+
+        # 백그라운드 실행 함수
+        def run_in_background():
+            try:
+                print(f"[HISTORY-BG] {episode_id} 백그라운드 실행 시작")
+                result = execute_episode(
+                    episode_id=episode_id,
+                    title=title,
+                    script=script,
+                    image_prompts=image_prompts,
+                    metadata=metadata,
+                    brief=brief,
+                    generate_video=True,
+                    upload=upload,
+                    privacy_status=privacy_status,
+                    thumbnail_config=thumbnail,
+                )
+
+                _history_jobs[job_id]["status"] = "completed" if result.get("ok") else "failed"
+                _history_jobs[job_id]["result"] = result
+                _history_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+                print(f"[HISTORY-BG] {episode_id} 완료: {result.get('ok')}")
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                _history_jobs[job_id]["status"] = "failed"
+                _history_jobs[job_id]["error"] = str(e)
+                _history_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+                print(f"[HISTORY-BG] {episode_id} 실패: {e}")
+
+        # 스레드 시작
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
+
+        print(f"[HISTORY-BG] {episode_id} 작업 시작됨 (job_id: {job_id})")
+
+        return jsonify({
+            "ok": True,
+            "job_id": job_id,
+            "episode_id": episode_id,
+            "title": title,
+            "message": f"{episode_id} 백그라운드 실행 시작됨",
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/job-status', methods=['GET'])
+def api_history_job_status():
+    """
+    백그라운드 작업 상태 조회
+
+    파라미터:
+    - job_id: 작업 ID (선택, 없으면 전체 목록)
+
+    응답:
+    {
+        "ok": true,
+        "job": {...} 또는 "jobs": [...]
+    }
+    """
+    job_id = request.args.get('job_id')
+
+    if job_id:
+        job = _history_jobs.get(job_id)
+        if not job:
+            return jsonify({"ok": False, "error": "작업을 찾을 수 없습니다"}), 404
+        return jsonify({"ok": True, "job": job})
+
+    # 전체 목록 (최근 10개)
+    jobs = sorted(
+        [{"job_id": k, **v} for k, v in _history_jobs.items()],
+        key=lambda x: x.get("started_at", ""),
+        reverse=True
+    )[:10]
+
+    return jsonify({"ok": True, "jobs": jobs})
+
+
+@history_bp.route('/api/history/script-image-matching', methods=['GET'])
+def api_history_script_image_matching():
+    """
+    대본-이미지 매칭 검증 API
+
+    대본을 문단 단위로 나누고, 각 문단에 해당하는 이미지 프롬프트를 보여줍니다.
+    대시보드에서 대본과 이미지가 제대로 매칭되는지 확인할 수 있습니다.
+
+    파라미터:
+    - episode: 에피소드 번호 (예: 22)
+
+    응답:
+    {
+        "ok": true,
+        "episode_id": "ep022",
+        "title": "거란과의 전쟁",
+        "script_length": 13500,
+        "estimated_duration_sec": 1800,
+        "sections": [
+            {
+                "index": 0,
+                "start_sec": 0,
+                "end_sec": 60,
+                "text": "993년 가을이었어요...",
+                "image": {
+                    "timestamp_sec": 0,
+                    "prompt": "Epic scene..."
+                }
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        import importlib.util
+        import glob as glob_module
+
+        episode_num = request.args.get('episode')
+        if not episode_num:
+            return jsonify({"ok": False, "error": "episode 파라미터가 필요합니다"}), 400
+
+        episode_num = int(episode_num)
+        episode_id = f"ep{episode_num:03d}"
+
+        # 에피소드 파일 로드
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        episode_files = glob_module.glob(os.path.join(
+            base_path, "scripts", "history_pipeline", "episodes", f"{episode_id}_*.py"
+        ))
+
+        main_file = None
+        image_prompts_file = None
+        for f in episode_files:
+            if "image_prompts" in f:
+                image_prompts_file = f
+            elif "data" not in f:
+                main_file = f
+
+        if not main_file:
+            return jsonify({"ok": False, "error": f"{episode_id} 에피소드 파일 없음"}), 404
+
+        # 메인 모듈 로드
+        spec = importlib.util.spec_from_file_location(f"{episode_id}_main", main_file)
+        episode_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(episode_module)
+
+        episode_info = getattr(episode_module, 'EPISODE_INFO', {})
+        script = getattr(episode_module, 'SCRIPT', '')
+
+        if not script:
+            return jsonify({"ok": False, "error": "대본 없음"}), 400
+
+        # 이미지 프롬프트 로드
+        image_prompts = []
+        if image_prompts_file:
+            img_spec = importlib.util.spec_from_file_location(f"{episode_id}_image_prompts", image_prompts_file)
+            img_module = importlib.util.module_from_spec(img_spec)
+            img_spec.loader.exec_module(img_module)
+            image_prompts = getattr(img_module, 'IMAGE_PROMPTS', [])
+
+        # 대본을 문단 단위로 분할
+        paragraphs = [p.strip() for p in script.strip().split('\n\n') if p.strip()]
+
+        # TTS 기준 예상 시간 계산 (분당 약 450자)
+        chars_per_sec = 7.5  # 초당 약 7.5자
+        total_chars = len(script.replace('\n', '').replace(' ', ''))
+        estimated_duration = total_chars / chars_per_sec
+
+        # 각 문단의 시작 시간 계산
+        sections = []
+        current_time = 0
+
+        for i, para in enumerate(paragraphs):
+            para_chars = len(para.replace('\n', '').replace(' ', ''))
+            para_duration = para_chars / chars_per_sec
+
+            # 이 시간대에 해당하는 이미지 찾기
+            matching_image = None
+            for img in image_prompts:
+                img_time = img.get('timestamp_sec', 0) if isinstance(img, dict) else 0
+                if current_time <= img_time < current_time + para_duration:
+                    matching_image = img
+                    break
+
+            sections.append({
+                "index": i,
+                "start_sec": round(current_time, 1),
+                "end_sec": round(current_time + para_duration, 1),
+                "text": para[:200] + "..." if len(para) > 200 else para,
+                "text_full": para,
+                "char_count": para_chars,
+                "image": matching_image
+            })
+
+            current_time += para_duration
+
+        # 이미지 프롬프트 중 매칭되지 않은 것들 확인
+        matched_images = set()
+        for sec in sections:
+            if sec.get('image'):
+                img_time = sec['image'].get('timestamp_sec', 0) if isinstance(sec['image'], dict) else 0
+                matched_images.add(img_time)
+
+        unmatched_images = []
+        for img in image_prompts:
+            img_time = img.get('timestamp_sec', 0) if isinstance(img, dict) else 0
+            if img_time not in matched_images:
+                unmatched_images.append(img)
+
+        # 문제점 분석
+        issues = []
+        if estimated_duration > 0:
+            last_image_time = max(
+                (img.get('timestamp_sec', 0) if isinstance(img, dict) else 0)
+                for img in image_prompts
+            ) if image_prompts else 0
+
+            if last_image_time < estimated_duration * 0.8:
+                issues.append(f"마지막 이미지({last_image_time}초)가 대본 끝({round(estimated_duration)}초)보다 너무 앞에 있음")
+
+        if unmatched_images:
+            issues.append(f"{len(unmatched_images)}개 이미지가 대본과 매칭되지 않음")
+
+        sections_without_image = sum(1 for s in sections if not s.get('image'))
+        if sections_without_image > len(sections) * 0.5:
+            issues.append(f"{sections_without_image}개 문단에 이미지 없음 (전체 {len(sections)}개)")
+
+        return jsonify({
+            "ok": True,
+            "episode_id": episode_id,
+            "title": episode_info.get('title', f'한국사 {episode_num}화'),
+            "script_length": len(script),
+            "estimated_duration_sec": round(estimated_duration, 1),
+            "total_paragraphs": len(paragraphs),
+            "total_images": len(image_prompts),
+            "sections": sections,
+            "unmatched_images": unmatched_images,
+            "issues": issues,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/save-image-prompts', methods=['POST'])
+def api_history_save_image_prompts():
+    """
+    이미지 프롬프트 저장 API
+
+    대시보드에서 편집한 이미지 프롬프트를 파일로 저장합니다.
+
+    Input:
+    {
+        "episode_id": "ep022",
+        "image_prompts": [
+            {"timestamp_sec": 0, "prompt": "..."},
+            {"timestamp_sec": 10, "prompt": "..."},
+            ...
+        ]
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data"}), 400
+
+        episode_id = data.get("episode_id")
+        image_prompts = data.get("image_prompts", [])
+
+        if not episode_id:
+            return jsonify({"ok": False, "error": "episode_id required"}), 400
+
+        # 저장 경로
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        prompts_file = os.path.join(
+            base_path, "scripts", "history_pipeline", "episodes",
+            f"{episode_id}_image_prompts.py"
+        )
+
+        # 스타일 프리픽스
+        style_prefix = """Korean webtoon style meets Studio Ghibli and modern flat illustration,
+clean line art with soft warm lighting,
+vibrant yet gentle colors,
+cel shading with subtle gradients,
+dynamic composition but peaceful atmosphere,
+hand-painted feel with clean aesthetic,
+accessible and friendly,
+bright warm palette,
+16:9 aspect ratio."""
+
+        # Python 파일 생성
+        content = f'''"""
+{episode_id} 이미지 프롬프트
+Auto-generated by Script-Image Editor
+"""
+
+STYLE_PREFIX = """{style_prefix}"""
+
+IMAGE_PROMPTS = [
+'''
+        for p in image_prompts:
+            ts = p.get("timestamp_sec", 0)
+            prompt = p.get("prompt", "").replace('"""', '\\"\\"\\"').replace("'''", "\\'\\'\\'")
+            content += f'''    {{
+        "timestamp_sec": {ts},
+        "prompt": """{prompt}"""
+    }},
+'''
+
+        content += "]\n"
+
+        # 파일 저장
+        os.makedirs(os.path.dirname(prompts_file), exist_ok=True)
+        with open(prompts_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return jsonify({
+            "ok": True,
+            "episode_id": episode_id,
+            "saved_count": len(image_prompts),
+            "file_path": prompts_file
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/tts', methods=['POST'])
+def api_history_tts():
+    """
+    History TTS 생성 (ElevenLabs)
+
+    Input:
+    {
+        "episode_id": "test",
+        "script": "대본 텍스트...",
+        "voice": "aurnUodFzOtofecLd3T1",  # ElevenLabs voice_id (선택)
+        "speed": 0.95  # 속도 (선택, 기본 1.0)
+    }
+
+    Output:
+    {
+        "ok": true,
+        "audio_path": "outputs/audio/test_full.mp3",
+        "audio_url": "/outputs/audio/test_full.mp3",
+        "srt_path": "outputs/subtitles/test.srt",
+        "duration": 60.5
+    }
+    """
+    print("[HISTORY-TTS] ===== TTS API 호출됨 =====")
+
+    try:
+        from scripts.history_pipeline.tts import generate_tts
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data received"}), 400
+
+        episode_id = data.get("episode_id", "tts_test")
+        script = data.get("script", "")
+        voice = data.get("voice")  # ElevenLabs voice_id
+        speed = data.get("speed", 1.0)
+
+        if not script:
+            return jsonify({"ok": False, "error": "script가 필요합니다"}), 400
+
+        # --- 구분선 제거
+        script = script.replace('\n---\n', '\n\n').replace('---\n', '').replace('\n---', '')
+
+        print(f"[HISTORY-TTS] Episode: {episode_id}")
+        print(f"[HISTORY-TTS] Script length: {len(script)}자")
+        print(f"[HISTORY-TTS] Voice: {voice or 'default'}")
+        print(f"[HISTORY-TTS] Speed: {speed}")
+
+        # 출력 디렉토리
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        output_dir = os.path.join(base_path, "outputs", "audio")
+
+        result = generate_tts(
+            episode_id=episode_id,
+            script=script,
+            output_dir=output_dir,
+            voice=voice,
+            speed=speed
+        )
+
+        if result.get("ok"):
+            audio_path = result.get("audio_path", "")
+            srt_path = result.get("srt_path", "")
+
+            # 상대 경로로 변환
+            if audio_path and base_path in audio_path:
+                audio_rel = audio_path.replace(base_path + "/", "")
+            else:
+                audio_rel = audio_path
+            if srt_path and base_path in srt_path:
+                srt_rel = srt_path.replace(base_path + "/", "")
+            else:
+                srt_rel = srt_path
+
+            # URL 생성
+            audio_url = "/" + audio_rel if audio_rel else ""
+            srt_url = "/" + srt_rel if srt_rel else ""
+
+            return jsonify({
+                "ok": True,
+                "episode_id": episode_id,
+                "audio_path": audio_rel,
+                "audio_url": audio_url,
+                "srt_path": srt_rel,
+                "srt_url": srt_url,
+                "duration": result.get("duration", 0)
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "TTS 생성 실패")
+            }), 500
+
     except Exception as e:
         import traceback
         traceback.print_exc()
