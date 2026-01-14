@@ -416,6 +416,148 @@ def render_multi_image_video(
         return {"ok": False, "error": str(e)}
 
 
+def mix_audio_with_multi_bgm(
+    voice_path: str,
+    bgm_segments: List[Dict[str, Any]],
+    output_path: str,
+    bgm_volume: float = 0.15,
+    voice_volume: float = 1.0,
+    crossfade_duration: float = 2.0,
+    log_prefix: str = "[RENDERER]",
+) -> Dict[str, Any]:
+    """
+    음성과 여러 BGM 세그먼트 믹싱 (씬별 BGM 전환)
+
+    Args:
+        voice_path: 음성 파일 경로
+        bgm_segments: BGM 세그먼트 리스트
+            [{"start": 0, "end": 60, "path": "epic_01.mp3"}, ...]
+        output_path: 출력 파일 경로
+        bgm_volume: BGM 볼륨 (0.0 ~ 1.0)
+        voice_volume: 음성 볼륨 증폭
+        crossfade_duration: BGM 전환 시 크로스페이드 길이 (초)
+        log_prefix: 로그 접두사
+
+    Returns:
+        {"ok": True, "audio_path": "..."}
+    """
+    if not bgm_segments:
+        return {"ok": False, "error": "BGM 세그먼트가 없습니다."}
+
+    # 세그먼트가 1개면 단일 BGM 믹싱으로 폴백
+    if len(bgm_segments) == 1:
+        return mix_audio_with_bgm(
+            voice_path=voice_path,
+            bgm_path=bgm_segments[0]["path"],
+            output_path=output_path,
+            bgm_volume=bgm_volume,
+            voice_volume=voice_volume,
+            log_prefix=log_prefix,
+        )
+
+    try:
+        voice_duration = get_audio_duration(voice_path)
+
+        # FFmpeg 입력 파일 목록 생성
+        inputs = ['-i', voice_path]  # 0번: 음성
+        for i, seg in enumerate(bgm_segments):
+            inputs.extend(['-stream_loop', '-1', '-i', seg["path"]])  # 1번부터: BGM들
+
+        # 복잡한 필터 생성
+        filter_parts = []
+        bgm_labels = []
+
+        for i, seg in enumerate(bgm_segments):
+            input_idx = i + 1  # 0번은 음성
+            start = seg["start"]
+            end = seg["end"]
+            duration = end - start
+
+            # 각 BGM 세그먼트 트림 및 볼륨 조절
+            label = f"bgm{i}"
+            # atrim으로 시작부터 필요한 길이만큼 자르고, adelay로 시작 위치 지정
+            delay_ms = int(start * 1000)
+
+            if i == len(bgm_segments) - 1:
+                # 마지막 세그먼트: 페이드 아웃 추가
+                filter_parts.append(
+                    f"[{input_idx}:a]atrim=0:{duration},volume={bgm_volume},"
+                    f"afade=t=in:d={crossfade_duration},"
+                    f"afade=t=out:st={duration-3}:d=3,"
+                    f"adelay={delay_ms}|{delay_ms}[{label}]"
+                )
+            elif i == 0:
+                # 첫 세그먼트: 페이드 아웃만
+                filter_parts.append(
+                    f"[{input_idx}:a]atrim=0:{duration},volume={bgm_volume},"
+                    f"afade=t=out:st={duration-crossfade_duration}:d={crossfade_duration},"
+                    f"adelay={delay_ms}|{delay_ms}[{label}]"
+                )
+            else:
+                # 중간 세그먼트: 페이드 인/아웃 둘 다
+                filter_parts.append(
+                    f"[{input_idx}:a]atrim=0:{duration},volume={bgm_volume},"
+                    f"afade=t=in:d={crossfade_duration},"
+                    f"afade=t=out:st={duration-crossfade_duration}:d={crossfade_duration},"
+                    f"adelay={delay_ms}|{delay_ms}[{label}]"
+                )
+            bgm_labels.append(f"[{label}]")
+
+        # 음성 볼륨 조절
+        filter_parts.append(f"[0:a]volume={voice_volume}[voice]")
+
+        # 모든 BGM 믹싱
+        bgm_mix_input = "".join(bgm_labels)
+        filter_parts.append(f"{bgm_mix_input}amix=inputs={len(bgm_segments)}:normalize=0[bgm_mixed]")
+
+        # 음성과 BGM 최종 믹싱
+        filter_parts.append(f"[voice][bgm_mixed]amix=inputs=2:duration=first:normalize=0[out]")
+
+        filter_complex = ";".join(filter_parts)
+
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            *inputs,
+            '-filter_complex', filter_complex,
+            '-map', '[out]',
+            '-c:a', 'libmp3lame', '-b:a', '192k',
+            '-t', str(voice_duration),
+            output_path
+        ]
+
+        print(f"{log_prefix} 멀티 BGM 믹싱 중... ({len(bgm_segments)}개 세그먼트)")
+
+        process = subprocess.run(
+            ffmpeg_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=600
+        )
+
+        if process.returncode != 0:
+            error_msg = process.stderr.decode('utf-8', errors='ignore')[:500]
+            print(f"{log_prefix} 멀티 BGM 믹싱 오류: {error_msg}")
+            # 실패 시 첫 번째 BGM으로 폴백
+            print(f"{log_prefix} 단일 BGM으로 폴백...")
+            return mix_audio_with_bgm(
+                voice_path=voice_path,
+                bgm_path=bgm_segments[0]["path"],
+                output_path=output_path,
+                bgm_volume=bgm_volume,
+                voice_volume=voice_volume,
+                log_prefix=log_prefix,
+            )
+
+        if os.path.exists(output_path):
+            print(f"{log_prefix} 멀티 BGM 믹싱 완료")
+            return {"ok": True, "audio_path": output_path}
+        else:
+            return {"ok": False, "error": "출력 파일 없음"}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def mix_audio_with_bgm(
     voice_path: str,
     bgm_path: str,

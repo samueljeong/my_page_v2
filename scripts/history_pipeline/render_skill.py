@@ -189,6 +189,7 @@ def render_episode(
     script = getattr(module, "SCRIPT", "")
     episode_info = getattr(module, "EPISODE_INFO", {})
     metadata = getattr(module, "METADATA", {})
+    scene_moods_raw = getattr(module, "SCENE_MOODS", None)  # 씬별 BGM 무드
     title = episode_info.get("title", metadata.get("title", episode_id))
 
     print(f"    제목: {title}")
@@ -222,6 +223,27 @@ def render_episode(
     print(f"\n[STEP 3] 이미지 타임스탬프 계산...")
     timestamps = calculate_image_timestamps(duration)
     print(f"    TTS 실제 길이 기반: {len(timestamps)}개 타임스탬프")
+
+    # 3-1. 씬별 BGM 무드 계산 (SCENE_MOODS가 있는 경우)
+    scene_moods = None
+    if scene_moods_raw:
+        # 대본 섹션 분리 (---로 구분)
+        sections = script.split("---")
+        num_sections = len(sections)
+        section_duration = duration / num_sections if num_sections > 0 else duration
+
+        scene_moods = []
+        for i, mood in enumerate(scene_moods_raw):
+            if i >= num_sections:
+                break
+            start = i * section_duration
+            end = (i + 1) * section_duration
+            scene_moods.append({
+                "start": start,
+                "end": end,
+                "mood": mood,
+            })
+        print(f"    씬별 BGM: {len(scene_moods)}개 세그먼트")
 
     # 4. 이미지 프롬프트 준비
     print(f"\n[STEP 4] 이미지 프롬프트 준비...")
@@ -288,10 +310,11 @@ def render_episode(
         audio_path=audio_path,
         image_paths=image_paths,
         srt_path=srt_path,
-        bgm_mood="epic",
-        voice_volume=4.0,  # TTS 볼륨 4배
+        bgm_mood="epic",  # scene_moods가 없을 때 기본값
+        voice_volume=6.0,  # TTS 볼륨 6배
         bgm_volume=0.10,
         timestamps=timestamps,  # 타임스탬프 기반 이미지 배치
+        scene_moods=scene_moods,  # 씬별 BGM (있는 경우)
     )
 
     if not video_result.get("ok"):

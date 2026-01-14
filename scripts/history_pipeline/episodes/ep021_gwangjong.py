@@ -37,6 +37,28 @@ BRIEF = {
     ],
 }
 
+# 씬별 BGM 무드 (17개 섹션)
+# 사용 가능: calm, epic, tense, sad, dramatic, hopeful, inspiring, mysterious
+SCENE_MOODS = [
+    "epic",       # 1. 949년 광종 즉위
+    "calm",       # 2. 배경 - 왕건의 아들들
+    "tense",      # 3. 왕규의 난
+    "calm",       # 4. 정종과 서경 천도
+    "dramatic",   # 5. 고려의 구조적 문제
+    "mysterious", # 6. 광종 7년간의 침묵
+    "epic",       # 7. 노비안검법 발표
+    "calm",       # 8. 노비안검법 시행
+    "epic",       # 9. 과거제도 도입
+    "inspiring",  # 10. 첫 과거시험
+    "tense",      # 11. 호족들의 반발
+    "dramatic",   # 12. 피의 숙청
+    "epic",       # 13. 왕권 강화 조치
+    "calm",       # 14. 개혁의 성과
+    "sad",        # 15. 광종의 죽음
+    "dramatic",   # 16. 광종 평가
+    "hopeful",    # 17. 고려의 미래
+]
+
 SCRIPT = """
 949년. 고려의 네 번째 왕이 즉위했습니다.
 

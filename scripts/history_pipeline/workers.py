@@ -355,6 +355,7 @@ def render_video(
     voice_volume: float = 1.0,  # TTS 볼륨 (1.0 = 원본)
     bgm_volume: float = 0.10,  # BGM 볼륨 (10%)
     timestamps: List[int] = None,  # 이미지별 시작 시간 (초)
+    scene_moods: List[Dict[str, Any]] = None,  # 씬별 BGM 무드
 ) -> Dict[str, Any]:
     """
     영상 렌더링 (독립 모듈 - FFmpeg만 필요)
@@ -364,10 +365,12 @@ def render_video(
         audio_path: TTS 오디오 파일 경로
         image_paths: 배경 이미지 경로 목록 (시간순)
         srt_path: 자막 파일 경로 (선택)
-        bgm_mood: BGM 분위기 (calm, epic, tense)
+        bgm_mood: BGM 분위기 (calm, epic, tense) - scene_moods가 없을 때 사용
         voice_volume: TTS 볼륨 증폭 비율
         bgm_volume: BGM 볼륨
         timestamps: 이미지별 시작 시간 (초) - None이면 균등 분배
+        scene_moods: 씬별 BGM 무드 리스트
+            [{"start": 0, "end": 60, "mood": "epic"}, ...]
 
     Returns:
         {
@@ -382,41 +385,77 @@ def render_video(
 
     # 독립 렌더러 모듈 사용
     from .renderer import render_video as render_single, render_multi_image_video, mix_audio_with_bgm, DEFAULT_BGM_PATH
+    from scripts.common.renderer_utils import mix_audio_with_multi_bgm
+    from scripts.common.audio_utils import get_audio_duration
 
-    # BGM 파일 선택
+    # BGM 파일 매핑 (확장)
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bgm_dir = os.path.join(base_dir, "static", "audio", "bgm")
     bgm_files = {
         "calm": os.path.join(bgm_dir, "calm_01.mp3"),
         "epic": os.path.join(bgm_dir, "epic_01.mp3"),
         "tense": os.path.join(bgm_dir, "tense_01.mp3"),
+        "sad": os.path.join(bgm_dir, "sad_01.mp3"),
+        "dramatic": os.path.join(bgm_dir, "dramatic_01.mp3"),
+        "hopeful": os.path.join(bgm_dir, "hopeful_01.mp3"),
+        "inspiring": os.path.join(bgm_dir, "inspiring_01.mp3"),
+        "mysterious": os.path.join(bgm_dir, "mysterious_01.mp3"),
     }
-    bgm_path = bgm_files.get(bgm_mood, DEFAULT_BGM_PATH)
 
-    # BGM 파일이 없으면 기본값 사용
-    if not os.path.exists(bgm_path):
-        bgm_path = DEFAULT_BGM_PATH
-    if not os.path.exists(bgm_path):
-        print(f"[HISTORY-RENDERER] ⚠ BGM 파일 없음, BGM 없이 진행")
-        bgm_path = None
-
-    # BGM 믹싱 (BGM 파일이 있는 경우)
+    # BGM 믹싱
     final_audio_path = audio_path
-    if bgm_path:
-        mixed_audio_path = os.path.join(AUDIO_DIR, f"{episode_id}_mixed.mp3")
-        mix_result = mix_audio_with_bgm(
-            voice_path=audio_path,
-            bgm_path=bgm_path,
-            output_path=mixed_audio_path,
-            bgm_volume=bgm_volume,
-            voice_volume=voice_volume,
-            log_prefix="[HISTORY-RENDERER]",
-        )
-        if mix_result.get("ok"):
-            final_audio_path = mix_result.get("audio_path", mixed_audio_path)
-            print(f"[HISTORY-RENDERER] ✓ BGM 믹싱 완료 (볼륨: voice={voice_volume}x, bgm={bgm_volume*100:.0f}%)")
+    mixed_audio_path = os.path.join(AUDIO_DIR, f"{episode_id}_mixed.mp3")
+
+    if scene_moods and len(scene_moods) > 1:
+        # 씬별 멀티 BGM 믹싱
+        bgm_segments = []
+        for scene in scene_moods:
+            mood = scene.get("mood", "calm")
+            bgm_path = bgm_files.get(mood, bgm_files["calm"])
+            if os.path.exists(bgm_path):
+                bgm_segments.append({
+                    "start": scene["start"],
+                    "end": scene["end"],
+                    "path": bgm_path,
+                })
+
+        if bgm_segments:
+            print(f"[HISTORY-RENDERER] 씬별 BGM 믹싱 ({len(bgm_segments)}개 세그먼트)")
+            mix_result = mix_audio_with_multi_bgm(
+                voice_path=audio_path,
+                bgm_segments=bgm_segments,
+                output_path=mixed_audio_path,
+                bgm_volume=bgm_volume,
+                voice_volume=voice_volume,
+                log_prefix="[HISTORY-RENDERER]",
+            )
+            if mix_result.get("ok"):
+                final_audio_path = mix_result.get("audio_path", mixed_audio_path)
+                print(f"[HISTORY-RENDERER] ✓ 멀티 BGM 믹싱 완료")
+            else:
+                print(f"[HISTORY-RENDERER] ⚠ 멀티 BGM 실패, 단일 BGM으로 폴백")
+    else:
+        # 단일 BGM 믹싱 (기존 방식)
+        bgm_path = bgm_files.get(bgm_mood, DEFAULT_BGM_PATH)
+        if not os.path.exists(bgm_path):
+            bgm_path = DEFAULT_BGM_PATH
+
+        if bgm_path and os.path.exists(bgm_path):
+            mix_result = mix_audio_with_bgm(
+                voice_path=audio_path,
+                bgm_path=bgm_path,
+                output_path=mixed_audio_path,
+                bgm_volume=bgm_volume,
+                voice_volume=voice_volume,
+                log_prefix="[HISTORY-RENDERER]",
+            )
+            if mix_result.get("ok"):
+                final_audio_path = mix_result.get("audio_path", mixed_audio_path)
+                print(f"[HISTORY-RENDERER] ✓ BGM 믹싱 완료 (볼륨: voice={voice_volume}x, bgm={bgm_volume*100:.0f}%)")
+            else:
+                print(f"[HISTORY-RENDERER] ⚠ BGM 믹싱 실패, 원본 오디오 사용: {mix_result.get('error')}")
         else:
-            print(f"[HISTORY-RENDERER] ⚠ BGM 믹싱 실패, 원본 오디오 사용: {mix_result.get('error')}")
+            print(f"[HISTORY-RENDERER] ⚠ BGM 파일 없음, BGM 없이 진행")
 
     if len(image_paths) == 1:
         # 단일 이미지

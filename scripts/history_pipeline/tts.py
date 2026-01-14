@@ -264,6 +264,90 @@ def verify_subtitle_sync(timeline: List[Tuple[float, float, str]], total_duratio
     }
 
 
+def number_to_korean(num: int) -> str:
+    """
+    숫자를 한국어 읽기로 변환 (TTS용)
+
+    예: 949 → 구백사십구
+        2025 → 이천이십오
+        43 → 사십삼
+    """
+    if num == 0:
+        return "영"
+
+    units = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"]
+
+    result = ""
+
+    # 천 단위
+    if num >= 1000:
+        thousands = num // 1000
+        if thousands == 1:
+            result += "천"
+        else:
+            result += units[thousands] + "천"
+        num %= 1000
+
+    # 백 단위
+    if num >= 100:
+        hundreds = num // 100
+        if hundreds == 1:
+            result += "백"
+        else:
+            result += units[hundreds] + "백"
+        num %= 100
+
+    # 십 단위
+    if num >= 10:
+        tens = num // 10
+        if tens == 1:
+            result += "십"
+        else:
+            result += units[tens] + "십"
+        num %= 10
+
+    # 일 단위
+    if num > 0:
+        result += units[num]
+
+    return result
+
+
+def preprocess_script_for_tts(script: str) -> str:
+    """
+    TTS 전 대본 전처리 - 숫자를 한국어로 변환
+
+    변환 대상:
+    - 연도: 949년 → 구백사십구 년
+    - 세기: 10세기 → 십 세기
+    - 명: 25명 → 이십오 명
+    """
+    import re
+
+    def replace_year(match):
+        num = int(match.group(1))
+        return number_to_korean(num) + " 년"
+
+    def replace_century(match):
+        num = int(match.group(1))
+        return number_to_korean(num) + " 세기"
+
+    def replace_people(match):
+        num = int(match.group(1))
+        return number_to_korean(num) + " 명"
+
+    # 연도 변환 (3-4자리 숫자 + 년)
+    script = re.sub(r'(\d{3,4})년', replace_year, script)
+
+    # 세기 변환
+    script = re.sub(r'(\d{1,2})세기', replace_century, script)
+
+    # 명 변환
+    script = re.sub(r'(\d+)명', replace_people, script)
+
+    return script
+
+
 def generate_elevenlabs_tts_chunk(
     text: str,
     voice_id: str,
@@ -343,6 +427,10 @@ def generate_tts(
         return {"ok": False, "error": "ELEVENLABS_API_KEY 환경변수가 필요합니다. Gemini 폴백 없음."}
 
     os.makedirs(output_dir, exist_ok=True)
+
+    # 대본 전처리 (숫자 → 한국어)
+    script = preprocess_script_for_tts(script)
+    print(f"[HISTORY-TTS] 대본 전처리 완료 (숫자 → 한국어 변환)")
 
     # 음성 ID 설정 (ElevenLabs만 사용)
     voice_id = voice if voice and len(voice) > 15 else DEFAULT_VOICE_ID
