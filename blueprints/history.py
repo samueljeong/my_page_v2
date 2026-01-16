@@ -1365,6 +1365,10 @@ import json as json_lib
 # 대본 디렉토리
 SCRIPTS_DIR = Path(__file__).parent.parent / "video_scripts"
 
+# 폴더가 없으면 생성
+if not SCRIPTS_DIR.exists():
+    SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @history_bp.route('/youtube-factory')
 def youtube_factory_page():
