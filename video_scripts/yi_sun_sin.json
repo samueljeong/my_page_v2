@@ -1,0 +1,53 @@
+{
+  "id": "yi_sun_sin",
+  "title": "이순신 장군과 임진왜란",
+  "era": "조선",
+  "description": "나라를 구한 불멸의 영웅, 이순신 장군의 이야기",
+  "bgm": "epic",
+  "scenes": [
+    {
+      "scene_id": 1,
+      "narration": "1592년, 일본의 20만 대군이 조선을 침략했습니다. 임진왜란의 시작이었습니다.",
+      "image_prompt": "Japanese invasion fleet approaching Korean coast in 1592, hundreds of ships, ominous atmosphere, historical Korean painting style, dramatic, 4k",
+      "duration": 10
+    },
+    {
+      "scene_id": 2,
+      "narration": "육지에서는 조선군이 연패했지만, 바다에서는 달랐습니다. 전라좌도 수군절도사 이순신 장군이 있었기 때문입니다.",
+      "image_prompt": "Admiral Yi Sun-sin in full armor on his turtle ship, commanding presence, Korean naval fleet behind him, dramatic lighting, 4k, detailed",
+      "duration": 12
+    },
+    {
+      "scene_id": 3,
+      "narration": "이순신 장군은 세계 최초의 철갑선, 거북선을 만들었습니다. 적의 화살과 총탄을 막는 철갑 지붕, 용머리에서 뿜는 연기가 적을 혼란에 빠뜨렸습니다.",
+      "image_prompt": "Geobukseon turtle ship in battle, iron-clad roof with spikes, dragon head breathing smoke, surrounded by Japanese ships, epic naval battle scene, 4k",
+      "duration": 14
+    },
+    {
+      "scene_id": 4,
+      "narration": "한산도 대첩에서 이순신 장군은 학익진 전술을 펼쳤습니다. 학이 날개를 펼친 모양의 진형으로 적선 59척을 격파했습니다.",
+      "image_prompt": "Battle of Hansan Island, Korean fleet in crane wing formation, surrounding Japanese ships, aerial view of naval battle, historical painting style, 4k",
+      "duration": 14
+    },
+    {
+      "scene_id": 5,
+      "narration": "명량 해협, 단 13척의 배로 133척의 적함대와 맞섰습니다. 장군은 말했습니다. '죽고자 하면 살고, 살고자 하면 죽는다.'",
+      "image_prompt": "Battle of Myeongnyang, 13 Korean ships against 133 Japanese ships in narrow strait, dramatic waves, heroic composition, Korean historical art style, 4k",
+      "duration": 14
+    },
+    {
+      "scene_id": 6,
+      "narration": "이순신 장군은 23전 23승, 단 한 번도 패하지 않았습니다. 하지만 마지막 노량 해전에서 적의 총탄에 맞아 순국하셨습니다.",
+      "image_prompt": "Admiral Yi Sun-sin's final moment at Battle of Noryang, heroic sacrifice, dramatic sunrise over the sea, emotional historical painting, 4k",
+      "duration": 12
+    },
+    {
+      "scene_id": 7,
+      "narration": "이순신 장군의 희생으로 조선은 살아남았습니다. 그의 정신은 오늘날까지 대한민국 국민의 가슴속에 살아 숨쉬고 있습니다.",
+      "image_prompt": "Yi Sun-sin statue at Gwanghwamun with modern Seoul, sunset, inspirational atmosphere, legacy and honor, cinematic, 4k",
+      "duration": 10
+    }
+  ],
+  "created_at": "2026-01-16",
+  "total_duration": 86
+}

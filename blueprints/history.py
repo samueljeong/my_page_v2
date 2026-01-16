@@ -840,8 +840,8 @@ def api_history_script_image_matching():
         # 대본을 문단 단위로 분할
         paragraphs = [p.strip() for p in script.strip().split('\n\n') if p.strip()]
 
-        # TTS 기준 예상 시간 계산 (분당 약 450자)
-        chars_per_sec = 7.5  # 초당 약 7.5자
+        # TTS 기준 예상 시간 계산 (21화 실측: 6.4자/초)
+        chars_per_sec = 6.4  # 초당 약 6.4자 (21화 기준 실측)
         total_chars = len(script.replace('\n', '').replace(' ', ''))
         estimated_duration = total_chars / chars_per_sec
 
@@ -904,6 +904,12 @@ def api_history_script_image_matching():
         if sections_without_image > len(sections) * 0.5:
             issues.append(f"{sections_without_image}개 문단에 이미지 없음 (전체 {len(sections)}개)")
 
+        # timestamp_sec를 키로 하는 프롬프트 맵 생성
+        prompts_by_timestamp = {}
+        for img in image_prompts:
+            ts = img.get('timestamp_sec', 0) if isinstance(img, dict) else 0
+            prompts_by_timestamp[ts] = img.get('prompt', '') if isinstance(img, dict) else ''
+
         return jsonify({
             "ok": True,
             "episode_id": episode_id,
@@ -915,7 +921,250 @@ def api_history_script_image_matching():
             "sections": sections,
             "unmatched_images": unmatched_images,
             "issues": issues,
+            "prompts_by_timestamp": prompts_by_timestamp,  # timestamp -> prompt 맵
         })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/generate-image', methods=['POST'])
+def api_history_generate_image():
+    """
+    단일 이미지 생성 API
+
+    Input:
+    {
+        "episode_id": "ep022",
+        "timestamp_sec": 0,
+        "prompt": "establishing_shot, massive Khitan cavalry..."
+    }
+
+    Output:
+    {
+        "ok": true,
+        "image_url": "/outputs/history/images/ep022_0000.png",
+        "timestamp_sec": 0
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data"}), 400
+
+        episode_id = data.get("episode_id")
+        timestamp_sec = data.get("timestamp_sec", 0)
+        prompt = data.get("prompt", "")
+        use_gpu = data.get("use_gpu", True)  # 기본값: GPU 사용
+
+        if not episode_id or not prompt:
+            return jsonify({"ok": False, "error": "episode_id and prompt required"}), 400
+
+        # 스타일 프리픽스 추가
+        style_prefix = """Korean webtoon style meets Studio Ghibli and modern flat illustration,
+clean line art with soft warm lighting, vibrant yet gentle colors,
+cel shading with subtle gradients, dynamic composition but peaceful atmosphere,
+hand-painted feel with clean aesthetic, accessible and friendly, bright warm palette."""
+
+        full_prompt = f"{style_prefix}\n\n{prompt}"
+
+        # 출력 디렉토리
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        output_dir = os.path.join(base_path, "outputs", "history", "images")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 이미지 생성 (GPU/ComfyUI 우선)
+        if use_gpu:
+            import os as os_env
+            os_env.environ['COMFYUI_ENABLED'] = 'true'
+            os_env.environ['COMFYUI_MODEL'] = 'flux'
+            from image.comfyui import generate_image_comfyui
+            result = generate_image_comfyui(
+                prompt=full_prompt,
+                size="1024x576",
+                steps=2
+            )
+        else:
+            from image.gemini import generate_image
+            result = generate_image(
+                prompt=full_prompt,
+                size="1280x720",
+                output_dir=output_dir,
+                add_aspect_instruction=True
+            )
+
+        if result.get("ok"):
+            # 파일명 변경: episode_id_timestamp.ext
+            original_path = result.get("image_url", "")
+
+            # 절대 경로로 변환
+            if os.path.isabs(original_path):
+                # 이미 절대 경로면 그대로 사용
+                original_full_path = original_path
+            else:
+                # 상대 경로인 경우 base_path 기준으로 변환
+                original_full_path = os.path.join(base_path, original_path)
+
+            # 새 파일명 (원본 확장자 유지)
+            original_ext = os.path.splitext(original_full_path)[1] or ".jpg"
+            new_filename = f"{episode_id}_{timestamp_sec:04d}{original_ext}"
+            new_path = os.path.join(output_dir, new_filename)
+
+            # 파일 이동
+            if os.path.exists(original_full_path) and original_full_path != new_path:
+                import shutil
+                shutil.move(original_full_path, new_path)
+
+            image_url = f"/outputs/history/images/{new_filename}"
+
+            return jsonify({
+                "ok": True,
+                "image_url": image_url,
+                "timestamp_sec": timestamp_sec,
+                "cost": result.get("cost", 0)
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "Image generation failed")
+            }), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/generate-video', methods=['POST'])
+def api_history_generate_video():
+    """
+    이미지를 영상으로 변환 (FFmpeg 팬/줌 효과)
+
+    Input:
+    {
+        "image_path": "outputs/history/images/ep022_001.jpg",
+        "effect": "zoom_in",  // zoom_in, zoom_out, pan_left, pan_right, random
+        "duration": 5.0  // 초
+    }
+
+    Output:
+    {
+        "ok": true,
+        "video_path": "outputs/history/videos/ep022_001.mp4",
+        "effect": "zoom_in",
+        "duration": 5.0
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data"}), 400
+
+        image_path = data.get("image_path")
+        effect = data.get("effect", "random")
+        duration = float(data.get("duration", 5.0))
+
+        if not image_path:
+            return jsonify({"ok": False, "error": "image_path required"}), 400
+
+        # 절대 경로 변환
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if not os.path.isabs(image_path):
+            image_path = os.path.join(base_path, image_path)
+
+        if not os.path.exists(image_path):
+            return jsonify({"ok": False, "error": f"이미지 파일 없음: {image_path}"}), 404
+
+        # 출력 경로 생성
+        video_dir = os.path.join(base_path, "outputs", "history", "videos")
+        os.makedirs(video_dir, exist_ok=True)
+
+        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        output_path = os.path.join(video_dir, f"{base_name}.mp4")
+
+        # 영상 생성
+        from image.video_effects import image_to_video
+        result = image_to_video(
+            image_path=image_path,
+            output_path=output_path,
+            effect=effect,
+            duration=duration,
+        )
+
+        if result["ok"]:
+            # 상대 경로로 변환해서 반환
+            rel_path = os.path.relpath(output_path, base_path)
+            return jsonify({
+                "ok": True,
+                "video_path": rel_path,
+                "effect": result.get("effect", effect),
+                "duration": duration,
+            })
+        else:
+            return jsonify(result), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/history/generate-videos-batch', methods=['POST'])
+def api_history_generate_videos_batch():
+    """
+    여러 이미지를 일괄 영상 변환
+
+    Input:
+    {
+        "image_paths": ["outputs/history/images/ep022_001.jpg", ...],
+        "effect": "random",  // random이면 각각 다른 효과
+        "duration": 5.0
+    }
+
+    Output:
+    {
+        "ok": true,
+        "results": [...],
+        "success_count": 10,
+        "fail_count": 0
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"ok": False, "error": "No data"}), 400
+
+        image_paths = data.get("image_paths", [])
+        effect = data.get("effect", "random")
+        duration = float(data.get("duration", 5.0))
+
+        if not image_paths:
+            return jsonify({"ok": False, "error": "image_paths required"}), 400
+
+        # 절대 경로 변환
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        abs_paths = []
+        for p in image_paths:
+            if os.path.isabs(p):
+                abs_paths.append(p)
+            else:
+                abs_paths.append(os.path.join(base_path, p))
+
+        # 출력 디렉토리
+        video_dir = os.path.join(base_path, "outputs", "history", "videos")
+
+        # 일괄 변환
+        from image.video_effects import batch_image_to_video
+        result = batch_image_to_video(
+            image_paths=abs_paths,
+            output_dir=video_dir,
+            effect=effect,
+            duration=duration,
+        )
+
+        return jsonify(result)
 
     except Exception as e:
         import traceback
@@ -1098,6 +1347,116 @@ def api_history_tts():
             return jsonify({
                 "ok": False,
                 "error": result.get("error", "TTS 생성 실패")
+            }), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ============================================================
+# YouTube Factory - 대본 기반 영상 생성
+# ============================================================
+
+from pathlib import Path
+import json as json_lib
+
+# 대본 디렉토리
+SCRIPTS_DIR = Path(__file__).parent.parent / "video_scripts"
+
+
+@history_bp.route('/youtube-factory')
+def youtube_factory_page():
+    """YouTube Factory 페이지"""
+    return render_template('youtube_factory.html')
+
+
+@history_bp.route('/api/youtube-factory/scripts')
+def youtube_factory_list_scripts():
+    """대본 목록 조회"""
+    try:
+        scripts = []
+        if SCRIPTS_DIR.exists():
+            for file in sorted(SCRIPTS_DIR.glob("*.json")):
+                try:
+                    with open(file, 'r', encoding='utf-8') as f:
+                        data = json_lib.load(f)
+                        scripts.append({
+                            "id": file.stem,
+                            "title": data.get("title", file.stem),
+                            "era": data.get("era", ""),
+                            "scene_count": len(data.get("scenes", []))
+                        })
+                except Exception as e:
+                    print(f"[YOUTUBE-FACTORY] 대본 로드 실패: {file} - {e}")
+
+        return jsonify({"ok": True, "scripts": scripts})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/youtube-factory/scripts/<script_id>')
+def youtube_factory_get_script(script_id: str):
+    """대본 상세 조회"""
+    try:
+        script_path = SCRIPTS_DIR / f"{script_id}.json"
+        if not script_path.exists():
+            return jsonify({"ok": False, "error": "대본을 찾을 수 없습니다"}), 404
+
+        with open(script_path, 'r', encoding='utf-8') as f:
+            data = json_lib.load(f)
+
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@history_bp.route('/api/youtube-factory/generate', methods=['POST'])
+def youtube_factory_generate():
+    """대본으로 영상 생성"""
+    try:
+        data = request.get_json() or {}
+        script_id = data.get('script_id')
+
+        if not script_id:
+            return jsonify({"ok": False, "error": "script_id가 필요합니다"}), 400
+
+        # 대본 로드
+        script_path = SCRIPTS_DIR / f"{script_id}.json"
+        if not script_path.exists():
+            return jsonify({"ok": False, "error": "대본을 찾을 수 없습니다"}), 404
+
+        with open(script_path, 'r', encoding='utf-8') as f:
+            script_data = json_lib.load(f)
+
+        print(f"[YOUTUBE-FACTORY] 영상 생성 시작: {script_data.get('title')}")
+
+        # History Pipeline 사용
+        from scripts.history_pipeline.pipeline import HistoryPipeline
+
+        pipeline = HistoryPipeline()
+        result = pipeline.run_from_script(script_data)
+
+        if result.get("ok"):
+            video_path = result.get("video_path", "")
+            # URL로 변환
+            base_path = str(Path(__file__).parent.parent)
+            if video_path.startswith(base_path):
+                video_rel = video_path.replace(base_path + "/", "")
+            else:
+                video_rel = video_path
+
+            return jsonify({
+                "ok": True,
+                "video_url": "/" + video_rel,
+                "video_path": video_rel,
+                "title": script_data.get("title")
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": result.get("error", "영상 생성 실패")
             }), 500
 
     except Exception as e:

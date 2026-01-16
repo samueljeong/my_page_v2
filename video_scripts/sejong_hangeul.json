@@ -1,0 +1,53 @@
+{
+  "id": "sejong_hangeul",
+  "title": "세종대왕의 한글 창제",
+  "era": "조선",
+  "description": "백성을 사랑한 성군 세종대왕이 한글을 만든 이야기",
+  "bgm": "epic",
+  "scenes": [
+    {
+      "scene_id": 1,
+      "narration": "조선의 제4대 왕, 세종대왕. 그는 백성들이 글을 읽고 쓰지 못하는 것을 안타깝게 여겼습니다.",
+      "image_prompt": "King Sejong the Great sitting on throne in royal hanbok, looking thoughtfully at a scroll, Gyeongbokgung palace interior, warm candlelight, Korean traditional art style, 4k, detailed",
+      "duration": 10
+    },
+    {
+      "scene_id": 2,
+      "narration": "당시 조선은 중국의 한자를 사용했지만, 어려운 한자는 양반들만 읽을 수 있었습니다. 백성들은 자신의 생각을 글로 표현할 수 없었습니다.",
+      "image_prompt": "Joseon dynasty common people looking confused at Chinese characters on a notice board, traditional Korean village, realistic historical painting style, 4k",
+      "duration": 12
+    },
+    {
+      "scene_id": 3,
+      "narration": "세종대왕은 직접 연구에 몰두했습니다. 사람의 입과 혀가 어떻게 움직이는지, 어떤 소리가 나는지 과학적으로 분석했습니다.",
+      "image_prompt": "King Sejong studying with scholars in Jiphyeonjeon Hall, books and scrolls spread on table, intense study session, traditional Korean painting style, detailed, 4k",
+      "duration": 12
+    },
+    {
+      "scene_id": 4,
+      "narration": "1443년, 마침내 28개의 글자가 완성되었습니다. 하늘, 땅, 사람의 모양을 본떠 만든 과학적인 문자, 훈민정음이 탄생한 것입니다.",
+      "image_prompt": "Hunminjeongeum manuscript with Korean alphabet letters, illuminated by soft light, sacred atmosphere, traditional Korean art style, highly detailed, 4k",
+      "duration": 12
+    },
+    {
+      "scene_id": 5,
+      "narration": "세종대왕은 선언했습니다. '나라의 말이 중국과 달라, 어리석은 백성이 말하고자 하는 바가 있어도 그 뜻을 펴지 못하는 이가 많다. 내가 이를 가엾게 여겨 새로 스물여덟 글자를 만드노니.'",
+      "image_prompt": "King Sejong proclaiming Hunminjeongeum to court officials, majestic throne room, dramatic lighting, historical Korean painting style, epic composition, 4k",
+      "duration": 16
+    },
+    {
+      "scene_id": 6,
+      "narration": "한글은 세계에서 가장 과학적인 문자로 평가받습니다. 배우기 쉽고, 어떤 소리도 표현할 수 있는 놀라운 문자입니다.",
+      "image_prompt": "Modern Korean people reading and writing Hangul, blending traditional and contemporary Korea, celebration of Korean culture, artistic composition, 4k",
+      "duration": 10
+    },
+    {
+      "scene_id": 7,
+      "narration": "세종대왕의 백성 사랑은 600년이 지난 오늘날까지 이어지고 있습니다. 한글은 대한민국의 자랑입니다.",
+      "image_prompt": "Statue of King Sejong at Gwanghwamun Square with modern Seoul skyline, sunset golden hour, inspirational atmosphere, 4k, cinematic",
+      "duration": 10
+    }
+  ],
+  "created_at": "2026-01-16",
+  "total_duration": 82
+}

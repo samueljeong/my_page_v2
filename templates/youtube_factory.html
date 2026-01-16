@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Factory</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 {
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .subtitle {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .card-title {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        select {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .btn {
+            padding: 0.875rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .preview-section {
+            margin-top: 1.5rem;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .preview-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .preview-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        .era-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #3b82f6;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .scenes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .scene-item {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 3px solid #3b82f6;
+        }
+        .scene-number {
+            font-size: 0.75rem;
+            color: #3b82f6;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .scene-narration {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            margin-bottom: 0.5rem;
+        }
+        .scene-prompt {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-style: italic;
+        }
+        .scene-duration {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+        }
+        .progress-section {
+            margin-top: 1.5rem;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #0f172a;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+        .log-box {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.75rem;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #94a3b8;
+            margin-top: 1rem;
+        }
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #3b82f6; }
+        .hidden { display: none; }
+        .result-section {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        .result-video {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        .download-btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            background: #10b981;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 1rem;
+        }
+        .download-btn:hover {
+            background: #059669;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Factory</h1>
+        <p class="subtitle">대본을 선택하고 영상을 자동 생성합니다</p>
+
+        <!-- 대본 선택 -->
+        <div class="card">
+            <div class="card-title">대본 선택</div>
+            <select id="scriptSelect">
+                <option value="">-- 대본을 선택하세요 --</option>
+            </select>
+        </div>
+
+        <!-- 미리보기 -->
+        <div class="card" id="previewCard" style="display: none;">
+            <div class="preview-header">
+                <div>
+                    <div class="preview-title" id="previewTitle"></div>
+                    <div class="preview-meta" id="previewMeta"></div>
+                </div>
+                <span class="era-badge" id="previewEra"></span>
+            </div>
+            <div class="scenes-list" id="scenesList"></div>
+        </div>
+
+        <!-- 생성 버튼 -->
+        <div class="card" id="generateCard" style="display: none;">
+            <button class="btn btn-primary" id="generateBtn" onclick="generateVideo()">
+                영상 생성하기
+            </button>
+
+            <!-- 진행 상황 -->
+            <div class="progress-section hidden" id="progressSection">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">준비 중...</div>
+                <div class="log-box" id="logBox"></div>
+            </div>
+        </div>
+
+        <!-- 결과 -->
+        <div class="card hidden" id="resultCard">
+            <div class="card-title">생성 완료</div>
+            <div class="result-section">
+                <video id="resultVideo" class="result-video" controls></video>
+                <br>
+                <a id="downloadLink" class="download-btn" href="#" download>다운로드</a>
+            </div>
+        </div>
+
+        <!-- 빈 상태 -->
+        <div class="card" id="emptyState">
+            <div class="empty-state">
+                <div class="empty-state-icon">📝</div>
+                <p>scripts/ 폴더에 대본 파일(.json)을 추가하세요</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentScript = null;
+
+        // 페이지 로드 시 대본 목록 불러오기
+        document.addEventListener('DOMContentLoaded', loadScripts);
+
+        async function loadScripts() {
+            try {
+                const res = await fetch('/api/youtube-factory/scripts');
+                const data = await res.json();
+
+                const select = document.getElementById('scriptSelect');
+                const emptyState = document.getElementById('emptyState');
+
+                if (data.scripts && data.scripts.length > 0) {
+                    emptyState.style.display = 'none';
+                    data.scripts.forEach(script => {
+                        const option = document.createElement('option');
+                        option.value = script.id;
+                        option.textContent = `${script.title} (${script.era}) - ${script.scene_count}장면`;
+                        select.appendChild(option);
+                    });
+                } else {
+                    emptyState.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('대본 목록 로드 실패:', err);
+            }
+        }
+
+        // 대본 선택 시 미리보기
+        document.getElementById('scriptSelect').addEventListener('change', async function() {
+            const scriptId = this.value;
+            const previewCard = document.getElementById('previewCard');
+            const generateCard = document.getElementById('generateCard');
+
+            if (!scriptId) {
+                previewCard.style.display = 'none';
+                generateCard.style.display = 'none';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/youtube-factory/scripts/${scriptId}`);
+                const script = await res.json();
+                currentScript = script;
+
+                // 미리보기 표시
+                document.getElementById('previewTitle').textContent = script.title;
+                document.getElementById('previewEra').textContent = script.era;
+
+                const totalDuration = script.scenes.reduce((sum, s) => sum + (s.duration || 10), 0);
+                document.getElementById('previewMeta').textContent =
+                    `${script.scenes.length}개 장면 · 약 ${Math.round(totalDuration / 60)}분`;
+
+                // 장면 목록
+                const scenesList = document.getElementById('scenesList');
+                scenesList.innerHTML = '';
+                script.scenes.forEach((scene, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'scene-item';
+                    div.innerHTML = `
+                        <div class="scene-number">장면 ${idx + 1}</div>
+                        <div class="scene-narration">${scene.narration}</div>
+                        <div class="scene-prompt">${scene.image_prompt}</div>
+                        <div class="scene-duration">${scene.duration || 10}초</div>
+                    `;
+                    scenesList.appendChild(div);
+                });
+
+                previewCard.style.display = 'block';
+                generateCard.style.display = 'block';
+                document.getElementById('resultCard').classList.add('hidden');
+
+            } catch (err) {
+                console.error('대본 로드 실패:', err);
+                alert('대본을 불러올 수 없습니다.');
+            }
+        });
+
+        // 영상 생성
+        async function generateVideo() {
+            if (!currentScript) return;
+
+            const btn = document.getElementById('generateBtn');
+            const progressSection = document.getElementById('progressSection');
+            const logBox = document.getElementById('logBox');
+
+            btn.disabled = true;
+            btn.textContent = '생성 중...';
+            progressSection.classList.remove('hidden');
+            logBox.innerHTML = '';
+
+            const scriptId = document.getElementById('scriptSelect').value;
+
+            try {
+                addLog('대본 로드 완료', 'info');
+                updateProgress(10, 'TTS 음성 생성 중...');
+
+                const res = await fetch('/api/youtube-factory/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script_id: scriptId })
+                });
+
+                const result = await res.json();
+
+                if (result.ok) {
+                    addLog('영상 생성 완료!', 'success');
+                    updateProgress(100, '완료!');
+
+                    // 결과 표시
+                    document.getElementById('resultCard').classList.remove('hidden');
+                    document.getElementById('resultVideo').src = result.video_url;
+                    document.getElementById('downloadLink').href = result.video_url;
+
+                } else {
+                    addLog(`오류: ${result.error}`, 'error');
+                    updateProgress(0, '생성 실패');
+                }
+
+            } catch (err) {
+                addLog(`오류: ${err.message}`, 'error');
+                updateProgress(0, '생성 실패');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '영상 생성하기';
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const logBox = document.getElementById('logBox');
+            const line = document.createElement('div');
+            line.className = `log-${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logBox.appendChild(line);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = `${percent}%`;
+            document.getElementById('progressText').textContent = text;
+        }
+    </script>
+</body>
+</html>
