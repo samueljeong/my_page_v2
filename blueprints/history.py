@@ -1434,28 +1434,57 @@ def youtube_factory_generate():
         with open(script_path, 'r', encoding='utf-8') as f:
             script_data = json_lib.load(f)
 
-        print(f"[YOUTUBE-FACTORY] 영상 생성 시작: {script_data.get('title')}")
+        title = script_data.get('title', script_id)
+        scenes = script_data.get('scenes', [])
 
-        # History Pipeline 사용
-        from scripts.history_pipeline.pipeline import HistoryPipeline
+        print(f"[YOUTUBE-FACTORY] 영상 생성 시작: {title}")
 
-        pipeline = HistoryPipeline()
-        result = pipeline.run_from_script(script_data)
+        # 대본 텍스트 합치기
+        full_script = "\n\n".join([s.get('narration', '') for s in scenes])
+
+        # 이미지 프롬프트 추출
+        image_prompts = []
+        for idx, scene in enumerate(scenes):
+            image_prompts.append({
+                "prompt": scene.get('image_prompt', ''),
+                "scene_index": idx + 1
+            })
+
+        # 메타데이터
+        metadata = {
+            "title": title,
+            "description": f"{title} - YouTube Factory로 생성된 영상",
+            "tags": [script_data.get('era', '한국사'), '역사', '다큐멘터리']
+        }
+
+        # History Pipeline Workers 사용
+        from scripts.history_pipeline import execute_episode
+
+        result = execute_episode(
+            episode_id=script_id,
+            title=title,
+            script=full_script,
+            image_prompts=image_prompts,
+            metadata=metadata,
+            bgm_mood=script_data.get('bgm', 'epic'),
+            generate_video=True,
+            upload=False,
+        )
 
         if result.get("ok"):
             video_path = result.get("video_path", "")
             # URL로 변환
             base_path = str(Path(__file__).parent.parent)
-            if video_path.startswith(base_path):
+            if video_path and video_path.startswith(base_path):
                 video_rel = video_path.replace(base_path + "/", "")
             else:
-                video_rel = video_path
+                video_rel = video_path or ""
 
             return jsonify({
                 "ok": True,
-                "video_url": "/" + video_rel,
+                "video_url": "/" + video_rel if video_rel else "",
                 "video_path": video_rel,
-                "title": script_data.get("title")
+                "title": title
             })
         else:
             return jsonify({
