@@ -765,6 +765,23 @@ def get_client():
 
 client = get_client()
 
+# LAOZHANG 클라이언트 (GPT 채팅용)
+def get_laozhang_client():
+    key = (os.getenv("LAOZHANG_API_KEY") or "").strip()
+    if not key:
+        print("[LAOZHANG] API 키가 설정되지 않았습니다.")
+        return None
+    try:
+        return OpenAI(
+            base_url="https://api.laozhang.ai/v1",
+            api_key=key
+        )
+    except Exception as e:
+        print(f"[LAOZHANG] 클라이언트 초기화 실패: {e}")
+        return None
+
+laozhang_client = get_laozhang_client()
+
 # OpenRouter 클라이언트 (Step3 Claude용)
 def get_openrouter_client():
     key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
@@ -1082,9 +1099,9 @@ init_db()
 # YouTube 토큰/할당량 모듈 DB 연결 초기화
 youtube_auth.init_db(get_db_connection, USE_POSTGRES)
 
-# GPT Blueprint 의존성 주입
+# GPT Blueprint 의존성 주입 (LAOZHANG 클라이언트 우선 사용)
 gpt_set_db_connection(get_db_connection)
-gpt_set_openai_client(client)
+gpt_set_openai_client(laozhang_client or client)
 gpt_set_use_postgres(USE_POSTGRES)
 
 # Bible Blueprint 의존성 주입 (get_sheets_service_account, _mix_bgm_with_video, pipeline_lock는 나중에 정의됨)
