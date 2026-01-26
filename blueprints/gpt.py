@@ -12,7 +12,7 @@ import os
 from flask import Blueprint, request, jsonify, render_template
 from error_handlers import error_response, ERROR_MESSAGES
 from logging_config import get_logger
-from config import DEFAULT_USERS, USER_PROFILES, get_system_prompt_for_user
+from gpt_config import DEFAULT_USERS, USER_PROFILES, get_system_prompt_for_user
 from services.gpt_service import analyze_question_complexity
 
 logger = get_logger(__name__)
